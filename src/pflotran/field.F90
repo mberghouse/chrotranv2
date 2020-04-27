@@ -45,6 +45,9 @@ module Field_module
     ! vectors for advanced nonlinear solvers other than Newton - Heeho
     Vec :: flow_scaled_xx, flow_work_loc
 
+    ! vectors for advanced nonlinear solvers other than Newton - Heeho
+    Vec :: flow_scaled_xx
+
     ! vectors for operator splitting
     Vec :: tran_rhs
     Vec :: tran_rhs_coef

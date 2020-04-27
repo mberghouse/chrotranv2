@@ -70,7 +70,6 @@ module PM_WIPP_Flow_class
                                      ! just before the PETSc solver.
     PetscInt :: newtontrd_inner_iter_num ! True: inside inner iteration.
     PetscInt :: newtontrd_prev_iter_num
-
     Vec :: scaling_vec
     ! When reading Dirichlet 2D Flared BC
     PetscInt, pointer :: dirichlet_dofs_ghosted(:) ! this array is zero-based indexing
@@ -631,18 +630,12 @@ subroutine PMWIPPFloReadNewtonSelectCase(this,input,keyword,found, &
       endif
     case('DO_NOT_SCALE_JACOBIAN')
       this%scale_linear_system = PETSC_FALSE
-    case('SCALE_PRESSURE')
+    case('SCALE_PRESSURE') ! This option will scale solution, residual, and Jacobian
       option%flow%scale_all_pressure = PETSC_TRUE
+      this%scale_linear_system = PETSC_TRUE
       call InputReadDouble(input,option,option%flow%pressure_scaling_factor)
       call InputErrorMsg(input,option,keyword,error_string)
-! is not proven to assist newtontrd in performance (disabled)
-!   case('SCALE_DIAGONAL')
-!     this%newtontrd_scale_diagonal = PETSC_TRUE
-!   case('DO_NOT_SCALE_DIAGONAL')
-!     this%newtontrd_scale_diagonal = PETSC_FALSE
-    case('AUTO_SCALE_PRESSURE')
-      option%flow%scale_all_pressure = PETSC_TRUE
-      option%flow%pressure_scaling_factor = 1.d0
+      this%linear_system_scaling_factor = option%flow%pressure_scaling_factor
     case default
       found = PETSC_FALSE
 
