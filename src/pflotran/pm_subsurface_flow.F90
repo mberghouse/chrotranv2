@@ -754,6 +754,7 @@ subroutine PMSubsurfaceFlowPreSolve(this)
   
   class(pm_subsurface_flow_type) :: this
 
+
   this%norm_history = 0.d0
 
   call DataMediatorUpdate(this%realization%flow_data_mediator_list, &
