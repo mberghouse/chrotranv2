@@ -754,11 +754,14 @@ subroutine PMSubsurfaceFlowPreSolve(this)
 
   this%norm_history = 0.d0  
   PetscErrorCode :: ierr
+  PetscReal :: inverse_factor
   
   if (this%option%flow%scale_all_pressure) then
     call VecCopy(this%realization%field%flow_xx, &
                  this%realization%field%flow_scaled_xx,ierr);CHKERRQ(ierr)
-    !call VecLog(this%realization%field%tran_log_xx,ierr);CHKERRQ(ierr)
+    inverse_factor = this%option%flow%pressure_scaling_factor**(-1.d0)
+    call VecStrideScale(this%realization%field%flow_scaled_xx,ZERO_INTEGER, &
+                        inverse_factor, ierr);CHKERRQ(ierr)
   endif 
 
   call DataMediatorUpdate(this%realization%flow_data_mediator_list, &
