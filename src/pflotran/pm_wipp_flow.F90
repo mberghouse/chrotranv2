@@ -1490,7 +1490,6 @@ subroutine PMWIPPFloCheckUpdatePre(this,snes,X,dX,changed,ierr)
   PetscBool :: changed
   PetscErrorCode :: ierr
   PetscReal :: inverse_factor
-
   this%convergence_flags = 0
   this%convergence_reals = 0.d0
   changed = PETSC_FALSE
