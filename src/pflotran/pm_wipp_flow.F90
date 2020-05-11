@@ -70,7 +70,6 @@ module PM_WIPP_Flow_class
                                      ! just before the PETSc solver.
     PetscInt :: newtontrd_inner_iter_num ! True: inside inner iteration.
     PetscInt :: newtontrd_prev_iter_num
-
     Vec :: scaling_vec
     ! When reading Dirichlet 2D Flared BC
     PetscInt, pointer :: dirichlet_dofs_ghosted(:) ! this array is zero-based indexing
@@ -633,35 +632,12 @@ subroutine PMWIPPFloReadNewtonSelectCase(this,input,keyword,found, &
       this%scale_linear_system = PETSC_FALSE
     case('SCALE_PRESSURE')
       option%flow%scale_all_pressure = PETSC_TRUE
-      this%scale_linear_system = PETSC_TRUE
-      input%ierr = 0
-      call InputPushBlock(input,option)
-      do
-        call InputReadPflotranString(input,option)
-        if (InputCheckExit(input,option)) exit
-
-        call InputReadCard(input,option,keyword)
-        call InputErrorMsg(input,option,'keyword','SCALE_PRESSURE')
-        call StringToUpper(keyword)
-
-        select case(trim(keyword))
-          case('SCALE_JACOBIAN')
-            this%scale_linear_system = PETSC_TRUE
-          case('DO_NOT_SCALE_JACOBIAN')
-            this%scale_linear_system = PETSC_FALSE
-          case('SCALE_FACTOR')
-            call InputReadDouble(input,option, &
-                                 option%flow%pressure_scaling_factor)
-            call InputErrorMsg(input,option,keyword,error_string)
-            this%linear_system_scaling_factor = &
-                                        option%flow%pressure_scaling_factor
-          case default
-            option%io_buffer  = 'SCALE_PRESSURE option: ' // trim(word) // &
-                              ' unknown.'
-            call PrintErrMsg(option)
-        end select
-      enddo
-      call InputPopBlock(input,option)
+      call InputReadDouble(input,option,option%flow%pressure_scaling_factor)
+      call InputErrorMsg(input,option,keyword,error_string)
+      if (this%scale_linear_system) then
+        option%io_buffer = 'cannot be used with SCALE_JACOBIAN, Jacobian is already scaled'
+        call PrintErrMsg(option)
+      endif
     case default
       found = PETSC_FALSE
 
@@ -1353,7 +1329,6 @@ subroutine PMWIPPFloJacobian(this,snes,xx,A,B,ierr)
   PetscReal, allocatable :: diagonal_values(:)
   PetscReal :: array(1,1)
   PetscReal, pointer :: vec_p(:)
-
 
   option => this%option
   field => this%realization%field
