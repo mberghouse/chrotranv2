@@ -288,6 +288,7 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
         if (InputCheckExit(input,option)) exit
 
         call InputReadCard(input,option,keyword)
+
         call InputErrorMsg(input,option,'keyword','NEWTON_TRUST_REGION_DOGLEG')
         call StringToUpper(keyword)
 
