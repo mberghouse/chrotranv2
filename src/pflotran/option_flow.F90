@@ -158,6 +158,9 @@ subroutine OptionFlowInitRealization(option)
   option%steady_state = PETSC_FALSE
 
   option%store_darcy_vel = PETSC_FALSE
+  option%scale_all_pressure = PETSC_FALSE
+  option%pressure_scaling_factor = 1.d7
+  option%using_newtontrd = PETSC_FALSE
 
 end subroutine OptionFlowInitRealization
 
