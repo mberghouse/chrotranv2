@@ -54,6 +54,7 @@ module Option_Flow_module
 
     PetscBool :: scale_all_pressure
     PetscReal :: pressure_scaling_factor
+    PetscBool :: using_newtontrd
 
   end type flow_option_type
   

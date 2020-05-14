@@ -70,6 +70,9 @@ module PM_WIPP_Flow_class
                                      ! just before the PETSc solver.
     PetscInt :: newtontrd_inner_iter_num ! True: inside inner iteration.
     PetscInt :: newtontrd_prev_iter_num
+    PetscBool :: newtontrd_scale_diagonal ! newtontrd experiment purpose only. do not use
+    PetscBool :: newtontrd_jacobian_calculated
+    
     Vec :: scaling_vec
     ! When reading Dirichlet 2D Flared BC
     PetscInt, pointer :: dirichlet_dofs_ghosted(:) ! this array is zero-based indexing
@@ -203,6 +206,8 @@ subroutine PMWIPPFloInitObject(this)
   this%scale_linear_system = PETSC_FALSE
   this%newtontrd_inner_iter_num = 0
   this%newtontrd_prev_iter_num = 0
+  this%newtontrd_jacobian_calculated = PETSC_FALSE
+  this%newtontrd_scale_diagonal = PETSC_FALSE
   this%scaling_vec = PETSC_NULL_VEC
   nullify(this%dirichlet_dofs_ghosted)
   nullify(this%dirichlet_dofs_ints)
@@ -634,10 +639,11 @@ subroutine PMWIPPFloReadNewtonSelectCase(this,input,keyword,found, &
       option%flow%scale_all_pressure = PETSC_TRUE
       call InputReadDouble(input,option,option%flow%pressure_scaling_factor)
       call InputErrorMsg(input,option,keyword,error_string)
-      if (this%scale_linear_system) then
-        option%io_buffer = 'cannot be used with SCALE_JACOBIAN, Jacobian is already scaled'
-        call PrintErrMsg(option)
-      endif
+! is not proven to assist newtontrd in performance (disabled)
+!   case('SCALE_DIAGONAL')
+!     this%newtontrd_scale_diagonal = PETSC_TRUE
+!   case('DO_NOT_SCALE_DIAGONAL')
+!     this%newtontrd_scale_diagonal = PETSC_FALSE
     case default
       found = PETSC_FALSE
 
@@ -1424,7 +1430,6 @@ subroutine PMWIPPFloJacobian(this,snes,xx,A,B,ierr)
     endif
   endif
 
-
   if (this%newtontrd_scale_diagonal .and. this%newtontrd_jacobian_calculated) then
     ! only used for newtontrd algorithm - Heeho
     call VecGetLocalSize(this%scaling_vec,matsize,ierr);CHKERRQ(ierr)
@@ -1453,6 +1458,7 @@ subroutine PMWIPPFloJacobian(this,snes,xx,A,B,ierr)
       call PetscViewerDestroy(viewer,ierr);CHKERRQ(ierr)
     endif
   endif
+
   if (this%realization%debug%norm_Matrix) then
     call MatNorm(A,NORM_1,norm,ierr);CHKERRQ(ierr)
     write(this%option%io_buffer,'("1 norm: ",es11.4)') norm

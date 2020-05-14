@@ -275,6 +275,7 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
   found = PETSC_TRUE
   select case(trim(keyword))
 
+
     case ('NEWTONTRD','NEWTON_TRUST_REGION_DOGLEG','NEWTON_TRD')
       this%option%flow%using_newtontrd = PETSC_TRUE
       string = '-flow_snes_type'
