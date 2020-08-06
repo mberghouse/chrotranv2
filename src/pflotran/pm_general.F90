@@ -1219,15 +1219,12 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
   global_auxvars => patch%aux%Global%auxvars
 
   call SNESNewtonTRDCGetRhoFlag(snes,rho_flag,ierr);CHKERRQ(ierr);
-
   if (this%option%flow%using_newtontrd) then
     if (general_newtontrd_prev_iter_num == it) then
       general_sub_newton_iter_num = general_sub_newton_iter_num + 1
     endif
     general_newtontrd_prev_iter_num = it
   endif
-
-
 
   if (this%check_post_convergence) then
     call VecGetArrayReadF90(field%flow_r,r_p,ierr);CHKERRQ(ierr)
@@ -1421,7 +1418,7 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
       call OptionPrint(string,option)
       option%convergence = CONVERGENCE_CUT_TIMESTEP
     endif
- 
+
     if (general_sub_newton_iter_num > 20) then
       ! cut time step in case PETSC solvers are missing inner iterations
       option%convergence = CONVERGENCE_CUT_TIMESTEP
