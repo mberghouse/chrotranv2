@@ -295,8 +295,8 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
           case('TR_TOL')
             call InputReadWord(input,option,word,PETSC_TRUE)
             call InputErrorMsg(input,option, &
-                               'BoomerAMG convergence tolerance', &
-                               'CPR OPTIONS, HYPRE options')
+                               'trust region tolerance ', &
+                               'NEWTON TRD options')
             string = '-flow_snes_trtol'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
@@ -304,8 +304,8 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
           case('ETA1') ! 0 =< ETA1 <= ETA2, ETA3 = 0.75
             call InputReadWord(input,option,word,PETSC_TRUE)
             call InputErrorMsg(input,option, &
-                               'BoomerAMG convergence tolerance', &
-                               'CPR OPTIONS, HYPRE options')
+                               'rho > eta1 trust region satisfactory value', &
+                               'NEWTON TRD options')
             string = '-flow_snes_tr_eta1'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
@@ -313,8 +313,8 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
           case('ETA2')
             call InputReadWord(input,option,word,PETSC_TRUE)
             call InputErrorMsg(input,option, &
-                               'BoomerAMG convergence tolerance', &
-                               'CPR OPTIONS, HYPRE options')
+                               'rho =< eta2, shrink trust region ', &
+                               'NEWTON TRD options')
             string = '-flow_snes_tr_eta2'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
@@ -322,8 +322,8 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
           case('ETA3')
             call InputReadWord(input,option,word,PETSC_TRUE)
             call InputErrorMsg(input,option, &
-                               'BoomerAMG convergence tolerance', &
-                               'CPR OPTIONS, HYPRE options')
+                               'rho > eta3, expand trust region', &
+                               'NEWTON TRD options')
             string = '-flow_snes_tr_eta3'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
@@ -331,8 +331,8 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
           case('T1') ! SHRINK BY THIS FACTOR 0.25
             call InputReadWord(input,option,word,PETSC_TRUE)
             call InputErrorMsg(input,option, &
-                               'BoomerAMG convergence tolerance', &
-                               'CPR OPTIONS, HYPRE options')
+                               'shrink trust region by t1', &
+                               'NEWTON TRD options')
             string = '-flow_snes_tr_t1'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
@@ -340,8 +340,8 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
           case('T2') ! EXPAND BY THIS FACTOR 2.00
             call InputReadWord(input,option,word,PETSC_TRUE)
             call InputErrorMsg(input,option, &
-                               'BoomerAMG convergence tolerance', &
-                               'CPR OPTIONS, HYPRE options')
+                               'expand trust region by t2', &
+                               'NEWTON TRD options')
             string = '-flow_snes_tr_t2'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
@@ -349,8 +349,8 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
           case('DELTA_M','DELTAM')
             call InputReadWord(input,option,word,PETSC_TRUE)
             call InputErrorMsg(input,option, &
-                               'BoomerAMG convergence tolerance', &
-                               'CPR OPTIONS, HYPRE options')
+                               'maximum trust region size, Delta_M*xnorm', &
+                               'NEWTON TRD options')
             string = '-flow_snes_tr_deltaM'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
@@ -358,8 +358,8 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
           case('DELTA_0','DELTA0')
             call InputReadWord(input,option,word,PETSC_TRUE)
             call InputErrorMsg(input,option, &
-                               'BoomerAMG convergence tolerance', &
-                               'CPR OPTIONS, HYPRE options')
+                               'initial trust region size', &
+                               'NEWTON TRD options')
             string = '-flow_snes_tr_delta0'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
@@ -367,9 +367,18 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
           case('USE_CAUCHY','CAUCHY')
             call InputReadWord(input,option,word,PETSC_TRUE)
             call InputErrorMsg(input,option, &
-                               'BoomerAMG convergence tolerance', &
-                               'CPR OPTIONS, HYPRE options')
+                               'USE_CAUCHY TRUE or FALSE', &
+                               'NEWTON TRD options')
             string = '-flow_snes_use_cauchy'
+            call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
+                                      trim(string),trim(word), &
+                                      ierr);CHKERRQ(ierr)
+          case('AUTO_SCALE_UNKNOWNS','AUTO_SCALE')
+            call InputReadWord(input,option,word,PETSC_TRUE)
+            call InputErrorMsg(input,option, &
+                               'auto scale multiphase flow modes', &
+                               'NEWTON TRD options')
+            string = '-flow_snes_auto_scale'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
                                       ierr);CHKERRQ(ierr)
