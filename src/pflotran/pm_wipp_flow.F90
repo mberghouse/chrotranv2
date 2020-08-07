@@ -70,7 +70,7 @@ module PM_WIPP_Flow_class
                                      ! just before the PETSc solver.
     PetscInt :: newtontrd_inner_iter_num ! True: inside inner iteration.
     PetscInt :: newtontrd_prev_iter_num
-    
+   
     Vec :: scaling_vec
     ! When reading Dirichlet 2D Flared BC
     PetscInt, pointer :: dirichlet_dofs_ghosted(:) ! this array is zero-based indexing
