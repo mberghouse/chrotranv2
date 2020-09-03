@@ -19,6 +19,9 @@ module Debug_module
     PetscBool :: matview_Matrix
     PetscBool :: matview_Matrix_detailed
     PetscBool :: norm_Matrix
+    
+    PetscBool :: matview_perm_sensibility
+    PetscBool :: norm_Jacobian
 
     PetscInt  :: output_format
     PetscBool :: verbose_filename
@@ -58,9 +61,16 @@ function DebugCreate()
 
   debug%vecview_residual = PETSC_FALSE
   debug%vecview_solution = PETSC_FALSE
+<<<<<<< HEAD
   debug%matview_Matrix = PETSC_FALSE
   debug%matview_Matrix_detailed = PETSC_FALSE
   debug%norm_Matrix = PETSC_FALSE
+=======
+  debug%matview_Jacobian = PETSC_FALSE
+  debug%matview_Jacobian_detailed = PETSC_FALSE
+  debug%matview_perm_sensibility = PETSC_FALSE
+  debug%norm_Jacobian = PETSC_FALSE
+>>>>>>> dad8dd96b (initail implementation, not tested yet)
 
   debug%output_format = DEBUG_ASCII_FORMAT
   debug%verbose_filename = PETSC_FALSE
@@ -127,7 +137,13 @@ subroutine DebugRead(debug,input,option)
         debug%coupler_string = trim(adjustl(input%buf))
       case('PRINT_JACOBIAN_DETAILED','matview_Matrix_DETAILED', &
            'VIEW_JACOBIAN_DETAILED')
+<<<<<<< HEAD
         debug%matview_Matrix_detailed = PETSC_TRUE
+=======
+        debug%matview_Jacobian_detailed = PETSC_TRUE
+      case ('PRINT_PERMEABILITY_SENSITIVITY')
+        debug%matview_perm_sensibility = PETSC_TRUE
+>>>>>>> dad8dd96b (initail implementation, not tested yet)
       case('PRINT_WAYPOINTS')
         debug%print_waypoints = PETSC_TRUE
       case('APPEND_COUNTS_TO_FILENAME','APPEND_COUNTS_TO_FILENAMES')
