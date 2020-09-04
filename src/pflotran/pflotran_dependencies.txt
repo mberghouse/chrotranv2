@@ -839,8 +839,9 @@ richards.o : connection.o coupler.o debug.o discretization.o field.o \
              material.o material_aux.o matrix_buffer.o option.o output_aux.o \
              patch.o pflotran_constants.o realization_base.o \
              realization_subsurface.o region.o richards_aux.o \
-             richards_common.o srcsink_sandbox.o srcsink_sandbox_base.o \
-             srcsink_sandbox_downreg.o utility.o variables.o
+             richards_common.o sensibility_analysis.o srcsink_sandbox.o \
+             srcsink_sandbox_base.o srcsink_sandbox_downreg.o \
+             utility.o variables.o
 richards_aux.o : characteristic_curves.o characteristic_curves_common.o \
                  eos_water.o global_aux.o material_aux.o matrix_buffer.o \
                  matrix_zeroing.o option.o pflotran_constants.o utility.o
@@ -859,6 +860,10 @@ secondary_continuum.o : block_solve.o block_tridiag.o condition.o coupler.o \
                         utility.o variables.o
 secondary_continuum_aux.o : option.o pflotran_constants.o \
                             reactive_transport_aux.o utility.o
+sensibility_analysis.o : characteristic_curves.o connection.o eos_water.o \
+                         global_aux.o grid.o material_aux.o option.o patch.o \
+                         pflotran_constants.o realization_subsurface.o \
+                         richards_aux.o richards_common.o utility.o
 shape_function.o : gauss.o grid_unstructured_cell.o pflotran_constants.o
 simulation_aux.o : option.o pflotran_constants.o
 simulation_base.o : driver.o option.o output.o output_aux.o \
