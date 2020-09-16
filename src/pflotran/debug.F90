@@ -132,7 +132,7 @@ subroutine DebugRead(debug,input,option)
            'VIEW_JACOBIAN_DETAILED')
         debug%matview_Matrix_detailed = PETSC_TRUE
       case ('PRINT_PERMEABILITY_SENSITIVITY')
-        debug%matview_perm_sensibility = PETSC_TRUE
+        debug%matview_perm_sensitivity = PETSC_TRUE
       case('PRINT_WAYPOINTS')
         debug%print_waypoints = PETSC_TRUE
       case('APPEND_COUNTS_TO_FILENAME','APPEND_COUNTS_TO_FILENAMES')

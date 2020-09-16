@@ -860,7 +860,7 @@ secondary_continuum.o : block_solve.o block_tridiag.o condition.o coupler.o \
                         utility.o variables.o
 secondary_continuum_aux.o : option.o pflotran_constants.o \
                             reactive_transport_aux.o utility.o
-sensibility_analysis.o : characteristic_curves.o connection.o eos_water.o \
+sensitivity_analysis.o : characteristic_curves.o connection.o eos_water.o \
                          global_aux.o grid.o material_aux.o option.o patch.o \
                          pflotran_constants.o realization_subsurface.o \
                          richards_aux.o richards_common.o utility.o
