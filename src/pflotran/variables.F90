@@ -160,5 +160,7 @@ module Variables_module
   PetscInt, parameter, public :: EPSILON = 130
 
   PetscInt, parameter, public :: DARCY_VELOCITY          = 141
+  
+  PetscInt, parameter, public :: LIQUID_PZ_HEAD          = 142
 
 end module Variables_module

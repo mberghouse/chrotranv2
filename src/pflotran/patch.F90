@@ -4765,7 +4765,7 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
          LIQUID_DENSITY,GAS_DENSITY,GAS_DENSITY_MOL,LIQUID_VISCOSITY, &
          GAS_VISCOSITY,CAPILLARY_PRESSURE,LIQUID_DENSITY_MOL, &
          LIQUID_MOBILITY,GAS_MOBILITY,SC_FUGA_COEFF,ICE_DENSITY, &
-         LIQUID_HEAD,VAPOR_PRESSURE,SATURATION_PRESSURE, &
+         LIQUID_HEAD,LIQUID_PZ_HEAD,VAPOR_PRESSURE,SATURATION_PRESSURE, &
          MAXIMUM_PRESSURE,LIQUID_MASS_FRACTION,GAS_MASS_FRACTION)
 
       if (associated(patch%aux%TH)) then
@@ -4902,6 +4902,14 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
                 patch%aux%Global%auxvars(grid%nL2G(local_id))%pres(1)/ &
                 EARTH_GRAVITY/ &
                 patch%aux%Global%auxvars(grid%nL2G(local_id))%den_kg(1)
+            enddo
+          case(LIQUID_PZ_HEAD)
+            do local_id=1,grid%nlmax
+              vec_ptr(local_id) = &
+                patch%aux%Global%auxvars(grid%nL2G(local_id))%pres(1) / &
+                (EARTH_GRAVITY * &
+                patch%aux%Global%auxvars(grid%nL2G(local_id))%den_kg(1)) - &
+                grid%z(grid%nL2G(local_id))
             enddo
           case(LIQUID_SATURATION)
             do local_id=1,grid%nlmax
@@ -6298,8 +6306,17 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
          GAS_VISCOSITY,AIR_PRESSURE,CAPILLARY_PRESSURE, &
          LIQUID_MOBILITY,GAS_MOBILITY,SC_FUGA_COEFF,ICE_DENSITY, &
          SECONDARY_TEMPERATURE,LIQUID_DENSITY_MOL, &
+<<<<<<< HEAD
          LIQUID_HEAD,VAPOR_PRESSURE,SATURATION_PRESSURE,MAXIMUM_PRESSURE, &
          LIQUID_MASS_FRACTION,GAS_MASS_FRACTION)
+=======
+         LIQUID_HEAD,LIQUID_PZ_HEAD,VAPOR_PRESSURE,SATURATION_PRESSURE, &
+         MAXIMUM_PRESSURE,LIQUID_MASS_FRACTION,GAS_MASS_FRACTION, &
+         OIL_PRESSURE,OIL_SATURATION,OIL_DENSITY,OIL_DENSITY_MOL,OIL_ENERGY, &
+         OIL_MOBILITY,OIL_VISCOSITY,BUBBLE_POINT, &
+         SOLVENT_PRESSURE,SOLVENT_SATURATION,SOLVENT_DENSITY, &
+         SOLVENT_DENSITY_MOL,SOLVENT_ENERGY,SOLVENT_MOBILITY)
+>>>>>>> 063a435f7 (Add Liquid Piezometric Head as output variable)
 
       if (associated(patch%aux%TH)) then
         select case(ivar)
@@ -6371,6 +6388,11 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
             value = patch%aux%Global%auxvars(ghosted_id)%pres(1)/ &
                     EARTH_GRAVITY/ &
                     patch%aux%Global%auxvars(ghosted_id)%den_kg(1)
+          case(LIQUID_PZ_HEAD)
+            value = patch%aux%Global%auxvars(ghosted_id)%pres(1) / &
+                    (EARTH_GRAVITY * &
+                    patch%aux%Global%auxvars(ghosted_id)%den_kg(1)) - &
+                    grid%z(ghosted_id)
           case(LIQUID_SATURATION)
             value = patch%aux%Global%auxvars(ghosted_id)%sat(1)
           case(LIQUID_DENSITY)
