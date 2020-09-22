@@ -160,7 +160,18 @@ module Variables_module
   PetscInt, parameter, public :: EPSILON = 130
 
   PetscInt, parameter, public :: DARCY_VELOCITY          = 141
+
+  PetscInt, parameter, public :: AQUEOUS_EQ_CONC         = 135
+  PetscInt, parameter, public :: MNRL_EQ_CONC            = 136
+  PetscInt, parameter, public :: SORB_EQ_CONC            = 137
+  PetscInt, parameter, public :: TOTAL_BULK_CONC         = 138
+  PetscInt, parameter, public :: MNRL_VOLUME_FRACTION    = 139
+
+  PetscInt, parameter, public :: K_ORTHOGONALITY_ERROR   = 140
   
-  PetscInt, parameter, public :: LIQUID_PZ_HEAD          = 142
+!  PetscInt, parameter, public :: LIQUID_PZ_HEAD          = 141
+  
+  PetscInt, parameter, public :: FACE_PERMEABILITY       = 142
+  PetscInt, parameter, public :: FACE_AREA               = 143
 
 end module Variables_module

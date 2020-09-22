@@ -133,6 +133,7 @@ subroutine OutputFileRead(input,realization,output_option, &
   energy_flowrate = PETSC_FALSE
   aveg_mass_flowrate = PETSC_FALSE
   aveg_energy_flowrate = PETSC_FALSE
+  print_connection_ids = PETSC_FALSE
   k = 0
   nullify(temp_real_array)
 
@@ -512,6 +513,7 @@ subroutine OutputFileRead(input,realization,output_option, &
 !.............................
       case('PRINT_CONNECTION_IDS')
         print_connection_ids = PETSC_TRUE
+
 
 !.............................
       case('DETAILED')
@@ -962,6 +964,20 @@ subroutine OutputVariableRead(input,option,output_variable_list)
             exit
           endif
         enddo
+      case('FACE_PERMEABILITY')
+        call OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
+                                option)
+        output_variable => OutputVariableCreate(name,category,units,id)
+        output_variable%iformat = 0 ! double
+        output_variable%plot_only = PETSC_TRUE ! toggle output off for observation
+        call OutputVariableAddToList(output_variable_list,output_variable)
+      case('FACE_AREA')
+        call OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
+                                option)
+        output_variable => OutputVariableCreate(name,category,units,id)
+        output_variable%iformat = 0 ! double
+        output_variable%plot_only = PETSC_TRUE ! toggle output off for observation
+        call OutputVariableAddToList(output_variable_list,output_variable)
 ! IMPORANT
 ! Developers: Before you add a new case statement, does the new
 ! have non-default values (see OutputVariableInit). If no, do
