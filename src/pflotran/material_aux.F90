@@ -950,6 +950,9 @@ subroutine MaterialFractureCompress(material_aux, sigma)
               (1.d0 - (sigma / (1.d6 * material_aux%bulk_mod)) ** &
                material_aux%hard_material_const) ** 3 
     case(THREE_INTEGER)
+      if (Uninitialized(material_aux%porosity_0)) then
+        material_aux%porosity_0 = material_aux%porosity
+      endif
       !Two-part Hooke's Model (Zheng et al., 2016)
       perm_hard = material_aux%initial_permeability * &
                   exp(-material_aux%hard_material_const * &
