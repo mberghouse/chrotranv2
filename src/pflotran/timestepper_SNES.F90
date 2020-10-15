@@ -299,6 +299,7 @@ subroutine TimestepperSNESUpdateDT(this,process_model)
     endif
     if (this%rescue_step_counter > this%rescue_frequency) then
       this%rescue_step_counter = 0
+#if 0
       if (2**this%max_time_step_cuts < this%rescue_factor) then
         ! can't jump timestep more than the max time step cut is allowed
         if (this%max_time_step_cuts < 2) then
@@ -312,6 +313,7 @@ subroutine TimestepperSNESUpdateDT(this,process_model)
       this%dt = this%dt * this%rescue_factor
       option%io_buffer = 'rescue mode activated. jumping time step size.'
       call PrintMsg(option)
+#endif
     endif
   endif
 
