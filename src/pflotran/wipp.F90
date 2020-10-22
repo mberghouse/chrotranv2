@@ -25,7 +25,9 @@ module Fracture_module
     PetscReal :: change_perm_x
     PetscReal :: change_perm_y
     PetscReal :: change_perm_z
+    PetscInt :: id
     PetscBool :: unit_test
+    character(len=MAXSTRINGLENGTH) :: input_filename
   contains
     procedure, public :: Read => FractureRead
   end type fracture_type
@@ -39,7 +41,9 @@ module Fracture_module
             FracturePropertytoAux, &
             FractureDestroy, &
             FracturePoroEvaluate, &
-            FracturePermScale
+            FracturePermScale, &
+            FractureTest, &
+            FractureUnitTest
   
   contains
 
@@ -82,7 +86,9 @@ subroutine FractureInit(this)
   this%change_perm_x = 0.d0
   this%change_perm_y = 0.d0
   this%change_perm_z = 0.d0
+  this%id = 0
   this%unit_test = PETSC_FALSE
+  this%input_filename = ''
 
 end subroutine FractureInit
 
@@ -105,6 +111,9 @@ subroutine FractureAuxVarInit(auxvar)
   auxvar%fracture%initial_pressure = UNINITIALIZED_DOUBLE
   auxvar%fracture%properties = UNINITIALIZED_DOUBLE
   auxvar%fracture%vector = 0.d0
+  auxvar%fracture%id = 0
+  auxvar%fracture%unit_test = PETSC_FALSE
+  auxvar%fracture%input_filename = ''
 
 end subroutine FractureAuxVarInit
 
@@ -140,10 +149,17 @@ subroutine FracturePropertytoAux(fracture_auxvar,fracture_property)
         fracture_property%change_perm_y
       fracture_auxvar%vector(frac_change_perm_z_index) = &
         fracture_property%change_perm_z
+      fracture_auxvar%id = fracture_property%id
+      fracture_auxvar%unit_test = fracture_property%unit_test
+      fracture_auxvar%input_filename = &
+        fracture_property%input_filename
     else
       fracture_auxvar%fracture_is_on = PETSC_FALSE
       fracture_auxvar%properties = UNINITIALIZED_DOUBLE
       fracture_auxvar%vector = 0.d0
+      fracture_auxvar%id = 0
+      fracture_auxvar%unit_test = PETSC_FALSE
+      fracture_auxvar%input_filename = ''
     endif
   endif
 
@@ -165,46 +181,41 @@ subroutine FractureRead(this,input,option)
   class(fracture_type) :: this
   type(input_type), pointer :: input
   type(option_type) :: option
-  character(len=MAXWORDLENGTH) :: word
+  character(len=MAXWORDLENGTH) :: word, error_string
+
+  error_string = 'MATERIAL_PROPERTY,WIPP-FRACTURE'
 
   option%flow%fracture_on = PETSC_TRUE
   call InputPushBlock(input,option)
   do
       call InputReadPflotranString(input,option)
-      call InputReadStringErrorMsg(input,option, &
-                                    'MATERIAL_PROPERTY,WIPP-FRACTURE')
+      call InputReadStringErrorMsg(input,option,error_string)
           
       if (InputCheckExit(input,option)) exit
           
       if (InputError(input)) exit
       call InputReadCard(input,option,word)
-      call InputErrorMsg(input,option,'keyword', &
-                          'MATERIAL_PROPERTY,WIPP-FRACTURE')   
+      call InputErrorMsg(input,option,'keyword',error_string)   
       select case(trim(word))
         case('INITIATING_PRESSURE')
-          call InputReadDouble(input,option, &
-                                this%init_pressure)
+          call InputReadDouble(input,option,this%init_pressure)
           call InputErrorMsg(input,option, &
-                              'initiating pressure of fracturing', &
-                              'MATERIAL_PROPERTY,WIPP-FRACTURE')
+                             'initiating pressure of fracturing', &
+                             error_string)
         case('ALTERED_PRESSURE')
           call InputReadDouble(input,option, &
                                 this%altered_pressure)
           call InputErrorMsg(input,option, &
-                              'altered pressure of fracturing', &
-                              'MATERIAL_PROPERTY,WIPP-FRACTURE')
+                              'altered pressure of fracturing',error_string)
         case('MAXIMUM_FRACTURE_POROSITY')
           call InputReadDouble(input,option, &
                                 this%maximum_porosity)
           call InputErrorMsg(input,option, &
-                              'maximum fracture porosity', &
-                              'MATERIAL_PROPERTY,WIPP-FRACTURE')
+                              'maximum fracture porosity',error_string)
         case('FRACTURE_EXPONENT')
-          call InputReadDouble(input,option, &
-                              this%porosity_exponent)
+          call InputReadDouble(input,option,this%porosity_exponent)
           call InputErrorMsg(input,option, &
-                          'dimensionless fracture exponent for porosity', &
-                              'MATERIAL_PROPERTY,WIPP-FRACTURE')
+                 'dimensionless fracture exponent for porosity',error_string)
         case('ALTER_PERM_X')
           this%change_perm_x = 1.d0
         case('ALTER_PERM_Y')
@@ -213,9 +224,10 @@ subroutine FractureRead(this,input,option)
           this%change_perm_z = 1.d0
         case('TEST')
           this%unit_test = PETSC_TRUE
+          call InputReadFilename(input,option,this%input_filename)
+          call InputErrorMsg(input,option,'TEST INPUT FILENAME',error_string)
         case default
-          call InputKeywordUnrecognized(input,word, &
-                  'MATERIAL_PROPERTY,WIPP-FRACTURE',option)
+          call InputKeywordUnrecognized(input,word,error_string,option)
       end select
     enddo
     call InputPopBlock(input,option)
@@ -389,6 +401,235 @@ subroutine FracturePermScale(auxvar,liquid_pressure,effective_porosity, &
   endif
 
 end subroutine FracturePermScale
+
+! ************************************************************************** !
+
+subroutine FractureTest(liq_pressure,auxvar)
+  ! 
+  ! Author: Jennifer Frederick
+  ! Date: 10/22/2020
+  ! 
+
+  use Material_Aux_class
+
+  implicit none
+  
+  PetscReal, intent(in) :: liq_pressure
+  class(material_auxvar_type), intent(in) :: auxvar
+
+  PetscReal :: compressed_porosity, dcompressed_porosity_dp
+  PetscReal :: scaling_factor
+
+  call FracturePoroEvaluate(auxvar,liq_pressure,compressed_porosity, &
+                            dcompressed_porosity_dp)
+  call FracturePermScale(auxvar,liq_pressure,compressed_porosity, &
+                         scaling_factor)
+
+  print *, '[material ID], [liq. pressure], [intact porosity], &
+           &[altered porosity], [d_por/d_press], [perm. scaling factor]'
+  print *, auxvar%id, liq_pressure, auxvar%porosity_base, compressed_porosity, &
+           dcompressed_porosity_dp, scaling_factor
+  
+end subroutine FractureTest
+
+! ************************************************************************** !
+
+subroutine FractureUnitTest(auxvars,grid)
+  ! 
+  ! Author: Jenn Frederick
+  ! Date: 10/22/2020
+  ! 
+
+  use Material_Aux_class
+  use Grid_module
+
+  implicit none
+  
+  class(material_auxvar_type), pointer :: auxvars(:)
+  type(grid_type), pointer :: grid
+
+  class(fracture_auxvar_type), pointer :: fracture
+  class(material_auxvar_type), pointer :: auxvar
+  PetscReal, pointer :: liq_pressure(:)                ! [Pa]
+  PetscReal, pointer :: temp_liq_pressure(:)           ! [Pa]
+  PetscReal, pointer :: material_id(:)                 ! [  ]
+  PetscReal :: compressed_porosity                     ! [  ]
+  PetscReal :: dcompressed_porosity_dp                 ! [1/Pa]
+  PetscReal :: scaling_factor                          ! [  ]
+  PetscReal, pointer :: corr_compressed_porosity(:)    ! [  ]
+  PetscReal, pointer :: corr_dcompressed_porosity_dp(:)! [1/Pa]
+  PetscReal, pointer :: corr_scaling_factor(:)         ! [  ]  
+  PetscReal, pointer :: temp_corr_comp_porosity(:)     ! [  ]
+  PetscReal, pointer :: temp_corr_dcomp_porosity_dp(:) ! [1/Pa]
+  PetscReal, pointer :: temp_corr_scaling_factor(:)    ! [  ]     
+  PetscReal, pointer :: temp_material_id(:)            ! [  ]           
+  PetscReal, parameter :: tolerance = 1.d-8
+  PetscReal :: diff
+  PetscInt :: i, j, k
+  PetscInt :: local_id, ghosted_id
+  PetscInt :: prev_mat_id, mat_id
+  character(len=MAXWORDLENGTH) :: pass_fail
+  character(len=MAXWORDLENGTH) :: filename_out, id
+  PetscInt :: rc_in, rc_out, fu_in, fu_out
+  PetscBool :: input_file_given
+  PetscInt :: values(8)
+  character(len=8) :: date
+  character(len=5) :: zone
+  character(len=10) :: time
+
+  prev_mat_id = 0
+  do local_id = 1, grid%nlmax
+    ghosted_id = grid%nL2G(local_id)
+    mat_id = auxvars(ghosted_id)%fracture%id
+    if (mat_id == prev_mat_id) cycle
+    prev_mat_id = mat_id
+    auxvar => auxvars(ghosted_id)
+    fracture => auxvar%fracture
+    if (auxvar%fracture%fracture_is_on) then 
+    
+!----- for creating input files only --------------------!
+  call FractureTest(2.5d5,auxvar)
+  call FractureTest(7.5d5,auxvar)
+  call FractureTest(9.0d5,auxvar)
+  call FractureTest(1.5d6,auxvar)
+  call FractureTest(3.0d6,auxvar)
+  call FractureTest(5.0d6,auxvar)
+!--------------------------------------------------------!
+
+  write(id,'(I2)') fracture%id
+  filename_out = trim('./fracture_id') // trim(id) // trim('.out')
+
+  allocate(temp_material_id(99))
+  allocate(temp_liq_pressure(99))
+  allocate(temp_corr_comp_porosity(99))
+  allocate(temp_corr_dcomp_porosity_dp(99))
+  allocate(temp_corr_scaling_factor(99))
+
+  if (len(trim(fracture%input_filename)) > 0) then
+  !------- an input file was provided -------------------------------
+    input_file_given = PETSC_TRUE
+    open(action='write', file=filename_out, iostat=rc_out, newunit=fu_out)
+    call date_and_time(DATE=date,ZONE=zone,TIME=time,VALUES=values)
+    write(fu_out,*) date(1:4),'/',date(5:6),'/',date(7:8),' ',time(1:2),':', &
+                    time(3:4),' ',zone(1:3),':',zone(4:5),'UTC'
+    write(fu_out,*)
+    write(fu_out,'(a)') 'NOTE: The input file provided was:'
+    write(fu_out,'(a,a)') '      ', trim(fracture%input_filename)
+
+    write(fu_out,'(a,d17.10,a)') 'NOTE: The validation test tolerance is ', &
+                             tolerance, '.'
+    write(fu_out,*)
+    i = 1
+    open(action='read', file=trim(fracture%input_filename), iostat=rc_in, &
+         newunit=fu_in)
+    read(fu_in, *) ! skip header line
+    do
+      read (fu_in, *, iostat=rc_in) temp_material_id(i), &
+                                    temp_liq_pressure(i), &
+                                    temp_corr_comp_porosity(i), &
+                                    temp_corr_dcomp_porosity_dp(i), &
+                                    temp_corr_scaling_factor(i)
+      if (rc_in /= 0) exit 
+      i = i + 1 
+    enddo
+    ! read in values while counting how many values with i
+    allocate(material_id(i-1))
+    allocate(liq_pressure(i-1))
+    allocate(corr_compressed_porosity(i-1))
+    allocate(corr_dcompressed_porosity_dp(i-1))
+    allocate(corr_scaling_factor(i-1))
+    material_id(:) = temp_material_id(1:i-1)
+    liq_pressure(:) = temp_liq_pressure(1:i-1)
+    corr_compressed_porosity(:) = temp_corr_comp_porosity(1:i-1)
+    corr_dcompressed_porosity_dp(:) = temp_corr_dcomp_porosity_dp(1:i-1)
+    corr_scaling_factor(:) = temp_corr_scaling_factor(1:i-1)
+  else
+  !------- an input file was not provided ---------------------------
+    input_file_given = PETSC_FALSE
+  endif
+
+  i = 0
+  if (input_file_given) then
+    do k=1,size(liq_pressure)
+      if (material_id(k) == fracture%id) then
+      write(fu_out,'(a,I2,a)') '||-----------TEST-#',k,'-----------------------&
+                                 &--------------||'
+      write(fu_out,'(a)') '[in]  liquid pressure [Pa]:'
+      write(fu_out,'(d17.10)') liq_pressure(k)
+
+      write(fu_out,'(a)') '[out]  altered porosity [-]:'
+      call FracturePoroEvaluate(auxvar,liq_pressure(k),compressed_porosity, &
+                                dcompressed_porosity_dp)
+      write(fu_out,'(d17.10)') compressed_porosity
+      write(fu_out,'(a)') '[correct] altered porosity [-]:'
+      write(fu_out,'(d17.10)') corr_compressed_porosity(k)
+      diff = abs(corr_compressed_porosity(k)-compressed_porosity)
+      if (diff > (tolerance*corr_compressed_porosity(k))) then
+        pass_fail = 'FAIL!'
+        i = i + 1
+      else
+        pass_fail = 'pass'
+      endif
+      write(fu_out,'(a)') trim(pass_fail)
+
+      write(fu_out,'(a)') '[out] d altered porosity dp [1/Pa]:'
+      write(fu_out,'(d17.10)') dcompressed_porosity_dp
+      write(fu_out,'(a)') '[correct] d altered porosity dp [1/Pa]:'
+      write(fu_out,'(d17.10)') corr_dcompressed_porosity_dp(k)
+      diff = abs(corr_dcompressed_porosity_dp(k)-dcompressed_porosity_dp)
+      if (diff > (tolerance*corr_dcompressed_porosity_dp(k))) then
+        pass_fail = 'FAIL!'
+        i = i + 1
+      else
+        pass_fail = 'pass'
+      endif
+      write(fu_out,'(a)') trim(pass_fail)
+
+      write(fu_out,'(a)') '[out] perm scaling factor [-]:'
+      call FracturePermScale(auxvar,liq_pressure(k),compressed_porosity, &
+                             scaling_factor)
+      write(fu_out,'(d17.10)') scaling_factor
+      write(fu_out,'(a)') '[correct] perm scaling factor [-]:'
+      write(fu_out,'(d17.10)') corr_scaling_factor(k)
+      diff = abs(corr_scaling_factor(k)-scaling_factor)
+      if (diff > (tolerance*corr_scaling_factor(k))) then
+        pass_fail = 'FAIL!'
+        i = i + 1
+      else
+        pass_fail = 'pass'
+      endif
+      write(fu_out,'(a)') trim(pass_fail)
+      write(fu_out,*)
+      endif
+    enddo
+    write(fu_out,'(a)') 'TEST SUMMARY:'
+    if (i == 0) then
+      write(fu_out,'(a)') ' All tests passed!'
+    else
+      write(fu_out,'(a,I3,a)') ' A total of (', i, ') test(s) failed!'
+    endif
+    close(fu_out)
+  endif
+
+  close(fu_in)
+
+  if (input_file_given) then
+    deallocate(material_id)
+    deallocate(liq_pressure)
+    deallocate(corr_compressed_porosity)
+    deallocate(corr_dcompressed_porosity_dp)
+    deallocate(corr_scaling_factor)
+  endif
+  deallocate(temp_material_id)
+  deallocate(temp_liq_pressure)
+  deallocate(temp_corr_comp_porosity)
+  deallocate(temp_corr_dcomp_porosity_dp)
+  deallocate(temp_corr_scaling_factor)
+
+    endif
+  enddo
+  
+end subroutine FractureUnitTest
 
 ! ************************************************************************** !
 
@@ -1189,7 +1430,7 @@ subroutine KlinkenbergUnitTest(this)
     write(fu_out,'(a,d17.10,a,d17.10,a,d17.10,a)') ' (', &
       gas_permeability(1),',',gas_permeability(2),',',gas_permeability(3),')'
     if (input_file_given) then
-      write(fu_out,'(a)') '[given] gas permeability (x,y,z) [m2]:'
+      write(fu_out,'(a)') '[correct] gas permeability (x,y,z) [m2]:'
       write(fu_out,'(a,d17.10,a,d17.10,a,d17.10,a)') ' (', &
         corr_gas_permeability(k,1),',',corr_gas_permeability(k,2),',', &
         corr_gas_permeability(k,3),')'

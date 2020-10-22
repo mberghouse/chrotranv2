@@ -74,6 +74,9 @@ module Material_Aux_class
     PetscReal :: initial_pressure
     PetscReal :: properties(4)
     PetscReal :: vector(3) ! < 0. 0. 0. >
+    PetscInt :: id
+    PetscBool :: unit_test
+    character(len=MAXSTRINGLENGTH) :: input_filename
   end type fracture_auxvar_type
  
   type, public :: material_parameter_type

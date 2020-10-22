@@ -650,6 +650,8 @@ recursive subroutine PMWIPPFloInitializeRun(this)
   use Option_module
   use Discretization_module
   use Region_module
+  use Material_module
+  use Fracture_module
   
   implicit none
   
@@ -722,6 +724,11 @@ recursive subroutine PMWIPPFloInitializeRun(this)
     call PMWSSSetRealization(this%pmwss_ptr,this%realization)
     call this%pmwss_ptr%Setup()
     call this%pmwss_ptr%InitializeRun()
+  endif
+
+  ! check for WIPP UNIT TESTING
+  if (option%flow%fracture_on) then
+    call FractureUnitTest(patch%aux%Material%auxvars,grid)
   endif
 
   ! read in alphas

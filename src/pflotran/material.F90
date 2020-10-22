@@ -435,6 +435,7 @@ subroutine MaterialPropertyRead(material_property,input,option)
         ! 4.10 Pressure-Induced Fracture Treatment
         material_property%fracture => FractureCreate()
         call material_property%fracture%Read(input,option)
+        material_property%fracture%id = material_property%external_id 
         option%flow%transient_porosity = PETSC_TRUE
       case('CREEP_CLOSURE_TABLE') 
         call InputReadCardDbaseCompatible(input,option, &
