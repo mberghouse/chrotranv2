@@ -56,6 +56,9 @@ module Material_module
     class(dataset_base_type), pointer :: soil_reference_pressure_dataset
 !    character(len=MAXWORDLENGTH) :: compressibility_dataset_name
     class(dataset_base_type), pointer :: compressibility_dataset
+    PetscBool :: unit_test 
+    character(len=MAXSTRINGLENGTH) :: unittest_input_filename
+
 
     class(geomechanics_subsurface_properties_type), pointer :: &
          geomechanics_subsurface_properties
@@ -193,6 +196,8 @@ function MaterialPropertyCreate()
   nullify(material_property%soil_reference_pressure_dataset)
 !  material_property%compressibility_dataset_name = ''
   nullify(material_property%compressibility_dataset)
+  material_property%unit_test = PETSC_FALSE
+  material_property%unittest_input_filename = ''
 
   material_property%thermal_conductivity_frozen = UNINITIALIZED_DOUBLE
   material_property%alpha_fr = 0.95d0
@@ -380,6 +385,10 @@ subroutine MaterialPropertyRead(material_property,input,option)
                                    material_property%compressibility_dataset, &
                                         'soil compressibility', &
                                         'MATERIAL_PROPERTY',option)
+      case('TEST')
+        material_property%unit_test = PETSC_TRUE
+        call InputReadFilename(input,option,material_property%unittest_input_filename)
+        call InputErrorMsg(input,option,'TEST INPUT FILENAME','MATERIAL_PROPERTY')
       case('SOIL_REFERENCE_PRESSURE') 
         string = trim(input%buf)
         ! first read the word to determine if it is the keyword 

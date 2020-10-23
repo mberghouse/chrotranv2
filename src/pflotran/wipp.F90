@@ -469,7 +469,7 @@ subroutine FractureUnitTest(auxvars,grid)
   PetscInt :: local_id, ghosted_id
   PetscInt :: prev_mat_id, mat_id
   character(len=MAXWORDLENGTH) :: pass_fail
-  character(len=MAXWORDLENGTH) :: filename_out, id
+  character(len=MAXWORDLENGTH) :: filename_in, filename_out, id
   PetscInt :: rc_in, rc_out, fu_in, fu_out
   PetscBool :: input_file_given
   PetscInt :: values(8)
@@ -477,50 +477,28 @@ subroutine FractureUnitTest(auxvars,grid)
   character(len=5) :: zone
   character(len=10) :: time
 
-  prev_mat_id = 0
-  do local_id = 1, grid%nlmax
-    ghosted_id = grid%nL2G(local_id)
-    mat_id = auxvars(ghosted_id)%fracture%id
-    if (mat_id == prev_mat_id) cycle
-    prev_mat_id = mat_id
-    auxvar => auxvars(ghosted_id)
-    fracture => auxvar%fracture
-    if (auxvar%fracture%fracture_is_on) then 
-    
-!----- for creating input files only --------------------!
-  call FractureTest(2.5d5,auxvar)
-  call FractureTest(7.5d5,auxvar)
-  call FractureTest(9.0d5,auxvar)
-  call FractureTest(1.5d6,auxvar)
-  call FractureTest(3.0d6,auxvar)
-  call FractureTest(5.0d6,auxvar)
-!--------------------------------------------------------!
-
-  write(id,'(I2)') fracture%id
-  filename_out = trim('./fracture_id') // trim(id) // trim('.out')
-
   allocate(temp_material_id(99))
   allocate(temp_liq_pressure(99))
   allocate(temp_corr_comp_porosity(99))
   allocate(temp_corr_dcomp_porosity_dp(99))
   allocate(temp_corr_scaling_factor(99))
 
-  if (len(trim(fracture%input_filename)) > 0) then
+  ! find the fracture input filename
+  filename_in = ''
+  do local_id = 1, grid%nlmax
+    ghosted_id = grid%nL2G(local_id)
+    auxvar => auxvars(ghosted_id)
+    fracture => auxvar%fracture
+    if (fracture%fracture_is_on) then
+      filename_in = fracture%input_filename
+    endif
+  enddo
+
+  if (len(trim(filename_in)) > 0) then
   !------- an input file was provided -------------------------------
     input_file_given = PETSC_TRUE
-    open(action='write', file=filename_out, iostat=rc_out, newunit=fu_out)
-    call date_and_time(DATE=date,ZONE=zone,TIME=time,VALUES=values)
-    write(fu_out,*) date(1:4),'/',date(5:6),'/',date(7:8),' ',time(1:2),':', &
-                    time(3:4),' ',zone(1:3),':',zone(4:5),'UTC'
-    write(fu_out,*)
-    write(fu_out,'(a)') 'NOTE: The input file provided was:'
-    write(fu_out,'(a,a)') '      ', trim(fracture%input_filename)
-
-    write(fu_out,'(a,d17.10,a)') 'NOTE: The validation test tolerance is ', &
-                             tolerance, '.'
-    write(fu_out,*)
     i = 1
-    open(action='read', file=trim(fracture%input_filename), iostat=rc_in, &
+    open(action='read', file=trim(filename_in), iostat=rc_in, &
          newunit=fu_in)
     read(fu_in, *) ! skip header line
     do
@@ -548,70 +526,108 @@ subroutine FractureUnitTest(auxvars,grid)
     input_file_given = PETSC_FALSE
   endif
 
-  i = 0
-  if (input_file_given) then
-    do k=1,size(liq_pressure)
-      if (material_id(k) == fracture%id) then
-      write(fu_out,'(a,I2,a)') '||-----------TEST-#',k,'-----------------------&
-                                 &--------------||'
-      write(fu_out,'(a)') '[in]  liquid pressure [Pa]:'
-      write(fu_out,'(d17.10)') liq_pressure(k)
+  prev_mat_id = 0
+  do local_id = 1, grid%nlmax
+    ghosted_id = grid%nL2G(local_id)
+    mat_id = auxvars(ghosted_id)%fracture%id
+    if (mat_id == prev_mat_id) cycle
+    prev_mat_id = mat_id
+    auxvar => auxvars(ghosted_id)
+    fracture => auxvar%fracture
+    if (auxvar%fracture%fracture_is_on) then 
+    
+  !----- for creating input files only --------------------!
+    call FractureTest(2.5d5,auxvar)
+    call FractureTest(7.5d5,auxvar)
+    call FractureTest(9.0d5,auxvar)
+    call FractureTest(1.5d6,auxvar)
+    call FractureTest(3.0d6,auxvar)
+    call FractureTest(5.0d6,auxvar)
+  !--------------------------------------------------------!
 
-      write(fu_out,'(a)') '[out]  altered porosity [-]:'
-      call FracturePoroEvaluate(auxvar,liq_pressure(k),compressed_porosity, &
-                                dcompressed_porosity_dp)
-      write(fu_out,'(d17.10)') compressed_porosity
-      write(fu_out,'(a)') '[correct] altered porosity [-]:'
-      write(fu_out,'(d17.10)') corr_compressed_porosity(k)
-      diff = abs(corr_compressed_porosity(k)-compressed_porosity)
-      if (diff > (tolerance*corr_compressed_porosity(k))) then
-        pass_fail = 'FAIL!'
-        i = i + 1
-      else
-        pass_fail = 'pass'
-      endif
-      write(fu_out,'(a)') trim(pass_fail)
+    write(id,'(I2)') fracture%id
+    filename_out = trim('./fracture_id') // trim(id) // trim('.out')
 
-      write(fu_out,'(a)') '[out] d altered porosity dp [1/Pa]:'
-      write(fu_out,'(d17.10)') dcompressed_porosity_dp
-      write(fu_out,'(a)') '[correct] d altered porosity dp [1/Pa]:'
-      write(fu_out,'(d17.10)') corr_dcompressed_porosity_dp(k)
-      diff = abs(corr_dcompressed_porosity_dp(k)-dcompressed_porosity_dp)
-      if (diff > (tolerance*corr_dcompressed_porosity_dp(k))) then
-        pass_fail = 'FAIL!'
-        i = i + 1
-      else
-        pass_fail = 'pass'
-      endif
-      write(fu_out,'(a)') trim(pass_fail)
-
-      write(fu_out,'(a)') '[out] perm scaling factor [-]:'
-      call FracturePermScale(auxvar,liq_pressure(k),compressed_porosity, &
-                             scaling_factor)
-      write(fu_out,'(d17.10)') scaling_factor
-      write(fu_out,'(a)') '[correct] perm scaling factor [-]:'
-      write(fu_out,'(d17.10)') corr_scaling_factor(k)
-      diff = abs(corr_scaling_factor(k)-scaling_factor)
-      if (diff > (tolerance*corr_scaling_factor(k))) then
-        pass_fail = 'FAIL!'
-        i = i + 1
-      else
-        pass_fail = 'pass'
-      endif
-      write(fu_out,'(a)') trim(pass_fail)
+    if (input_file_given) then
+    !------- an input file was provided -------------------------------
+      open(action='write', file=filename_out, iostat=rc_out, newunit=fu_out)
+      call date_and_time(DATE=date,ZONE=zone,TIME=time,VALUES=values)
+      write(fu_out,*) date(1:4),'/',date(5:6),'/',date(7:8),' ',time(1:2),':', &
+                      time(3:4),' ',zone(1:3),':',zone(4:5),'UTC'
       write(fu_out,*)
-      endif
-    enddo
-    write(fu_out,'(a)') 'TEST SUMMARY:'
-    if (i == 0) then
-      write(fu_out,'(a)') ' All tests passed!'
-    else
-      write(fu_out,'(a,I3,a)') ' A total of (', i, ') test(s) failed!'
-    endif
-    close(fu_out)
-  endif
+      write(fu_out,'(a)') 'NOTE: The input file provided was:'
+      write(fu_out,'(a,a)') '      ', trim(fracture%input_filename)
+  
+      write(fu_out,'(a,d17.10,a)') 'NOTE: The validation test tolerance is ', &
+                                   tolerance, '.'
+      write(fu_out,*)
+    
+      i = 0
+      do k=1,size(liq_pressure)
+        if (material_id(k) == fracture%id) then
+          write(fu_out,'(a,I2,a)') '||-----------TEST-#',k,'-----------------------&
+                                     &--------------||'
+          write(fu_out,'(a)') '[in]  liquid pressure [Pa]:'
+          write(fu_out,'(d17.10)') liq_pressure(k)
 
-  close(fu_in)
+          write(fu_out,'(a)') '[out]  altered porosity [-]:'
+          call FracturePoroEvaluate(auxvar,liq_pressure(k),compressed_porosity, &
+                                    dcompressed_porosity_dp)
+          write(fu_out,'(d17.10)') compressed_porosity
+          write(fu_out,'(a)') '[correct] altered porosity [-]:'
+          write(fu_out,'(d17.10)') corr_compressed_porosity(k)
+          diff = abs(corr_compressed_porosity(k)-compressed_porosity)
+          if (diff > (tolerance*corr_compressed_porosity(k))) then
+            pass_fail = 'FAIL!'
+            i = i + 1
+          else
+            pass_fail = 'pass'
+          endif
+          write(fu_out,'(a)') trim(pass_fail)
+
+          write(fu_out,'(a)') '[out] d altered porosity dp [1/Pa]:'
+          write(fu_out,'(d17.10)') dcompressed_porosity_dp
+          write(fu_out,'(a)') '[correct] d altered porosity dp [1/Pa]:'
+          write(fu_out,'(d17.10)') corr_dcompressed_porosity_dp(k)
+          diff = abs(corr_dcompressed_porosity_dp(k)-dcompressed_porosity_dp)
+          if (diff > (tolerance*corr_dcompressed_porosity_dp(k))) then
+            pass_fail = 'FAIL!'
+            i = i + 1
+          else
+            pass_fail = 'pass'
+          endif
+          write(fu_out,'(a)') trim(pass_fail)
+
+          write(fu_out,'(a)') '[out] perm scaling factor [-]:'
+          call FracturePermScale(auxvar,liq_pressure(k),compressed_porosity, &
+                                 scaling_factor)
+          write(fu_out,'(d17.10)') scaling_factor
+          write(fu_out,'(a)') '[correct] perm scaling factor [-]:'
+          write(fu_out,'(d17.10)') corr_scaling_factor(k)
+          diff = abs(corr_scaling_factor(k)-scaling_factor)
+          if (diff > (tolerance*corr_scaling_factor(k))) then
+            pass_fail = 'FAIL!'
+            i = i + 1
+          else
+            pass_fail = 'pass'
+          endif
+          write(fu_out,'(a)') trim(pass_fail)
+          write(fu_out,*)
+        endif
+      enddo
+      write(fu_out,'(a)') 'TEST SUMMARY:'
+      if (i == 0) then
+        write(fu_out,'(a)') ' All tests passed!'
+      else
+        write(fu_out,'(a,I3,a)') ' A total of (', i, ') test(s) failed!'
+      endif
+      close(fu_out)
+    endif
+
+    close(fu_in)
+
+    endif
+  enddo
 
   if (input_file_given) then
     deallocate(material_id)
@@ -625,9 +641,6 @@ subroutine FractureUnitTest(auxvars,grid)
   deallocate(temp_corr_comp_porosity)
   deallocate(temp_corr_dcomp_porosity_dp)
   deallocate(temp_corr_scaling_factor)
-
-    endif
-  enddo
   
 end subroutine FractureUnitTest
 

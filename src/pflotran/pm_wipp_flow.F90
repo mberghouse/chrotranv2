@@ -651,6 +651,7 @@ recursive subroutine PMWIPPFloInitializeRun(this)
   use Discretization_module
   use Region_module
   use Material_module
+  use Material_Aux_class
   use Fracture_module
   
   implicit none
@@ -730,6 +731,7 @@ recursive subroutine PMWIPPFloInitializeRun(this)
   if (option%flow%fracture_on) then
     call FractureUnitTest(patch%aux%Material%auxvars,grid)
   endif
+  call MaterialCompressSoilUnitTest(patch%aux%Material%auxvars,grid)
 
   ! read in alphas
   if (len_trim(this%alpha_dataset_name) > 0) then
