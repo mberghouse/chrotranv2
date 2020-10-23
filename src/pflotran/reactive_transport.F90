@@ -426,7 +426,7 @@ subroutine RTComputeMassBalance(realization,max_size,sum_mol)
   use Patch_module
   use Field_module
   use Grid_module
-
+  use Secondary_Continuum_module
 
   type(realization_subsurface_type) :: realization
   PetscInt :: max_size
@@ -448,13 +448,14 @@ subroutine RTComputeMassBalance(realization,max_size,sum_mol)
   PetscReal :: sum_mol_by_mnrl(max_size)
   PetscReal :: sum_mol_by_im(max_size)
   PetscReal :: sum_mol_by_gas(max_size)
+  PetscReal :: sum_sec(max_size)
 
   PetscErrorCode :: ierr
   PetscInt :: local_id
   PetscInt :: ghosted_id
   PetscInt :: i, icomp, imnrl, ncomp, irate, irxn, naqcomp
   PetscReal :: pp_to_mol_per_L
-  PetscReal :: liquid_saturation, porosity, volume
+  PetscReal :: liquid_saturation, porosity, volume, sec_porosity
   PetscReal :: tempreal
 
   option => realization%option
@@ -477,7 +478,8 @@ subroutine RTComputeMassBalance(realization,max_size,sum_mol)
   sum_mol_by_mnrl = 0.d0
   sum_mol_by_im = 0.d0
   sum_mol_by_gas = 0.d0
-
+  sum_sec = 0.d0
+  
   naqcomp = reaction%naqcomp
 
   do local_id = 1, grid%nlmax
@@ -486,7 +488,7 @@ subroutine RTComputeMassBalance(realization,max_size,sum_mol)
     if (patch%imat(ghosted_id) <= 0) cycle
     liquid_saturation = global_auxvars(ghosted_id)%sat(1)
     porosity = material_auxvars(ghosted_id)%porosity
-    volume = material_auxvars(ghosted_id)%volume ! [m^3]
+    volume = material_auxvars(ghosted_id)%volume*patch%aux%SC_RT%sec_transport_vars(local_id)%epsilon ! [m^3]
     
     ! aqueous (sum_mol_aq)
     sum_mol_aq(1:naqcomp) = sum_mol_aq(1:naqcomp) + &
@@ -549,9 +551,18 @@ subroutine RTComputeMassBalance(realization,max_size,sum_mol)
           (1.d0-liquid_saturation) * porosity * volume * 1.d3
       enddo
     endif
+
+    if (option%use_mc) then
+      sec_porosity = patch%material_property_array(1)%ptr% &
+                     secondary_continuum_porosity
+      call SecondaryComputeMassBalance(patch%aux%SC_RT%sec_transport_vars(local_id), &
+           sec_porosity,max_size,naqcomp,liquid_saturation,sum_sec)
+    endif
   enddo
 
-  sum_mol_tot = sum_mol_aq + sum_mol_sb + sum_mol_mnrl + sum_mol_gas
+
+
+  sum_mol_tot = sum_mol_aq + sum_mol_sb + sum_mol_mnrl + sum_mol_gas + sum_sec
 
   sum_mol(:,1) = sum_mol_tot
   sum_mol(:,2) = sum_mol_aq

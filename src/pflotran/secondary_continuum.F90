@@ -31,7 +31,8 @@ module Secondary_Continuum_module
             SecondaryRTUpdateIterate, &
             SecondaryRTUpdateEquilState, &
             SecondaryRTUpdateKineticState, &
-            SecondaryRTTimeCut
+            SecondaryRTTimeCut, &
+            SecondaryComputeMassBalance
 
 contains
 
@@ -2263,6 +2264,36 @@ subroutine SecondaryRTotalSorbKD(rt_auxvar,global_auxvar,material_auxvar,reactio
   enddo
 
 end subroutine SecondaryRTotalSorbKD
+
+
+
+            
+! ************************************************************************** !
+
+subroutine SecondaryComputeMassBalance(sec_transport_vars,porosity,max_size,naqcomp,saturation,sum_sec)
+
+  implicit none
+
+  type(sec_transport_type) :: sec_transport_vars
+  
+  PetscReal :: sum_sec(max_size) 
+  PetscReal :: porosity
+  PetscReal :: volume(sec_transport_vars%ncells)
+  PetscReal :: saturation
+  PetscInt :: ngcells
+  PetscInt :: max_size, naqcomp
+  PetscInt :: local_id
+
+  ngcells = sec_transport_vars%ncells
+  volume = sec_transport_vars%vol
+
+  do local_id = 1, ngcells
+     sum_sec(1:naqcomp) = sum_sec(1:naqcomp) + &
+          sec_transport_vars%sec_rt_auxvar(local_id)%total(:,1) * &
+          saturation*porosity*volume*1d3
+  enddo
+
+end subroutine SecondaryComputeMassBalance
 
 
 end module Secondary_Continuum_module
