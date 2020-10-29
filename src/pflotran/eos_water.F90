@@ -238,7 +238,8 @@ module EOS_Water_module
 
   public :: TestEOSWaterBatzleAndWang, &
             EOSWaterTest, &
-            EOSWaterSteamTest
+            EOSWaterSteamTest, &
+            EOSWaterUnitTest
  
   contains
 
@@ -4025,6 +4026,17 @@ subroutine EOSWaterTest(temp_low,temp_high,pres_low,pres_high, &
   deallocate(saturation_pressure_array)
 
 end subroutine EOSWaterTest
+
+! ************************************************************************** !
+
+subroutine EOSWaterUnitTest(input_filename)
+
+  implicit none
+  
+  character(len=MAXWORDLENGTH) :: input_filename
+
+
+end subroutine EOSWaterUnitTest
 
 ! ************************************************************************** !
 

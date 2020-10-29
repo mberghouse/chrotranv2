@@ -172,7 +172,8 @@ module EOS_Gas_module
             EOSGasDensityEnergy, &
             EOSGasHenry, &
             EOSGasInputRecord, &
-            EOSGasTest
+            EOSGasTest, &
+            EOSGasUnitTest
             
   public :: EOSGasSetDensityIdeal, &
             EOSGasSetEnergyIdeal, &
@@ -2266,6 +2267,19 @@ subroutine EOSGasTest(temp_low,temp_high,pres_low,pres_high, &
   deallocate(henry)
 
 end subroutine EOSGasTest
+
+! ************************************************************************** !
+
+subroutine EOSGasUnitTest(input_filename)
+
+  use EOS_Water_module, only : EOSWaterSaturationPressure
+
+  implicit none
+  
+  character(len=MAXWORDLENGTH) :: input_filename
+
+
+end subroutine EOSGasUnitTest
 
 ! ************************************************************************** !
 
