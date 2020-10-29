@@ -288,6 +288,7 @@ subroutine EOSRead(input,option)
                                 test_uniform_temp, test_uniform_pres, &
                                 test_filename)
             endif
+          case('UNIT_TEST')
           case default
             call InputKeywordUnrecognized(input,keyword,'EOS,WATER',option)
         end select

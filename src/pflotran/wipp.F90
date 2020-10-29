@@ -222,7 +222,7 @@ subroutine FractureRead(this,input,option)
           this%change_perm_y = 1.d0
         case('ALTER_PERM_Z')
           this%change_perm_z = 1.d0
-        case('TEST')
+        case('UNIT_TEST')
           this%unit_test = PETSC_TRUE
           call InputReadFilename(input,option,this%input_filename)
           call InputErrorMsg(input,option,'TEST INPUT FILENAME',error_string)
@@ -796,7 +796,7 @@ subroutine CreepClosureRead(this,input,option)
       
     select case(trim(keyword))
       ! TODO:Jenn Make the TEST specific to tables, if you don't want to test all
-      case('TEST')
+      case('UNIT_TEST')
        this%unit_test = PETSC_TRUE
       case('FILENAME') 
         call InputReadFilename(input,option,filename)
@@ -1239,7 +1239,7 @@ subroutine KlinkenbergRead(this,input,option)
       case('B') 
         call InputReadDouble(input,option,this%b)
         call InputErrorMsg(input,option,'b',error_string)
-      case('TEST')
+      case('UNIT_TEST')
         this%unit_test = PETSC_TRUE
         call InputReadFilename(input,option,this%input_filename)
         ! Not sure I want to have the error message because maybe we don't

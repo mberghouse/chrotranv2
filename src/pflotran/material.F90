@@ -385,7 +385,7 @@ subroutine MaterialPropertyRead(material_property,input,option)
                                    material_property%compressibility_dataset, &
                                         'soil compressibility', &
                                         'MATERIAL_PROPERTY',option)
-      case('TEST')
+      case('UNIT_TEST')
         material_property%unit_test = PETSC_TRUE
         call InputReadFilename(input,option,material_property%unittest_input_filename)
         call InputErrorMsg(input,option,'TEST INPUT FILENAME','MATERIAL_PROPERTY')
