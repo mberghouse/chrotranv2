@@ -2291,7 +2291,13 @@ subroutine EOSGasUnitTest(input_filename)
   PetscReal, pointer :: temp_temperature(:)        ! [C]
   ! outputs/intermediates:
   PetscReal, pointer :: saturation_press(:)        ! [Pa]
-  PetscReal, pointer :: henry(:)                   ! [?]
+  PetscReal, pointer :: henry(:)                   ! [-]
+  PetscReal, pointer :: density_kg(:)              ! [kg/m3]
+  PetscReal, pointer :: enthalpy(:)                ! [J/kmol]
+  PetscReal, pointer :: internal_energy(:)         ! [J/kmol]
+  PetscReal, pointer :: viscosity(:)               ! [Pa-sec]
+  PetscReal :: dum1, dum2, dum3, dum4
+  PetscReal :: air_pressure
 
   PetscErrorCode :: ierr
   PetscReal, parameter :: tolerance = 1.d-8
@@ -2325,8 +2331,16 @@ subroutine EOSGasUnitTest(input_filename)
   temperature(:) = temp_temperature(1:i-1)
   allocate(saturation_press(i-1))
   allocate(henry(i-1))
+  allocate(density_kg(i-1))
+  allocate(enthalpy(i-1))
+  allocate(internal_energy(i-1))
+  allocate(viscosity(i-1))
   saturation_press(:) = 0.d0
   henry(:) = 0.d0 
+  density_kg(:) = 0.d0 
+  enthalpy(:) = 0.d0 
+  internal_energy(:) = 0.d0 
+  viscosity(:) = -999.0 
 
   filename_out = 'eos_gas.out'
 
@@ -2389,42 +2403,38 @@ subroutine EOSGasUnitTest(input_filename)
   do k=1,size(temperature)
     write(fu_out,'(a,I2,a)') '||-----------TEST-#',k,'-----------------------&
                              &--------------||'
-    write(fu_out,'(a)') '[in]  temperature [C]:'
+    write(fu_out,'(a)') '  [in]  temperature [C]:'
     write(fu_out,'(d17.10)') temperature(k)
-    write(fu_out,'(a)') '[in]  pressure [Pa]:'
+    write(fu_out,'(a)') '  [in]  pressure [Pa]:'
     write(fu_out,'(d17.10)') pressure(k)
     ! Need saturation pressure to calculate air partial pressure
     call EOSWaterSaturationPressure(temperature(k),saturation_press(k),ierr)
     call EOSGasHenry(temperature(k),saturation_press(k),henry(k),ierr)
+    call EOSGasDensityPtr(temperature(k),pressure(k),density_kg(k), &
+                          dum1,dum2,ierr)
+    write(fu_out,'(a)') '  [out]  density [kg/m3]:'
+    write(fu_out,'(d17.10)') density_kg(k)
+    call EOSGasEnergyPtr(temperature(k),pressure(k),enthalpy(k),dum1,dum2, &
+                         internal_energy(k),dum3,dum4,ierr)
+    write(fu_out,'(a)') '  [out]  enthalpy [J/kmol]:'
+    write(fu_out,'(d17.10)') enthalpy(k)
+    write(fu_out,'(a)') '  [out]  internal energy [J/kmol]:'
+    write(fu_out,'(d17.10)') internal_energy(k)
+    air_pressure = pressure(k) - saturation_press(k)
+    write(fu_out,'(a)') '  [out]  viscosity [Pa-sec]:'
+    if (air_pressure > 0.d0) then
+      call EOSGasViscosityPtr(temperature(k),air_pressure,pressure(k), &
+                              density_kg(k),viscosity(k),PETSC_FALSE, &
+                              dum1,dum2,dum3,dum4,ierr)
+      write(fu_out,'(d17.10)') viscosity(k)
+    else
+      write(fu_out,'(d17.10)') 'NaN'
+    endif
+    write(fu_out,'(a)') "  [out]  Henry's constant [-]:"
+    write(fu_out,'(d17.10)') henry(k)
     write(fu_out,*)
   enddo
   write(fu_out,'(a)') 'TEST SUMMARY:'
-
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  ! do itemp = 1, ntemp
-  !   ! Need saturation pressure to calculate air partial pressure
-  !   call EOSWaterSaturationPressure(temp(itemp),saturation_pressure,ierr)
-  !   saturation_pressure_array(itemp) = saturation_pressure
-  !   call EOSGasHenry(temp(itemp),saturation_pressure,henry(itemp),ierr)
-  !   do ipres = 1, npres
-  !     call EOSGasDensityPtr(temp(itemp),pres(ipres), &
-  !                           density_kg(ipres,itemp), &
-  !                           dum1,dum2,ierr)
-  !     call EOSGasEnergyPtr(temp(itemp),pres(ipres),&
-  !                          enthalpy(ipres,itemp),dum1,dum2, &
-  !                          internal_energy(ipres,itemp),dum3,dum4,ierr)
-  !     air_pressure = pres(ipres) - saturation_pressure
-  !     if (air_pressure > 0.d0) then
-  !       call EOSGasViscosityPtr(temp(itemp),air_pressure,pres(ipres), &
-  !                               density_kg(ipres,itemp), &
-  !                               viscosity(ipres,itemp),PETSC_FALSE, &
-  !                               dum1,dum2,dum3,dum4,ierr)
-  !     else
-  !       viscosity(ipres,itemp) = NaN
-  !     endif
-  !   enddo
-  ! enddo
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   close(fu_out)
   close(fu_in)
@@ -2433,6 +2443,10 @@ subroutine EOSGasUnitTest(input_filename)
   deallocate(pressure)
   deallocate(saturation_press)
   deallocate(henry)
+  deallocate(density_kg)
+  deallocate(enthalpy)
+  deallocate(internal_energy)
+  deallocate(viscosity)
   deallocate(temp_temperature)
   deallocate(temp_pressure)
 
