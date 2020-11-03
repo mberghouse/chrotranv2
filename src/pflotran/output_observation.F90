@@ -933,7 +933,7 @@ subroutine WriteObservationHeaderSec(fid,realization_base,cell_string, &
               write(string,'(i2)') i
               string = 'C(' // trim(adjustl(string)) // ') ' &
                          // trim(reaction%primary_species_names(j))
-              call OutputWriteToHeader(fid,string,'molal',cell_string, &
+              call OutputWriteToHeader(fid,string,'M',cell_string, &
                                        icolumn)
             enddo
           enddo
