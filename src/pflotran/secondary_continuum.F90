@@ -2290,7 +2290,7 @@ subroutine SecondaryComputeMassBalance(sec_transport_vars,porosity,max_size,naqc
   do local_id = 1, ngcells
      sum_sec(1:naqcomp) = sum_sec(1:naqcomp) + &
           sec_transport_vars%sec_rt_auxvar(local_id)%total(:,1) * &
-          saturation*porosity*volume*1d3
+          saturation*porosity*(1-sec_transport_vars%epsilon)/2*1d3
   enddo
 
 end subroutine SecondaryComputeMassBalance
