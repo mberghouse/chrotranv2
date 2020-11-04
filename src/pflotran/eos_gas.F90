@@ -2498,7 +2498,7 @@ subroutine EOSGasUnitTest(input_filename)
                               trim(eos_viscosity_name), '):'
       write(fu_out,'(d17.10)') corr_viscosity(k)
       diff = abs(corr_viscosity(k)-viscosity(k))
-      if (diff > (tolerance*corr_internal_energy(k))) then
+      if (diff > (tolerance*corr_viscosity(k))) then
         pass_fail = 'FAIL!'
         i = i + 1
       else
