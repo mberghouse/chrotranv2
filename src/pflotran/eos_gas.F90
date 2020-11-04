@@ -2509,7 +2509,8 @@ subroutine EOSGasUnitTest(input_filename)
       write(fu_out,'(d17.10)') 'NaN'
     endif
 
-    write(fu_out,'(a,a,a)') "  [out]  Henry's constant [-] (", eos_henry_name, '):'
+    write(fu_out,'(a,a,a)') "  [out]  Henry's constant [-] (", &
+                            trim(eos_henry_name), '):'
     write(fu_out,'(d17.10)') henry(k)
     write(fu_out,*)
   enddo
