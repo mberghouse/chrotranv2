@@ -26,10 +26,13 @@ module Characteristic_Curves_Base_module
     PetscReal :: pcmax
     PetscBool :: analytical_derivative_available
     PetscBool :: calc_int_tension
+    PetscBool :: unit_test
+    character(len=MAXWORDLENGTH) :: input_filename
   contains
     procedure, public :: Init => SFBaseInit
     procedure, public :: Verify => SFBaseVerify
     procedure, public :: Test => SFBaseTest
+    procedure, public :: UnitTest => SFBaseUnitTest
     procedure, public :: SetupPolynomials => SFBaseSetupPolynomials
     procedure, public :: CapillaryPressure => SFBaseCapillaryPressure
     procedure, public :: Saturation => SFBaseSaturation
@@ -45,10 +48,13 @@ module Characteristic_Curves_Base_module
     PetscReal :: Sr
     PetscReal :: Srg
     PetscBool :: analytical_derivative_available
+    PetscBool :: unit_test
+    character(len=MAXWORDLENGTH) :: input_filename
   contains
     procedure, public :: Init => RPFBaseInit
     procedure, public :: Verify => RPFBaseVerify
     procedure, public :: Test => RPF_Base_Test
+    procedure, public :: UnitTest => RPF_Base_UnitTest
     procedure, public :: SetupPolynomials => RPFBaseSetupPolynomials
     procedure, public :: RelativePermeability => RPF_Base_RelPerm
   end type rel_perm_func_base_type
@@ -63,6 +69,7 @@ module Characteristic_Curves_Base_module
             RPFBaseInit, &
             RPFBaseVerify, &
             RPF_Base_Test, &
+            RPF_Base_UnitTest, &
             RPF_Base_RelPerm, &
             SaturationFunctionDestroy, &
             PermeabilityFunctionDestroy
@@ -100,6 +107,8 @@ subroutine SFBaseInit(this)
   this%pcmax = DEFAULT_PCMAX
   this%analytical_derivative_available = PETSC_FALSE
   this%calc_int_tension = PETSC_FALSE
+  this%unit_test = PETSC_FALSE
+  this%input_filename = ''
   
 end subroutine SFBaseInit
 
@@ -144,6 +153,8 @@ subroutine RPFBaseInit(this)
   this%Sr = UNINITIALIZED_DOUBLE
   this%Srg = UNINITIALIZED_DOUBLE
   this%analytical_derivative_available = PETSC_FALSE
+  this%unit_test = PETSC_FALSE
+  this%input_filename = ''
   
 end subroutine RPFBaseInit
 
@@ -367,6 +378,23 @@ subroutine SFBaseTest(this,cc_name,option)
 end subroutine SFBaseTest
 
 ! ************************************************************************** !
+
+subroutine SFBaseUnitTest(this,cc_name,input_filename,option)
+
+  use Option_module
+  use Material_Aux_class
+
+  implicit none
+  
+  class(sat_func_base_type) :: this
+  character(len=MAXWORDLENGTH) :: cc_name
+  character(len=MAXWORDLENGTH) :: input_filename
+  type(option_type), intent(inout) :: option
+  
+
+end subroutine SFBaseUnitTest
+
+! ************************************************************************** !
 ! ************************************************************************** !
 
 subroutine RPF_Base_RelPerm(this,liquid_saturation,relative_permeability, &
@@ -444,6 +472,124 @@ subroutine RPF_Base_Test(this,cc_name,phase,option)
   close(86)
 
 end subroutine RPF_Base_Test
+
+! ************************************************************************** !
+
+subroutine RPF_Base_UnitTest(this,cc_name,phase,input_filename,option)
+
+  use Option_module
+
+  implicit none
+  
+  class(rel_perm_func_base_type) :: this
+  character(len=MAXWORDLENGTH) :: cc_name
+  character(len=MAXWORDLENGTH) :: phase
+  character(len=MAXWORDLENGTH) :: input_filename
+  type(option_type), intent(inout) :: option
+
+  character(len=MAXWORDLENGTH), pointer :: name(:)      ! [-]
+  character(len=MAXWORDLENGTH), pointer :: temp_name(:) ! [-]
+  PetscReal, pointer :: saturation(:)                   ! [-]
+  PetscReal, pointer :: temp_saturation(:)              ! [-]
+  PetscReal, pointer :: rel_perm(:)                     ! [m2]
+  PetscReal, pointer :: corr_rel_perm(:)                ! [m2]
+  PetscReal, pointer :: temp_corr_rel_perm(:)           ! [m2]          
+  PetscReal, parameter :: tolerance = 1.d-8
+  PetscReal :: dum1
+  PetscReal :: diff
+  PetscInt :: i, j, k
+  character(len=MAXWORDLENGTH) :: pass_fail
+  character(len=MAXWORDLENGTH) :: filename_out, id
+  PetscInt :: rc_in, rc_out, fu_in, fu_out
+  PetscBool :: input_file_given
+  PetscInt :: values(8)
+  character(len=8) :: date
+  character(len=5) :: zone
+  character(len=10) :: time
+
+  allocate(temp_name(99))
+  allocate(temp_saturation(99))
+  allocate(temp_corr_rel_perm(99))
+
+  i = 1
+  open(action='read', file=trim(input_filename), iostat=rc_in, &
+       newunit=fu_in)
+  read(fu_in, *) ! skip header line
+  do
+    read (fu_in, *, iostat=rc_in) temp_name(i), &
+                                  temp_saturation(i), &
+                                  temp_corr_rel_perm(i)
+    if (rc_in /= 0) exit 
+    i = i + 1 
+  enddo
+
+  allocate(name(i-1))
+  allocate(saturation(i-1))
+  allocate(corr_rel_perm(i-1))
+  allocate(rel_perm(i-1))
+  name(:) = temp_name(1:i-1)
+  saturation(:) = temp_saturation(1:i-1)
+  corr_rel_perm(:) = temp_corr_rel_perm(1:i-1)
+
+  filename_out = 'perm_func_' // trim(phase) // '.out'
+
+  open(action='write', file=filename_out, iostat=rc_out, newunit=fu_out)
+  call date_and_time(DATE=date,ZONE=zone,TIME=time,VALUES=values)
+  write(fu_out,*) date(1:4),'/',date(5:6),'/',date(7:8),' ',time(1:2),':', &
+                  time(3:4),' ',zone(1:3),':',zone(4:5),'UTC'
+  write(fu_out,*)
+  write(fu_out,'(a)') 'NOTE: The input file provided was:'
+  write(fu_out,'(a,a)') '      ', trim(input_filename)
+  write(fu_out,'(a,d17.10,a)') 'NOTE: The validation test tolerance is ', &
+                               tolerance, '.'
+  write(fu_out,*)
+
+  i = 0
+  do k=1,size(name)
+    write(fu_out,'(a,I2,a)') '||-----------TEST-#',k,'-----------------------&
+                             &--------------||'
+    write(fu_out,'(a)') '  [in]  relative permeability function name:'
+    write(fu_out,'(a)') name(k)
+    write(fu_out,'(a,a,a)') '  [in]  saturation (', trim(phase), ') [Pa]:'
+    write(fu_out,'(d17.10)') saturation(k)
+
+    call this%RelativePermeability(saturation(k),rel_perm(k),dum1,option)
+    write(fu_out,'(a,a,a)') '  [out]  relative permeability (', trim(phase), &
+                            ') [m2]:'
+    write(fu_out,'(d17.10)') rel_perm(k)
+    write(fu_out,'(a,a,a)') '  [correct]  relative permeability (', &
+                            trim(phase), ') [m2]:'
+    write(fu_out,'(d17.10)') corr_rel_perm(k)
+    diff = abs(corr_rel_perm(k)-rel_perm(k))
+    if (diff > (tolerance*corr_rel_perm(k))) then
+      pass_fail = 'FAIL!'
+      i = i + 1
+    else
+      pass_fail = 'pass'
+    endif
+    write(fu_out,'(a)') trim(pass_fail)
+
+    write(fu_out,*)
+  enddo
+  write(fu_out,'(a)') 'TEST SUMMARY:'
+  if (i == 0) then
+    write(fu_out,'(a)') ' All tests passed!'
+  else
+    write(fu_out,'(a,I3,a)') ' A total of (', i, ') test(s) failed!'
+  endif
+
+  close(fu_out)
+  close(fu_in)
+
+  deallocate(name)
+  deallocate(saturation)
+  deallocate(corr_rel_perm)
+  deallocate(rel_perm)
+  deallocate(temp_name)
+  deallocate(temp_saturation)
+  deallocate(temp_corr_rel_perm)
+
+end subroutine RPF_Base_UnitTest
 
 ! ************************************************************************** !
 
