@@ -316,7 +316,6 @@ subroutine TimestepperSNESUpdateDT(this,process_model)
       this%dt = this%dt * this%rescue_factor
       option%io_buffer = 'rescue mode activated. jumping time step size.'
       call PrintMsg(option)
-#endif
     endif
   endif
 
