@@ -312,11 +312,11 @@ subroutine TimestepperBEUpdateDT(this,process_model)
         this%rescue_factor = 2**(this%max_time_step_cuts-2)
         option%io_buffer = 'rescue factor too big. automatically adjusted.'
         call PrintMsg(option)
-      endif      
+      endif
+#endif
       this%dt = this%dt * this%rescue_factor
       option%io_buffer = 'rescue mode activated. jumping time step size.'
       call PrintMsg(option)
-#endif
     endif
   endif
 
