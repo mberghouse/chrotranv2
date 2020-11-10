@@ -500,16 +500,17 @@ END
 
 \begin{semiverbatim}
 
-LINEAR_SOLVER FLOW     \bluecomment{! flow solver}
-  SOLVER DIRECT        \bluecomment{! sets both the below}
+NUMERICAL_METHODS FLOW
+  LINEAR_SOLVER          \bluecomment{! flow solver}
+    SOLVER DIRECT        \bluecomment{! sets both the below}
+  /
 END
 
-\bluecomment{! could also use:}
-LINEAR_SOLVER FLOW
-  KSP_TYPE PREONLY     \bluecomment{! turn off Krylov solver}
-  PC_TYPE PCLU         \bluecomment{! turn on LU preconditioner}
-END
-
+  \bluecomment{! could also use:}
+  LINEAR_SOLVER
+    KSP_TYPE PREONLY     \bluecomment{! turn off Krylov solver}
+    PC_TYPE PCLU         \bluecomment{! turn on LU preconditioner}
+  /
 \end{semiverbatim}
 
 \end{frame}

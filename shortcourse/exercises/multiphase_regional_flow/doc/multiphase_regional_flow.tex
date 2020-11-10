@@ -102,8 +102,10 @@ END
 \end{itemize}
 
 \begin{semiverbatim}
-LINEAR_SOLVER FLOW
-  SOLVER DIRECT
+NUMERICAL_METHODS FLOW
+  LINEAR_SOLVER
+    SOLVER DIRECT
+  /
 END
 \end{semiverbatim}
 \end{frame}
