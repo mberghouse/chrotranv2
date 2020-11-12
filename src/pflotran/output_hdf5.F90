@@ -871,6 +871,7 @@ subroutine OutputHDF5UGridXDMF(realization_base,var_list_type)
   call VecDestroy(global_vec_vx,ierr);CHKERRQ(ierr)
   call VecDestroy(global_vec_vy,ierr);CHKERRQ(ierr)
   call VecDestroy(global_vec_vz,ierr);CHKERRQ(ierr)
+  call VecDestroy(face_vec,ierr);CHKERRQ(ierr)
 
   call h5gclose_f(grp_id,hdf5_err)
 
@@ -1116,7 +1117,9 @@ subroutine OutputHDF5UGridXDMFExplicit(realization_base,var_list_type)
     write_xdmf = PETSC_TRUE
   endif
   
-  if (first .and. output_option%print_explicit_primal_grid) then
+  if (first .and. &
+     (output_option%print_explicit_primal_grid .or. &
+      output_option%print_hdf5_connection_ids)) then
     call h5pcreate_f(H5P_FILE_ACCESS_F,new_prop_id,hdf5_err)
     call h5fcreate_f(domain_filename_path,H5F_ACC_TRUNC_F,new_file_id, &
                      hdf5_err,H5P_DEFAULT_F,new_prop_id)
@@ -1125,8 +1128,14 @@ subroutine OutputHDF5UGridXDMFExplicit(realization_base,var_list_type)
     string = "Domain"
     call h5gcreate_f(new_file_id,string,new_grp_id,hdf5_err, &
                      OBJECT_NAMELEN_DEFAULT_F)
-    call WriteHDF5CoordinatesUGridXDMFExplicit(realization_base,option, &
-                                               new_grp_id)
+    if (output_option%print_explicit_primal_grid) then
+      call WriteHDF5CoordinatesUGridXDMFExplicit(realization_base,option, &
+                                                 new_grp_id)
+    endif
+    if (output_option%print_hdf5_connection_ids) then
+      call WriteHDF5ConnectionIdsUGridXDMF(realization_base,option, &
+                                           new_grp_id)
+    endif
     num_cells = realization_base%output_option%xmf_vert_len
     call h5gclose_f(new_grp_id,hdf5_err)
     call h5fclose_f(new_file_id,hdf5_err)    
@@ -2359,7 +2368,7 @@ subroutine WriteHDF5ConnectionIdsUGridXDMF(realization_base,option,file_id)
   type(connection_set_type), pointer :: cur_connection_set
   type(coupler_type), pointer :: boundary_condition
   PetscInt :: icount, iconn, istart
-  PetscInt :: ghosted_id, nat_id
+  PetscInt :: ghosted_id, nat_id_up, nat_id_dn
   PetscInt :: total_num_connections, nlconnection !local connection
   PetscInt, allocatable :: int_array(:)
   PetscErrorCode :: ierr
@@ -2385,6 +2394,9 @@ subroutine WriteHDF5ConnectionIdsUGridXDMF(realization_base,option,file_id)
   nlconnection = 0
   call OutputGetNumberOfFaceConnection(realization_base, nlconnection)
   
+  write(option%io_buffer, '(i10)') nlconnection
+  call PrintMsg(option)
+  
   ! memory space which is a 1D vector
   rank_mpi = 1
   dims = 0
@@ -2394,6 +2406,8 @@ subroutine WriteHDF5ConnectionIdsUGridXDMF(realization_base,option,file_id)
   ! file space which is a 2D block
   call MPI_Allreduce(nlconnection,total_num_connections,ONE_INTEGER_MPI, &
                      MPIU_INTEGER, MPI_SUM,option%mycomm,ierr);CHKERRQ(ierr)
+  write(option%io_buffer, '(i10)') total_num_connections
+  call PrintMsg(option)
   rank_mpi = 2
   dims = 0
   dims(2) = total_num_connections
@@ -2448,12 +2462,14 @@ subroutine WriteHDF5ConnectionIdsUGridXDMF(realization_base,option,file_id)
             realization_base%patch%grid%internal_connection_set_list%first
   do
     do iconn = 1, cur_connection_set%num_connections
-      ghosted_id = cur_connection_set%id_dn(iconn)
-      nat_id = realization_base%patch%grid%nG2A(ghosted_id)
-      int_array(icount) = nat_id
-      ghosted_id = cur_connection_set%id_up(iconn)
-      nat_id = realization_base%patch%grid%nG2A(ghosted_id)
-      int_array(icount + 1) = nat_id
+      nat_id_up = realization_base%patch%grid%nG2A( &
+                                      cur_connection_set%id_up(iconn))
+      nat_id_dn = realization_base%patch%grid%nG2A( &
+                                        cur_connection_set%id_dn(iconn))
+      if (cur_connection_set%local(iconn) == 0 .and. &
+          nat_id_up < nat_id_dn) cycle
+      int_array(icount) = nat_id_dn
+      int_array(icount + 1) = nat_id_up
       icount = icount + 2
     enddo
     cur_connection_set => cur_connection_set%next
@@ -2466,8 +2482,8 @@ subroutine WriteHDF5ConnectionIdsUGridXDMF(realization_base,option,file_id)
     cur_connection_set => boundary_condition%connection_set
     do iconn = 1, cur_connection_set%num_connections
       ghosted_id = cur_connection_set%id_dn(iconn)
-      nat_id = realization_base%patch%grid%nG2A(ghosted_id)
-      int_array(icount) = nat_id
+      nat_id_dn = realization_base%patch%grid%nG2A(ghosted_id)
+      int_array(icount) = nat_id_dn
       int_array(icount + 1) = -1
       icount = icount + 2
     enddo

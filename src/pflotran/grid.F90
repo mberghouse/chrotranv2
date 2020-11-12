@@ -25,7 +25,7 @@ module Grid_module
     PetscInt :: global_offset ! Offset of first cell on process in petsc ordering
     PetscInt :: nlmax_faces  ! Total number of non-ghosted faces in local domain.
     PetscInt :: ngmax_faces  ! Number of ghosted & non-ghosted faces in local domain.
-    PetscInt :: nmax_faces  ! Number of ghosted & non-ghosted faces in local domain.
+    PetscInt :: nmax_faces  ! Number of ghosted & non-ghosted faces in global domain.
     PetscInt :: global_cell_offset, global_faces_offset  ! offsets for LP formulation
    
     ! Below, we define several arrays used for mapping between different 
@@ -165,6 +165,9 @@ function GridCreate()
   grid%nlmax = 0 
   grid%ngmax = 0
   grid%global_offset = 0
+  grid%nmax_faces = 0
+  !grid%ngmax_faces = 0
+  !grid%nlmax_faces = 0
 
   nullify(grid%hash)
   grid%num_hash_bins = 1000

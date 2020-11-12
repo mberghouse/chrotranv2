@@ -2084,7 +2084,8 @@ subroutine OutputGetNumberOfFaceConnection(realization_base, nconnection)
   use Option_module
   
   class(realization_base_type) :: realization_base
-  PetscInt :: nconnection
+  PetscInt :: nconnection, icount, iconn
+  PetscInt :: nat_id_up, nat_id_dn
   
   type(option_type), pointer :: option
   type(connection_set_type), pointer :: cur_connection_set
@@ -2100,8 +2101,21 @@ subroutine OutputGetNumberOfFaceConnection(realization_base, nconnection)
             realization_base%patch%grid%internal_connection_set_list%first
   do
     if (.not.associated(cur_connection_set)) exit
-    nconnection = nconnection + &
-                            cur_connection_set%num_connections
+    icount = 0
+    do iconn = 1, cur_connection_set%num_connections
+      if (cur_connection_set%local(iconn) == 1) then 
+        icount = icount + 1 !local
+      else
+        nat_id_up = realization_base%patch%grid%nG2A( &
+                                        cur_connection_set%id_up(iconn))
+        nat_id_dn = realization_base%patch%grid%nG2A( &
+                                        cur_connection_set%id_dn(iconn))
+        if (nat_id_up > nat_id_dn) then
+          icount = icount + 1
+        endif
+      endif
+    enddo
+    nconnection = nconnection + icount
     cur_connection_set => cur_connection_set%next
   enddo
   ! boundary connections

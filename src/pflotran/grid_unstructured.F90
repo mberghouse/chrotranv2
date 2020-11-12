@@ -2072,6 +2072,7 @@ function UGridComputeInternConnect(unstructured_grid,grid_x,grid_y,grid_z, &
   allocate(face_to_cell(2,face_count))
   face_to_cell = temp_int_2d
   deallocate(temp_int_2d)
+  ! unstructured_grid%nmax_faces = face_count
 
   
   ! remap faces in cells using temp_int from above
@@ -2197,6 +2198,11 @@ function UGridComputeInternConnect(unstructured_grid,grid_x,grid_y,grid_z, &
         connections%id_up(iconn) = local_id
         connections%id_dn(iconn) = abs(dual_local_id)
         connections%face_id(iconn) = cell_to_face(iface,local_id)
+        if (dual_local_id < 0) then
+          connections%local(iconn) = 0
+        else 
+          connections%local(iconn) = 1
+        endif
         if (face_type == LINE_FACE_TYPE) then
 
           point_up%x = grid_x(local_id)
