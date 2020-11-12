@@ -240,7 +240,7 @@ subroutine UGridExplicitRead(unstructured_grid,filename,option)
   call MPI_Bcast(temp_int,ONE_INTEGER_MPI,MPI_INTEGER, &
                  option%driver%io_rank,option%mycomm,ierr)
   num_connections = temp_int
-
+  
    ! divide cells across ranks
   num_connections_local = num_connections/option%comm%mycommsize
   num_connections_local_save = num_connections_local
@@ -1631,6 +1631,8 @@ subroutine UGridExplicitDecompose(ugrid,option)
   explicit_grid%connections = 0
   allocate(explicit_grid%face_areas(count))
   explicit_grid%face_areas = 0
+  allocate(explicit_grid%face_locals(count))
+  explicit_grid%face_locals = 0
   allocate(explicit_grid%face_centroids(count))
   do iconn = 1, count
     explicit_grid%face_centroids(iconn)%x = 0.d0
@@ -1649,6 +1651,7 @@ subroutine UGridExplicitDecompose(ugrid,option)
       explicit_grid%face_centroids(count)%y = vec_ptr(offset+4)
       explicit_grid%face_centroids(count)%z = vec_ptr(offset+5)
       explicit_grid%face_areas(count) = vec_ptr(offset+6)
+      explicit_grid%face_locals(count) = vec_ptr(offset+7)
     endif
   enddo
   call VecRestoreArrayF90(connections_local,vec_ptr,ierr);CHKERRQ(ierr)
@@ -1756,6 +1759,9 @@ function UGridExplicitSetInternConnect(explicit_grid,upwind_fraction_method, &
     connections%id_up(iconn) = id_up
     connections%id_dn(iconn) = id_dn
 
+    connections%local(iconn) = 0
+    if (explicit_grid%face_locals(iconn) > 0.1) connections%local(iconn) = 1
+    
     pt_up(1) = explicit_grid%cell_centroids(id_up)%x
     pt_up(2) = explicit_grid%cell_centroids(id_up)%y
     pt_up(3) = explicit_grid%cell_centroids(id_up)%z
@@ -1884,6 +1890,7 @@ function UGridExplicitSetBoundaryConnect(explicit_grid,cell_ids, &
     connections%dist(0,iconn) = distance
     connections%dist(1:3,iconn) = v/distance
     connections%area(iconn) = face_areas(iconn)
+    !connections%local(iconn) = 1 ! boundary always local
   enddo
   if (error) then
     option%io_buffer = 'Coincident cell and face centroids found in ' // &

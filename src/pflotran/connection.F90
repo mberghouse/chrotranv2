@@ -11,6 +11,7 @@ module Connection_module
     PetscInt :: id
     PetscInt :: itype                  ! connection type (boundary, internal, source sink
     PetscInt :: num_connections
+    PetscInt :: num_connections_unique ! number of connections to be treat uniquely
     PetscInt :: offset
     PetscInt, pointer :: local(:)      ! 1 if connection is local, 0 if connection is ghosted
     PetscInt, pointer :: id_up(:)      ! list of ids of upwind cells
@@ -76,6 +77,7 @@ function ConnectionCreate(num_connections,connection_itype)
   connection%itype = connection_itype
   connection%offset = 0
   connection%num_connections = num_connections
+  connection%num_connections_unique = 0
   nullify(connection%local)
   nullify(connection%id_up)
   nullify(connection%id_dn)
@@ -88,6 +90,7 @@ function ConnectionCreate(num_connections,connection_itype)
   nullify(connection%cntr)
   select case(connection_itype)
     case(INTERNAL_CONNECTION_TYPE)
+      allocate(connection%local(num_connections))
       allocate(connection%id_up(num_connections))
       allocate(connection%id_dn(num_connections))
       allocate(connection%dist(-1:3,num_connections))
