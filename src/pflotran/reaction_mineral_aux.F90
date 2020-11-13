@@ -35,6 +35,7 @@ module Reaction_Mineral_Aux_module
     PetscReal :: rate_limiter
     PetscReal :: surf_area_vol_frac_pwr
     PetscReal :: surf_area_porosity_pwr
+    PetscReal :: nucleation_volume_fraction
     PetscInt :: irreversible
     PetscReal :: rate
     PetscReal :: activation_energy
@@ -127,6 +128,7 @@ module Reaction_Mineral_Aux_module
     PetscReal, pointer :: kinmnrl_rate_limiter(:)
     PetscReal, pointer :: kinmnrl_surf_area_vol_frac_pwr(:)
     PetscReal, pointer :: kinmnrl_surf_area_porosity_pwr(:)
+    PetscReal, pointer :: kinmnrl_nucleation_vol_frac(:)
     PetscReal, pointer :: kinmnrl_armor_crit_vol_frac(:)
     PetscReal, pointer :: kinmnrl_armor_pwr(:)
     PetscInt, pointer :: kinmnrl_irreversible(:)
@@ -222,6 +224,7 @@ function MineralCreate()
   nullify(mineral%kinmnrl_rate_limiter)
   nullify(mineral%kinmnrl_surf_area_vol_frac_pwr)
   nullify(mineral%kinmnrl_surf_area_porosity_pwr)
+  nullify(mineral%kinmnrl_nucleation_vol_frac)
 
   nullify(mineral%kinmnrl_armor_min_names)
   nullify(mineral%kinmnrl_armor_crit_vol_frac)
@@ -284,6 +287,7 @@ function TransitionStateTheoryRxnCreate()
   tstrxn%affinity_threshold = 0.d0
   tstrxn%surf_area_vol_frac_pwr = 0.d0
   tstrxn%surf_area_porosity_pwr = 0.d0
+  tstrxn%nucleation_volume_fraction = 0.d0
   tstrxn%rate_limiter = 0.d0
   tstrxn%irreversible = 0
   tstrxn%activation_energy = 0.d0
@@ -795,6 +799,7 @@ subroutine MineralDestroy(mineral)
   call DeallocateArray(mineral%kinmnrl_rate_limiter)
   call DeallocateArray(mineral%kinmnrl_surf_area_vol_frac_pwr)
   call DeallocateArray(mineral%kinmnrl_surf_area_porosity_pwr)
+  call DeallocateArray(mineral%kinmnrl_nucleation_vol_frac)
   call DeallocateArray(mineral%kinmnrl_armor_min_names)
   call DeallocateArray(mineral%kinmnrl_armor_pwr)
   call DeallocateArray(mineral%kinmnrl_armor_crit_vol_frac)

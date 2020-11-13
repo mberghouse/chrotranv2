@@ -202,6 +202,11 @@ subroutine MineralReadKinetics(mineral,input,option)
               call InputErrorMsg(input,option, &
                                  'surface area volume fraction power', &
                                  error_string)
+            case('NUCLEATION_VOLUME_FRACTION')
+              call InputReadDouble(input,option, &
+                                   tstrxn%nucleation_volume_fraction)
+              call InputErrorMsg(input,option,"nucleation volume fraction", &
+                                 error_string)
             case('RATE_LIMITER')
 !             read rate limiter for precipitation
               call InputReadDouble(input,option,tstrxn%rate_limiter)
