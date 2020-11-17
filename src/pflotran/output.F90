@@ -810,6 +810,14 @@ subroutine OutputVariableRead(input,option,output_variable_list)
                                 option)
         call OutputVariableAddToList(output_variable_list,name, &
                                      category,units,id,subvar)
+        if (option%iflowmode == H_MODE .and. option%nflowdof == 4) then
+          word = 'XCL'
+          call OutputVariableToID(word,name,units,category,id,subvar, &
+                                  subsubvar,option)
+          call OutputVariableAddToList(output_variable_list,name, &
+                                      category,units,id,subvar)
+        endif
+
       case ('GAS_MOLE_FRACTIONS')
         word = 'XGG'
         call OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
@@ -821,6 +829,13 @@ subroutine OutputVariableRead(input,option,output_variable_list)
                                 option)
         call OutputVariableAddToList(output_variable_list,name, &
                                      category,units,id,subvar)
+        if (option%iflowmode == H_MODE .and. option%nflowdof == 4) then
+          word = 'XCG'
+          call OutputVariableToID(word,name,units,category,id,subvar, &
+                                  subsubvar,option)
+          call OutputVariableAddToList(output_variable_list,name, &
+                                      category,units,id,subvar)
+        endif
       case ('LIQUID_MASS_FRACTIONS')
         word = 'WGL'
         call OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &

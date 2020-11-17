@@ -22,13 +22,13 @@ module PM_Hydrate_class
     PetscInt, pointer :: max_change_ivar(:)
     PetscInt, pointer :: max_change_isubvar(:)
     type(hydrate_parameter_type), pointer :: hydrate_parameters
-    PetscBool :: converged_flag(3,15,MAX_INDEX)
-    PetscInt :: converged_cell(3,15,MAX_INDEX)
-    PetscReal :: converged_real(3,15,MAX_INDEX)
-    PetscReal :: residual_abs_inf_tol(3)
-    PetscReal :: residual_scaled_inf_tol(3)
-    PetscReal :: abs_update_inf_tol(3,15)
-    PetscReal :: rel_update_inf_tol(3,15)
+    PetscBool, pointer :: converged_flag(:,:,:)
+    PetscInt, pointer :: converged_cell(:,:,:)
+    PetscReal, pointer :: converged_real(:,:,:)
+    PetscReal, pointer :: residual_abs_inf_tol(:)
+    PetscReal, pointer :: residual_scaled_inf_tol(:)
+    PetscReal, pointer :: abs_update_inf_tol(:,:)
+    PetscReal, pointer :: rel_update_inf_tol(:,:)
     PetscReal :: damping_factor
   contains
     procedure, public :: ReadSimulationOptionsBlock => &
@@ -72,10 +72,7 @@ function PMHydrateCreate()
   ! Author: Michael Nole
   ! Date: 07/23/19
   ! 
-  use Variables_module, only : LIQUID_PRESSURE, GAS_PRESSURE, AIR_PRESSURE, &
-                               LIQUID_MOLE_FRACTION, TEMPERATURE, &
-                               GAS_SATURATION, HYDRATE_SATURATION, &
-                               LIQUID_SATURATION, ICE_SATURATION
+
   use Upwind_Direction_module
 
   implicit none
@@ -84,38 +81,261 @@ function PMHydrateCreate()
 
   class(pm_hydrate_type), pointer :: this
   
+  allocate(this)
+  this%damping_factor = -1.d0
+  
+  call PMSubsurfaceFlowInit(this)
+  this%name = 'Hydrate Multiphase Flow'
+  this%header = 'GAS HYDRATE + MULTIPHASE FLOW'
+
+  ! turn off default upwinding which is set to PETSC_TRUE in
+  !  upwind_direction.F90
+  fix_upwind_direction = PETSC_FALSE
+
+  allocate(this%hydrate_parameters)
+  nullify(this%hydrate_parameters%methanogenesis)
+
+  PMHydrateCreate => this
+  
+end function PMHydrateCreate
+
+! ************************************************************************** !
+
+subroutine PMHydrateSetFlowMode(pm,option)
+!
+! Sets the flow mode for equilibrium hydrate formation and dissociation
+!
+! Author: Michael Nole
+! Date: 01/02/19
+!
+
+  use Option_module
+  use Variables_module, only : LIQUID_PRESSURE, GAS_PRESSURE, AIR_PRESSURE, &
+                               LIQUID_MOLE_FRACTION, TEMPERATURE, &
+                               GAS_SATURATION, HYDRATE_SATURATION, &
+                               LIQUID_SATURATION, ICE_SATURATION, &
+                               HYDRATE2_SATURATION
+
+  implicit none
+
+  type(option_type) :: option
+  class(pm_hydrate_type), pointer :: pm
+
   PetscReal, parameter :: ref_temp = 20.d0 !degrees C
   PetscReal, parameter :: ref_pres = 101325.d0 !Pa
   PetscReal, parameter :: ref_sat = 0.5
   PetscReal, parameter :: ref_xmol = 1.d-6
-                                             
-  !MAN optimized:
+
+  !MAN: need to make these more flexible so they can be 
+  !     read in through the sim options block
   PetscReal, parameter :: pres_abs_inf_tol = 1.d0 ! Reference tolerance [Pa]
   PetscReal, parameter :: temp_abs_inf_tol = 1.d-5
   PetscReal, parameter :: sat_abs_inf_tol = 1.d-5
   PetscReal, parameter :: xmol_abs_inf_tol = 1.d-9
-  
+
   PetscReal, parameter :: pres_rel_inf_tol = 1.d-3
   PetscReal, parameter :: temp_rel_inf_tol = 1.d-3
   PetscReal, parameter :: sat_rel_inf_tol = 1.d-3
   PetscReal, parameter :: xmol_rel_inf_tol = 1.d-3
-  
+
   PetscReal, parameter :: ref_density_w = 55.058 !kmol_water/m^3
   PetscReal, parameter :: ref_density_a = 0.0423 !kmol_air/m^3
   PetscReal, parameter :: ref_u = 83.8 !MJ/m^3
-  
-  !MAN optimized:
+
   PetscReal, parameter :: w_mass_abs_inf_tol = 1.d-5 !1.d-7 !kmol_water/sec
   PetscReal, parameter :: a_mass_abs_inf_tol = 1.d-5 !1.d-7
   PetscReal, parameter :: u_abs_inf_tol = 1.d-5 !1.d-7
-                                          
-  PetscReal, parameter :: residual_abs_inf_tol(3) = (/w_mass_abs_inf_tol, &
-                             a_mass_abs_inf_tol, u_abs_inf_tol/)
-  PetscReal, parameter :: residual_scaled_inf_tol(3) = 1.d-6
+
+  PetscReal, pointer :: residual_abs_inf_tol(:)
+  PetscReal, pointer :: residual_scaled_inf_tol(:)
 
   PetscReal, parameter :: hyd_sat_abs_inf_tol = 1.d-5 !1.d-10
-  !For convergence using hydrate and ice formation capability
-  PetscReal, parameter :: abs_update_inf_tol(3,15) = &
+
+  PetscReal, pointer :: abs_update_inf_tol(:,:)
+  PetscReal, pointer :: rel_update_inf_tol(:,:)
+
+  if (option%nflowdof == ZERO_INTEGER) option%nflowdof = 3
+
+  if (option%nflowdof == 3) then
+
+    option%iflowmode = H_MODE
+    option%nphase = 4
+    option%liquid_phase = 1  ! liquid_pressure
+    option%gas_phase = 2     ! gas_pressure
+    option%hydrate_phase = 3
+    option%ice_phase = 4
+
+    option%air_pressure_id = 3
+    option%capillary_pressure_id = 4
+    option%vapor_pressure_id = 5
+    option%saturation_pressure_id = 6
+
+    option%water_id = 1
+    option%air_id = 2
+    option%energy_id = 3
+
+    option%nflowspec = 2
+    option%use_isothermal = PETSC_FALSE
+
+    hydrate_max_states = 15
+
+    allocate(dof_to_primary_variable(option%nflowdof,hydrate_max_states))
+
+    dof_to_primary_variable(1:option%nflowdof,L_STATE) = &
+      (/HYDRATE_LIQUID_PRESSURE_INDEX, HYDRATE_LIQ_MOLE_FRACTION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,G_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_AIR_PRESSURE_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,H_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_HYD_MOLE_FRACTION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,I_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_ICE_MOLE_FRACTION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,GA_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_GAS_SATURATION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,HG_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_GAS_SATURATION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,HA_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_HYD_SATURATION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,HI_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_HYD_SATURATION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,GI_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_ICE_SATURATION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,AI_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_LIQ_MOLE_FRACTION_INDEX, &
+       HYDRATE_LIQ_SATURATION_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,HGA_STATE) = &
+      (/HYDRATE_LIQ_SATURATION_INDEX, HYDRATE_HYD_SATURATION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,HAI_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_LIQ_SATURATION_INDEX, &
+       HYDRATE_ICE_SATURATION_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,HGI_STATE) = &
+      (/HYDRATE_ICE_SATURATION_INDEX, HYDRATE_HYD_SATURATION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,GAI_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_LIQ_SATURATION_INDEX, &
+       HYDRATE_ICE_SATURATION_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,QUAD_STATE) = &
+      (/HYDRATE_LIQ_SATURATION_INDEX, HYDRATE_GAS_SATURATION_INDEX, &
+       HYDRATE_ICE_SATURATION_INDEX/)
+
+  elseif (option%nflowdof == 4) then
+    option%iflowmode = H_MODE
+    option%nphase = 5
+    option%liquid_phase = 1  ! liquid_pressure
+    option%gas_phase = 2     ! gas_pressure
+    option%hydrate_phase = 3
+    option%ice_phase = 4
+    option%hydrate2_phase = 5
+
+    option%air_pressure_id = 4      !DF: these used to be 3,4,5,6 
+    option%capillary_pressure_id = 5!This works for w/g/c/e equations, prevents overlap
+    option%vapor_pressure_id = 6
+    option%saturation_pressure_id = 7
+
+    option%water_id = 1
+    option%air_id = 2
+    option%energy_id = 3
+    option%co2_id = 3
+
+    option%nflowspec = 3
+    option%nphase = 5
+    option%use_isothermal = PETSC_FALSE
+
+    !MAN: this will likely increase in the future
+    hydrate_max_states = 19
+
+    allocate(dof_to_primary_variable(option%nflowdof,hydrate_max_states))
+
+    dof_to_primary_variable(1:option%nflowdof,L_STATE) = &
+      (/HYDRATE_LIQUID_PRESSURE_INDEX, HYDRATE_LIQ_MOLE_FRACTION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX, HYDRATE_LIQ_MOLE2_FRACTION_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,G_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_AIR_PRESSURE_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX, HYDRATE_CO2_PRESSURE_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,H_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_HYD_MOLE_FRACTION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX, HYDRATE_LIQ_MOLE2_FRACTION_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,I_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_ICE_MOLE_FRACTION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX, HYDRATE_LIQ_MOLE2_FRACTION_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,GA_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_GAS_SATURATION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX, HYDRATE_LIQ_MOLE2_FRACTION_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,HG_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_GAS_SATURATION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX, HYDRATE_CO2_PRESSURE_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,HA_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_HYD_SATURATION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX, HYDRATE_LIQ_MOLE2_FRACTION_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,HI_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_HYD_SATURATION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX, HYDRATE_LIQ_MOLE2_FRACTION_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,GI_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_ICE_SATURATION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX, HYDRATE_CO2_PRESSURE_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,AI_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_LIQ_MOLE_FRACTION_INDEX, &
+       HYDRATE_LIQ_MOLE2_FRACTION_INDEX, HYDRATE_LIQ_SATURATION_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,HGA_STATE) = &
+      (/HYDRATE_LIQ_SATURATION_INDEX, HYDRATE_HYD_SATURATION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX, HYDRATE_LIQ_MOLE2_FRACTION_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,HAI_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_LIQ_SATURATION_INDEX, &
+       HYDRATE_LIQ_MOLE2_FRACTION_INDEX, HYDRATE_ICE_SATURATION_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,HGI_STATE) = &
+      (/HYDRATE_ICE_SATURATION_INDEX, HYDRATE_HYD_SATURATION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX, HYDRATE_CO2_PRESSURE_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,GAI_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_LIQ_SATURATION_INDEX, &
+       HYDRATE_LIQ_MOLE2_FRACTION_INDEX, HYDRATE_ICE_SATURATION_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,QUAD_STATE) = &
+      (/HYDRATE_LIQ_SATURATION_INDEX, HYDRATE_GAS_SATURATION_INDEX, &
+       HYDRATE_LIQ_MOLE2_FRACTION_INDEX, HYDRATE_ICE_SATURATION_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,H2A_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_HYD2_SATURATION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX, HYDRATE_LIQ_MOLE2_FRACTION_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,H2G_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_LIQ_MOLE_FRACTION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX, HYDRATE_HYD2_SATURATION_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,H2_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_GAS_SATURATION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX, HYDRATE_CO2_PRESSURE_INDEX/)
+    dof_to_primary_variable(1:option%nflowdof,HHA_STATE) = &
+      (/HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_HYD_SATURATION_INDEX, &
+       HYDRATE_TEMPERATURE_INDEX, HYDRATE_HYD2_SATURATION_INDEX/)
+
+  else
+    write(option%io_buffer,*) option%nflowdof
+    option%io_buffer = trim(adjustl(option%io_buffer)) // &
+    ' equations not currently supported in HYDRATE mode.'
+    call PrintErrMsgByRank(option)
+  endif
+
+  allocate(abs_update_inf_tol(option%nflowdof,hydrate_max_states))
+  allocate(rel_update_inf_tol(option%nflowdof,hydrate_max_states))
+  allocate(residual_abs_inf_tol(option%nflowdof))
+  allocate(residual_scaled_inf_tol(option%nflowdof))
+
+  allocate(pm%abs_update_inf_tol(option%nflowdof,hydrate_max_states))
+  allocate(pm%rel_update_inf_tol(option%nflowdof,hydrate_max_states))
+  allocate(pm%residual_abs_inf_tol(option%nflowdof))
+  allocate(pm%residual_scaled_inf_tol(option%nflowdof))
+
+  allocate(pm%converged_flag(option%nflowdof,hydrate_max_states,MAX_INDEX))
+  allocate(pm%converged_cell(option%nflowdof,hydrate_max_states,MAX_INDEX))
+  allocate(pm%converged_real(option%nflowdof,hydrate_max_states,MAX_INDEX))
+
+  if (option%nflowdof == 3) then
+    abs_update_inf_tol = &
     reshape([pres_abs_inf_tol,xmol_abs_inf_tol,temp_abs_inf_tol, &
              pres_abs_inf_tol,pres_abs_inf_tol,temp_abs_inf_tol, &
              pres_abs_inf_tol,hyd_sat_abs_inf_tol,temp_abs_inf_tol,  &
@@ -133,7 +353,7 @@ function PMHydrateCreate()
              hyd_sat_abs_inf_tol,hyd_sat_abs_inf_tol,hyd_sat_abs_inf_tol], &
             shape(abs_update_inf_tol)) * &
             1.d0 ! change to 0.d0 to zero tolerances
-  PetscReal, parameter :: rel_update_inf_tol(3,15) = &
+    rel_update_inf_tol = &
     reshape([pres_rel_inf_tol,xmol_rel_inf_tol,temp_rel_inf_tol, &
              pres_rel_inf_tol,pres_rel_inf_tol,temp_rel_inf_tol, &
              pres_rel_inf_tol,sat_rel_inf_tol,temp_rel_inf_tol, &
@@ -151,81 +371,108 @@ function PMHydrateCreate()
              sat_rel_inf_tol,sat_rel_inf_tol,sat_rel_inf_tol], &
             shape(rel_update_inf_tol)) * &
             1.d0 ! change to 0.d0 to zero tolerances
-  allocate(this)
-  allocate(this%max_change_ivar(9))
-  this%max_change_ivar = [LIQUID_PRESSURE, GAS_PRESSURE, AIR_PRESSURE, &
+
+    residual_abs_inf_tol(:) = [w_mass_abs_inf_tol, a_mass_abs_inf_tol, &
+                               u_abs_inf_tol]
+    residual_scaled_inf_tol(:) = 1.d-6
+
+    !allocate(pm%max_change_ivar(9))
+    !pm%max_change_ivar = [LIQUID_PRESSURE, GAS_PRESSURE, AIR_PRESSURE, &
+    !                            LIQUID_MOLE_FRACTION, TEMPERATURE, &
+    !                            GAS_SATURATION, HYDRATE_SATURATION, &
+    !                            LIQUID_SATURATION, ICE_SATURATION]
+    !allocate(pm%max_change_isubvar(9))
+    !                               ! UNINITIALIZED_INTEGER avoids zeroing of 
+    !                               ! pressures not represented in phase
+    !                                   ! 2 = air in xmol(air,liquid)
+    !pm%max_change_isubvar = [0,0,0,2,0,0,0,0,0]
+
+    allocate(pm%max_change_ivar(9))
+    pm%max_change_ivar = [LIQUID_PRESSURE, GAS_PRESSURE, AIR_PRESSURE, &
                                 LIQUID_MOLE_FRACTION, TEMPERATURE, &
                                 GAS_SATURATION, HYDRATE_SATURATION, &
                                 LIQUID_SATURATION, ICE_SATURATION]
-  allocate(this%max_change_isubvar(9))
+    allocate(pm%max_change_isubvar(9))
                                    ! UNINITIALIZED_INTEGER avoids zeroing of 
                                    ! pressures not represented in phase
-                                       ! 2 = air in xmol(air,liquid)
-  this%max_change_isubvar = [0,0,0,2,0,0,0,0,0]
-  this%damping_factor = -1.d0
-  
-  call PMSubsurfaceFlowInit(this)
-  this%name = 'Hydrate Multiphase Flow'
-  this%header = 'GAS HYDRATE + MULTIPHASE FLOW'
+                                   ! 2 = air in xmol(air,liquid)
+                                   ! 3 = co2 in xmol(co2,liquid)
+    pm%max_change_isubvar = [0,0,0,2,0,0,0,0,0]
 
-  ! turn off default upwinding which is set to PETSC_TRUE in
-  !  upwind_direction.F90
-  fix_upwind_direction = PETSC_FALSE
+  elseif (option%nflowdof == 4) then
 
-! this should be set explicitly in input file using 
-! USE_INFINITY_NORM_CONVERGENCE specified in input block
-!  this%check_post_convergence = PETSC_TRUE
-  this%residual_abs_inf_tol = residual_abs_inf_tol
-  this%residual_scaled_inf_tol = residual_scaled_inf_tol
-  this%abs_update_inf_tol = abs_update_inf_tol
-  this%rel_update_inf_tol = rel_update_inf_tol
+    residual_abs_inf_tol(:) = [w_mass_abs_inf_tol, a_mass_abs_inf_tol, &
+                            a_mass_abs_inf_tol, u_abs_inf_tol]
+    residual_scaled_inf_tol(:) = 1.d-6
 
-  this%converged_flag(:,:,:) = PETSC_TRUE
-  this%converged_real(:,:,:) = 0.d0
-  this%converged_cell(:,:,:) = 0
+    abs_update_inf_tol = &
+  reshape([pres_abs_inf_tol,xmol_abs_inf_tol,temp_abs_inf_tol,xmol_abs_inf_tol,&
+       pres_abs_inf_tol,pres_abs_inf_tol,temp_abs_inf_tol,pres_abs_inf_tol,&
+       pres_abs_inf_tol,hyd_sat_abs_inf_tol,temp_abs_inf_tol,xmol_abs_inf_tol, &
+       pres_abs_inf_tol,999.d0,temp_abs_inf_tol,999.d0, &
+       pres_abs_inf_tol,hyd_sat_abs_inf_tol,temp_abs_inf_tol,xmol_abs_inf_tol, &
+       pres_abs_inf_tol,hyd_sat_abs_inf_tol,temp_abs_inf_tol,pres_abs_inf_tol, &
+       pres_abs_inf_tol,hyd_sat_abs_inf_tol,temp_abs_inf_tol,xmol_abs_inf_tol, &
+       pres_abs_inf_tol,hyd_sat_abs_inf_tol,temp_abs_inf_tol,999.d0, &
+       pres_abs_inf_tol,hyd_sat_abs_inf_tol,temp_abs_inf_tol,pres_abs_inf_tol, &
+       pres_abs_inf_tol,xmol_abs_inf_tol,xmol_abs_inf_tol,hyd_sat_abs_inf_tol,&
+    hyd_sat_abs_inf_tol,hyd_sat_abs_inf_tol,temp_abs_inf_tol,xmol_abs_inf_tol, &
+       pres_abs_inf_tol,hyd_sat_abs_inf_tol,temp_abs_inf_tol,xmol_abs_inf_tol, &
+    hyd_sat_abs_inf_tol,hyd_sat_abs_inf_tol,temp_abs_inf_tol,pres_abs_inf_tol, &
+     pres_abs_inf_tol,hyd_sat_abs_inf_tol,xmol_abs_inf_tol,hyd_sat_abs_inf_tol,&
+  hyd_sat_abs_inf_tol,hyd_sat_abs_inf_tol,xmol_abs_inf_tol,hyd_sat_abs_inf_tol,&
+       pres_abs_inf_tol,hyd_sat_abs_inf_tol,temp_abs_inf_tol,xmol_abs_inf_tol,&
+       pres_abs_inf_tol,xmol_abs_inf_tol,temp_abs_inf_tol,hyd_sat_abs_inf_tol, &
+       pres_abs_inf_tol,hyd_sat_abs_inf_tol,temp_abs_inf_tol,pres_abs_inf_tol, &
+    pres_abs_inf_tol,hyd_sat_abs_inf_tol,temp_abs_inf_tol,hyd_sat_abs_inf_tol],&
+           shape(abs_update_inf_tol)) * 1.d0 ! change to 0.d0 to zero tolerances
+    rel_update_inf_tol = &
+ reshape([pres_rel_inf_tol,xmol_rel_inf_tol,temp_rel_inf_tol,xmol_rel_inf_tol,&
+          pres_rel_inf_tol,pres_rel_inf_tol,temp_rel_inf_tol,pres_rel_inf_tol,&
+          pres_rel_inf_tol,999.d0,temp_rel_inf_tol,xmol_rel_inf_tol,&
+          pres_rel_inf_tol,999.d0,temp_rel_inf_tol,999.d0, &
+          pres_rel_inf_tol,sat_rel_inf_tol,temp_rel_inf_tol,xmol_rel_inf_tol,&
+          pres_rel_inf_tol,sat_rel_inf_tol,temp_rel_inf_tol,pres_rel_inf_tol,&
+          pres_rel_inf_tol,sat_rel_inf_tol,temp_rel_inf_tol,xmol_rel_inf_tol,&
+          pres_rel_inf_tol,sat_rel_inf_tol,temp_rel_inf_tol,999.d0,&
+          pres_rel_inf_tol,sat_rel_inf_tol,temp_rel_inf_tol,pres_rel_inf_tol,&
+          pres_rel_inf_tol,xmol_rel_inf_tol,xmol_rel_inf_tol, sat_rel_inf_tol,&
+          sat_rel_inf_tol,sat_rel_inf_tol,temp_rel_inf_tol,xmol_rel_inf_tol,&
+          pres_rel_inf_tol,sat_rel_inf_tol,xmol_rel_inf_tol, sat_rel_inf_tol,&
+          sat_rel_inf_tol,sat_rel_inf_tol,temp_rel_inf_tol,pres_rel_inf_tol,&
+          pres_rel_inf_tol,sat_rel_inf_tol,xmol_rel_inf_tol, sat_rel_inf_tol,&
+          sat_rel_inf_tol,sat_rel_inf_tol,xmol_rel_inf_tol, sat_rel_inf_tol,&
+          pres_rel_inf_tol,sat_rel_inf_tol,temp_rel_inf_tol,xmol_rel_inf_tol,&
+          pres_rel_inf_tol,xmol_rel_inf_tol,temp_rel_inf_tol,sat_rel_inf_tol,&
+          pres_rel_inf_tol,sat_rel_inf_tol,temp_rel_inf_tol,pres_rel_inf_tol,&
+          pres_rel_inf_tol,sat_rel_inf_tol,temp_rel_inf_tol,sat_rel_inf_tol], &
+          shape(rel_update_inf_tol)) * 1.d0 ! change to 0.d0 to zero tolerances
+    allocate(pm%max_change_ivar(10))
+    pm%max_change_ivar = [LIQUID_PRESSURE, GAS_PRESSURE, AIR_PRESSURE, &
+                                LIQUID_MOLE_FRACTION, LIQUID_MOLE_FRACTION, &
+                                TEMPERATURE, &
+                                GAS_SATURATION, HYDRATE_SATURATION, &
+                                LIQUID_SATURATION, ICE_SATURATION]
+    allocate(pm%max_change_isubvar(10))
+                                   ! UNINITIALIZED_INTEGER avoids zeroing of 
+                                   ! pressures not represented in phase
+                                   ! 2 = air in xmol(air,liquid)
+                                   ! 3 = co2 in xmol(co2,liquid)
+    pm%max_change_isubvar = [0,0,0,2,3,0,0,0,0,0]
+  endif
 
-  allocate(this%hydrate_parameters)
-  nullify(this%hydrate_parameters%methanogenesis)
+  pm%damping_factor = -1.d0
 
-  PMHydrateCreate => this
-  
-end function PMHydrateCreate
+  pm%residual_abs_inf_tol = residual_abs_inf_tol
+  pm%residual_scaled_inf_tol = residual_scaled_inf_tol
+  pm%abs_update_inf_tol = abs_update_inf_tol
+  pm%rel_update_inf_tol = rel_update_inf_tol
 
-! ************************************************************************** !
 
-subroutine PMHydrateSetFlowMode(option)
-!
-! Sets the flow mode for equilibrium hydrate formation and dissociation
-!
-! Author: Michael Nole
-! Date: 01/02/19
-!
+  pm%converged_flag(:,:,:) = PETSC_TRUE
+  pm%converged_real(:,:,:) = 0.d0
+  pm%converged_cell(:,:,:) = 0
 
-  use Option_module
-
-  implicit none
-
-  type(option_type) :: option
-
-  option%iflowmode = H_MODE
-  option%nphase = 4
-  option%liquid_phase = 1  ! liquid_pressure
-  option%gas_phase = 2     ! gas_pressure
-  option%hydrate_phase = 3
-  option%ice_phase = 4
-
-  option%air_pressure_id = 3
-  option%capillary_pressure_id = 4
-  option%vapor_pressure_id = 5
-  option%saturation_pressure_id = 6
-
-  option%water_id = 1
-  option%air_id = 2
-  option%energy_id = 3
-
-  option%nflowdof = 3
-  option%nflowspec = 2
-  option%use_isothermal = PETSC_FALSE
 
 end subroutine PMHydrateSetFlowMode
 
@@ -286,16 +533,23 @@ subroutine PMHydrateReadParameters(input,pm_hydrate,option)
         end select
       case('EFFECTIVE_SAT_SCALING')
         hydrate_eff_sat_scaling = PETSC_TRUE
+      case('SAME_SPECIES_HYDRATE')
+        hydrate_mass_balance_1 = ONE_INTEGER
+        fmw_comp = [FMWH2O,FMWAIR,FMWAIR]
       case('WITH_GIBBS_THOMSON')
         hydrate_with_gibbs_thomson = PETSC_TRUE
       case('GT_3PHASE')
         hydrate_gt_3phase = PETSC_TRUE
+      case('WITH_SALINITY')
+        hydrate_salinity = PETSC_TRUE
       case('ADJUST_SOLUBILITY_WITHIN_GHSZ')
         hydrate_adjust_ghsz_solubility = PETSC_TRUE
       case('WITH_SEDIMENTATION')
         hydrate_with_sedimentation = PETSC_TRUE
       case('NO_PC')
         hydrate_no_pc = PETSC_TRUE
+      case('MULTI_HYDRATE')
+        hydrate_three_component = PETSC_TRUE
       case('METHANOGENESIS')
         hydrate_with_methanogenesis = PETSC_TRUE
         if (.not. associated(pm_hydrate%hydrate_parameters%methanogenesis)) then
@@ -431,13 +685,14 @@ subroutine PMHydrateReadSimOptionsBlock(this,input)
   PetscReal :: tempreal
   character(len=MAXSTRINGLENGTH) :: error_string
   PetscBool :: found
-  PetscInt :: lid, gid, eid
+  PetscInt :: lid, gid, eid, cid
 
   option => this%option
 
   lid = 1 !option%liquid_phase
   gid = 2 !option%gas_phase
   eid = 3 !option%energy_id
+  cid = 4
 
   error_string = 'Hydrate Options'
   
@@ -500,6 +755,18 @@ subroutine PMHydrateReadSimOptionsBlock(this,input)
       case('WINDOW_EPSILON') 
         call InputReadDouble(input,option,window_epsilon)
         call InputErrorMsg(input,option,keyword,error_string)
+      case('HYDRATE_FORMER')
+        call InputReadWord(input,option,word,PETSC_TRUE)
+        call InputErrorMsg(input,option,'hydrate_former',error_string)
+        call HydrateAuxSetHydrateFormer(word,option)
+      case('WITH_SALT_MASS_BALANCE')
+        !MAN: To use, NUMBER_OF_EQUATIONS must be at least 4?
+        hydrate_salinity = PETSC_TRUE
+      case('NUMBER_OF_EQUATIONS')
+        !Currently supported: 3 or 4
+        call InputReadDouble(input,option,tempreal)
+        option%nflowdof = tempreal
+        call InputErrorMsg(input,option,keyword,error_string)
       case default
         call InputKeywordUnrecognized(input,keyword,'HYDRATE Mode',option)
     end select
@@ -550,7 +817,8 @@ subroutine PMHydrateReadNewtonSelectCase(this,input,keyword,found, &
   call PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
                                             error_string,option)
   if (found) return
-    
+  
+  !MAN: This needs work (10/20)
   found = PETSC_TRUE
   select case(trim(keyword))
       case('CENTRAL_DIFFERENCE_JACOBIAN')
@@ -656,6 +924,8 @@ subroutine PMHydrateReadNewtonSelectCase(this,input,keyword,found, &
         this%abs_update_inf_tol(1,11) = tempreal
         this%abs_update_inf_tol(1,13) = tempreal
         this%abs_update_inf_tol(1,15) = tempreal
+        this%abs_update_inf_tol(2,19) = tempreal
+        this%abs_update_inf_tol(4,19) = tempreal
       case('XMOL_ABS_UPDATE_INF_TOL')
         call InputReadDouble(input,option,tempreal)
         call InputErrorMsg(input,option,keyword,error_string)
@@ -779,18 +1049,31 @@ recursive subroutine PMHydrateInitializeRun(this)
   PetscInt :: i
   PetscErrorCode :: ierr
 
+  
   ! need to allocate vectors for max change
-  call VecDuplicateVecsF90(this%realization%field%work,NINE_INTEGER, &
-                           this%realization%field%max_change_vecs, &
-                           ierr);CHKERRQ(ierr)
-  ! set initial values
-  do i = 1, 9
-    call RealizationGetVariable(this%realization, &
-                                this%realization%field%max_change_vecs(i), &
-                                this%max_change_ivar(i), &
-                                this%max_change_isubvar(i))
-  enddo
-
+  if (hydrate_max_states == 15) then
+    call VecDuplicateVecsF90(this%realization%field%work,NINE_INTEGER, &
+                             this%realization%field%max_change_vecs, &
+                             ierr);CHKERRQ(ierr)
+    ! set initial values
+    do i = 1, 9
+      call RealizationGetVariable(this%realization, &
+                                  this%realization%field%max_change_vecs(i), &
+                                  this%max_change_ivar(i), &
+                                  this%max_change_isubvar(i))
+   enddo
+  else
+    call VecDuplicateVecsF90(this%realization%field%work,TEN_INTEGER, &
+                             this%realization%field%max_change_vecs, &
+                             ierr);CHKERRQ(ierr)
+    ! set initial values
+    do i = 1, 10
+      call RealizationGetVariable(this%realization, &
+                                  this%realization%field%max_change_vecs(i), &
+                                  this%max_change_ivar(i), &
+                                  this%max_change_isubvar(i))
+    enddo
+  endif
   ! call parent implementation
   call PMSubsurfaceFlowInitializeRun(this)
 
@@ -1062,7 +1345,7 @@ subroutine PMHydrateCheckUpdatePre(this,snes,X,dX,changed,ierr)
   type(field_type), pointer :: field
   PetscInt :: liquid_pressure_index, gas_pressure_index, air_pressure_index
   PetscInt :: temperature_index
-  PetscInt :: lid, gid, apid, cpid, vpid, spid
+  PetscInt :: lid, gid, apid, cpid, vpid, spid, cid
   PetscReal :: liquid_pressure0, liquid_pressure1, del_liquid_pressure
   PetscReal :: gas_pressure0, gas_pressure1, del_gas_pressure
   PetscReal :: air_pressure0, air_pressure1, del_air_pressure
@@ -1197,6 +1480,8 @@ subroutine PMHydrateCheckUpdatePre(this,snes,X,dX,changed,ierr)
       scale = hydrate_damping_factor
     endif
 
+!MAN: This needs work (10/20)
+
 #define LIMIT_MAX_PRESSURE_CHANGE
 #define LIMIT_MAX_SATURATION_CHANGE
     ! scaling
@@ -1224,7 +1509,7 @@ subroutine PMHydrateCheckUpdatePre(this,snes,X,dX,changed,ierr)
           endif
 #endif
 !LIMIT_MAX_PRESSURE_CHANGE
-        case(GA_STATE)
+        case(GA_STATE, HA_STATE)
           gas_pressure_index = offset + HYDRATE_GAS_PRESSURE_DOF
 !        air_pressure_index = offset + 2
           saturation_index = offset + HYDRATE_GAS_SATURATION_DOF
@@ -1266,6 +1551,41 @@ subroutine PMHydrateCheckUpdatePre(this,snes,X,dX,changed,ierr)
                                      HYDRATE_PRESSURE_SCALE
           dX_p(air_pressure_index) = dX_p(air_pressure_index) * &
                                      HYDRATE_PRESSURE_SCALE
+        case(HHA_STATE)
+          gas_pressure_index = offset + HYDRATE_GAS_PRESSURE_DOF
+!        air_pressure_index = offset + 2
+          saturation_index = offset + HYDRATE_GAS_SATURATION_DOF
+          temperature_index  = offset + HYDRATE_ENERGY_DOF
+          dX_p(gas_pressure_index) = dX_p(gas_pressure_index) * &
+                                     HYDRATE_PRESSURE_SCALE
+          if (hydrate_2ph_energy_dof == HYDRATE_AIR_PRESSURE_INDEX) then
+            air_pressure_index = offset + HYDRATE_ENERGY_DOF
+            dX_p(air_pressure_index) = dX_p(air_pressure_index) * &
+                                       HYDRATE_PRESSURE_SCALE
+            del_air_pressure = dX_p(air_pressure_index)
+            air_pressure0 = X_p(air_pressure_index)
+            air_pressure1 = air_pressure0 - del_air_pressure
+          endif
+          temp_scale = 1.d0
+          del_gas_pressure = dX_p(gas_pressure_index)
+          gas_pressure0 = X_p(gas_pressure_index)
+          gas_pressure1 = gas_pressure0 - del_gas_pressure
+          del_saturation = max(dX_p(saturation_index), &
+                               dX_p(saturation_index+ONE_INTEGER))
+          saturation0 = X_p(saturation_index)
+          saturation1 = saturation0 - del_saturation
+#ifdef LIMIT_MAX_PRESSURE_CHANGE
+          if (dabs(del_gas_pressure) > hydrate_max_pressure_change) then
+            temp_real = dabs(hydrate_max_pressure_change/del_gas_pressure)
+            temp_scale = min(temp_scale,temp_real)
+          endif
+#endif
+#ifdef LIMIT_MAX_SATURATION_CHANGE
+          if (dabs(del_saturation) > max_saturation_change) then
+            temp_real = dabs(max_saturation_change/del_saturation)
+            temp_scale = min(temp_scale,temp_real)
+          endif
+#endif
       end select
       scale = min(scale,temp_scale)
     enddo
@@ -1324,12 +1644,12 @@ subroutine PMHydrateCheckUpdatePost(this,snes,X0,dX,X1,dX_changed, &
   PetscInt :: local_id, ghosted_id, natural_id
   PetscInt :: offset, ival, idof
   PetscReal :: dX_abs, dX_X0
-  PetscBool :: converged_abs_update_flag(3,15)
-  PetscBool :: converged_rel_update_flag(3,15)
-  PetscInt :: converged_abs_update_cell(3,15)
-  PetscInt :: converged_rel_update_cell(3,15)
-  PetscReal :: converged_abs_update_real(3,15)
-  PetscReal :: converged_rel_update_real(3,15)
+  PetscBool, pointer :: converged_abs_update_flag(:,:)
+  PetscBool, pointer :: converged_rel_update_flag(:,:)
+  PetscInt, pointer :: converged_abs_update_cell(:,:)
+  PetscInt, pointer :: converged_rel_update_cell(:,:)
+  PetscReal, pointer :: converged_abs_update_real(:,:)
+  PetscReal, pointer :: converged_rel_update_real(:,:)
   PetscInt :: istate
   PetscBool :: converged_absolute
   PetscBool :: converged_relative
@@ -1339,6 +1659,14 @@ subroutine PMHydrateCheckUpdatePost(this,snes,X0,dX,X1,dX_changed, &
   field => this%realization%field
   patch => this%realization%patch
   global_auxvars => patch%aux%Global%auxvars
+
+  allocate(converged_abs_update_flag(option%nflowdof,hydrate_max_states))
+  allocate(converged_rel_update_flag(option%nflowdof,hydrate_max_states))
+  allocate(converged_abs_update_cell(option%nflowdof,hydrate_max_states))
+  allocate(converged_rel_update_cell(option%nflowdof,hydrate_max_states))
+  allocate(converged_abs_update_real(option%nflowdof,hydrate_max_states))
+  allocate(converged_rel_update_real(option%nflowdof,hydrate_max_states))
+
  
   hydrate_allow_state_change = PETSC_TRUE
  
@@ -1455,24 +1783,47 @@ subroutine PMHydrateCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
   PetscInt :: offset, ival, idof, itol
   PetscReal :: R, A, R_A
   PetscReal, parameter :: A_zero = 1.d-15
-  PetscBool :: converged_abs_residual_flag(3,15)
-  PetscReal :: converged_abs_residual_real(3,15)
-  PetscInt :: converged_abs_residual_cell(3,15)
-  PetscBool :: converged_scaled_residual_flag(3,15)
-  PetscReal :: converged_scaled_residual_real(3,15)
-  PetscInt :: converged_scaled_residual_cell(3,15)
+  PetscBool, pointer :: converged_abs_residual_flag(:,:)
+  PetscReal, pointer :: converged_abs_residual_real(:,:)
+  PetscInt, pointer :: converged_abs_residual_cell(:,:)
+  PetscBool, pointer :: converged_scaled_residual_flag(:,:)
+  PetscReal, pointer :: converged_scaled_residual_real(:,:)
+  PetscInt, pointer :: converged_scaled_residual_cell(:,:)
   PetscInt :: istate
   PetscBool :: converged_absolute
   PetscBool :: converged_scaled
   PetscMPIInt :: mpi_int
-  PetscBool :: flags(181)
+  PetscBool, pointer :: flags(:)
   character(len=MAXSTRINGLENGTH) :: string
-  character(len=14), parameter :: state_string(15) = &
+  character(len=14), pointer :: state_string(:)
+  character(len=17), pointer :: dof_string(:,:)
+  character(len=15), parameter :: tol_string(MAX_INDEX) = &
+    ['Absolute Update','Relative Update','Residual       ','Scaled Residual']
+
+  patch => this%realization%patch
+  option => this%realization%option
+  field => this%realization%field
+  grid => patch%grid
+  global_auxvars => patch%aux%Global%auxvars
+
+  allocate(dof_string(option%nflowdof,hydrate_max_states))
+  allocate(state_string(hydrate_max_states))
+  allocate(flags(MAX_INDEX*option%nflowdof*hydrate_max_states+1))
+
+  allocate(converged_abs_residual_flag(option%nflowdof,hydrate_max_states))
+  allocate(converged_abs_residual_real(option%nflowdof,hydrate_max_states))
+  allocate(converged_abs_residual_cell(option%nflowdof,hydrate_max_states))
+  allocate(converged_scaled_residual_flag(option%nflowdof,hydrate_max_states))
+  allocate(converged_scaled_residual_real(option%nflowdof,hydrate_max_states))
+  allocate(converged_scaled_residual_cell(option%nflowdof,hydrate_max_states))
+
+  if (option%nflowdof == 3) then
+    state_string = &
     ['Liquid State  ','Gas State     ','Hydrate State ','Ice State     ', &
      'GA State      ','HG State      ','HA State      ','HI State      ', &
      'GI State      ','AI State      ','HGA State     ','HAI State     ', &
      'HGI State     ','GAI State     ','Quad State    ']
-  character(len=17), parameter :: dof_string(3,15) = &
+    dof_string = &
     reshape(['Liquid Pressure  ','Air Mole Fraction','Temperature      ', &
              'Gas Pressure     ','Air Pressure     ','Temperature      ', &
              'Gas Pressure     ','Air Mole Frac Hyd','Temperature      ', &
@@ -1489,14 +1840,55 @@ subroutine PMHydrateCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
              'Gas Pressure     ','Liquid Saturation','Ice Saturation   ', &
              'Gas Saturation   ','Liquid Saturation','Ice Saturation   '], &
              shape(dof_string))
-  character(len=15), parameter :: tol_string(MAX_INDEX) = &
-    ['Absolute Update','Relative Update','Residual       ','Scaled Residual']
-  
-  patch => this%realization%patch
-  option => this%realization%option
-  field => this%realization%field
-  grid => patch%grid
-  global_auxvars => patch%aux%Global%auxvars
+  elseif (option%nflowdof == 4) then
+    state_string = &
+    ['Liquid State  ','Gas State     ','Hydrate State ','Ice State     ', &
+     'GA State      ','HG State      ','HA State      ','HI State      ', &
+     'GI State      ','AI State      ','HGA State     ','HAI State     ', &
+     'HGI State     ','GAI State     ','Quad State    ','H2A State     ', &
+     'H2G State     ','H2 State      ','HHA State     ']
+    dof_string  = &
+    reshape(['Liquid Pressure  ','Air Mole Fraction','Temperature      ', &
+             'CO2 Mole Fraction', &
+             'Gas Pressure     ','Air Pressure     ','Temperature      ', &
+             'Gas saturation   ', &
+             'Gas Pressure     ','Air Mole Frac Hyd','Temperature      ', &
+             'CO2 Mole Frac Hyd', &
+             'Gas Pressure     ','Air Mole Frac Ice','Temperature      ', &
+             'CO2 Mole Frac Hyd', &
+             'Gas Pressure     ','Gas Saturation   ','Temperature      ', &
+             'CO2 Pressure     ', &
+             'Gas Pressure     ','Gas Saturation   ','Temperature      ', &
+             'CO2 Pressure     ', &
+             'Gas Pressure     ','Hydrate Sat      ','Temperature      ', &
+             'CO2 Pressure     ', &
+             'Gas Pressure     ','Hydrate Sat      ','Temperature      ', &
+             'CO2 Pressure     ', &
+             'Gas Pressure     ','Ice Saturation   ','Temperature      ', &
+             'CO2 Pressure     ', &
+             'Gas Pressure     ','Air Mole Fraction','Liquid Saturation', &
+             'CO2 Pressure     ', &
+             'Liquid Saturation','Hydrate Sat      ','Temperature      ', &
+             'CO2 Pressure     ', &
+             'Gas Pressure     ','Liquid Saturation','Ice Saturation   ', &
+             'CO2 Pressure     ', &
+             'Hydrate Sat      ','Ice Saturation   ','Temperature      ', &
+             'CO2 Pressure     ', &
+             'Gas Pressure     ','Liquid Saturation','Ice Saturation   ', &
+             'CO2 Pressure     ', &
+             'Liquid Saturation','Gas Saturation   ','Ice Saturation   ', &
+             'CO2 Pressure     ', &
+             'Gas pressure     ','CO2 Mole Frac Hyd','Temperature      ', &
+             'CO2 Pressure     ', &
+             'Gas Pressure     ','Gas Saturation   ','Temperature      ', &
+             'CO2 Pressure     ', &
+             'Gas Pressure     ','CO2 Mole Frac Hyd','Temperature      ', &
+             'CO2 Pressure     ', &
+             'Liquid Saturation','Hydrate Sat      ','Temperature      ', &
+             'Hydrate2 Sat     '], &
+             shape(dof_string))
+  endif
+
 
   if (this%check_post_convergence) then
     call VecGetArrayReadF90(field%flow_r,r_p,ierr);CHKERRQ(ierr)
@@ -1567,25 +1959,32 @@ subroutine PMHydrateCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
                                        converged_scaled_residual_real(:,:)
     this%converged_cell(:,:,SCALED_RESIDUAL_INDEX) = &
                                        converged_scaled_residual_cell(:,:)
-    !mpi_int = 9*MAX_INDEX
-    flags(1:45*MAX_INDEX) = reshape(this%converged_flag,(/45*MAX_INDEX/))
-    flags(181) = .not.hydrate_high_temp_ts_cut
-    mpi_int = 181
+
+    flags(1:option%nflowdof*hydrate_max_states*MAX_INDEX) = &
+          reshape(this%converged_flag,(/option%nflowdof* &
+                  hydrate_max_states*MAX_INDEX/))
+    flags(MAX_INDEX*option%nflowdof*hydrate_max_states+1) = &
+          .not.hydrate_high_temp_ts_cut
+    mpi_int = MAX_INDEX*option%nflowdof*hydrate_max_states+1
+
     ! do not perform an all reduce on cell id as this info is not printed 
     ! in parallel
     call MPI_Allreduce(MPI_IN_PLACE,flags,mpi_int, &
                        MPI_LOGICAL,MPI_LAND,option%mycomm,ierr)
-    this%converged_flag = reshape(flags(1:45*MAX_INDEX),(/3,15,MAX_INDEX/))
-    hydrate_high_temp_ts_cut = .not.flags(181)
+    this%converged_flag = reshape(flags(1:option%nflowdof*hydrate_max_states* &
+                                  MAX_INDEX),(/option%nflowdof, &
+                                  hydrate_max_states,MAX_INDEX/))
+    hydrate_high_temp_ts_cut = .not.flags(option%nflowdof*hydrate_max_states* &
+                                          MAX_INDEX+1)
 
-    mpi_int = 45*MAX_INDEX
+    mpi_int = option%nflowdof*hydrate_max_states*MAX_INDEX
     call MPI_Allreduce(MPI_IN_PLACE,this%converged_real,mpi_int, &
                        MPI_DOUBLE_PRECISION,MPI_MAX,option%mycomm,ierr)
-  
+
     option%convergence = CONVERGENCE_CONVERGED
     
     do itol = 1, MAX_INDEX
-      do istate = 1, 15
+      do istate = 1, hydrate_max_states
         do idof = 1, option%nflowdof
           if (.not.this%converged_flag(idof,istate,itol)) then
             option%convergence = CONVERGENCE_KEEP_ITERATING
@@ -1775,10 +2174,9 @@ subroutine PMHydrateMaxChange(this)
   type(grid_type), pointer :: grid
   type(global_auxvar_type), pointer :: global_auxvars(:)
   PetscReal, pointer :: vec_ptr(:), vec_ptr2(:)
-  PetscReal :: max_change_local(9)
-  PetscReal :: max_change_global(9)
+  PetscReal, pointer :: max_change_local(:), max_change_global(:)
   PetscReal :: max_change
-  PetscInt :: i, j
+  PetscInt :: i, j, max_change_index
   PetscInt :: local_id, ghosted_id
 
   
@@ -1797,7 +2195,18 @@ subroutine PMHydrateMaxChange(this)
   !max change variables:[LIQUID_PRESSURE, GAS_PRESSURE, AIR_PRESSURE, &
   !                      LIQUID_MOLE_FRACTION, TEMPERATURE, GAS_SATURATION,
   !                      HYDRATE_SATURATION, LIQUID_SATUARTION, ICE_SATUARTION]
-  do i = 1, 9
+  if (option%nflowdof == 3) then
+    max_change_index = 9
+  else
+    max_change_index = 10
+  endif
+  
+  allocate(max_change_local(max_change_index))
+  allocate(max_change_global(max_change_index))
+  max_change_global = 0.d0
+  max_change_local = 0.d0
+
+  do i = 1, max_change_index
     call RealizationGetVariable(realization,field%work, &
                                 this%max_change_ivar(i), &
                                 this%max_change_isubvar(i))
@@ -1828,32 +2237,46 @@ subroutine PMHydrateMaxChange(this)
                             ierr);CHKERRQ(ierr)
     call VecCopy(field%work,field%max_change_vecs(i),ierr);CHKERRQ(ierr)
   enddo
-  call MPI_Allreduce(max_change_local,max_change_global,NINE_INTEGER, &
+  
+  if (option%nflowdof == 3) then
+    call MPI_Allreduce(max_change_local,max_change_global,NINE_INTEGER, &
                       MPI_DOUBLE_PRECISION,MPI_MAX,option%mycomm,ierr)
+  else
+    call MPI_Allreduce(max_change_local,max_change_global,TEN_INTEGER, &
+                      MPI_DOUBLE_PRECISION,MPI_MAX,option%mycomm,ierr)
+  endif
   ! print them out
   if (OptionPrintToScreen(option)) then
     write(*,'("  --> max chng: dpl= ",1pe12.4, " dpg= ",1pe12.4,&
       & " dpa= ",1pe12.4,/,15x," dxa= ",1pe12.4,"  dt= ",1pe12.4,&
       & " dsg= ",1pe12.4,/,15x," dsh= ",1pe12.4," dsl= ",1pe12.4,&
       & " dsi= ",1pe12.4)') &
-      max_change_global(1:9)
+      max_change_global(1:max_change_index)
   endif
   if (OptionPrintToFile(option)) then
     write(option%fid_out,'("  --> max chng: dpl= ",1pe12.4, " dpg= ",1pe12.4,&
       & " dpa= ",1pe12.4,/,15x," dxa= ",1pe12.4,"  dt= ",1pe12.4, &
       & " dsg= ",1pe12.4,/,15x," dsh= ",1pe12.4," dsl= ",1pe12.4,&
       & " dsi= ",1pe12.4)') &
-      max_change_global(1:9)
+      max_change_global(1:max_change_index)
   endif
 
   ! max change variables:[LIQUID_PRESSURE, GAS_PRESSURE, AIR_PRESSURE, &
   !                       LIQUID_MOLE_FRACTION, TEMPERATURE, GAS_SATURATION,
   !                       HYDRATE_SATURATION, LIQUID_SATURATION, ICE_SATURATION]
   ! ignore air pressure as it jumps during phase change
-  this%max_pressure_change = maxval(max_change_global(1:2))
-  this%max_xmol_change = max_change_global(4)
-  this%max_temperature_change = max_change_global(5)
-  this%max_saturation_change = maxval(max_change_global(6:9))
+
+  if (option%nflowdof ==3) then
+    this%max_pressure_change = maxval(max_change_global(1:2))
+    this%max_xmol_change = max_change_global(4)
+    this%max_temperature_change = max_change_global(5)
+    this%max_saturation_change = maxval(max_change_global(6:9))
+  else
+    this%max_pressure_change = maxval(max_change_global(1:2))
+    this%max_xmol_change = maxval(max_change_global(4:5))
+    this%max_temperature_change = max_change_global(6)
+    this%max_saturation_change = maxval(max_change_global(7:10))
+  endif
   
 end subroutine PMHydrateMaxChange
 

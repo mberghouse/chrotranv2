@@ -673,15 +673,15 @@ subroutine HydrateUpdateAuxVars(realization,update_state)
   PetscInt :: iphasebc, iphase
   PetscInt :: offset
   PetscInt :: istate
-  PetscInt :: wat_comp_id, air_comp_id
+  PetscInt :: wat_comp_id, air_comp_id, co2_comp_id, co2_id
   PetscReal :: gas_pressure, capillary_pressure, liquid_saturation
   PetscReal :: saturation_pressure, temperature
-  PetscReal :: qsrc(3)
+  PetscReal :: qsrc(realization%option%nflowdof)
   PetscInt :: real_index, variable, flow_src_sink_type
   PetscReal, pointer :: xx_loc_p(:)
   PetscReal :: xxbc(realization%option%nflowdof), & 
                xxss(realization%option%nflowdof)
-  PetscReal :: cell_pressure,qsrc_vol(2),scale
+  PetscReal :: cell_pressure,qsrc_vol(realization%option%nflowdof-1),scale
   PetscErrorCode :: ierr
   
   option => realization%option
@@ -710,7 +710,8 @@ subroutine HydrateUpdateAuxVars(realization,update_state)
     option%iflag = HYDRATE_UPDATE_FOR_ACCUM
     natural_id = grid%nG2A(ghosted_id)
     if (grid%nG2L(ghosted_id) == 0) natural_id = -natural_id
-    call HydrateAuxVarCompute(xx_loc_p(ghosted_start:ghosted_end), &
+    if (option%nflowdof == 3) then
+      call HydrateAuxVarCompute3(xx_loc_p(ghosted_start:ghosted_end), &
                        hyd_auxvars(ZERO_INTEGER,ghosted_id), &
                        global_auxvars(ghosted_id), &
                        material_auxvars(ghosted_id), &
@@ -718,6 +719,16 @@ subroutine HydrateUpdateAuxVars(realization,update_state)
                          patch%cc_id(ghosted_id))%ptr, &
                        natural_id, &
                        option)
+    elseif (option%nflowdof == 4) then
+      call HydrateAuxVarCompute4(xx_loc_p(ghosted_start:ghosted_end), &
+                       hyd_auxvars(ZERO_INTEGER,ghosted_id), &
+                       global_auxvars(ghosted_id), &
+                       material_auxvars(ghosted_id), &
+                       patch%characteristic_curves_array( &
+                         patch%cc_id(ghosted_id))%ptr, &
+                       natural_id, &
+                       option)
+    endif
     if (update_state) then
       call HydrateAuxVarUpdateState(xx_loc_p(ghosted_start:ghosted_end), &
                                     hyd_auxvars(ZERO_INTEGER,ghosted_id), &
@@ -752,8 +763,10 @@ subroutine HydrateUpdateAuxVars(realization,update_state)
             do idof = 1, option%nflowdof
               select case(boundary_condition%flow_bc_type(idof))
                 case(DIRICHLET_BC,HYDROSTATIC_BC)
-                  real_index = boundary_condition%flow_aux_mapping(dof_to_primary_variable(idof,istate))
-                  xxbc(idof) = boundary_condition%flow_aux_real_var(real_index,iconn)
+                  real_index = boundary_condition%flow_aux_mapping( &
+                               dof_to_primary_variable(idof,istate))
+                  xxbc(idof) = boundary_condition%flow_aux_real_var( &
+                               real_index,iconn)
               end select   
             enddo
           case(HA_STATE) !MAN: Testing HA_STATE
@@ -761,16 +774,19 @@ subroutine HydrateUpdateAuxVars(realization,update_state)
               select case(boundary_condition%flow_bc_type(idof))
                 case(DIRICHLET_BC,HYDROSTATIC_BC)
                   real_index = boundary_condition%flow_aux_mapping( &
-                          dof_to_primary_variable(idof,GA_STATE))
-                  xxbc(idof) = boundary_condition%flow_aux_real_var(real_index,iconn)
+                               dof_to_primary_variable(idof,HA_STATE))
+                  xxbc(idof) = boundary_condition%flow_aux_real_var( &
+                               real_index,iconn)
               end select
             enddo
           case(GA_STATE)
             do idof = 1, option%nflowdof
               select case(boundary_condition%flow_bc_type(idof))
                 case(HYDROSTATIC_BC)
-                  real_index = boundary_condition%flow_aux_mapping(dof_to_primary_variable(idof,istate))
-                  xxbc(idof) = boundary_condition%flow_aux_real_var(real_index,iconn)
+                  real_index = boundary_condition%flow_aux_mapping( &
+                               dof_to_primary_variable(idof,istate))
+                  xxbc(idof) = boundary_condition%flow_aux_real_var( &
+                               real_index,iconn)
                 case(DIRICHLET_BC)
                   variable = dof_to_primary_variable(idof,istate)
                   select case(variable)
@@ -778,7 +794,8 @@ subroutine HydrateUpdateAuxVars(realization,update_state)
                     case(HYDRATE_GAS_PRESSURE_INDEX)
                       real_index = boundary_condition%flow_aux_mapping(variable)
                       if (real_index /= 0) then
-                        xxbc(idof) = boundary_condition%flow_aux_real_var(real_index,iconn)
+                        xxbc(idof) = boundary_condition%flow_aux_real_var( &
+                                     real_index,iconn)
                       else
                         option%io_buffer = 'Mixed FLOW_CONDITION "' // &
                           trim(boundary_condition%flow_condition%name) // &
@@ -789,50 +806,55 @@ subroutine HydrateUpdateAuxVars(realization,update_state)
                     case(HYDRATE_AIR_PRESSURE_INDEX)
                       real_index = boundary_condition%flow_aux_mapping(variable)
                       if (real_index == 0) then ! air pressure not found
-                        ! if air pressure is not available, let's try temperature 
-                        real_index = boundary_condition%flow_aux_mapping(HYDRATE_TEMPERATURE_INDEX)
+                       ! if air pressure is not available, let's try temperature 
+                        real_index = boundary_condition%flow_aux_mapping( &
+                                     HYDRATE_TEMPERATURE_INDEX)
                         if (real_index /= 0) then
-                          temperature = boundary_condition%flow_aux_real_var(real_index,iconn)
-                          call EOSWaterSaturationPressure(temperature,saturation_pressure,ierr)
-                          ! now verify whether gas pressure is provided through BC
-                          if (boundary_condition%flow_bc_type(ONE_INTEGER) == NEUMANN_BC) then
+                          temperature = boundary_condition%flow_aux_real_var( &
+                                        real_index,iconn)
+                          call EOSWaterSaturationPressure(temperature, &
+                               saturation_pressure,ierr)
+                        ! now verify whether gas pressure is provided through BC
+                          if (boundary_condition%flow_bc_type(ONE_INTEGER) == &
+                              NEUMANN_BC) then
                             gas_pressure = xxbc(ONE_INTEGER)
                           else
-                            real_index = boundary_condition%flow_aux_mapping(HYDRATE_GAS_PRESSURE_INDEX)
+                            real_index = boundary_condition%flow_aux_mapping( &
+                                         HYDRATE_GAS_PRESSURE_INDEX)
                             if (real_index /= 0) then
-                              gas_pressure = boundary_condition%flow_aux_real_var(real_index,iconn)
+                              gas_pressure = boundary_condition% &
+                                             flow_aux_real_var(real_index,iconn)
                             else
                               option%io_buffer = 'Mixed FLOW_CONDITION "' // &
-                                trim(boundary_condition%flow_condition%name) // &
-                                '" needs gas pressure defined to calculate air ' // &
+                              trim(boundary_condition%flow_condition%name) // &
+                           '" needs gas pressure defined to calculate air ' // &
                                 'pressure from temperature.'
                               call PrintErrMsg(option)
                             endif
                           endif
                           xxbc(idof) = gas_pressure - saturation_pressure
                         else
-                          option%io_buffer = 'Cannot find boundary constraint for air pressure.'
+                          option%io_buffer = &
+                             'Cannot find boundary constraint for air pressure.'
                           call PrintErrMsg(option)
                         endif
                       else
-                        xxbc(idof) = boundary_condition%flow_aux_real_var(real_index,iconn)
+                        xxbc(idof) = boundary_condition%flow_aux_real_var( &
+                                     real_index,iconn)
                       endif
                     ! for gas saturation dof
                     case(HYDRATE_GAS_SATURATION_INDEX)
                       real_index = boundary_condition%flow_aux_mapping(variable)
                       if (real_index /= 0) then
-                        xxbc(idof) = boundary_condition%flow_aux_real_var(real_index,iconn)
+                        xxbc(idof) = boundary_condition%flow_aux_real_var( &
+                                     real_index,iconn)
                       else
-!geh: should be able to use the saturation within the cell
-!                        option%io_buffer = 'Mixed FLOW_CONDITION "' // &
-!                          trim(boundary_condition%flow_condition%name) // &
-!                          '" needs saturation defined.'
-!                        call PrintErrMsg(option)
                       endif
                     case(HYDRATE_TEMPERATURE_INDEX)
                       real_index = boundary_condition%flow_aux_mapping(variable)
                       if (real_index /= 0) then
-                        xxbc(idof) = boundary_condition%flow_aux_real_var(real_index,iconn)
+                        xxbc(idof) = boundary_condition%flow_aux_real_var( &
+                                     real_index,iconn)
                       else
                         option%io_buffer = 'Mixed FLOW_CONDITION "' // &
                           trim(boundary_condition%flow_condition%name) // &
@@ -850,17 +872,13 @@ subroutine HydrateUpdateAuxVars(realization,update_state)
       else
         ! we do this for all BCs; Neumann bcs will be set later
         do idof = 1, option%nflowdof
-          if (istate > 3) then
-            real_index = boundary_condition%flow_aux_mapping(&
-                    dof_to_primary_variable(idof,GA_STATE))
-          else
-            real_index = boundary_condition%flow_aux_mapping(&
+          real_index = boundary_condition%flow_aux_mapping(&
                     dof_to_primary_variable(idof,istate))
-          endif
           if (real_index > 0) then
             xxbc(idof) = boundary_condition%flow_aux_real_var(real_index,iconn)
           else
-            option%io_buffer = 'Error setting up boundary condition in HydrateUpdateAuxVars'
+            option%io_buffer = 'Error setting up boundary condition&
+                                & in HydrateUpdateAuxVars'
             call PrintErrMsg(option)
           endif
         enddo
@@ -871,14 +889,23 @@ subroutine HydrateUpdateAuxVars(realization,update_state)
       global_auxvars_bc(sum_connection)%istate = istate
       ! HYDRATE_UPDATE_FOR_BOUNDARY indicates call from non-perturbation
       option%iflag = HYDRATE_UPDATE_FOR_BOUNDARY
-
-      call HydrateAuxVarCompute(xxbc,hyd_auxvars_bc(sum_connection), &
+      if (option%nflowdof == 3) then
+        call HydrateAuxVarCompute3(xxbc,hyd_auxvars_bc(sum_connection), &
                                 global_auxvars_bc(sum_connection), &
                                 material_auxvars(ghosted_id), &
                                 patch%characteristic_curves_array( &
                                   patch%cc_id(ghosted_id))%ptr, &
                                 natural_id, &
                                 option)
+      elseif (option%nflowdof == 4) then
+        call HydrateAuxVarCompute4(xxbc,hyd_auxvars_bc(sum_connection), &
+                                global_auxvars_bc(sum_connection), &
+                                material_auxvars(ghosted_id), &
+                                patch%characteristic_curves_array( &
+                                  patch%cc_id(ghosted_id))%ptr, &
+                                natural_id, &
+                                option)
+      endif
       ! update state and update aux var; this could result in two update to
       ! the aux var as update state updates if the state changes
       call HydrateAuxVarUpdateState(xxbc,hyd_auxvars_bc(sum_connection), &
@@ -893,6 +920,8 @@ subroutine HydrateUpdateAuxVars(realization,update_state)
   
   wat_comp_id = option%water_id
   air_comp_id = option%air_id
+  co2_comp_id = option%co2_id
+  co2_id = 4
   source_sink => patch%source_sink_list%first
   sum_connection = 0
   do
@@ -939,22 +968,34 @@ subroutine HydrateUpdateAuxVars(realization,update_state)
       else
         hyd_auxvar_ss%pres(air_comp_id) = hyd_auxvar%pres(option%gas_phase)
       endif
-    
+ 
+      !MAN: need to think through the components + phase densities (10/20)   
       select case(flow_src_sink_type)
       case(MASS_RATE_SS)
         qsrc_vol(air_comp_id) = qsrc(air_comp_id)/(fmw_comp(air_comp_id)* &
                               hyd_auxvar%den(air_comp_id))
         qsrc_vol(wat_comp_id) = qsrc(wat_comp_id)/(fmw_comp(wat_comp_id)* &
                               hyd_auxvar%den(wat_comp_id))
+        if (option%nflowdof == 4) then
+          qsrc_vol(co2_comp_id) = qsrc(co2_comp_id)/(fmw_comp(co2_comp_id)* &
+             hyd_auxvar%den(co2_comp_id))
+        endif
       case(SCALED_MASS_RATE_SS)                       ! kg/sec -> kmol/sec
         qsrc_vol(air_comp_id) = qsrc(air_comp_id)/(fmw_comp(air_comp_id)* &
                               hyd_auxvar%den(air_comp_id))*scale 
         qsrc_vol(wat_comp_id) = qsrc(wat_comp_id)/(fmw_comp(wat_comp_id)* &
                               hyd_auxvar%den(wat_comp_id))*scale 
+        if (option%nflowdof == 4) then
+          qsrc_vol(co2_id) = qsrc(co2_id)/(fmw_comp(co2_comp_id)* &
+             hyd_auxvar%den(co2_comp_id))*scale
+        endif
       case(SCALED_VOLUMETRIC_RATE_SS)  ! assume local density for now
       ! qsrc1 = m^3/sec             ! den = kmol/m^3
         qsrc_vol(air_comp_id) = qsrc(air_comp_id)*scale
         qsrc_vol(wat_comp_id) = qsrc(wat_comp_id)*scale
+        if (option%nflowdof == 4) then
+          qsrc_vol(co2_comp_id) = qsrc(co2_comp_id)*scale
+        endif
       end select
     
       xxss(1) = maxval(hyd_auxvar_ss%pres(option% &
@@ -976,6 +1017,10 @@ subroutine HydrateUpdateAuxVars(realization,update_state)
         xxss(1) = cell_pressure
         xxss(2) = hyd_auxvar%sat(air_comp_id)
         xxss(3) = hyd_auxvar%temp
+        if (option%nflowdof == 4) then
+          !MAN: I think this is incorret
+          xxss(4) = hyd_auxvar%sat(co2_comp_id)
+        endif
       endif
     
       if (dabs(qsrc(wat_comp_id)) > 0.d0 .and. &
@@ -998,7 +1043,8 @@ subroutine HydrateUpdateAuxVars(realization,update_state)
       option%iflag = HYDRATE_UPDATE_FOR_SS
     
       ! Compute state variables 
-      call HydrateAuxVarCompute(xxss,hyd_auxvar_ss, &
+      if (option%nflowdof == 3) then
+        call HydrateAuxVarCompute3(xxss,hyd_auxvar_ss, &
                                 global_auxvar_ss, &
                                 material_auxvars(ghosted_id), &
                                 patch%characteristic_curves_array( &
@@ -1006,6 +1052,16 @@ subroutine HydrateUpdateAuxVars(realization,update_state)
                                 cell_ids(1)))%ptr, &
                                 source_sink%region%cell_ids(1), &
                                 option)
+      elseif (option%nflowdof == 4) then
+        call HydrateAuxVarCompute4(xxss,hyd_auxvar_ss, &
+                                global_auxvar_ss, &
+                                material_auxvars(ghosted_id), &
+                                patch%characteristic_curves_array( &
+                                patch%cc_id(source_sink%region% &
+                                cell_ids(1)))%ptr, &
+                                source_sink%region%cell_ids(1), &
+                                option)
+      endif
     enddo
     source_sink => source_sink%next
   enddo
@@ -1082,15 +1138,25 @@ subroutine HydrateUpdateFixedAccum(realization)
     local_start = local_end - option%nflowdof + 1
     ! HYDRATE_UPDATE_FOR_FIXED_ACCUM indicates call from non-perturbation
     option%iflag = HYDRATE_UPDATE_FOR_FIXED_ACCUM
-
-     call HydrateAuxVarCompute(xx_p(local_start:local_end), &
+    if (option%nflowdof == 3) then
+      call HydrateAuxVarCompute3(xx_p(local_start:local_end), &
                               hyd_auxvars(ZERO_INTEGER,ghosted_id), &
                               global_auxvars(ghosted_id), &
                               material_auxvars(ghosted_id), &
                               patch%characteristic_curves_array( &
-                                patch%cc_id(ghosted_id))%ptr, &
+                              patch%cc_id(ghosted_id))%ptr, &
                               natural_id, &
                               option)
+    elseif (option%nflowdof == 4) then
+      call HydrateAuxVarCompute4(xx_p(local_start:local_end), &
+                              hyd_auxvars(ZERO_INTEGER,ghosted_id), &
+                              global_auxvars(ghosted_id), &
+                              material_auxvars(ghosted_id), &
+                              patch%characteristic_curves_array( &
+                              patch%cc_id(ghosted_id))%ptr, &
+                              natural_id, &
+                              option)
+    endif
     call HydrateAccumulation(hyd_auxvars(ZERO_INTEGER,ghosted_id), &
                              global_auxvars(ghosted_id), &
                              material_auxvars(ghosted_id),patch%grid% &
@@ -1176,7 +1242,7 @@ subroutine HydrateResidual(snes,xx,r,realization,ierr)
   PetscReal, pointer :: accum_p(:), accum_p2(:)
   PetscReal, pointer :: vec_p(:)
   
-  PetscReal :: qsrc(3)
+  PetscReal :: qsrc(realization%option%nflowdof)
   
   character(len=MAXSTRINGLENGTH) :: string
   character(len=MAXWORDLENGTH) :: word
@@ -1388,9 +1454,15 @@ subroutine HydrateResidual(snes,xx,r,realization,ierr)
       endif
       if (option%compute_mass_balance_new) then
         ! contribution to boundary
-        global_auxvars_bc(sum_connection)%mass_balance_delta(1:2,1) = &
-          global_auxvars_bc(sum_connection)%mass_balance_delta(1:2,1) - &
-          Res(1:2)
+        if (option%nflowdof == 4) then
+          global_auxvars_bc(sum_connection)%mass_balance_delta(1:3,1) = &
+            global_auxvars_bc(sum_connection)%mass_balance_delta(1:3,1) - &
+            (/Res(1:2), Res(4)/)
+        else
+          global_auxvars_bc(sum_connection)%mass_balance_delta(1:2,1) = &
+            global_auxvars_bc(sum_connection)%mass_balance_delta(1:2,1) - &
+            Res(1:2)
+        endif
       endif
 
       local_end = local_id * option%nflowdof
@@ -1445,9 +1517,15 @@ subroutine HydrateResidual(snes,xx,r,realization,ierr)
       endif      
       if (option%compute_mass_balance_new) then
         ! contribution to boundary
-        global_auxvars_ss(sum_connection)%mass_balance_delta(1:2,1) = &
-          global_auxvars_ss(sum_connection)%mass_balance_delta(1:2,1) - &
-          Res(1:2)
+        if (option%nflowdof == 4) then
+          global_auxvars_ss(sum_connection)%mass_balance_delta(1:3,1) = &
+            global_auxvars_ss(sum_connection)%mass_balance_delta(1:3,1) - &
+            (/Res(1:2),Res(4)/)
+        else
+          global_auxvars_ss(sum_connection)%mass_balance_delta(1:2,1) = &
+            global_auxvars_ss(sum_connection)%mass_balance_delta(1:2,1) - &
+            Res(1:2)
+        endif
       endif
 
     enddo
@@ -2042,6 +2120,16 @@ subroutine HydrateSetPlotVariables(realization,list)
     call OutputVariableAddToList(list,name,OUTPUT_SATURATION,units, &
                                 GAS_SATURATION)
     
+    name = 'Hydrate Saturation'
+    units = ''
+    call OutputVariableAddToList(list,name,OUTPUT_SATURATION,units, &
+                                HYDRATE_SATURATION)
+
+    name = 'Ice Saturation'
+    units = ''
+    call OutputVariableAddToList(list,name,OUTPUT_SATURATION,units, &
+                                ICE_SATURATION)
+
     name = 'Liquid Density'
     units = 'kg/m^3'
     call OutputVariableAddToList(list,name,OUTPUT_GENERIC,units, &
@@ -2075,6 +2163,26 @@ subroutine HydrateSetPlotVariables(realization,list)
     call OutputVariableAddToList(list,name,OUTPUT_GENERIC,units, &
                                 GAS_MOLE_FRACTION, &
                                 realization%option%water_id)
+    if (realization%option%nflowdof == 4) then
+
+      name = 'X_c^l'
+      units = ''
+      call OutputVariableAddToList(list,name,OUTPUT_GENERIC,units, &
+                                 LIQUID_MOLE_FRACTION, &
+                                 realization%option%co2_id)
+
+      name = 'X_c^g'
+      units = ''
+      call OutputVariableAddToList(list,name,OUTPUT_GENERIC,units, &
+                                 GAS_MOLE_FRACTION, &
+                                 realization%option%co2_id)
+
+      name = 'Hydrate2 Saturation'
+      units = ''
+      call OutputVariableAddToList(list,name,OUTPUT_SATURATION,units, &
+                                HYDRATE2_SATURATION)
+
+     endif
   
   endif
   

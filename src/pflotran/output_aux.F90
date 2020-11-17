@@ -968,6 +968,11 @@ subroutine OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
       units = ''
       category = OUTPUT_SATURATION
       id = HYDRATE_SATURATION
+    case ('HYDRATE2_SATURATION')
+      name = 'Hydrate-2 Saturation'
+      units = ''
+      category = OUTPUT_SATURATION
+      id = HYDRATE2_SATURATION
     case ('XGL')
       name = 'X_g^l'
       units = ''
@@ -980,6 +985,18 @@ subroutine OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
       category = OUTPUT_GENERIC
       id = LIQUID_MOLE_FRACTION
       subvar = option%water_id
+    case ('XCL')
+      name = 'X_c^l'
+      units = ''
+      category = OUTPUT_GENERIC
+      id = LIQUID_MOLE_FRACTION
+      subvar = option%co2_id
+    case ('XCG')
+      name = 'X_c^g'
+      units = ''
+      category = OUTPUT_GENERIC
+      id = GAS_MOLE_FRACTION
+      subvar = option%co2_id
     case ('XGG')
       name = 'X_g^g'
       units = ''

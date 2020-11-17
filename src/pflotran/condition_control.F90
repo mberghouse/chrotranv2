@@ -429,6 +429,14 @@ subroutine CondControlAssignFlowInitCond(realization)
                   option%io_buffer = 'Mole fraction ' // trim(string)
                   call PrintErrMsg(option)
                 endif
+                if (option%nflowdof == 4) then
+                  if (.not. &
+                       (hydrate%mole2_fraction%itype == DIRICHLET_BC .or. &
+                       hydrate%mole2_fraction%itype == HYDROSTATIC_BC)) then
+                    option%io_buffer = 'Mole2 fraction' // trim(string)
+                    call PrintErrMsg(option)
+                  endif
+                endif
               case(G_STATE)
                 if (.not. &
                     (hydrate%gas_pressure%itype == DIRICHLET_BC .or. &
@@ -472,6 +480,10 @@ subroutine CondControlAssignFlowInitCond(realization)
                     hydrate%mole_fraction%dataset%rarray(1)
                   xx_p(ibegin+HYDRATE_ENERGY_DOF) = &
                     hydrate%temperature%dataset%rarray(1)
+                  if (option%nflowdof == 4) then
+                    xx_p(ibegin+HYDRATE_L_STATE_X2_MOLE_DOF) = &
+                      hydrate%mole2_fraction%dataset%rarray(1)
+                  endif
                 case(G_STATE)
                   xx_p(ibegin+HYDRATE_GAS_PRESSURE_DOF) = &
                     hydrate%gas_pressure%dataset%rarray(1)
@@ -480,6 +492,11 @@ subroutine CondControlAssignFlowInitCond(realization)
                     hydrate%mole_fraction%dataset%rarray(1)
                   xx_p(ibegin+HYDRATE_ENERGY_DOF) = &
                     hydrate%temperature%dataset%rarray(1)
+                  if (option%nflowdof == 4) then
+                    xx_p(ibegin+HYDRATE_G_STATE_CO2_PRESSURE_DOF) = &
+                      hydrate%gas_pressure%dataset%rarray(2) * &
+                      hydrate%mole_fraction%dataset%rarray(2)
+                  endif
                 case(H_STATE)
                   xx_p(ibegin+HYDRATE_GAS_PRESSURE_DOF) = &
                     hydrate%gas_pressure%dataset%rarray(1)
@@ -487,6 +504,10 @@ subroutine CondControlAssignFlowInitCond(realization)
                     MOL_RATIO_METH
                   xx_p(ibegin+HYDRATE_ENERGY_DOF) = &
                     hydrate%temperature%dataset%rarray(1)
+                  if (option%nflowdof == 4) then
+                    xx_p(ibegin+HYDRATE_L_STATE_X2_MOLE_DOF) = &
+                      hydrate%mole_fraction%dataset%rarray(2)
+                  endif
                 case(I_STATE)
                   xx_p(ibegin+HYDRATE_GAS_PRESSURE_DOF) = &
                     hydrate%gas_pressure%dataset%rarray(1)
@@ -494,6 +515,9 @@ subroutine CondControlAssignFlowInitCond(realization)
                     0.d0
                   xx_p(ibegin+HYDRATE_ENERGY_DOF) = &
                     hydrate%temperature%dataset%rarray(1)
+                  if (option%nflowdof == 4) then
+                    xx_p(ibegin+HYDRATE_HYD2_SATURATION_DOF) = 0.d0
+                  endif
                 case(GA_STATE)
                   xx_p(ibegin+HYDRATE_GAS_PRESSURE_DOF) = &
                     hydrate%gas_pressure%dataset%rarray(1)
@@ -503,6 +527,10 @@ subroutine CondControlAssignFlowInitCond(realization)
                   if (hydrate_2ph_energy_dof == HYDRATE_TEMPERATURE_INDEX) then
                     xx_p(ibegin+HYDRATE_ENERGY_DOF) = temperature
                   endif
+                  if (option%nflowdof == 4) then
+                    xx_p(ibegin+HYDRATE_L_STATE_X2_MOLE_DOF) = &
+                      hydrate%mole_fraction%dataset%rarray(1)
+                  endif
                 case(HG_STATE)
                   xx_p(ibegin+HYDRATE_GAS_PRESSURE_DOF) = &
                     hydrate%gas_pressure%dataset%rarray(1)
@@ -510,6 +538,11 @@ subroutine CondControlAssignFlowInitCond(realization)
                     hydrate%gas_saturation%dataset%rarray(1)
                   xx_p(ibegin+HYDRATE_ENERGY_DOF) = &
                     hydrate%temperature%dataset%rarray(1)
+                  if (option%nflowdof == 4) then
+                    xx_p(ibegin+HYDRATE_G_STATE_CO2_PRESSURE_DOF) = &
+                      hydrate%gas_pressure%dataset%rarray(1) * &
+                      hydrate%mole_fraction%dataset%rarray(1)
+                  endif
                 case(HA_STATE)
                   if (associated(hydrate%gas_pressure)) then
                     xx_p(ibegin+HYDRATE_GAS_PRESSURE_DOF) = &
@@ -522,6 +555,10 @@ subroutine CondControlAssignFlowInitCond(realization)
                     hydrate%hydrate_saturation%dataset%rarray(1)
                   xx_p(ibegin+HYDRATE_ENERGY_DOF) = &
                     hydrate%temperature%dataset%rarray(1)
+                  if (option%nflowdof == 4) then
+                    xx_p(ibegin+HYDRATE_L_STATE_X2_MOLE_DOF) = &
+                      hydrate%mole2_fraction%dataset%rarray(1)
+                  endif
                 case(HI_STATE)
                   xx_p(ibegin+HYDRATE_GAS_PRESSURE_DOF) = &
                     hydrate%gas_pressure%dataset%rarray(1)
@@ -543,6 +580,15 @@ subroutine CondControlAssignFlowInitCond(realization)
                     hydrate%mole_fraction%dataset%rarray(1)
                   xx_p(ibegin+HYDRATE_ENERGY_DOF) = &
                     hydrate%temperature%dataset%rarray(1)
+                case(HH_STATE)
+                  xx_p(ibegin+HYDRATE_GAS_PRESSURE_DOF) = &
+                       hydrate%gas_pressure%dataset%rarray(1)
+                  xx_p(ibegin+HYDRATE_GAS_SATURATION_DOF) = &
+                       MOL_RATIO_METH
+                  xx_p(ibegin+HYDRATE_L_STATE_X2_MOLE_DOF) = &
+                       hydrate%mole_fraction%dataset%rarray(1)
+                  xx_p(ibegin+HYDRATE_ENERGY_DOF) = &
+                       hydrate%temperature%dataset%rarray(1)
                 case(HGA_STATE)
                   xx_p(ibegin+HYDRATE_GAS_PRESSURE_DOF) = &
                       hydrate%gas_pressure%dataset%rarray(1)

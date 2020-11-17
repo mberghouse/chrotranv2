@@ -23,7 +23,7 @@ module Hydrate_Common_module
 #define WATER_SRCSINK
 #define AIR_SRCSINK
 #define ENERGY_SRCSINK
-  
+#define CO2_SRCSINK  
 
 ! Cutoff parameters
   PetscReal, parameter :: eps       = 1.d-8
@@ -74,7 +74,7 @@ subroutine HydrateAccumulation(hyd_auxvar,global_auxvar,material_auxvar, &
   PetscBool :: analytical_derivatives
   PetscBool :: debug_cell
 
-  PetscInt :: wat_comp_id, air_comp_id, energy_id
+  PetscInt :: wat_comp_id, air_comp_id, energy_id, co2_comp_id
   PetscInt :: icomp, iphase
 
   PetscReal :: porosity, volume
@@ -84,6 +84,7 @@ subroutine HydrateAccumulation(hyd_auxvar,global_auxvar,material_auxvar, &
   wat_comp_id = option%water_id
   air_comp_id = option%air_id
   energy_id = option%energy_id
+  co2_comp_id = option%co2_id
 
   volume_over_dt = material_auxvar%volume / option%flow_dt
   porosity = hyd_auxvar%effective_porosity
@@ -129,6 +130,8 @@ subroutine HydrateAccumulation(hyd_auxvar,global_auxvar,material_auxvar, &
       call HydrateMethanogenesis(z, offset, hydrate_parameter, q_meth)
       !kmol/m^3/s to kmol/s
       q_meth = q_meth*(1.d0 - porosity)*volume
+      ! MAN: Biogenic methane is on the first methane mass balance right now. 
+      ! Might want to make it more generic.
       Res(air_comp_id) = Res(air_comp_id) + q_meth
     endif
   endif
@@ -188,7 +191,7 @@ subroutine HydrateFlux(hyd_auxvar_up,global_auxvar_up, &
   PetscReal :: dist_gravity  ! distance along gravity vector
   PetscReal :: dist_up, dist_dn
   PetscReal :: upweight
-  PetscInt :: wat_comp_id, air_comp_id, energy_id
+  PetscInt :: wat_comp_id, air_comp_id, energy_id, co2_comp_id
   PetscInt :: iphase
   
   PetscReal :: xmol(option%nflowspec)
@@ -196,14 +199,15 @@ subroutine HydrateFlux(hyd_auxvar_up,global_auxvar_up, &
   PetscReal :: uH
   PetscReal :: perm_ave_over_dist(option%nphase)
   PetscReal :: perm_up, perm_dn
-  PetscReal :: delta_pressure, delta_xmol, delta_temp
+  PetscReal :: delta_pressure, delta_xmol, delta_xmol1, delta_xmol2, delta_temp
   PetscReal :: xmol_air_up, xmol_air_dn
   PetscReal :: xmass_air_up, xmass_air_dn, delta_xmass
   PetscReal :: delta_X_whatever
   PetscReal :: pressure_ave
   PetscReal :: gravity_term
   PetscReal :: mobility, q
-  PetscReal :: tot_mole_flux, wat_mole_flux, air_mole_flux
+  PetscReal :: tot_mole_flux, wat_mole_flux, air_mole_flux, co2_mole_flux
+  PetscReal :: tot_mole_flux1, tot_mole_flux2
   PetscReal :: stpd_up, stpd_dn
   PetscReal :: sat_up, sat_dn, den_up, den_dn
   PetscReal :: temp_ave, stpd_ave_over_dist, tempreal
@@ -232,14 +236,11 @@ subroutine HydrateFlux(hyd_auxvar_up,global_auxvar_up, &
   PetscReal :: dstpd_up_dsatup, dstpd_dn_dsatdn
   PetscReal :: dstpd_up_ddenup, dstpd_dn_ddendn
   PetscReal :: dsatup, dsatdn
-  PetscReal :: delta_X_whatever_dxmolup, delta_X_whatever_dxmoldn
+  PetscReal :: dtot_mole_flux_ddeltaX
   PetscReal :: dxmass_air_up_dxmol_air_up, dxmass_air_dn_dxmol_air_dn
-  PetscReal :: dtot_mole_flux_dstpd, dtot_mole_flux_ddeltaX
-  PetscReal :: dtot_mole_flux_ddenave
   PetscReal :: diffusion_scale
   PetscReal :: ddiffusion_coef_dTup, ddiffusion_coef_dTdn
   PetscReal :: ddiffusion_coef_dpup, ddiffusion_coef_dpdn
-  PetscReal :: dtot_mole_flux_ddiffusion_coef
   PetscReal :: dstpd_ave_over_dist_dstpd_up, dstpd_ave_over_dist_dstpd_dn
   
   ! Conduction
@@ -254,17 +255,20 @@ subroutine HydrateFlux(hyd_auxvar_up,global_auxvar_up, &
   PetscReal :: Jcup(3,3), Jcdn(3,3)
 
   PetscReal :: energy_flux
-  PetscReal :: liq_sat, gas_sat, hyd_sat
+  PetscReal :: liq_sat, gas_sat, hyd_sat, hyd2_sat
   PetscReal :: v_sed
-  PetscInt  :: gid, lid, hid
+  PetscInt  :: gid, lid, iid, hid, h2id
 
   lid = 1
   gid = 2
   hid = 3
+  iid = 4
+  h2id = 5
  
   wat_comp_id = option%water_id
   air_comp_id = option%air_id
   energy_id = option%energy_id
+  co2_comp_id = option%co2_id
 
   call ConnectionCalculateDistances(dist,option%gravity,dist_up,dist_dn, &
                                     dist_gravity,upweight)
@@ -372,6 +376,10 @@ subroutine HydrateFlux(hyd_auxvar_up,global_auxvar_up, &
       Res(wat_comp_id) = Res(wat_comp_id) + wat_mole_flux
       Res(air_comp_id) = Res(air_comp_id) + air_mole_flux
       Res(energy_id) = Res(energy_id) + tot_mole_flux * uH
+      if (option%nflowdof == 4) then
+        co2_mole_flux = tot_mole_flux * xmol(co2_comp_id)
+        Res(co2_comp_id) = Res(co2_comp_id) + co2_mole_flux
+      endif
     endif                   
   endif
 #endif
@@ -438,6 +446,10 @@ subroutine HydrateFlux(hyd_auxvar_up,global_auxvar_up, &
       Res(wat_comp_id) = Res(wat_comp_id) + wat_mole_flux
       Res(air_comp_id) = Res(air_comp_id) + air_mole_flux
       Res(energy_id) = Res(energy_id) + tot_mole_flux * uH
+      if (option%nflowdof == 4) then
+        co2_mole_flux = tot_mole_flux * xmol(co2_comp_id)
+        Res(co2_comp_id) = Res(co2_comp_id) + co2_mole_flux
+      endif
     endif               
   endif
 #endif  
@@ -457,6 +469,7 @@ subroutine HydrateFlux(hyd_auxvar_up,global_auxvar_up, &
     if (dabs(dist_gravity) > 0.d0) then
       wat_mole_flux = 0.d0
       air_mole_flux = 0.d0
+      co2_mole_flux = 0.d0
 
       q = v_sed * area
   
@@ -488,16 +501,37 @@ subroutine HydrateFlux(hyd_auxvar_up,global_auxvar_up, &
                         xmol(air_comp_id,hid)*hyd_sat
         air_mole_flux = q  * air_mole_flux
 
-
         energy_flux = q * hyd_auxvar_up%effective_porosity* &
            (hyd_auxvar_up%den(lid) * hyd_auxvar_up%H(lid) * &
            liq_sat + hyd_auxvar_up%den(gid) * hyd_auxvar_up%H(gid) * gas_sat + &
-           hyd_auxvar_up%den(hid) * hyd_auxvar_up%H(hid) * hyd_sat) 
+           hyd_auxvar_up%den(hid) * hyd_auxvar_up%H(hid) * hyd_sat)
+
+        if (option%nflowdof == 4) then
+          hyd2_sat = hyd_auxvar_up%sat(h2id)
+
+          wat_mole_flux = wat_mole_flux + q * hyd_auxvar_up%den(h2id)* &
+                          hyd_auxvar_up%xmol(wat_comp_id,h2id)*hyd2_sat
+
+          co2_mole_flux = hyd_auxvar_up%den(lid)*hyd_auxvar_up% &
+                          xmol(co2_comp_id,lid)*liq_sat
+          co2_mole_flux = co2_mole_flux + hyd_auxvar_up%den(gid)*hyd_auxvar_up%&
+                          xmol(co2_comp_id,gid)*gas_sat
+          co2_mole_flux = co2_mole_flux + hyd_auxvar_up%den(h2id)* &
+                          hyd_auxvar_up%xmol(co2_comp_id,h2id)*hyd2_sat
+          co2_mole_flux = q * co2_mole_flux
+
+          Res(co2_comp_id) = Res(co2_comp_id) + co2_mole_flux
+
+          energy_flux = energy_flux + q * hyd_auxvar_up%effective_porosity* &
+                        hyd_auxvar_up%den(h2id)*hyd_auxvar_up%H(h2id)*hyd2_sat
+
+        endif
 
       else
         dn_scale = 1.d0
 
         hyd_sat = hyd_auxvar_dn%sat(hid)
+        hyd2_sat = hyd_auxvar_dn%sat(h2id)
         gas_sat = min(hyd_auxvar_dn%sat(gid),hyd_auxvar_dn%srg)
         liq_sat = min(hyd_auxvar_dn%sat(lid),hyd_auxvar_dn%srl)
 
@@ -507,6 +541,8 @@ subroutine HydrateFlux(hyd_auxvar_up,global_auxvar_up, &
                         xmol(wat_comp_id,gid)*gas_sat
         wat_mole_flux = wat_mole_flux + hyd_auxvar_dn%den(hid)*hyd_auxvar_dn%&
                         xmol(wat_comp_id,hid)*hyd_sat
+        wat_mole_flux = wat_mole_flux + hyd_auxvar_dn%den(h2id)*hyd_auxvar_dn%&
+                        xmol(wat_comp_id,h2id)*hyd2_sat
         wat_mole_flux = q  * wat_mole_flux
 
         air_mole_flux = hyd_auxvar_dn%den(lid)*hyd_auxvar_dn%xmol(air_comp_id, &
@@ -517,12 +553,32 @@ subroutine HydrateFlux(hyd_auxvar_up,global_auxvar_up, &
                         xmol(air_comp_id,hid)*hyd_sat
         air_mole_flux = q  * air_mole_flux
 
-
         energy_flux = q * hyd_auxvar_dn%effective_porosity * &
                       (hyd_auxvar_dn%den(lid) * hyd_auxvar_dn%H(lid) * &
                       liq_sat + hyd_auxvar_dn%den(gid) * hyd_auxvar_dn%H(gid)*&
                       gas_sat + hyd_auxvar_dn%den(hid) * hyd_auxvar_dn%H(hid)*&
                       hyd_sat)
+
+        if (option%nflowdof == 4) then
+          hyd2_sat = hyd_auxvar_dn%sat(h2id)
+
+          wat_mole_flux = wat_mole_flux + q * hyd_auxvar_dn%den(h2id)* &
+                          hyd_auxvar_dn%xmol(wat_comp_id,h2id)*hyd2_sat
+
+          co2_mole_flux = hyd_auxvar_dn%den(lid)*hyd_auxvar_dn% &
+                          xmol(co2_comp_id,lid)*liq_sat
+          co2_mole_flux = co2_mole_flux + hyd_auxvar_dn%den(gid)*hyd_auxvar_dn%&
+                          xmol(co2_comp_id,gid)*gas_sat
+          co2_mole_flux = co2_mole_flux + hyd_auxvar_dn%den(h2id)* &
+                          hyd_auxvar_dn%xmol(co2_comp_id,h2id)*hyd2_sat
+          co2_mole_flux = q * co2_mole_flux
+
+          Res(co2_comp_id) = Res(co2_comp_id) + co2_mole_flux
+
+          energy_flux = energy_flux + q * hyd_auxvar_dn%effective_porosity* &
+                        hyd_auxvar_dn%den(h2id)*hyd_auxvar_dn%H(h2id)*hyd2_sat
+
+        endif
 
       endif
 
@@ -607,35 +663,74 @@ subroutine HydrateFlux(hyd_auxvar_up,global_auxvar_up, &
     dstpd_ave_over_dist_dstpd_dn = (stpd_up-stpd_ave_over_dist*dist_up)/tempreal
     
     if (hydrate_diffuse_xmol) then ! delta of mole fraction
-      delta_xmol = hyd_auxvar_up%xmol(air_comp_id,iphase) - &
+      delta_xmol1 = hyd_auxvar_up%xmol(air_comp_id,iphase) - &
                    hyd_auxvar_dn%xmol(air_comp_id,iphase)
-      delta_X_whatever = delta_xmol
-      delta_X_whatever_dxmolup = 1.d0
-      delta_X_whatever_dxmoldn = -1.d0
+      if (option%nflowdof == 4) then
+        delta_xmol2 = hyd_auxvar_up%xmol(co2_comp_id,iphase) - &
+                     hyd_auxvar_dn%xmol(co2_comp_id,iphase)
+        if (hydrate_mass_balance_1 == hydrate_mass_balance_2) then
+         delta_xmol = delta_xmol1 + delta_xmol2
+        endif
+      endif
     else ! delta of mass fraction
+      ! MAN: This is only used for MATCH_TOUGH2
+      option%io_buffer = &
+        'diffusion on mass fractions is not set up yet for Hydrate mode.'
+      call PrintErrMsg(option)
       xmol_air_up = hyd_auxvar_up%xmol(air_comp_id,iphase)
       xmol_air_dn = hyd_auxvar_dn%xmol(air_comp_id,iphase)
       tempreal = (xmol_air_up*fmw_comp(2) + (1.d0-xmol_air_up)*fmw_comp(1))
       xmass_air_up = xmol_air_up*fmw_comp(2) / tempreal
-      dxmass_air_up_dxmol_air_up = (fmw_comp(2) - xmass_air_up * (fmw_comp(2) - fmw_comp(1))) / tempreal
+      dxmass_air_up_dxmol_air_up = (fmw_comp(2) - xmass_air_up * (fmw_comp(2) -&
+                                    fmw_comp(1))) / tempreal
       tempreal = (xmol_air_dn*fmw_comp(2) + (1.d0-xmol_air_dn)*fmw_comp(1))
       xmass_air_dn = xmol_air_dn*fmw_comp(2) / tempreal
-      dxmass_air_dn_dxmol_air_dn = (fmw_comp(2) - xmass_air_dn * (fmw_comp(2) - fmw_comp(1))) / tempreal
+      dxmass_air_dn_dxmol_air_dn = (fmw_comp(2) - xmass_air_dn * (fmw_comp(2) -&
+                                    fmw_comp(1))) / tempreal
       delta_xmass = xmass_air_up - xmass_air_dn
       delta_X_whatever = delta_xmass
-      delta_X_whatever_dxmolup = 1.d0 * dxmass_air_up_dxmol_air_up
-      delta_X_whatever_dxmoldn = -1.d0 * dxmass_air_dn_dxmol_air_dn
     endif
     
     ! units = mole/sec
+
     dtot_mole_flux_ddeltaX = density_ave * stpd_ave_over_dist * &
                              hydrate_parameter%diffusion_coefficient(iphase) * &
                              area
-    tot_mole_flux = dtot_mole_flux_ddeltaX * delta_X_whatever
-    dtot_mole_flux_dstpd = tot_mole_flux / stpd_ave_over_dist
-    dtot_mole_flux_ddenave = tot_mole_flux / density_ave
-    Res(wat_comp_id) = Res(wat_comp_id) - tot_mole_flux
-    Res(air_comp_id) = Res(air_comp_id) + tot_mole_flux
+    if (option%nflowdof == 4) then
+      if (hydrate_mass_balance_1 == hydrate_mass_balance_2) then
+        if (delta_xmol < 0.d0) then
+          tot_mole_flux1 = dtot_mole_flux_ddeltaX * delta_xmol * &
+               hyd_auxvar_dn%xmol(air_comp_id,iphase) / &
+              (hyd_auxvar_dn%xmol(air_comp_id,iphase) + &
+               hyd_auxvar_dn%xmol(co2_comp_id,iphase))
+          tot_mole_flux2 = dtot_mole_flux_ddeltaX * delta_xmol * &
+               hyd_auxvar_dn%xmol(co2_comp_id,iphase) / &
+              (hyd_auxvar_dn%xmol(air_comp_id,iphase) + &
+               hyd_auxvar_dn%xmol(co2_comp_id,iphase))
+        else
+          tot_mole_flux1 = dtot_mole_flux_ddeltaX * delta_xmol * &
+               hyd_auxvar_up%xmol(air_comp_id,iphase) / &
+              (hyd_auxvar_up%xmol(air_comp_id,iphase) + &
+               hyd_auxvar_up%xmol(co2_comp_id,iphase))
+          tot_mole_flux2 = dtot_mole_flux_ddeltaX * delta_xmol * &
+               hyd_auxvar_up%xmol(co2_comp_id,iphase) / &
+              (hyd_auxvar_up%xmol(air_comp_id,iphase) + &
+               hyd_auxvar_up%xmol(co2_comp_id,iphase))
+        endif
+      else
+        tot_mole_flux1 = dtot_mole_flux_ddeltaX * delta_xmol1
+        tot_mole_flux2 = dtot_mole_flux_ddeltaX * delta_xmol2
+      endif
+
+      Res(co2_comp_id) = Res(co2_comp_id) + tot_mole_flux2
+
+    else
+      tot_mole_flux1 = dtot_mole_flux_ddeltaX * delta_xmol1
+      tot_mole_flux2 = 0.d0
+    endif
+
+    Res(wat_comp_id) = Res(wat_comp_id) - tot_mole_flux1 - tot_mole_flux2
+    Res(air_comp_id) = Res(air_comp_id) + tot_mole_flux1
     
   endif
 #endif
@@ -691,24 +786,35 @@ subroutine HydrateFlux(hyd_auxvar_up,global_auxvar_up, &
     dstpd_ave_over_dist_dstpd_dn = (stpd_up-stpd_ave_over_dist*dist_up)/tempreal
     
     if (hydrate_diffuse_xmol) then ! delta of mole fraction
-      delta_xmol = hyd_auxvar_up%xmol(air_comp_id,iphase) - &
+      delta_xmol1 = hyd_auxvar_up%xmol(air_comp_id,iphase) - &
                    hyd_auxvar_dn%xmol(air_comp_id,iphase)
-      delta_X_whatever = delta_xmol
-      delta_X_whatever_dxmolup = 1.d0
-      delta_X_whatever_dxmoldn = -1.d0
+      if (option%nflowdof == 4) then
+        delta_xmol2 = hyd_auxvar_up%xmol(co2_comp_id,iphase) - &
+                     hyd_auxvar_dn%xmol(co2_comp_id,iphase)
+        if (hydrate_mass_balance_1 == hydrate_mass_balance_2) then
+          delta_xmol = delta_xmol1 + delta_xmol2
+        endif
+      endif
     else ! delta of mass fraction
-      xmol_air_up = hyd_auxvar_up%xmol(air_comp_id,iphase)
-      xmol_air_dn = hyd_auxvar_dn%xmol(air_comp_id,iphase)
+      ! MAN: This is only used for MATCH_TOUGH2
+      option%io_buffer = &
+        'diffusion on mass fractions is not set up yet for Hydrate mode.'
+      call PrintErrMsg(option)
+
+      xmol_air_up = hyd_auxvar_up%xmol(air_comp_id,iphase) + &
+                    hyd_auxvar_up%xmol(co2_comp_id,iphase)
+      xmol_air_dn = hyd_auxvar_dn%xmol(air_comp_id,iphase) + &
+                    hyd_auxvar_dn%xmol(co2_comp_id,iphase)
       tempreal = (xmol_air_up*fmw_comp(2) + (1.d0-xmol_air_up)*fmw_comp(1))
       xmass_air_up = xmol_air_up*fmw_comp(2) / tempreal
-      dxmass_air_up_dxmol_air_up = (fmw_comp(2) - xmass_air_up * (fmw_comp(2) - fmw_comp(1))) / tempreal
+      dxmass_air_up_dxmol_air_up = (fmw_comp(2) - xmass_air_up *&
+                                    (fmw_comp(2) - fmw_comp(1))) / tempreal
       tempreal = (xmol_air_dn*fmw_comp(2) + (1.d0-xmol_air_dn)*fmw_comp(1))
       xmass_air_dn = xmol_air_dn*fmw_comp(2) / tempreal
-      dxmass_air_dn_dxmol_air_dn = (fmw_comp(2) - xmass_air_dn * (fmw_comp(2) - fmw_comp(1))) / tempreal
+      dxmass_air_dn_dxmol_air_dn = (fmw_comp(2) - xmass_air_dn *&
+                                    (fmw_comp(2) - fmw_comp(1))) / tempreal
       delta_xmass = xmass_air_up - xmass_air_dn
       delta_X_whatever = delta_xmass
-      delta_X_whatever_dxmolup = 1.d0 * dxmass_air_up_dxmol_air_up
-      delta_X_whatever_dxmoldn = -1.d0 * dxmass_air_dn_dxmol_air_dn
     endif
     ! need to account for multiple phases
     ! Eq. 1.9b.  The gas density is added below
@@ -735,12 +841,42 @@ subroutine HydrateFlux(hyd_auxvar_up,global_auxvar_up, &
                              diffusion_scale * &
                              hydrate_parameter%diffusion_coefficient(iphase) * &
                              area
-    tot_mole_flux = dtot_mole_flux_ddeltaX * delta_X_whatever
-    dtot_mole_flux_dstpd = tot_mole_flux / stpd_ave_over_dist
-    dtot_mole_flux_ddiffusion_coef = tot_mole_flux / diffusion_scale
-    dtot_mole_flux_ddenave = tot_mole_flux / density_ave    
-    Res(wat_comp_id) = Res(wat_comp_id) - tot_mole_flux
-    Res(air_comp_id) = Res(air_comp_id) + tot_mole_flux
+    if (option%nflowdof == 4) then
+      if (hydrate_mass_balance_1 == hydrate_mass_balance_2) then
+        if (delta_xmol < 0.d0) then
+          tot_mole_flux1 = dtot_mole_flux_ddeltaX * delta_xmol * &
+               hyd_auxvar_dn%xmol(air_comp_id,iphase) / &
+              (hyd_auxvar_dn%xmol(air_comp_id,iphase) + &
+               hyd_auxvar_dn%xmol(co2_comp_id,iphase))
+          tot_mole_flux2 = dtot_mole_flux_ddeltaX * delta_xmol * &
+               hyd_auxvar_dn%xmol(co2_comp_id,iphase) / &
+              (hyd_auxvar_dn%xmol(air_comp_id,iphase) + &
+               hyd_auxvar_dn%xmol(co2_comp_id,iphase))
+        else
+          tot_mole_flux1 = dtot_mole_flux_ddeltaX * delta_xmol * &
+               hyd_auxvar_up%xmol(air_comp_id,iphase) / &
+              (hyd_auxvar_up%xmol(air_comp_id,iphase) + &
+               hyd_auxvar_up%xmol(co2_comp_id,iphase))
+          tot_mole_flux2 = dtot_mole_flux_ddeltaX * delta_xmol * &
+               hyd_auxvar_up%xmol(co2_comp_id,iphase) / &
+              (hyd_auxvar_up%xmol(air_comp_id,iphase) + &
+               hyd_auxvar_up%xmol(co2_comp_id,iphase))
+        endif
+      else
+        tot_mole_flux1 = dtot_mole_flux_ddeltaX * delta_xmol1
+        tot_mole_flux2 = dtot_mole_flux_ddeltaX * delta_xmol2
+      endif
+
+      Res(co2_comp_id) = Res(co2_comp_id) + tot_mole_flux2
+
+    else
+      tot_mole_flux1 = dtot_mole_flux_ddeltaX * delta_xmol1
+      tot_mole_flux2 = 0.d0
+    endif
+
+    Res(wat_comp_id) = Res(wat_comp_id) - tot_mole_flux1 - tot_mole_flux2
+    Res(air_comp_id) = Res(air_comp_id) + tot_mole_flux1
+
   endif
 #endif
 ! DIFFUSION
@@ -832,14 +968,14 @@ subroutine HydrateBCFlux(ibndtype,auxvar_mapping,auxvars, &
   PetscReal :: v_darcy(option%nphase)
   PetscReal :: Res(1:option%nflowdof)
   PetscReal :: thermal_conductivity_dn(2)
-  PetscReal :: J(3,3)
+  PetscReal :: J(option%nflowdof,option%nflowdof)
   PetscBool :: analytical_derivatives
   PetscBool :: update_upwind_direction_
   PetscBool :: count_upwind_direction_flip_
   PetscBool :: debug_connection
  
   type(methanogenesis_type), pointer :: methanogenesis 
-  PetscInt :: wat_comp_id, air_comp_id, energy_id
+  PetscInt :: wat_comp_id, air_comp_id, energy_id, co2_comp_id
   PetscInt :: icomp, iphase
   PetscInt :: bc_type
   PetscReal :: xmol(option%nflowspec)  
@@ -848,10 +984,10 @@ subroutine HydrateBCFlux(ibndtype,auxvar_mapping,auxvars, &
   PetscReal :: perm_dn_adj(option%nphase)
   PetscReal :: perm_ave_over_dist
   PetscReal :: dist_gravity
-  PetscReal :: delta_pressure, delta_xmol, delta_temp
+  PetscReal :: delta_pressure, delta_xmol, delta_xmol1, delta_xmol2,  delta_temp
   PetscReal :: gravity_term
   PetscReal :: mobility, q 
-  PetscReal :: tot_mole_flux
+  PetscReal :: tot_mole_flux,tot_mole_flux1,tot_mole_flux2
   PetscReal :: sat_dn, perm_dn, den_dn
   PetscReal :: temp_ave, stpd_ave_over_dist, pres_ave
   PetscReal :: k_eff_dn, k_eff_ave, heat_flux
@@ -860,7 +996,7 @@ subroutine HydrateBCFlux(ibndtype,auxvar_mapping,auxvars, &
   PetscReal :: xmol_air_up, xmol_air_dn
   PetscReal :: tempreal
   PetscReal :: delta_X_whatever
-  PetscReal :: wat_mole_flux, air_mole_flux
+  PetscReal :: wat_mole_flux, air_mole_flux, co2_mole_flux
   PetscBool :: upwind
 
   ! Darcy flux
@@ -892,7 +1028,6 @@ subroutine HydrateBCFlux(ibndtype,auxvar_mapping,auxvars, &
   PetscReal :: diffusion_scale
   PetscReal :: ddiffusion_coef_dTdn
   PetscReal :: ddiffusion_coef_dpdn
-  PetscReal :: dtot_mole_flux_ddiffusion_coef
   PetscReal :: dstpd_ave_over_dist_dstpd_dn
   PetscReal :: pressure_ave
   PetscReal :: perm3(3)
@@ -904,27 +1039,26 @@ subroutine HydrateBCFlux(ibndtype,auxvar_mapping,auxvars, &
   
   ! DELETE
   
-  PetscReal :: Jl(3,3)
-  PetscReal :: Jg(3,3)
-  PetscReal :: Jc(3,3)
-  
   PetscInt :: idof
   
   PetscReal :: temp_perm_dn
   PetscReal :: dummy_dperm_dn
 
   PetscReal :: energy_flux
-  PetscReal :: liq_sat, gas_sat, hyd_sat
+  PetscReal :: liq_sat, gas_sat, hyd_sat, hyd2_sat
   PetscReal :: v_sed
-  PetscInt  :: gid, lid, hid
+  PetscInt  :: gid, lid, hid, iid, h2id
 
   lid = 1
   gid = 2
   hid = 3
- 
+  iid = 4
+  h2id = 5
+
   wat_comp_id = option%water_id
   air_comp_id = option%air_id
   energy_id = option%energy_id
+  co2_comp_id = option%co2_id
 
   Res = 0.d0
   J = 0.d0
@@ -1065,11 +1199,22 @@ subroutine HydrateBCFlux(ibndtype,auxvar_mapping,auxvars, &
         if (v_darcy(iphase) > 0.d0) then 
           density_ave = hyd_auxvar_up%den(iphase)
           uH = hyd_auxvar_up%H(iphase)
+          xmol(air_comp_id) = auxvars(air_comp_id + ONE_INTEGER)
+          xmol(wat_comp_id) = 1.d0 - xmol(air_comp_id)
+          if (option%nflowdof == 4) then
+            xmol(co2_comp_id) = max(1.d-4,auxvars(co2_comp_id + ONE_INTEGER))
+            xmol(wat_comp_id) = 1.d0 - xmol(air_comp_id) - xmol(co2_comp_id)
+          endif
         else 
           dn_scale = 1.d0
           density_ave = hyd_auxvar_dn%den(iphase)
           uH = hyd_auxvar_dn%H(iphase)
           ddensity_ave_dden_dn = 1.d0
+          xmol(wat_comp_id) = hyd_auxvar_dn%xmol(wat_comp_id,lid)
+          xmol(air_comp_id) = hyd_auxvar_dn%xmol(air_comp_id,lid)
+          if (option%nflowdof == 4) then
+            xmol(co2_comp_id) = hyd_auxvar_dn%xmol(co2_comp_id,lid)
+          endif
         endif 
       endif
     case default
@@ -1093,6 +1238,12 @@ subroutine HydrateBCFlux(ibndtype,auxvar_mapping,auxvars, &
     Res(wat_comp_id) = Res(wat_comp_id) + wat_mole_flux
     Res(air_comp_id) = Res(air_comp_id) + air_mole_flux
     Res(energy_id) = Res(energy_id) + tot_mole_flux * uH
+
+    if (option%nflowdof == 4) then
+      co2_mole_flux = tot_mole_flux * xmol(co2_comp_id)
+      Res(co2_comp_id) = Res(co2_comp_id) + co2_mole_flux
+    endif
+
   endif                   
 #endif
 #ifdef GAS_DARCY_FLUX
@@ -1240,6 +1391,12 @@ subroutine HydrateBCFlux(ibndtype,auxvar_mapping,auxvars, &
     Res(wat_comp_id) = Res(wat_comp_id) + wat_mole_flux
     Res(air_comp_id) = Res(air_comp_id) + air_mole_flux
     Res(energy_id) = Res(energy_id) + tot_mole_flux * uH
+
+    if (option%nflowdof == 4) then
+      co2_mole_flux = tot_mole_flux * xmol(co2_comp_id)
+      Res(co2_comp_id) = Res(co2_comp_id) + co2_mole_flux
+    endif
+
   endif                   
 #endif  
 ! CONVECTION
@@ -1258,6 +1415,7 @@ subroutine HydrateBCFlux(ibndtype,auxvar_mapping,auxvars, &
     if (dabs(dist_gravity) > 0.d0) then
       wat_mole_flux = 0.d0
       air_mole_flux = 0.d0
+      co2_mole_flux = 0.d0
 
       q = v_sed * area
 
@@ -1285,12 +1443,33 @@ subroutine HydrateBCFlux(ibndtype,auxvar_mapping,auxvars, &
                       xmol(air_comp_id,hid)*hyd_sat
       air_mole_flux = q  * air_mole_flux
 
-
     ! MAN: need to mult by phi?
-      energy_flux = q*hyd_auxvar_dn%effective_porosity*(hyd_auxvar_dn%den(lid) * &
+      energy_flux = q*hyd_auxvar_dn%effective_porosity*(hyd_auxvar_dn%den(lid)*&
                      hyd_auxvar_dn%H(lid) * liq_sat + &
                      hyd_auxvar_dn%den(gid) * hyd_auxvar_dn%H(gid) * gas_sat + &
                      hyd_auxvar_dn%den(hid) * hyd_auxvar_dn%H(hid) * hyd_sat)
+
+      if (option%nflowdof == 4) then
+        hyd2_sat = hyd_auxvar_dn%sat(h2id)
+
+        wat_mole_flux = wat_mole_flux + q * hyd_auxvar_dn%den(h2id)* &
+                        hyd_auxvar_dn%xmol(wat_comp_id,h2id)*hyd2_sat
+
+        co2_mole_flux = hyd_auxvar_dn%den(lid)*hyd_auxvar_dn% &
+                        xmol(co2_comp_id,lid)*liq_sat
+        co2_mole_flux = co2_mole_flux + hyd_auxvar_dn%den(gid)*hyd_auxvar_dn%&
+                        xmol(co2_comp_id,gid)*gas_sat
+        co2_mole_flux = co2_mole_flux + hyd_auxvar_dn%den(h2id)* &
+                        hyd_auxvar_dn%xmol(co2_comp_id,h2id)*hyd2_sat
+        co2_mole_flux = q * co2_mole_flux
+
+        energy_flux = energy_flux + q * hyd_auxvar_dn%effective_porosity* &
+                      hyd_auxvar_dn%den(h2id)*hyd_auxvar_dn%H(h2id)*hyd2_sat
+
+        Res(co2_comp_id) = Res(co2_comp_id) + co2_mole_flux
+
+      endif  
+
 
       Res(wat_comp_id) = Res(wat_comp_id) + wat_mole_flux
       Res(air_comp_id) = Res(air_comp_id) + air_mole_flux
@@ -1346,32 +1525,77 @@ subroutine HydrateBCFlux(ibndtype,auxvar_mapping,auxvars, &
     stpd_ave_over_dist = stpd_dn * dstpd_ave_over_dist_dstpd_dn
     
     if (hydrate_diffuse_xmol) then ! delta of mole fraction
-      delta_xmol = hyd_auxvar_up%xmol(air_comp_id,iphase) - &
+      delta_xmol1 = hyd_auxvar_up%xmol(air_comp_id,iphase) - &
                    hyd_auxvar_dn%xmol(air_comp_id,iphase)
-      delta_X_whatever = delta_xmol
-      delta_X_whatever_dxmoldn = -1.d0
+      delta_xmol2 = hyd_auxvar_up%xmol(co2_comp_id,iphase) - &
+                   hyd_auxvar_dn%xmol(co2_comp_id,iphase)
+      if (hydrate_mass_balance_1 == hydrate_mass_balance_2) then
+        delta_xmol = delta_xmol1 + delta_xmol2
+      endif
     else ! delta of mass fraction
-      xmol_air_up = hyd_auxvar_up%xmol(air_comp_id,iphase)
-      xmol_air_dn = hyd_auxvar_dn%xmol(air_comp_id,iphase)
-      tempreal = (xmol_air_up*fmw_comp(2) + (1.d0-xmol_air_up)*fmw_comp(1))
-      xmass_air_up = xmol_air_up*fmw_comp(2) / tempreal
-      tempreal = (xmol_air_dn*fmw_comp(2) + (1.d0-xmol_air_dn)*fmw_comp(1))
-      xmass_air_dn = xmol_air_dn*fmw_comp(2) / tempreal
-      dxmass_air_dn_dxmol_air_dn = (fmw_comp(2) - xmass_air_dn * (fmw_comp(2) - fmw_comp(1))) / tempreal
-      delta_xmass = xmass_air_up - xmass_air_dn
-      delta_X_whatever = delta_xmass
-      delta_X_whatever_dxmoldn = -1.d0 * dxmass_air_dn_dxmol_air_dn
+      ! MAN: This is only used for MATCH_TOUGH2
+      option%io_buffer = &
+        'diffusion on mass fractions is not set up yet for Hydrate mode.'
+      call PrintErrMsg(option)
+
+      !do i = 1,option%nflowspec
+      !  xmol_air_up(i) = hyd_auxvar_up%xmol(i,iphase)
+      !  xmol_air_dn(i) = hyd_auxvar_dn%xmol(i,iphase)
+
+      !  tempreal = (xmol_air_up(i)*fmw_comp(i) + (hyd_auxvar_up% &
+      !              xmol(1,iphase)*fmw_comp(1))        
+      !  xmass_air_up(i) = xmol_air_up(i)*fmw_comp(i) / tempreal
+      !  tempreal = (xmol_air_dn(i)*fmw_comp(i) + (hyd_auxvar_dn% &
+      !              xmol(1,iphase)*fmw_comp(1))
+      !  xmass_air_dn(i) = xmol_air_dn(i)*fmw_comp(i) / tempreal
+
+      !  dxmass_air_dn_dxmol_air_dn(i) = (fmw_comp(i) - xmass_air_dn(i) * &
+      !                                  (fmw_comp(i) - fmw_comp(1))) / tempreal
+      !  delta_xmass(i) = xmass_air_up(i) - xmass_air_dn(i)
+
+      !enddo
+
     endif
     
     ! units = mole/sec
     dtot_mole_flux_ddeltaX = density_ave * stpd_ave_over_dist * &
                              hydrate_parameter%diffusion_coefficient(iphase) * &
                              area
-    tot_mole_flux = dtot_mole_flux_ddeltaX * delta_X_whatever
-    dtot_mole_flux_dstpd = tot_mole_flux / stpd_ave_over_dist
-    dtot_mole_flux_ddenave = tot_mole_flux / density_ave
-    Res(wat_comp_id) = Res(wat_comp_id) - tot_mole_flux
-    Res(air_comp_id) = Res(air_comp_id) + tot_mole_flux
+
+    if (option%nflowdof == 4) then
+      if (hydrate_mass_balance_1 == hydrate_mass_balance_2) then
+        if (delta_xmol < 0.d0) then
+          tot_mole_flux1 = dtot_mole_flux_ddeltaX * delta_xmol * &
+               hyd_auxvar_dn%xmol(air_comp_id,iphase) / &
+              (hyd_auxvar_dn%xmol(air_comp_id,iphase) + &
+               hyd_auxvar_dn%xmol(co2_comp_id,iphase))
+          tot_mole_flux2 = dtot_mole_flux_ddeltaX * delta_xmol * &
+               hyd_auxvar_dn%xmol(co2_comp_id,iphase) / &
+              (hyd_auxvar_dn%xmol(air_comp_id,iphase) + &
+               hyd_auxvar_dn%xmol(co2_comp_id,iphase))
+        else
+          tot_mole_flux1 = dtot_mole_flux_ddeltaX * delta_xmol * &
+               hyd_auxvar_up%xmol(air_comp_id,iphase) / &
+              (hyd_auxvar_up%xmol(air_comp_id,iphase) + &
+               hyd_auxvar_up%xmol(co2_comp_id,iphase))
+          tot_mole_flux2 = dtot_mole_flux_ddeltaX * delta_xmol * &
+               hyd_auxvar_up%xmol(co2_comp_id,iphase) / &
+              (hyd_auxvar_up%xmol(air_comp_id,iphase) + &
+               hyd_auxvar_up%xmol(co2_comp_id,iphase))
+        endif
+      else
+        tot_mole_flux1 = dtot_mole_flux_ddeltaX * delta_xmol1
+        tot_mole_flux2 = dtot_mole_flux_ddeltaX * delta_xmol2
+      endif
+      Res(co2_comp_id) = Res(co2_comp_id) + tot_mole_flux2
+    else
+      tot_mole_flux1 = dtot_mole_flux_ddeltaX * delta_xmol1
+      tot_mole_flux2 = 0.d0
+    endif
+
+    Res(wat_comp_id) = Res(wat_comp_id) - tot_mole_flux1 - tot_mole_flux2
+    Res(air_comp_id) = Res(air_comp_id) + tot_mole_flux1
+
   endif
 #endif
 #ifdef GAS_DIFFUSION
@@ -1415,20 +1639,25 @@ subroutine HydrateBCFlux(ibndtype,auxvar_mapping,auxvars, &
     stpd_ave_over_dist = stpd_dn * dstpd_ave_over_dist_dstpd_dn    
     
     if (hydrate_diffuse_xmol) then ! delta of mole fraction
-      delta_xmol = hyd_auxvar_up%xmol(air_comp_id,iphase) - &
+      delta_xmol1 = hyd_auxvar_up%xmol(air_comp_id,iphase) - &
                    hyd_auxvar_dn%xmol(air_comp_id,iphase)
-      delta_X_whatever = delta_xmol
-      delta_X_whatever_dxmoldn = -1.d0
+      if (option%nflowdof == 4) then
+        delta_xmol2 = hyd_auxvar_up%xmol(co2_comp_id,iphase) - &
+                      hyd_auxvar_dn%xmol(co2_comp_id,iphase)
+      endif
     else ! delta of mass fraction
-      xmol_air_up = hyd_auxvar_up%xmol(air_comp_id,iphase)
-      xmol_air_dn = hyd_auxvar_dn%xmol(air_comp_id,iphase)
-      tempreal = (xmol_air_up*fmw_comp(2) + (1.d0-xmol_air_up)*fmw_comp(1))
-      xmass_air_up = xmol_air_up*fmw_comp(2) / tempreal
-      tempreal = (xmol_air_dn*fmw_comp(2) + (1.d0-xmol_air_dn)*fmw_comp(1))
-      xmass_air_dn = xmol_air_dn*fmw_comp(2) / tempreal
-      delta_xmass = xmass_air_up - xmass_air_dn
-      delta_X_whatever = delta_xmass
-      delta_X_whatever_dxmoldn = -1.d0 * dxmass_air_dn_dxmol_air_dn
+      option%io_buffer = &
+        'diffusion on mass fractions is not set up yet for Hydrate mode.'
+      call PrintErrMsg(option)
+      !xmol_air_up = hyd_auxvar_up%xmol(air_comp_id,iphase)
+      !xmol_air_dn = hyd_auxvar_dn%xmol(air_comp_id,iphase)
+      !tempreal = (xmol_air_up*fmw_comp(2) + (1.d0-xmol_air_up)*fmw_comp(1))
+      !xmass_air_up = xmol_air_up*fmw_comp(2) / tempreal
+      !tempreal = (xmol_air_dn*fmw_comp(2) + (1.d0-xmol_air_dn)*fmw_comp(1))
+      !xmass_air_dn = xmol_air_dn*fmw_comp(2) / tempreal
+      !delta_xmass = xmass_air_up - xmass_air_dn
+      !delta_X_whatever = delta_xmass
+      !delta_X_whatever_dxmoldn = -1.d0 * dxmass_air_dn_dxmol_air_dn
     endif
     ! need to account for multiple phases
     ! Eq. 1.9b.  The gas density is added below
@@ -1451,10 +1680,14 @@ subroutine HydrateBCFlux(ibndtype,auxvar_mapping,auxvars, &
                              diffusion_scale * &
                              hydrate_parameter%diffusion_coefficient(iphase) * &
                              area
-    tot_mole_flux = dtot_mole_flux_ddeltaX * delta_X_whatever
-    dtot_mole_flux_dstpd = tot_mole_flux / stpd_ave_over_dist
-    dtot_mole_flux_ddiffusion_coef = tot_mole_flux / diffusion_scale
-    dtot_mole_flux_ddenave = tot_mole_flux / density_ave    
+    tot_mole_flux1 = dtot_mole_flux_ddeltaX * delta_xmol1
+
+    if (option%nflowdof == 4) then
+      tot_mole_flux2 = dtot_mole_flux_ddeltaX * delta_xmol2
+      Res(co2_comp_id) = Res(co2_comp_id) + tot_mole_flux2
+    else
+      tot_mole_flux2 = 0.d0
+    endif
     Res(wat_comp_id) = Res(wat_comp_id) - tot_mole_flux
     Res(air_comp_id) = Res(air_comp_id) + tot_mole_flux
   endif
@@ -1536,11 +1769,11 @@ subroutine HydrateSrcSink(option,qsrc,flow_src_sink_type,hyd_auxvar_ss, &
   PetscBool :: analytical_derivatives  
   PetscBool :: debug_cell
   
-  PetscReal :: qsrc(3)
+  PetscReal :: qsrc(option%nflowdof)
   PetscInt :: flow_src_sink_type
   PetscReal :: qsrc_mol
   PetscReal :: enthalpy, internal_energy
-  PetscInt :: wat_comp_id, air_comp_id, energy_id
+  PetscInt :: wat_comp_id, air_comp_id, energy_id, co2_comp_id
   PetscReal :: Jl(option%nflowdof,option%nflowdof)  
   PetscReal :: Jg(option%nflowdof,option%nflowdof)  
   PetscReal :: Je(option%nflowdof,option%nflowdof)  
@@ -1554,6 +1787,7 @@ subroutine HydrateSrcSink(option,qsrc,flow_src_sink_type,hyd_auxvar_ss, &
   wat_comp_id = option%water_id
   air_comp_id = option%air_id
   energy_id = option%energy_id
+  co2_comp_id = option%co2_id
   
   Res = 0.d0
   J = 0.d0
@@ -1566,13 +1800,15 @@ subroutine HydrateSrcSink(option,qsrc,flow_src_sink_type,hyd_auxvar_ss, &
       if (hyd_auxvar%sat(gid) <= 0.d0) then
         ! Water component, liquid phase
         ! kg/s phase to kmol/sec phase
-        qsrc_mol = qsrc(wat_comp_id) * hyd_auxvar%den(lid) / hyd_auxvar%den_kg(lid)
+        qsrc_mol = qsrc(wat_comp_id) * hyd_auxvar%den(lid) / &
+                   hyd_auxvar%den_kg(lid)
         ! kmol/sec phase to kmol/sec component
         qsrc_mol = qsrc_mol * hyd_auxvar%xmol(lid,lid)
       elseif (hyd_auxvar%sat(lid) <= 0.d0) then
         ! Water component, gas phase
         ! kg/s phase to kmol/sec phase
-        qsrc_mol = qsrc(wat_comp_id) * hyd_auxvar%den(gid) / hyd_auxvar%den_kg(gid)
+        qsrc_mol = qsrc(wat_comp_id) * hyd_auxvar%den(gid) / &
+                   hyd_auxvar%den_kg(gid)
         ! kmol/sec phase to kmol/sec component
         qsrc_mol = qsrc_mol * hyd_auxvar%xmol(lid,gid)
       else
@@ -1592,13 +1828,15 @@ subroutine HydrateSrcSink(option,qsrc,flow_src_sink_type,hyd_auxvar_ss, &
       if (hyd_auxvar%sat(gid) <= 0.d0) then
         ! Air component, liquid phase
         ! kg/s phase to kmol/sec phase
-        qsrc_mol = qsrc(wat_comp_id) * hyd_auxvar%den(lid) / hyd_auxvar%den_kg(lid)
+        qsrc_mol = qsrc(wat_comp_id) * hyd_auxvar%den(lid) / &
+                   hyd_auxvar%den_kg(lid)
         ! kmol/sec phase to kmol/sec component
         qsrc_mol = qsrc_mol * hyd_auxvar%xmol(gid,lid)
       elseif (hyd_auxvar%sat(lid) <= 0.d0) then
         ! Air component, gas phase
         ! kg/s phase to kmol/sec phase
-        qsrc_mol = qsrc(wat_comp_id) * hyd_auxvar%den(gid) / hyd_auxvar%den_kg(gid)
+        qsrc_mol = qsrc(wat_comp_id) * hyd_auxvar%den(gid) / &
+                   hyd_auxvar%den_kg(gid)
         ! kmol/sec phase to kmol/sec component
         qsrc_mol = qsrc_mol * hyd_auxvar%xmol(gid,gid)
       else
@@ -1672,6 +1910,30 @@ subroutine HydrateSrcSink(option,qsrc,flow_src_sink_type,hyd_auxvar_ss, &
   ss_flow_vol_flux(air_comp_id) = qsrc_mol/hyd_auxvar%den(air_comp_id)
   Res(air_comp_id) = qsrc_mol
 #endif
+
+#ifdef CO2_SRCSINK
+  if (option%nflowdof == 4) then
+    qsrc_mol = 0.d0
+    dden_bool = 0.d0
+    select case(flow_src_sink_type)
+      case(MASS_RATE_SS)
+        qsrc_mol = qsrc(co2_comp_id)/fmw_comp(co2_comp_id) ! kg/sec -> kmol/sec
+      case(SCALED_MASS_RATE_SS)
+         qsrc_mol = qsrc(co2_comp_id)/fmw_comp(co2_comp_id)*scale
+      case(VOLUMETRIC_RATE_SS)
+         qsrc_mol = qsrc(co2_comp_id)*hyd_auxvar%den(co2_comp_id) !den=kmol/m^3
+         dden_bool = 1.d0
+      case(SCALED_VOLUMETRIC_RATE_SS)  ! assume local density for now
+         ! qsrc1 = m^3/sec             ! den = kmol/m^3
+         qsrc_mol = qsrc(co2_comp_id)*hyd_auxvar%den(co2_comp_id)*scale
+         dden_bool = 1.d0
+    end select
+    ss_flow_vol_flux(co2_comp_id) = qsrc_mol/hyd_auxvar%den(co2_comp_id)
+    Res(co2_comp_id) = qsrc_mol
+  endif
+#endif
+
+
   endif
   
   if (dabs(qsrc(air_comp_id)) < 1.d-40 .and. flow_src_sink_type /= &
@@ -1684,7 +1946,7 @@ subroutine HydrateSrcSink(option,qsrc,flow_src_sink_type,hyd_auxvar_ss, &
   endif
   
   ! energy units: MJ/sec
-  if (size(qsrc) == THREE_INTEGER) then
+  if (size(qsrc) == option%nflowdof) then
     if (flow_src_sink_type /= TOTAL_MASS_RATE_SS) then
       if (dabs(qsrc(wat_comp_id)) > 1.d-40) then
         if (associated(hyd_auxvar%d)) then
@@ -1712,7 +1974,24 @@ subroutine HydrateSrcSink(option,qsrc,flow_src_sink_type,hyd_auxvar_ss, &
         Res(energy_id) = Res(energy_id) + Res(air_comp_id) * enthalpy
         J = J + Je
       endif
+
+      if (option%nflowdof == 4 .and. dabs(qsrc(air_comp_id)) > 1.d-40) then
+        ! this is pure air, we use the enthalpy of air, NOT the air/water
+        ! mixture in gas
+        ! air enthalpy is only a function of temperature
+        if (associated(hyd_auxvar%d)) then
+          ha_dp = hyd_auxvar_ss%d%Ha_pg
+          ha_dT = hyd_auxvar_ss%d%Ha_T
+        endif
+
+        internal_energy = hyd_auxvar_ss%u(co2_comp_id)
+        enthalpy = hyd_auxvar_ss%h(co2_comp_id)
+        ! enthalpy units: MJ/kmol                       ! air component mass
+        Res(energy_id) = Res(energy_id) + Res(co2_comp_id) * enthalpy
+        J = J + Je
+      endif
     endif
+
     Res(energy_id) = Res(energy_id) + qsrc(energy_id)*scale ! MJ/s
     ! no derivative
   endif
@@ -2141,7 +2420,7 @@ subroutine HydrateSrcSinkDerivative(option,source_sink,hyd_auxvar_ss, &
   PetscReal :: scale
   PetscReal :: Jac(option%nflowdof,option%nflowdof)
   
-  PetscReal :: qsrc(3)
+  PetscReal :: qsrc(option%nflowdof)
   PetscInt :: flow_src_sink_type
   PetscReal :: res(option%nflowdof), res_pert_plus(option%nflowdof)
   PetscReal :: res_pert_minus(option%nflowdof)
@@ -2271,7 +2550,7 @@ subroutine HydrateAuxVarDiff(idof,hydrate_auxvar,global_auxvar, &
   PetscReal :: pert
 
   
-  PetscInt :: apid, cpid, vpid, spid
+  PetscInt :: apid, cpid, vpid, spid, cid
   PetscInt :: gid, lid, acid, wid, eid
   PetscReal :: liquid_mass, gas_mass
   PetscReal :: liquid_density, gas_density
@@ -2358,6 +2637,7 @@ subroutine HydrateAuxVarDiff(idof,hydrate_auxvar,global_auxvar, &
   acid = option%air_id ! air component id
   wid = option%water_id
   eid = option%energy_id
+  cid = option%co2_id
 
   liquid_density = 0.d0
   gas_density = 0.d0
@@ -2832,14 +3112,14 @@ subroutine HydrateDiffJacobian(string,numerical_jacobian,analytical_jacobian, &
   implicit none
   
   character(len=*) :: string
-  PetscReal :: numerical_jacobian(3,3)
-  PetscReal :: analytical_jacobian(3,3)
-  PetscReal :: residual(3)
-  PetscReal :: residual_pert(3,3)
-  PetscReal :: perturbation(3)
-  PetscReal :: perturbation_tolerance
   type(hydrate_auxvar_type) :: hydrate_auxvar(0:)
   type(option_type) :: option
+  PetscReal :: numerical_jacobian(option%nflowdof,option%nflowdof)
+  PetscReal :: analytical_jacobian(option%nflowdof,option%nflowdof)
+  PetscReal :: residual(option%nflowdof)
+  PetscReal :: residual_pert(option%nflowdof,option%nflowdof)
+  PetscReal :: perturbation(option%nflowdof)
+  PetscReal :: perturbation_tolerance
   
   PetscInt :: irow, icol
   
@@ -2850,8 +3130,8 @@ subroutine HydrateDiffJacobian(string,numerical_jacobian,analytical_jacobian, &
   endif
   write(*,'(" Perturbation tolerance: ",es12.4)') perturbation_tolerance
   write(*,'(" r c  numerical    analytical   digits of accuracy")')
-  do icol = 1, 3
-    do irow = 1, 3
+  do icol = 1, option%nflowdof
+    do irow = 1, option%nflowdof
       write(*,100) irow, icol, numerical_jacobian(irow,icol), &
                    analytical_jacobian(irow,icol), &
                    DigitsOfAccuracy(numerical_jacobian(irow,icol), &
@@ -2862,12 +3142,12 @@ subroutine HydrateDiffJacobian(string,numerical_jacobian,analytical_jacobian, &
 #if 0
 200 format(2es20.12)
 300 format(a24,10es20.12)
-  do icol = 1, 3
+  do icol = 1, option%nflowdof
     write(*,'(/," dof = ",i1,"  perturbation = ",es13.5)') icol, perturbation(icol)
 !    write(*,300) 'density', hydrate_auxvar(icol)%den(:), hydrate_auxvar(0)%den(:)
 !    write(*,300) 'energy', hydrate_auxvar(icol)%U(:), hydrate_auxvar(0)%U(:)
     write(*,'("  residual_pert       residual")')
-    do irow = 1, 3
+    do irow = 1, option%nflowdof
       write(*,200) residual_pert(irow,icol), residual(irow)
     enddo
   enddo

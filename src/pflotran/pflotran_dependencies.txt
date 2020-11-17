@@ -1080,7 +1080,7 @@ units.o : option.o pflotran_constants.o
 upwind_direction.o : option.o
 utility.o : input_aux.o option.o pflotran_constants.o string.o
 variables.o :
-waypoint.o : option.o output_aux.o pflotran_constants.o utility.o
+waypoint.o : option.o output_aux.o pflotran_constants.o string.o utility.o
 well_data.o : grid.o grid_grdecl.o input_aux.o option.o pflotran_constants.o \
               string.o units.o utility.o well_type.o
 well_solver.o : auxiliary.o auxvars_toil_ims.o auxvars_towg.o eos_gas.o \

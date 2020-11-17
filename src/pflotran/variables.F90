@@ -173,4 +173,7 @@ module Variables_module
 
   PetscInt, parameter, public :: K_ORTHOGONALITY_ERROR   = 140
 
+  PetscInt, parameter, public :: HYDRATE2_SATURATION     = 141
+  PetscInt, parameter, public :: LIQUID_MOLE2_FRACTION   = 142
+
 end module Variables_module

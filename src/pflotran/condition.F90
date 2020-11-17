@@ -70,13 +70,16 @@ module Condition_module
     type(flow_sub_condition_type), pointer :: liquid_saturation
     type(flow_sub_condition_type), pointer :: gas_saturation
     type(flow_sub_condition_type), pointer :: hydrate_saturation
+    type(flow_sub_condition_type), pointer :: hydrate2_saturation
     type(flow_sub_condition_type), pointer :: ice_saturation
     type(flow_sub_condition_type), pointer :: mole_fraction
+    type(flow_sub_condition_type), pointer :: mole2_fraction
     type(flow_sub_condition_type), pointer :: relative_humidity
     type(flow_sub_condition_type), pointer :: temperature
     type(flow_sub_condition_type), pointer :: rate
     type(flow_sub_condition_type), pointer :: liquid_flux
     type(flow_sub_condition_type), pointer :: gas_flux
+    type(flow_sub_condition_type), pointer :: gas2_flux
     type(flow_sub_condition_type), pointer :: energy_flux
     ! any new sub conditions must be added to FlowConditionIsTransient
   end type flow_hydrate_condition_type
@@ -336,12 +339,15 @@ function FlowHydrateConditionCreate(option)
   nullify(hydrate_condition%liquid_saturation)
   nullify(hydrate_condition%gas_saturation)
   nullify(hydrate_condition%hydrate_saturation)
+  nullify(hydrate_condition%hydrate2_saturation)
   nullify(hydrate_condition%ice_saturation)
   nullify(hydrate_condition%relative_humidity)
   nullify(hydrate_condition%mole_fraction)
+  nullify(hydrate_condition%mole2_fraction)
   nullify(hydrate_condition%temperature)
   nullify(hydrate_condition%liquid_flux)
   nullify(hydrate_condition%gas_flux)
+  nullify(hydrate_condition%gas2_flux)
   nullify(hydrate_condition%energy_flux)
   nullify(hydrate_condition%rate)
 
@@ -627,6 +633,13 @@ function FlowHydrateSubConditionPtr(input,sub_condition_name,hydrate, &
         sub_condition_ptr => FlowSubConditionCreate(ONE_INTEGER)
         hydrate%mole_fraction => sub_condition_ptr
       endif
+    case('MOLE2_FRACTION')
+      if (associated(hydrate%mole2_fraction)) then
+         sub_condition_ptr => hydrate%mole2_fraction
+      else
+         sub_condition_ptr => FlowSubConditionCreate(ONE_INTEGER)
+         hydrate%mole2_fraction => sub_condition_ptr
+      endif
     case('LIQUID_FLUX')
       if (associated(hydrate%liquid_flux)) then
         sub_condition_ptr => hydrate%liquid_flux
@@ -640,6 +653,13 @@ function FlowHydrateSubConditionPtr(input,sub_condition_name,hydrate, &
       else
         sub_condition_ptr => FlowSubConditionCreate(ONE_INTEGER)
         hydrate%gas_flux => sub_condition_ptr
+      endif
+    case('GAS2_FLUX')
+      if (associated(hydrate%gas2_flux)) then
+         sub_condition_ptr => hydrate%gas2_flux
+      else
+         sub_condition_ptr => FlowSubConditionCreate(ONE_INTEGER)
+         hydrate%gas2_flux => sub_condition_ptr
       endif
     case('ENERGY_FLUX')
       if (associated(hydrate%energy_flux)) then
@@ -2712,7 +2732,8 @@ subroutine FlowConditionHydrateRead(condition,input,option)
       case('LIQUID_PRESSURE','GAS_PRESSURE','LIQUID_SATURATION', &
            'ICE_SATURATION','GAS_SATURATION','HYDRATE_SATURATION', &
            'TEMPERATURE','MOLE_FRACTION','RATE','LIQUID_FLUX','GAS_FLUX', &
-           'ENERGY_FLUX','RELATIVE_HUMIDITY')
+           'ENERGY_FLUX','RELATIVE_HUMIDITY', 'HYDRATE2_SATURATION', &
+           'GAS2_FLUX', 'MOLE2_FRACTION')
         select case(option%iflowmode)
           case(H_MODE)
             sub_condition_ptr => &
@@ -2723,7 +2744,8 @@ subroutine FlowConditionHydrateRead(condition,input,option)
           case('LIQUID_PRESSURE','GAS_PRESSURE')
             internal_units = 'Pa'
           case('LIQUID_SATURATION','GAS_SATURATION','HYDRATE_SATURATION', &
-               'ICE_SATURATION','MOLE_FRACTION','RELATIVE_HUMIDITY')
+               'ICE_SATURATION','MOLE_FRACTION','RELATIVE_HUMIDITY', &
+               'HYDRATE2_SATURATION','MOLE2_FRACTION')
             internal_units = 'unitless'
           case('TEMPERATURE')
             internal_units = 'C'
@@ -2732,10 +2754,16 @@ subroutine FlowConditionHydrateRead(condition,input,option)
             input%err_buf = word
             select case(option%iflowmode)
               case(H_MODE)
-                internal_units = trim(rate_string) // ',' // &
+                if (option%nflowdof == 3) then
+                  internal_units = trim(rate_string) // ',' // &
                   trim(rate_string) // ',MJ/sec|MW'
+                elseif (option%nflowdof == 4) then
+                  internal_units = trim(rate_string) // ',' // &
+                    trim(rate_string) // ',' // &
+                    trim(rate_string) // ',MJ/sec|MW'
+                endif
             end select
-          case('LIQUID_FLUX','GAS_FLUX')
+          case('LIQUID_FLUX','GAS_FLUX','GAS2_FLUX')
             internal_units = 'meter/sec'
           case('ENERGY_FLUX')
             input%force_units = PETSC_TRUE
@@ -2829,8 +2857,11 @@ subroutine FlowConditionHydrateRead(condition,input,option)
       elseif (associated(hydrate%liquid_pressure) .and. &
               associated(hydrate%mole_fraction) .and. &
               associated(hydrate%temperature)) then
-        ! liquid phase condition
-        condition%iphase = L_STATE
+        if ((option%nflowdof == 4 .and. associated(hydrate%mole2_fraction)) &
+             .or. option%nflowdof == 3) then
+          ! liquid phase condition
+          condition%iphase = L_STATE
+        endif
       elseif (associated(hydrate%gas_pressure) .and. &
                (associated(hydrate%mole_fraction) .or. &
                 associated(hydrate%relative_humidity)) .and. &
@@ -2845,7 +2876,10 @@ subroutine FlowConditionHydrateRead(condition,input,option)
       elseif ((associated(hydrate%gas_pressure) .or. &
           associated(hydrate%liquid_pressure)) .and. &
           associated(hydrate%hydrate_saturation)) then
-        condition%iphase = HA_STATE
+        if ((option%nflowdof == 4 .and. associated(hydrate%mole2_fraction)) &
+             .or. option%nflowdof == 3) then
+          condition%iphase = HA_STATE
+        endif
       elseif (associated(hydrate%gas_pressure) .and. &
               associated(hydrate%ice_saturation) .and. &
               associated(hydrate%temperature)) then
@@ -2853,15 +2887,24 @@ subroutine FlowConditionHydrateRead(condition,input,option)
       elseif (associated(hydrate%gas_pressure) .and. &
               associated(hydrate%mole_fraction) .and. &
               associated(hydrate%liquid_saturation)) then
-        condition%iphase = AI_STATE
+        if ((option%nflowdof == 4 .and. associated(hydrate%mole2_fraction)) &
+             .or. option%nflowdof == 3) then
+          condition%iphase = AI_STATE
+        endif
       elseif (associated(hydrate%gas_saturation) .and. &
               associated(hydrate%hydrate_saturation) .and. &
               associated(hydrate%temperature)) then
-        condition%iphase = HGA_STATE
+        if ((option%nflowdof == 4 .and. associated(hydrate%mole2_fraction)) &
+             .or. option%nflowdof == 3) then
+          condition%iphase = HGA_STATE
+        endif
       elseif (associated(hydrate%gas_pressure) .and. &
               associated(hydrate%liquid_saturation) .and. &
               associated(hydrate%ice_saturation)) then
-        condition%iphase = HAI_STATE
+        if ((option%nflowdof == 4 .and. associated(hydrate%mole2_fraction)) &
+             .or. option%nflowdof == 3) then
+          condition%iphase = HAI_STATE
+        endif
       elseif (associated(hydrate%ice_saturation) .and. &
               associated(hydrate%hydrate_saturation) .and. &
               associated(hydrate%temperature)) then
@@ -2870,6 +2913,16 @@ subroutine FlowConditionHydrateRead(condition,input,option)
               associated(hydrate%gas_saturation) .and. &
               associated(hydrate%ice_saturation)) then
         condition%iphase = QUAD_STATE
+      elseif ((associated(hydrate%gas_pressure) .or. &
+          associated(hydrate%liquid_pressure)) .and. &
+          associated(hydrate%mole_fraction) .and. &
+          associated(hydrate%mole2_fraction)) then
+        condition%iphase = H2A_STATE
+      elseif ((associated(hydrate%gas_pressure) .or. &
+          associated(hydrate%liquid_pressure)) .and. &
+          associated(hydrate%hydrate_saturation) .and. &
+          associated(hydrate%hydrate2_saturation)) then
+        condition%iphase = HHA_STATE
       endif
       
     endif
@@ -2909,6 +2962,10 @@ subroutine FlowConditionHydrateRead(condition,input,option)
   call FlowSubConditionVerify(option,condition,word,hydrate%mole_fraction, &
                               default_time_storage, &
                               PETSC_TRUE)
+  word = 'mole2 fraction'
+  call FlowSubConditionVerify(option,condition,word,hydrate%mole2_fraction, &
+                              default_time_storage, &
+                              PETSC_TRUE)
   word = 'temperature'
   call FlowSubConditionVerify(option,condition,word,hydrate%temperature, &
                               default_time_storage, &
@@ -2939,6 +2996,10 @@ subroutine FlowConditionHydrateRead(condition,input,option)
   if (associated(hydrate%gas_saturation)) &
     i = i + 1
   if (associated(hydrate%hydrate_saturation)) &
+    i = i + 1 !HYDRATE2_SATURATION, mole2_fraction
+  if (associated(hydrate%hydrate2_saturation)) &
+    i = i + 1
+  if (associated(hydrate%mole2_fraction)) &
     i = i + 1
   if (associated(hydrate%ice_saturation)) &
     i = i + 1
@@ -2951,6 +3012,8 @@ subroutine FlowConditionHydrateRead(condition,input,option)
   if (associated(hydrate%liquid_flux)) &
     i = i + 1
   if (associated(hydrate%gas_flux)) &
+    i = i + 1
+  if (associated(hydrate%gas2_flux)) &
     i = i + 1
   if (associated(hydrate%energy_flux)) &
     i = i + 1
@@ -2978,6 +3041,10 @@ subroutine FlowConditionHydrateRead(condition,input,option)
     i = i + 1
     condition%sub_condition_ptr(i)%ptr => hydrate%hydrate_saturation
   endif
+  if (associated(hydrate%hydrate2_saturation)) then
+     i = i + 1
+     condition%sub_condition_ptr(i)%ptr => hydrate%hydrate2_saturation
+  endif
   if (associated(hydrate%ice_saturation)) then
     i = i + 1
     condition%sub_condition_ptr(i)%ptr => hydrate%ice_saturation
@@ -2990,6 +3057,10 @@ subroutine FlowConditionHydrateRead(condition,input,option)
     i = i + 1
     condition%sub_condition_ptr(i)%ptr => hydrate%mole_fraction
   endif
+  if (associated(hydrate%mole2_fraction)) then
+     i = i + 1
+     condition%sub_condition_ptr(i)%ptr => hydrate%mole2_fraction
+  endif
   if (associated(hydrate%temperature)) then
     i = i + 1
     condition%sub_condition_ptr(i)%ptr => hydrate%temperature
@@ -3001,6 +3072,10 @@ subroutine FlowConditionHydrateRead(condition,input,option)
   if (associated(hydrate%gas_flux)) then
     i = i + 1
     condition%sub_condition_ptr(i)%ptr => hydrate%gas_flux
+  endif
+  if (associated(hydrate%gas2_flux)) then
+     i = i + 1
+     condition%sub_condition_ptr(i)%ptr => hydrate%gas2_flux
   endif
   if (associated(hydrate%energy_flux)) then
     i = i + 1

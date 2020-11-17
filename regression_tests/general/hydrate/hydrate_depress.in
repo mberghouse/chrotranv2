@@ -6,6 +6,7 @@ SIMULATION
       MODE HYDRATE
       OPTIONS
         RESTRICT_STATE_CHANGE
+        NUMBER_OF_EQUATIONS 3
       /
     /
   /

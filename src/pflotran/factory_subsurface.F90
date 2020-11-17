@@ -818,7 +818,7 @@ subroutine SubsurfaceSetFlowMode(pm_flow,option)
       option%nflowspec = 2
       option%use_isothermal = PETSC_FALSE
     class is (pm_hydrate_type)
-      call PMHydrateSetFlowMode(option)
+      call PMHydrateSetFlowMode(pm_flow,option)
     class is (pm_toil_ims_type)
       option%iflowmode = TOIL_IMS_MODE
       option%nphase = 2
