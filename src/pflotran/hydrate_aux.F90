@@ -1338,8 +1338,8 @@ subroutine HydrateComputeStateSpecificVars3(x,state,m_nacl,hyd_auxvar, &
       else
         dTf = 0.d0
       endif
-
-      hyd_auxvar%temp = TQD+dTf
+      
+      hyd_auxvar%temp = TQD-dTf
 
       call EOSWaterSaturationPressure(hyd_auxvar%temp, &
                                           hyd_auxvar%pres(spid),ierr)
@@ -1458,7 +1458,7 @@ subroutine HydrateComputeStateSpecificVars3(x,state,m_nacl,hyd_auxvar, &
         dTf = 0.d0
       endif
 
-      hyd_auxvar%temp = TQD+dTf
+      hyd_auxvar%temp = TQD-dTf
       call HenrysConstant(hyd_auxvar%temp,hydrate_former,K_H_tilde)
       call HydratePE(hyd_auxvar%temp,h_sat_eff, m_nacl, &
                      PE_hyd, dP, characteristic_curves, material_auxvar, &
@@ -1541,7 +1541,7 @@ subroutine HydrateComputeStateSpecificVars3(x,state,m_nacl,hyd_auxvar, &
       call GibbsThomsonFreezing(1.d0-hyd_auxvar%sat(iid),6017.1d0, &
               ICE_DENSITY,TQD,dTf,characteristic_curves, material_auxvar,option)
 
-      hyd_auxvar%temp = TQD+dTf
+      hyd_auxvar%temp = TQD-dTf
 
       call EOSWaterSaturationPressure(hyd_auxvar%temp, &
                                     hyd_auxvar%pres(spid),ierr)
@@ -1626,7 +1626,7 @@ subroutine HydrateComputeStateSpecificVars3(x,state,m_nacl,hyd_auxvar, &
       !  endif
       !endif
 
-      hyd_auxvar%temp = TQD + dTf
+      hyd_auxvar%temp = TQD - dTf
       call HydratePE(hyd_auxvar%temp,h_sat_eff, m_nacl, &
                      PE_hyd, dP, characteristic_curves, material_auxvar, &
                      option, hydrate_former)
@@ -6198,15 +6198,17 @@ subroutine HydratePE(T,sat,xmol,PE,dP,characteristic_curves,material_auxvar, &
   PetscReal :: T_temp, dTf, dTfs
 
   if (hydrate_with_gibbs_thomson .and. hydrate_salinity) then
-    call GibbsThomsonFreezing(1.d0-sat, 54734.d0, HYDRATE_DENSITY, T, dTf, &
-         characteristic_curves, material_auxvar, option)
+    call GibbsThomsonFreezing(1.d0-sat-hydrate_phase_chng_epsilon, 54734.d0, &
+                              HYDRATE_DENSITY, T, dTf, characteristic_curves, &
+                              material_auxvar, option)
     call SalinityEffects(xmol,dTfs,option)
     dTf = dTf - dTfs
   elseif (hydrate_salinity) then
      call SalinityEffects(xmol,dTf,option)
   elseif (hydrate_with_gibbs_thomson) then
-     call GibbsThomsonFreezing(1.d0-sat, 54734.d0, HYDRATE_DENSITY, T, dTf, &
-          characteristic_curves, material_auxvar, option)
+     call GibbsThomsonFreezing(1.d0-sat-hydrate_phase_chng_epsilon, 54734.d0, &
+                               HYDRATE_DENSITY, T, dTf, characteristic_curves, &
+                               material_auxvar, option)
   else
     dTf = 0.d0
   endif
