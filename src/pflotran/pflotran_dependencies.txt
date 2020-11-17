@@ -348,9 +348,10 @@ hydrate.o : connection.o coupler.o debug.o discretization.o eos_water.o \
             saturation_function.o srcsink_sandbox.o srcsink_sandbox_base.o \
             srcsink_sandbox_wipp_gas.o srcsink_sandbox_wipp_well.o \
             upwind_direction.o variables.o
-hydrate_aux.o : characteristic_curves.o eos_gas.o eos_water.o global_aux.o \
-                material_aux.o matrix_zeroing.o option.o pflotran_constants.o \
-                string.o utility.o
+hydrate_aux.o : characteristic_curves.o co2_span_wagner.o \
+                co2_span_wagner_spline.o co2eos.o eos_gas.o eos_water.o \
+                global_aux.o material_aux.o matrix_zeroing.o option.o \
+                pflotran_constants.o string.o utility.o
 hydrate_common.o : connection.o coupler.o eos_gas.o eos_water.o global_aux.o \
                    hydrate_aux.o material_aux.o option.o pflotran_constants.o \
                    upwind_direction.o utility.o wipp.o
@@ -888,7 +889,7 @@ realization_subsurface.o : characteristic_curves.o \
                            output_eclipse.o patch.o pflotran_constants.o \
                            reaction.o reaction_aux.o reactive_transport_aux.o \
                            realization_base.o region.o saturation_function.o \
-                           strata.o string.o time_storage.o \
+                           strata.o string.o th_aux.o time_storage.o \
                            transport_constraint.o transport_constraint_base.o \
                            transport_constraint_nwt.o \
                            transport_constraint_rt.o variables.o waypoint.o \
