@@ -2039,7 +2039,8 @@ subroutine RealizationUpdatePropertiesTS(realization)
 
         volfrac_scale = 1.d0
         volfrac0 = max(rt_auxvars(ghosted_id)%mnrl_volfrac0(imnrl),&
-                       mineral%kinmnrl_nucleation_vol_frac(imnrl))
+                       mineral%kinmnrl_nucleation(NUCLEATION_VOLUME_FRACTION, &
+                                                  imnrl))
         if (volfrac0 > 0.d0) then
           volfrac_scale = (rt_auxvars(ghosted_id)%mnrl_volfrac(imnrl)/ &
                            volfrac0)** &
@@ -2055,8 +2056,9 @@ subroutine RealizationUpdatePropertiesTS(realization)
         endif
 
         rt_auxvars(ghosted_id)%mnrl_area(imnrl) = &
-            rt_auxvars(ghosted_id)%mnrl_area0(imnrl) * &
-            porosity_scale*volfrac_scale
+            max(rt_auxvars(ghosted_id)%mnrl_area0(imnrl) * &
+                porosity_scale*volfrac_scale, &
+                mineral%kinmnrl_nucleation(NUCLEATION_AREA,imnrl))
 
         if (reaction%update_armor_mineral_surface .and. &
             mineral%kinmnrl_armor_crit_vol_frac(imnrl) > 0.d0) then

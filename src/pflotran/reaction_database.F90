@@ -1984,8 +1984,8 @@ subroutine BasisInit(reaction,option)
       mineral%kinmnrl_molar_vol = 0.d0
       allocate(mineral%kinmnrl_molar_wt(mineral%nkinmnrl))
       mineral%kinmnrl_molar_wt = 0.d0
-      allocate(mineral%kinmnrl_nucleation_vol_frac(mineral%nkinmnrl))
-      mineral%kinmnrl_nucleation_vol_frac = 0.d0
+      allocate(mineral%kinmnrl_nucleation(2,mineral%nkinmnrl))
+      mineral%kinmnrl_nucleation = 0.d0
 
       allocate(mineral%kinmnrl_armor_pwr(mineral%nkinmnrl))
       mineral%kinmnrl_armor_pwr = 0.d0
@@ -2318,8 +2318,7 @@ subroutine BasisInit(reaction,option)
             tstrxn%affinity_threshold
           mineral%kinmnrl_rate_limiter(ikinmnrl) = tstrxn%rate_limiter
           mineral%kinmnrl_irreversible(ikinmnrl) = tstrxn%irreversible
-          mineral%kinmnrl_nucleation_vol_frac(ikinmnrl) = &
-            tstrxn%nucleation_volume_fraction
+          mineral%kinmnrl_nucleation(:,ikinmnrl) = tstrxn%nucleation(:)
 
           mineral%kinmnrl_armor_min_names(ikinmnrl) = tstrxn%armor_min_name
           mineral%kinmnrl_armor_pwr(ikinmnrl) = tstrxn%armor_pwr
