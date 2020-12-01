@@ -540,7 +540,7 @@ subroutine GeneralComputeMassBalance(realization,mass_balance)
       ! volume_phase = saturation*porosity*volume
       vol_phase = &
         general_auxvars(ZERO_INTEGER,ghosted_id)%sat(iphase)* &
-        general_auxvars(ZERO_INTEGER,ghosted_id)%effective_porosity* &
+        general_auxvars(ZERO_INTEGER,ghosted_id)%effective_porosity*material_auxvars(ghosted_id)%epsilon* &
         material_auxvars(ghosted_id)%volume
       ! mass = volume_phase*density
       do icomp = 1, option%nflowspec

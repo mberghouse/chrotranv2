@@ -7273,7 +7273,7 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
         vec_ptr(local_id) = &
           patch%aux%Global%auxvars(grid%nL2G(local_id))%istate
       enddo
-    case(POROSITY,BASE_POROSITY,INITIAL_POROSITY, &
+    case(POROSITY,EPSILON,BASE_POROSITY,INITIAL_POROSITY, &
          VOLUME,TORTUOSITY,SOIL_COMPRESSIBILITY, &
          SOIL_REFERENCE_PRESSURE)
       do local_id=1,grid%nlmax
@@ -9853,15 +9853,15 @@ subroutine PatchCalculateCFL1Timestep(patch,option,max_dt_cfl_1, &
         if (.not.(global_auxvars(ghosted_id_up)%sat(iphase) > 0.d0 .and. &
                   global_auxvars(ghosted_id_dn)%sat(iphase) > 0.d0)) cycle
         por_sat_min = min(material_auxvars(ghosted_id_up)%porosity* &
-                          global_auxvars(ghosted_id_up)%sat(iphase), &
+                          global_auxvars(ghosted_id_up)%sat(iphase)*material_auxvars(ghosted_id_up)%epsilon, &
                           material_auxvars(ghosted_id_dn)%porosity* &
-                          global_auxvars(ghosted_id_dn)%sat(iphase))
+                          material_auxvars(ghosted_id_dn)%epsilon*global_auxvars(ghosted_id_dn)%sat(iphase))
         por_sat_ave = (fraction_upwind* &
                        material_auxvars(ghosted_id_up)%porosity* &
-                       global_auxvars(ghosted_id_up)%sat(iphase) + &
+                       material_auxvars(ghosted_id_up)%epsilon*global_auxvars(ghosted_id_up)%sat(iphase) + &
                       (1.d0-fraction_upwind)* &
                       material_auxvars(ghosted_id_dn)%porosity* &
-                      global_auxvars(ghosted_id_dn)%sat(iphase))
+                      material_auxvars(ghosted_id_dn)%epsilon*global_auxvars(ghosted_id_dn)%sat(iphase))
         v_darcy = patch%internal_velocities(iphase,sum_connection)
         v_pore_max = v_darcy / por_sat_min
         v_pore_ave = v_darcy / por_sat_ave
@@ -9892,7 +9892,7 @@ subroutine PatchCalculateCFL1Timestep(patch,option,max_dt_cfl_1, &
       do iphase = 1, option%nphase
         ! the _ave variable is being reused. it is actually, max
         por_sat_ave = material_auxvars(ghosted_id_dn)%porosity* &
-                      global_auxvars(ghosted_id_dn)%sat(iphase)
+                      material_auxvars(ghosted_id_dn)%epsilon*global_auxvars(ghosted_id_dn)%sat(iphase)
         v_darcy = patch%boundary_velocities(iphase,sum_connection)
         v_pore_ave = v_darcy / por_sat_ave
         dt_cfl_1 = distance / dabs(v_pore_ave)

@@ -87,7 +87,7 @@ subroutine GeneralAccumulation(gen_auxvar,global_auxvar,material_auxvar, &
   volume_over_dt = material_auxvar%volume / option%flow_dt
   ! must use gen_auxvar%effective porosity here as it enables numerical 
   ! derivatives to be employed 
-  porosity = gen_auxvar%effective_porosity
+  porosity = gen_auxvar%effective_porosity * material_auxvar%epsilon
   
   ! accumulation term units = kmol/s
   Res = 0.d0
@@ -1528,12 +1528,12 @@ subroutine GeneralFlux(gen_auxvar_up,global_auxvar_up, &
       tempreal = 0.d0
     endif
     stpd_up = sat_up*material_auxvar_up%tortuosity* &
-              gen_auxvar_up%effective_porosity*den_up
+              gen_auxvar_up%effective_porosity*material_auxvar_up%epsilon*den_up
     stpd_dn = sat_dn*material_auxvar_dn%tortuosity* &
-              gen_auxvar_dn%effective_porosity*den_dn
+              gen_auxvar_dn%effective_porosity*material_auxvar_dn%epsilon*den_dn
               
-    dstpd_up_dporup = stpd_up / gen_auxvar_up%effective_porosity
-    dstpd_dn_dpordn = stpd_dn / gen_auxvar_dn%effective_porosity
+    dstpd_up_dporup = stpd_up / (gen_auxvar_up%effective_porosity*material_auxvar_up%epsilon)
+    dstpd_dn_dpordn = stpd_dn / (gen_auxvar_dn%effective_porosity*material_auxvar_dn%epsilon)
     dstpd_up_dsatup = stpd_up / sat_up
     dstpd_dn_dsatdn = stpd_dn / sat_dn
     dstpd_up_ddenup = tempreal * stpd_up / den_up
@@ -1586,7 +1586,7 @@ subroutine GeneralFlux(gen_auxvar_up,global_auxvar_up, &
           dtot_mole_flux_dp = & 
             ! liquid density and porosity
             dtot_mole_flux_dstpd * dstpd_ave_over_dist_dstpd_up * &
-            (dstpd_up_dporup * gen_auxvar_up%d%por_p + &
+            (dstpd_up_dporup * gen_auxvar_up%d%por_p * material_auxvar_up%epsilon + &
             ! if density harmonic averaged
              dstpd_up_ddenup * gen_auxvar_up%d%denl_pl) + &
             ! if density arithmetically averaged
@@ -1629,7 +1629,7 @@ subroutine GeneralFlux(gen_auxvar_up,global_auxvar_up, &
           dtot_mole_flux_dp = & 
             ! liquid density and porosity
             dtot_mole_flux_dstpd * dstpd_ave_over_dist_dstpd_up * &
-            (dstpd_up_dporup * gen_auxvar_up%d%por_p + &
+            (dstpd_up_dporup * gen_auxvar_up%d%por_p * material_auxvar_up%epsilon + &
              dstpd_up_ddenup * gen_auxvar_up%d%denl_pl) + &
             dtot_mole_flux_ddenave * ddensity_ave_dden_up * &
             gen_auxvar_up%d%denl_pl
@@ -1678,7 +1678,7 @@ subroutine GeneralFlux(gen_auxvar_up,global_auxvar_up, &
           dtot_mole_flux_dp = & 
             ! liquid density and porosity
             dtot_mole_flux_dstpd * dstpd_ave_over_dist_dstpd_up * &
-            (dstpd_up_dporup * gen_auxvar_up%d%por_p + &
+            (dstpd_up_dporup * gen_auxvar_up%d%por_p * material_auxvar_up%epsilon+ &
              dstpd_up_ddenup * gen_auxvar_up%d%denl_pl) + &
             ! if density arithmetically averaged
             dtot_mole_flux_ddenave * ddensity_ave_dden_up * &
@@ -1734,7 +1734,7 @@ subroutine GeneralFlux(gen_auxvar_up,global_auxvar_up, &
           dtot_mole_flux_dp = & 
             ! liquid density and porosity
             dtot_mole_flux_dstpd * dstpd_ave_over_dist_dstpd_dn * &
-            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p + &
+            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p *material_auxvar_up%epsilon+ &
              dstpd_dn_ddendn * gen_auxvar_dn%d%denl_pl) + &
             ! if density arithmetically averaged
             dtot_mole_flux_ddenave * ddensity_ave_dden_dn * &
@@ -1777,7 +1777,7 @@ subroutine GeneralFlux(gen_auxvar_up,global_auxvar_up, &
           dtot_mole_flux_dp = & 
             ! liquid density and porosity
             dtot_mole_flux_dstpd * dstpd_ave_over_dist_dstpd_dn * &
-            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p + &
+            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p * material_auxvar_up%epsilon+ &
              dstpd_dn_ddendn * gen_auxvar_dn%d%denl_pl) + &
             ! if density arithmetically averaged
             dtot_mole_flux_ddenave * ddensity_ave_dden_dn * &
@@ -1827,7 +1827,7 @@ subroutine GeneralFlux(gen_auxvar_up,global_auxvar_up, &
           dtot_mole_flux_dp = & 
             ! liquid density and porosity
             dtot_mole_flux_dstpd * dstpd_ave_over_dist_dstpd_dn * &
-            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p + &
+            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p *material_auxvar_up%epsilon+ &
              dstpd_dn_ddendn * gen_auxvar_dn%d%denl_pl) + &
             ! if density arithmetically averaged
             dtot_mole_flux_ddenave * ddensity_ave_dden_dn * &
@@ -1916,12 +1916,12 @@ subroutine GeneralFlux(gen_auxvar_up,global_auxvar_up, &
       tempreal = 0.d0
     endif
     stpd_up = sat_up*material_auxvar_up%tortuosity* &
-              gen_auxvar_up%effective_porosity*den_up
+              gen_auxvar_up%effective_porosity*material_auxvar_up%epsilon*den_up
     stpd_dn = sat_dn*material_auxvar_dn%tortuosity* &
-              gen_auxvar_dn%effective_porosity*den_dn
+              gen_auxvar_dn%effective_porosity*material_auxvar_dn%epsilon*den_dn
               
-    dstpd_up_dporup = stpd_up / gen_auxvar_up%effective_porosity
-    dstpd_dn_dpordn = stpd_dn / gen_auxvar_dn%effective_porosity
+    dstpd_up_dporup = stpd_up / (gen_auxvar_up%effective_porosity*material_auxvar_up%epsilon)
+    dstpd_dn_dpordn = stpd_dn / (gen_auxvar_dn%effective_porosity*material_auxvar_dn%epsilon)
     dstpd_up_dsatup = stpd_up / sat_up
     dstpd_dn_dsatdn = stpd_dn / sat_dn
     dstpd_up_ddenup = tempreal * stpd_up / den_up
@@ -1995,7 +1995,7 @@ subroutine GeneralFlux(gen_auxvar_up,global_auxvar_up, &
           dtot_mole_flux_dp = & 
             ! liquid density and porosity
             dtot_mole_flux_dstpd * dstpd_ave_over_dist_dstpd_up * &
-            (dstpd_up_dporup * gen_auxvar_up%d%por_p + &
+            (dstpd_up_dporup * gen_auxvar_up%d%por_p *material_auxvar_up%epsilon+ &
             ! if density harmonic averaged
              dstpd_up_ddenup * gen_auxvar_up%d%deng_pg) + &
             ! if density arithmetically averaged
@@ -2042,7 +2042,7 @@ subroutine GeneralFlux(gen_auxvar_up,global_auxvar_up, &
           dtot_mole_flux_dp = & 
             ! liquid density and porosity
             dtot_mole_flux_dstpd * dstpd_ave_over_dist_dstpd_up * &
-            (dstpd_up_dporup * gen_auxvar_up%d%por_p + &
+            (dstpd_up_dporup * gen_auxvar_up%d%por_p *material_auxvar_up%epsilon+ &
              dstpd_up_ddenup * gen_auxvar_up%d%deng_pg) + &
             ! if density arithmetically averaged
             dtot_mole_flux_ddenave * ddensity_ave_dden_up * &
@@ -2105,7 +2105,7 @@ subroutine GeneralFlux(gen_auxvar_up,global_auxvar_up, &
           dtot_mole_flux_dp = & 
             ! liquid density and porosity
             dtot_mole_flux_dstpd * dstpd_ave_over_dist_dstpd_up * &
-            (dstpd_up_dporup * gen_auxvar_up%d%por_p + &
+            (dstpd_up_dporup * gen_auxvar_up%d%por_p *material_auxvar_up%epsilon+ &
              dstpd_up_ddenup * gen_auxvar_up%d%deng_pg) + &
             ! if density arithmetically averaged
             dtot_mole_flux_ddenave * ddensity_ave_dden_up * &
@@ -2162,7 +2162,7 @@ subroutine GeneralFlux(gen_auxvar_up,global_auxvar_up, &
           dtot_mole_flux_dp = & 
             ! liquid density and porosity
             dtot_mole_flux_dstpd * dstpd_ave_over_dist_dstpd_dn * &
-            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p + &
+            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p*material_auxvar_up%epsilon + &
              dstpd_dn_ddendn * gen_auxvar_dn%d%deng_pg) + &
             ! if density arithmetically averaged
             dtot_mole_flux_ddenave * ddensity_ave_dden_dn * &
@@ -2208,7 +2208,7 @@ subroutine GeneralFlux(gen_auxvar_up,global_auxvar_up, &
           dtot_mole_flux_dp = & 
             ! liquid density and porosity
             dtot_mole_flux_dstpd * dstpd_ave_over_dist_dstpd_dn * &
-            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p + &
+            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p *material_auxvar_up%epsilon+ &
              dstpd_dn_ddendn * gen_auxvar_dn%d%deng_pg) + &
             ! if density arithmetically averaged
             dtot_mole_flux_ddenave * ddensity_ave_dden_dn * &
@@ -2271,7 +2271,7 @@ subroutine GeneralFlux(gen_auxvar_up,global_auxvar_up, &
           dtot_mole_flux_dp = & 
             ! liquid density and porosity
             dtot_mole_flux_dstpd * dstpd_ave_over_dist_dstpd_dn * &
-            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p + &
+            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p *material_auxvar_up%epsilon+ &
              dstpd_dn_ddendn * gen_auxvar_dn%d%deng_pg) + &
             ! if density arithmetically averaged
             dtot_mole_flux_ddenave * ddensity_ave_dden_dn * &
@@ -3330,9 +3330,9 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
       tempreal = 0.d0
     endif
     stpd_dn = sat_dn*material_auxvar_dn%tortuosity* &
-              gen_auxvar_dn%effective_porosity*den_dn
+              gen_auxvar_dn%effective_porosity*den_dn*material_auxvar_dn%epsilon
               
-    dstpd_dn_dpordn = stpd_dn / gen_auxvar_dn%effective_porosity
+    dstpd_dn_dpordn = stpd_dn / (gen_auxvar_dn%effective_porosity*material_auxvar_dn%epsilon)
     dstpd_dn_dsatdn = stpd_dn / sat_dn
     dstpd_dn_ddendn = tempreal * stpd_dn / den_dn
     ! units = [mole/m^4 bulk]
@@ -3376,7 +3376,7 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
           dtot_mole_flux_dp = & 
             ! liquid density and porosity
             dtot_mole_flux_dstpd * dstpd_ave_over_dist_dstpd_dn * &
-            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p + &
+            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p *material_auxvar_dn%epsilon+ &
              dstpd_dn_ddendn * gen_auxvar_dn%d%denl_pl) + &
             ! if density arithmetically averaged
             dtot_mole_flux_ddenave * ddensity_ave_dden_dn * &
@@ -3419,7 +3419,7 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
           dtot_mole_flux_dp = & 
             ! liquid density and porosity
             dtot_mole_flux_dstpd * dstpd_ave_over_dist_dstpd_dn * &
-            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p + &
+            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p *material_auxvar_dn%epsilon+ &
              dstpd_dn_ddendn * gen_auxvar_dn%d%denl_pl) + &
             ! if density arithmetically averaged
             dtot_mole_flux_ddenave * ddensity_ave_dden_dn * &
@@ -3469,7 +3469,7 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
           dtot_mole_flux_dp = & 
             ! liquid density and porosity
             dtot_mole_flux_dstpd * dstpd_ave_over_dist_dstpd_dn * &
-            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p + &
+            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p *material_auxvar_dn%epsilon+ &
              dstpd_dn_ddendn * gen_auxvar_dn%d%denl_pl) + &
             ! if density arithmetically averaged
             dtot_mole_flux_ddenave * ddensity_ave_dden_dn * &
@@ -3553,9 +3553,9 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
       tempreal = 0.d0
     endif
     stpd_dn = sat_dn*material_auxvar_dn%tortuosity* &
-              gen_auxvar_dn%effective_porosity*den_dn
+              gen_auxvar_dn%effective_porosity*den_dn*material_auxvar_dn%epsilon
               
-    dstpd_dn_dpordn = stpd_dn / gen_auxvar_dn%effective_porosity
+    dstpd_dn_dpordn = stpd_dn / (gen_auxvar_dn%effective_porosity*material_auxvar_dn%epsilon)
     dstpd_dn_dsatdn = stpd_dn / sat_dn
     dstpd_dn_ddendn = tempreal * stpd_dn / den_dn
     ! units = [mole/m^4 bulk]
@@ -3616,7 +3616,7 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
           dtot_mole_flux_dp = & 
             ! liquid density and porosity
             dtot_mole_flux_dstpd * dstpd_ave_over_dist_dstpd_dn * &
-            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p + &
+            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p *material_auxvar_dn%epsilon+ &
              dstpd_dn_ddendn * gen_auxvar_dn%d%deng_pg) + &
             ! if density arithmetically averaged
             dtot_mole_flux_ddenave * ddensity_ave_dden_dn * &
@@ -3662,7 +3662,7 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
           dtot_mole_flux_dp = & 
             ! liquid density and porosity
             dtot_mole_flux_dstpd * dstpd_ave_over_dist_dstpd_dn * &
-            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p + &
+            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p *material_auxvar_dn%epsilon+ &
              dstpd_dn_ddendn * gen_auxvar_dn%d%deng_pg) + &
             ! if density arithmetically averaged
             dtot_mole_flux_ddenave * ddensity_ave_dden_dn * &
@@ -3725,7 +3725,7 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
           dtot_mole_flux_dp = & 
             ! liquid density and porosity
             dtot_mole_flux_dstpd * dstpd_ave_over_dist_dstpd_dn * &
-            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p + &
+            (dstpd_dn_dpordn * gen_auxvar_dn%d%por_p *material_auxvar_dn%epsilon+ &
              dstpd_dn_ddendn * gen_auxvar_dn%d%deng_pg) + &
             ! if density arithmetically averaged
             dtot_mole_flux_ddenave * ddensity_ave_dden_dn * &
@@ -5028,12 +5028,12 @@ subroutine GeneralAuxVarDiff(idof,general_auxvar,global_auxvar, &
                  liquid_saturation+ &
                  gas_density*general_auxvar%xmol(lid,gid)* & 
                  gas_saturation)* & 
-                 general_auxvar%effective_porosity*material_auxvar%volume
+                 general_auxvar%effective_porosity*material_auxvar%epsilon*material_auxvar%volume
   gas_mass = (liquid_density*general_auxvar%xmol(gid,lid)* & 
               liquid_saturation+ &
               gas_density*general_auxvar%xmol(gid,gid)* & 
               gas_saturation)* & 
-              general_auxvar%effective_porosity*material_auxvar%volume
+              general_auxvar%effective_porosity*material_auxvar%epsilon*material_auxvar%volume
   select case(global_auxvar_pert%istate)
     case(LIQUID_STATE)
       print *, '     Thermodynamic state (pert): Liquid phase'
@@ -5064,12 +5064,12 @@ subroutine GeneralAuxVarDiff(idof,general_auxvar,global_auxvar, &
                  liquid_saturation_pert+ &
                  gas_density_pert*general_auxvar_pert%xmol(lid,gid)* & 
                  gas_saturation_pert)* & 
-                 general_auxvar_pert%effective_porosity*material_auxvar_pert%volume
+                 general_auxvar_pert%effective_porosity*material_auxvar%epsilon*material_auxvar_pert%volume
   gas_mass_pert = (liquid_density_pert*general_auxvar_pert%xmol(gid,lid)* & 
               liquid_saturation_pert+ &
               gas_density_pert*general_auxvar_pert%xmol(gid,gid)* & 
               gas_saturation_pert)* & 
-              general_auxvar_pert%effective_porosity*material_auxvar_pert%volume 
+              general_auxvar_pert%effective_porosity*material_auxvar%epsilon*material_auxvar_pert%volume 
               
               
   call GeneralAuxVarPrintResult('tot liq comp mass [kmol]', &

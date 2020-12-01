@@ -35,8 +35,10 @@ module Material_module
     class(dataset_base_type), pointer :: permeability_dataset_xz
     class(dataset_base_type), pointer :: permeability_dataset_yz
     PetscReal :: porosity
+    PetscReal :: epsilon
 !    character(len=MAXWORDLENGTH) :: porosity_dataset_name
     class(dataset_base_type), pointer :: porosity_dataset
+    class(dataset_base_type), pointer :: epsilon_dataset
     class(dataset_base_type), pointer :: tortuosity_dataset
     PetscReal :: tortuosity
     PetscBool :: tortuosity_function_of_porosity
@@ -173,8 +175,10 @@ function MaterialPropertyCreate()
   nullify(material_property%permeability_dataset_yz)
   ! initialize to UNINITIALIZED_DOUBLE to catch bugs
   material_property%porosity = UNINITIALIZED_DOUBLE
+  material_property%epsilon = UNINITIALIZED_DOUBLE
 !  material_property%porosity_dataset_name = ''
   nullify(material_property%porosity_dataset)
+  nullify(material_property%epsilon_dataset)
   nullify(material_property%tortuosity_dataset)
   material_property%tortuosity_function_of_porosity = PETSC_FALSE
   material_property%tortuosity = 1.d0
@@ -422,6 +426,10 @@ subroutine MaterialPropertyRead(material_property,input,option)
         call DatasetReadDoubleOrDataset(input,material_property%porosity, &
                                         material_property%porosity_dataset, &
                                         'porosity','MATERIAL_PROPERTY',option)
+      case('EPSILON')
+        call DatasetReadDoubleOrDataset(input,material_property%epsilon, &
+                                        material_property%epsilon_dataset, &
+                                        'epsilon','MATERIAL_PROPERTY',option)
       case('TORTUOSITY')
         call DatasetReadDoubleOrDataset(input,material_property%tortuosity, &
                                         material_property%tortuosity_dataset, &
@@ -1631,6 +1639,10 @@ subroutine MaterialSetAuxVarScalar(Material,value,ivar,isubvar)
             Material%auxvars(i)%porosity_0 = value
           enddo
       end select
+    case(EPSILON)
+      do i=1, Material%num_aux
+        Material%auxvars(i)%epsilon = value
+      enddo
     case(TORTUOSITY)
       do i=1, Material%num_aux
         Material%auxvars(i)%tortuosity = value
@@ -1724,7 +1736,11 @@ subroutine MaterialSetAuxVarVecLoc(Material,vec_loc,ivar,isubvar)
         case default
           print *, 'Error indexing porosity in MaterialSetAuxVarVecLoc()'
           stop
-      end select
+       end select
+    case(EPSILON)
+      do ghosted_id=1, Material%num_aux
+        Material%auxvars(ghosted_id)%epsilon = vec_loc_p(ghosted_id)
+      enddo
     case(TORTUOSITY)
       do ghosted_id=1, Material%num_aux
         Material%auxvars(ghosted_id)%tortuosity = vec_loc_p(ghosted_id)
@@ -1834,7 +1850,11 @@ subroutine MaterialGetAuxVarVecLoc(Material,vec_loc,ivar,isubvar)
         case default
           print *, 'Error indexing porosity in MaterialGetAuxVarVecLoc()'
           stop
-      end select
+       end select
+    case(EPSILON)
+      do ghosted_id=1, Material%num_aux
+        vec_loc_p(ghosted_id) = Material%auxvars(ghosted_id)%epsilon
+      enddo
     case(TORTUOSITY)
       do ghosted_id=1, Material%num_aux
         vec_loc_p(ghosted_id) = Material%auxvars(ghosted_id)%tortuosity
@@ -2270,6 +2290,7 @@ recursive subroutine MaterialPropertyDestroy(material_property)
   nullify(material_property%permeability_dataset_xz)
   nullify(material_property%permeability_dataset_yz)
   nullify(material_property%porosity_dataset)
+  nullify(material_property%epsilon_dataset)
   nullify(material_property%tortuosity_dataset)
   nullify(material_property%compressibility_dataset)
   nullify(material_property%soil_reference_pressure_dataset)

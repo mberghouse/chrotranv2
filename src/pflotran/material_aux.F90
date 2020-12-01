@@ -53,6 +53,7 @@ module Material_Aux_class
                                ! (e.g. geomechanics, mineral precip/diss)
     PetscReal :: porosity ! porosity used in calculation, which may be a 
                           ! function of soil compressibity, etc.
+    PetscReal :: epsilon ! secondary continuum
     PetscReal :: dporosity_dp
     PetscReal :: tortuosity
     PetscReal :: soil_particle_density
@@ -186,6 +187,7 @@ subroutine MaterialAuxVarInit(auxvar,option)
   auxvar%porosity_0 = UNINITIALIZED_DOUBLE
   auxvar%porosity_base = UNINITIALIZED_DOUBLE
   auxvar%porosity = UNINITIALIZED_DOUBLE
+  auxvar%epsilon = 1.0d0
   auxvar%dporosity_dp = 0.d0
   auxvar%tortuosity = UNINITIALIZED_DOUBLE
   auxvar%soil_particle_density = UNINITIALIZED_DOUBLE
@@ -236,6 +238,7 @@ subroutine MaterialAuxVarCopy(auxvar,auxvar2,option)
   auxvar2%porosity_0 = auxvar%porosity_0
   auxvar2%porosity_base = auxvar%porosity_base
   auxvar2%porosity = auxvar%porosity
+  auxvar2%epsilon = auxvar%epsilon
   auxvar2%tortuosity = auxvar%tortuosity
   auxvar2%soil_particle_density = auxvar%soil_particle_density
   if (associated(auxvar%permeability)) then
@@ -621,6 +624,8 @@ function MaterialAuxVarGetValue(material_auxvar,ivar)
       MaterialAuxVarGetValue = material_auxvar%porosity_base
     case(POROSITY)
       MaterialAuxVarGetValue = material_auxvar%porosity
+    case(EPSILON)
+      MaterialAuxVarGetValue = material_auxvar%epsilon
     case(TORTUOSITY)
       MaterialAuxVarGetValue = material_auxvar%tortuosity
     case(PERMEABILITY_X)
@@ -678,7 +683,9 @@ subroutine MaterialAuxVarSetValue(material_auxvar,ivar,value)
     case(BASE_POROSITY)
       material_auxvar%porosity_base = value
     case(POROSITY)
-      material_auxvar%porosity = value
+       material_auxvar%porosity = value
+    case(EPSILON)
+       material_auxvar%epsilon = value
     case(TORTUOSITY)
       material_auxvar%tortuosity = value
     case(PERMEABILITY_X)
