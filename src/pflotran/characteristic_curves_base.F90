@@ -390,7 +390,104 @@ subroutine SFBaseUnitTest(this,cc_name,input_filename,option)
   character(len=MAXWORDLENGTH) :: cc_name
   character(len=MAXWORDLENGTH) :: input_filename
   type(option_type), intent(inout) :: option
-  
+
+  character(len=MAXWORDLENGTH), pointer :: name(:)      ! [-]
+  character(len=MAXWORDLENGTH), pointer :: temp_name(:) ! [-]
+  PetscReal, pointer :: capillary_pressure(:)           ! [Pa]
+  PetscReal, pointer :: temp_capillary_pressure(:)      ! [Pa]
+  PetscReal, pointer :: corr_liq_saturation(:)          ! [-]
+  PetscReal, pointer :: temp_corr_liq_saturation(:)     ! [-]
+  PetscReal :: liq_saturation
+  PetscReal, parameter :: tolerance = 1.d-8
+  PetscReal :: dum1
+  PetscReal :: diff
+  PetscInt :: i, j, k
+  character(len=MAXWORDLENGTH) :: pass_fail
+  character(len=MAXWORDLENGTH) :: filename_out, id
+  PetscInt :: rc_in, rc_out, fu_in, fu_out
+  PetscInt :: values(8)
+  character(len=8) :: date
+  character(len=5) :: zone
+  character(len=10) :: time
+
+  allocate(temp_name(99))
+  allocate(temp_capillary_pressure(99))
+  allocate(temp_corr_liq_saturation(99))
+
+  i = 1
+  open(action='read', file=trim(input_filename), iostat=rc_in, &
+       newunit=fu_in)
+  read(fu_in, *) ! skip header line
+  do
+    read (fu_in, *, iostat=rc_in) temp_name(i), &
+                                  temp_capillary_pressure(i), &
+                                  temp_corr_liq_saturation(i)
+    if (rc_in /= 0) exit 
+    i = i + 1 
+  enddo
+
+  allocate(name(i-1))
+  allocate(capillary_pressure(i-1))
+  allocate(corr_liq_saturation(i-1))
+  name(:) = temp_name(1:i-1)
+  capillary_pressure(:) = temp_capillary_pressure(1:i-1)
+  corr_liq_saturation(:) = temp_corr_liq_saturation(1:i-1)
+
+  filename_out = 'sf_' // trim(cc_name) //'.out'
+
+  open(action='write', file=filename_out, iostat=rc_out, newunit=fu_out)
+  call date_and_time(DATE=date,ZONE=zone,TIME=time,VALUES=values)
+  write(fu_out,*) date(1:4),'/',date(5:6),'/',date(7:8),' ',time(1:2),':', &
+                  time(3:4),' ',zone(1:3),':',zone(4:5),'UTC'
+  write(fu_out,*)
+  write(fu_out,'(a)') 'NOTE: The input file provided was:'
+  write(fu_out,'(a,a)') '      ', trim(input_filename)
+  write(fu_out,'(a,d17.10,a)') 'NOTE: The validation test tolerance is ', &
+                               tolerance, '.'
+  write(fu_out,*)
+
+  i = 0
+  do k=1,size(name)
+    write(fu_out,'(a,I2,a)') '||-----------TEST-#',k,'-----------------------&
+                             &--------------||'
+    write(fu_out,'(a)') '  [in]  characteristic curves name:'
+    write(fu_out,'(a)') name(k)
+    write(fu_out,'(a)') '  [in]  capillary pressure [Pa]:'
+    write(fu_out,'(d17.10)') capillary_pressure(k)
+
+    call this%Saturation(capillary_pressure(k),liq_saturation,dum1,option)
+    write(fu_out,'(a)') '  [out] liquid saturation [-]:'
+    write(fu_out,'(d17.10)') liq_saturation
+    write(fu_out,'(a)') '  [correct]  liquid saturation [-]:'
+    write(fu_out,'(d17.10)') corr_liq_saturation(k)
+    diff = abs(corr_liq_saturation(k)-liq_saturation)
+    if (diff > (tolerance*corr_liq_saturation(k))) then
+      pass_fail = 'FAIL!'
+      i = i + 1
+    else
+      pass_fail = 'pass'
+    endif
+    write(fu_out,'(a)') trim(pass_fail)
+
+    write(fu_out,*)
+  enddo
+
+  write(fu_out,'(a)') 'TEST SUMMARY:'
+  if (i == 0) then
+    write(fu_out,'(a)') ' All tests passed!'
+  else
+    write(fu_out,'(a,I3,a)') ' A total of (', i, ') test(s) failed!'
+  endif
+
+  close(fu_out)
+  close(fu_in)
+
+  deallocate(temp_name)
+  deallocate(temp_capillary_pressure)
+  deallocate(temp_corr_liq_saturation)
+  deallocate(name)
+  deallocate(capillary_pressure)
+  deallocate(corr_liq_saturation)
 
 end subroutine SFBaseUnitTest
 
@@ -531,7 +628,7 @@ subroutine RPF_Base_UnitTest(this,cc_name,phase,input_filename,option)
   saturation(:) = temp_saturation(1:i-1)
   corr_rel_perm(:) = temp_corr_rel_perm(1:i-1)
 
-  filename_out = 'perm_func_' // trim(phase) // '.out'
+  filename_out = 'rpf_' // trim(phase) // '_' // trim(cc_name) // '.out'
 
   open(action='write', file=filename_out, iostat=rc_out, newunit=fu_out)
   call date_and_time(DATE=date,ZONE=zone,TIME=time,VALUES=values)
@@ -548,7 +645,7 @@ subroutine RPF_Base_UnitTest(this,cc_name,phase,input_filename,option)
   do k=1,size(name)
     write(fu_out,'(a,I2,a)') '||-----------TEST-#',k,'-----------------------&
                              &--------------||'
-    write(fu_out,'(a)') '  [in]  relative permeability function name:'
+    write(fu_out,'(a)') '  [in]  characteristic curves name:'
     write(fu_out,'(a)') name(k)
     write(fu_out,'(a,a,a)') '  [in]  saturation (', trim(phase), ') [Pa]:'
     write(fu_out,'(d17.10)') saturation(k)
