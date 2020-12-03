@@ -669,6 +669,7 @@ recursive subroutine PMWIPPFloInitializeRun(this)
   type(region_type), pointer :: region
   type(patch_type), pointer :: patch
   type(option_type), pointer :: option
+  type(material_property_type), pointer :: cur_material_property
   character(len=MAXSTRINGLENGTH) :: string, string2
   PetscReal, pointer :: work_p(:)
   PetscReal, pointer :: work_loc_p(:)
@@ -731,7 +732,18 @@ recursive subroutine PMWIPPFloInitializeRun(this)
   if (option%flow%fracture_on) then
     call FractureUnitTest(patch%aux%Material%auxvars,grid)
   endif
-  call MaterialCompressSoilUnitTest(patch%aux%Material%auxvars,grid)
+  cur_material_property => this%realization%material_properties
+  do                                      
+    if (.not.associated(cur_material_property)) exit
+    if (cur_material_property%unit_test) then
+      call MaterialCompressSoilUnitTest( &
+             cur_material_property%unittest_input_filename, &
+             cur_material_property%external_id, &
+             cur_material_property%internal_id, &
+             grid,patch%aux%Material%auxvars)
+    endif
+    cur_material_property => cur_material_property%next
+  enddo
 
   ! read in alphas
   if (len_trim(this%alpha_dataset_name) > 0) then
