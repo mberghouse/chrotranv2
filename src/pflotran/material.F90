@@ -38,7 +38,9 @@ module Material_module
 !    character(len=MAXWORDLENGTH) :: porosity_dataset_name
     class(dataset_base_type), pointer :: porosity_dataset
     class(dataset_base_type), pointer :: tortuosity_dataset
+    class(dataset_base_type), pointer :: epsilon_dataset
     PetscReal :: tortuosity
+    PetscReal :: epsilon
     PetscBool :: tortuosity_function_of_porosity
     PetscInt :: saturation_function_id
     character(len=MAXWORDLENGTH) :: saturation_function_name
@@ -176,10 +178,12 @@ function MaterialPropertyCreate()
 !  material_property%porosity_dataset_name = ''
   nullify(material_property%porosity_dataset)
   nullify(material_property%tortuosity_dataset)
+  nullify(material_property%epsilon_dataset)
   material_property%tortuosity_function_of_porosity = PETSC_FALSE
   material_property%tortuosity = 1.d0
   material_property%tortuosity_pwr = 0.d0
   material_property%tortuosity_func_porosity_pwr = UNINITIALIZED_DOUBLE
+  material_property%epsilon = 1.d0
   material_property%saturation_function_id = 0
   material_property%thermal_conductivity_function_id = UNINITIALIZED_INTEGER
   material_property%saturation_function_name = ''
@@ -426,6 +430,10 @@ subroutine MaterialPropertyRead(material_property,input,option)
         call DatasetReadDoubleOrDataset(input,material_property%tortuosity, &
                                         material_property%tortuosity_dataset, &
                                         'tortuosity','MATERIAL_PROPERTY',option)
+      case('EPSILON')
+        call DatasetReadDoubleOrDataset(input,material_property%epsilon, &
+                                        material_property%epsilon_dataset, &
+                                        'epsilon','MATERIAL_PROPERTY',option)
       case('GEOMECHANICS_SUBSURFACE_PROPS')
         ! Changes the subsurface props (perm/porosity) due to changes in
         ! geomechanical stresses and strains
@@ -1615,16 +1623,20 @@ subroutine MaterialSetAuxVarScalar(Material,value,ivar,isubvar)
     case(VOLUME)
       do i=1, Material%num_aux
         Material%auxvars(i)%volume = value
+     enddo
+    case(EPSILON)
+      do i=1, Material%num_aux
+        Material%auxvars(i)%epsilon = value
       enddo
     case(POROSITY)
       select case(isubvar)
         case(POROSITY_CURRENT)
           do i=1, Material%num_aux
-            Material%auxvars(i)%porosity = value
+            Material%auxvars(i)%porosity = value * Material%auxvars(i)%epsilon
           enddo
         case(POROSITY_BASE)
           do i=1, Material%num_aux
-            Material%auxvars(i)%porosity_base = value
+            Material%auxvars(i)%porosity_base = value * Material%auxvars(i)%epsilon
           enddo
         case(POROSITY_INITIAL)
           do i=1, Material%num_aux
@@ -1707,15 +1719,21 @@ subroutine MaterialSetAuxVarVecLoc(Material,vec_loc,ivar,isubvar)
       do ghosted_id=1, Material%num_aux
         Material%auxvars(ghosted_id)%volume = vec_loc_p(ghosted_id)
       enddo
+    case(EPSILON)
+      do ghosted_id=1, Material%num_aux
+        Material%auxvars(ghosted_id)%epsilon = vec_loc_p(ghosted_id)
+      enddo 
     case(POROSITY)
       select case(isubvar)
         case(POROSITY_CURRENT)
           do ghosted_id=1, Material%num_aux
-            Material%auxvars(ghosted_id)%porosity = vec_loc_p(ghosted_id)
+            Material%auxvars(ghosted_id)%porosity = vec_loc_p(ghosted_id) * &
+              Material%auxvars(ghosted_id)%epsilon
           enddo
         case(POROSITY_BASE)
           do ghosted_id=1, Material%num_aux
-            Material%auxvars(ghosted_id)%porosity_base = vec_loc_p(ghosted_id)
+            Material%auxvars(ghosted_id)%porosity_base = vec_loc_p(ghosted_id) * &
+              Material%auxvars(ghosted_id)%epsilon     
           enddo
         case(POROSITY_INITIAL)
           do ghosted_id=1, Material%num_aux
@@ -1820,12 +1838,13 @@ subroutine MaterialGetAuxVarVecLoc(Material,vec_loc,ivar,isubvar)
       select case(isubvar)
         case(POROSITY_CURRENT)
           do ghosted_id=1, Material%num_aux
-            vec_loc_p(ghosted_id) = &
-              Material%auxvars(ghosted_id)%porosity
+            vec_loc_p(ghosted_id) = Material%auxvars(ghosted_id)%porosity / &
+                                    Material%auxvars(ghosted_id)%epsilon
           enddo
         case(POROSITY_BASE)
           do ghosted_id=1, Material%num_aux
-            vec_loc_p(ghosted_id) = Material%auxvars(ghosted_id)%porosity_base
+            vec_loc_p(ghosted_id) = Material%auxvars(ghosted_id)%porosity_base / &
+                                    Material%auxvars(ghosted_id)%epsilon
           enddo
         case(POROSITY_INITIAL)
           do ghosted_id=1, Material%num_aux
@@ -2271,6 +2290,7 @@ recursive subroutine MaterialPropertyDestroy(material_property)
   nullify(material_property%permeability_dataset_yz)
   nullify(material_property%porosity_dataset)
   nullify(material_property%tortuosity_dataset)
+  nullify(material_property%epsilon_dataset)
   nullify(material_property%compressibility_dataset)
   nullify(material_property%soil_reference_pressure_dataset)
     

@@ -257,7 +257,8 @@ subroutine InitSubsurfAssignMatProperties(realization)
   use Variables_module, only : PERMEABILITY_X, PERMEABILITY_Y, &
                                PERMEABILITY_Z, PERMEABILITY_XY, &
                                PERMEABILITY_YZ, PERMEABILITY_XZ, &
-                               TORTUOSITY, POROSITY, SOIL_COMPRESSIBILITY
+                               TORTUOSITY, POROSITY, SOIL_COMPRESSIBILITY, &
+                               EPSILON
   use HDF5_module
   use Grid_Grdecl_module, only : GetPoroPermValues, &
                                  WriteStaticDataAndCleanup, &
@@ -272,6 +273,7 @@ subroutine InitSubsurfAssignMatProperties(realization)
   
   PetscReal, pointer :: por0_p(:)
   PetscReal, pointer :: tor0_p(:)
+  PetscReal, pointer :: eps0_p(:)
   PetscReal, pointer :: perm_xx_p(:)
   PetscReal, pointer :: perm_yy_p(:)
   PetscReal, pointer :: perm_zz_p(:)
@@ -323,6 +325,7 @@ subroutine InitSubsurfAssignMatProperties(realization)
   endif
   call VecGetArrayF90(field%porosity0,por0_p,ierr);CHKERRQ(ierr)
   call VecGetArrayF90(field%tortuosity0,tor0_p,ierr);CHKERRQ(ierr)
+  call VecGetArrayF90(field%epsilon0,eps0_p,ierr);CHKERRQ(ierr)
         
   ! have to use Material%auxvars() and not material_auxvars() due to memory
   ! errors in gfortran
@@ -432,6 +435,7 @@ subroutine InitSubsurfAssignMatProperties(realization)
     endif
     por0_p(local_id) = material_property%porosity
     tor0_p(local_id) = material_property%tortuosity
+    eps0_p(local_id) = material_property%epsilon
 
     if (GetIsGrdecl()) then
 
@@ -501,6 +505,7 @@ subroutine InitSubsurfAssignMatProperties(realization)
   endif
   call VecRestoreArrayF90(field%porosity0,por0_p,ierr);CHKERRQ(ierr)
   call VecRestoreArrayF90(field%tortuosity0,tor0_p,ierr);CHKERRQ(ierr)
+  call VecRestoreArrayF90(field%epsilon0,eps0_p,ierr);CHKERRQ(ierr)
         
   ! read in any user-defined property fields
   do material_id = 1, size(patch%material_property_array)
@@ -541,6 +546,11 @@ subroutine InitSubsurfAssignMatProperties(realization)
         call SubsurfReadDatasetToVecWithMask(realization, &
                material_property%tortuosity_dataset, &
                material_property%internal_id,PETSC_FALSE,field%tortuosity0)
+      endif
+      if (associated(material_property%epsilon_dataset)) then
+        call SubsurfReadDatasetToVecWithMask(realization, &
+               material_property%epsilon_dataset, &
+               material_property%internal_id,PETSC_FALSE,field%epsilon0)
       endif
     endif
   enddo
@@ -586,7 +596,11 @@ subroutine InitSubsurfAssignMatProperties(realization)
                                    SOIL_COMPRESSIBILITY,ZERO_INTEGER)
     endif
   endif
-  
+
+  call DiscretizationGlobalToLocal(discretization,field%epsilon0, &
+                                    field%work_loc,ONEDOF)
+  call MaterialSetAuxVarVecLoc(patch%aux%Material,field%work_loc, &
+                               EPSILON,ZERO_INTEGER)
   call DiscretizationGlobalToLocal(discretization,field%porosity0, &
                                    field%work_loc,ONEDOF)
   call MaterialSetAuxVarVecLoc(patch%aux%Material,field%work_loc, &

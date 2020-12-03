@@ -53,6 +53,7 @@ module Material_Aux_class
                                ! (e.g. geomechanics, mineral precip/diss)
     PetscReal :: porosity ! porosity used in calculation, which may be a 
                           ! function of soil compressibity, etc.
+    PetscReal :: epsilon ! secondary continuum: Fracture volume fraction
     PetscReal :: dporosity_dp
     PetscReal :: tortuosity
     PetscReal :: soil_particle_density
@@ -183,6 +184,7 @@ subroutine MaterialAuxVarInit(auxvar,option)
   
   auxvar%id = UNINITIALIZED_INTEGER
   auxvar%volume = UNINITIALIZED_DOUBLE
+  auxvar%epsilon = UNINITIALIZED_DOUBLE
   auxvar%porosity_0 = UNINITIALIZED_DOUBLE
   auxvar%porosity_base = UNINITIALIZED_DOUBLE
   auxvar%porosity = UNINITIALIZED_DOUBLE
@@ -233,6 +235,7 @@ subroutine MaterialAuxVarCopy(auxvar,auxvar2,option)
   type(option_type) :: option
   
   auxvar2%volume = auxvar%volume
+  auxvar2%epsilon = auxvar%epsilon
   auxvar2%porosity_0 = auxvar%porosity_0
   auxvar2%porosity_base = auxvar%porosity_base
   auxvar2%porosity = auxvar%porosity
@@ -618,9 +621,11 @@ function MaterialAuxVarGetValue(material_auxvar,ivar)
     case(INITIAL_POROSITY)
       MaterialAuxVarGetValue = material_auxvar%porosity_0
     case(BASE_POROSITY)
-      MaterialAuxVarGetValue = material_auxvar%porosity_base
+      MaterialAuxVarGetValue = material_auxvar%porosity_base / &
+                               material_auxvar%epsilon
     case(POROSITY)
-      MaterialAuxVarGetValue = material_auxvar%porosity
+      MaterialAuxVarGetValue = material_auxvar%porosity / &
+                               material_auxvar%epsilon   
     case(TORTUOSITY)
       MaterialAuxVarGetValue = material_auxvar%tortuosity
     case(PERMEABILITY_X)
@@ -673,10 +678,12 @@ subroutine MaterialAuxVarSetValue(material_auxvar,ivar,value)
   select case(ivar)
     case(VOLUME)
       material_auxvar%volume = value
+    case(EPSILON)
+      material_auxvar%epsilon = value   
     case(INITIAL_POROSITY)
       material_auxvar%porosity_0 = value
     case(BASE_POROSITY)
-      material_auxvar%porosity_base = value
+      material_auxvar%porosity_base = value * material_auxvar%epsilon
     case(POROSITY)
       material_auxvar%porosity = value
     case(TORTUOSITY)

@@ -226,6 +226,8 @@ subroutine RealizationCreateDiscretization(realization)
                                      field%tortuosity0)
   call DiscretizationDuplicateVector(discretization,field%work, &
                                      field%volume0)
+  call DiscretizationDuplicateVector(discretization,field%work, &
+                                     field%epsilon0)
 !geh: this is now allocated in 
 !     init_subsurface.F90:SubsurfAllocMatPropDataStructs()
 !  call DiscretizationDuplicateVector(discretization,field%work, &
@@ -398,7 +400,7 @@ subroutine RealizationCreateDiscretization(realization)
   ! initialize to UNINITIALIZED_DOUBLE for check later that verifies all values 
   ! have been set
   call VecSet(field%porosity0,UNINITIALIZED_DOUBLE,ierr);CHKERRQ(ierr)
-
+  call VecSet(field%epsilon0,UNINITIALIZED_DOUBLE,ierr);CHKERRQ(ierr)
   ! Allocate vectors to hold temporally average output quantites
   if (realization%output_option%aveg_output_variable_list%nvars>0) then
 
