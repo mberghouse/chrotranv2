@@ -17,7 +17,7 @@ module Characteristic_Curves_module
   type, public :: characteristic_curves_type
     character(len=MAXWORDLENGTH) :: name
     PetscBool :: print_me
-    PetscBool :: test
+    PetscBool :: test, unit_test
     class(sat_func_base_type), pointer :: saturation_function
     class(sat_func_xw_base_type), pointer :: oil_wat_sat_func
     class(sat_func_og_base_type), pointer :: oil_gas_sat_func
@@ -73,6 +73,7 @@ function CharacteristicCurvesCreate()
   characteristic_curves%name = ''
   characteristic_curves%print_me = PETSC_FALSE
   characteristic_curves%test = PETSC_FALSE
+  characteristic_curves%unit_test = PETSC_FALSE
   nullify(characteristic_curves%saturation_function)
   nullify(characteristic_curves%oil_wat_sat_func)
   nullify(characteristic_curves%oil_gas_sat_func)
@@ -173,6 +174,7 @@ subroutine CharacteristicCurvesRead(this,input,option)
                                           option)
         end select
         call SaturationFunctionRead(this%saturation_function,input,option)
+        if (this%saturation_function%unit_test) this%unit_test = PETSC_TRUE
     !-----------------------------------------------------------------------
       case('SATURATION_FUNCTION_OWG')
         option%io_buffer = 'SATURATION_FUNCTION_OWG is not supported any more &
@@ -408,6 +410,12 @@ subroutine CharacteristicCurvesRead(this,input,option)
             call InputKeywordUnrecognized(input,word, &
                                           'PERMEABILITY_FUNCTION,PHASE',option)
         end select
+        if (associated(this%gas_rel_perm_function)) then
+          if (this%gas_rel_perm_function%unit_test) this%unit_test = PETSC_TRUE
+        endif
+        if (associated(this%liq_rel_perm_function)) then
+          if (this%liq_rel_perm_function%unit_test) this%unit_test = PETSC_TRUE
+        endif
       case('PERMEABILITY_FUNCTION_WAT','KRW')
         call InputReadCardDbaseCompatible(input,option,word)
         call InputErrorMsg(input,option,'PERMEABILITY_FUNCTION_WAT - KRW ', &
@@ -600,7 +608,7 @@ subroutine SaturationFunctionRead(saturation_function,input,option)
   type(input_type), pointer :: input
   type(option_type) :: option
   
-  character(len=MAXWORDLENGTH) :: keyword
+  character(len=MAXWORDLENGTH) :: keyword, word
   character(len=MAXSTRINGLENGTH) :: error_string
   PetscBool :: found
   PetscBool :: smooth
@@ -666,6 +674,12 @@ subroutine SaturationFunctionRead(saturation_function,input,option)
       
       case('SMOOTH')
         smooth = PETSC_TRUE
+      case('UNIT_TEST')
+        saturation_function%unit_test = PETSC_TRUE
+        call InputReadFilename(input,option,word)
+        saturation_function%input_filename = trim(word)
+        call InputErrorMsg(input,option,'UNIT_TEST INPUT FILENAME', &
+                           error_string)
       case default
         found = PETSC_FALSE
     end select
@@ -1033,7 +1047,7 @@ subroutine PermeabilityFunctionRead(permeability_function,phase_keyword, &
   type(input_type), pointer :: input
   type(option_type) :: option
   
-  character(len=MAXWORDLENGTH) :: keyword, new_phase_keyword
+  character(len=MAXWORDLENGTH) :: keyword, new_phase_keyword, word
   character(len=MAXSTRINGLENGTH) :: error_string
   PetscBool :: found
   PetscBool :: smooth
@@ -1138,6 +1152,12 @@ subroutine PermeabilityFunctionRead(permeability_function,phase_keyword, &
         call StringToUpper(phase_keyword) 
       case('SMOOTH')
         smooth = PETSC_TRUE
+      case('UNIT_TEST')
+        permeability_function%unit_test = PETSC_TRUE
+        call InputReadFilename(input,option,word)
+        permeability_function%input_filename = word
+        call InputErrorMsg(input,option,'UNIT_TEST INPUT FILENAME', &
+                           error_string)
       case default
         found = PETSC_FALSE
     end select
@@ -1738,6 +1758,14 @@ subroutine CharCurvesConvertListToArray(list,array,option)
       call OptionSetBlocking(option,PETSC_TRUE)
       call OptionCheckNonBlockingError(option)
     endif
+    if (cur_characteristic_curves%unit_test) then
+      call OptionSetBlocking(option,PETSC_FALSE)
+      if (option%myrank == option%io_rank) then
+        call CharacteristicCurvesUnitTest(cur_characteristic_curves,option)
+      endif
+      call OptionSetBlocking(option,PETSC_TRUE)
+      call OptionCheckNonBlockingError(option)
+    endif
     cur_characteristic_curves => cur_characteristic_curves%next
   enddo
 
@@ -1999,11 +2027,10 @@ subroutine CharCurvesProcessTables(this,option)
     char_curves_table_cur => char_curves_table_cur%next
   enddo
   
-
 end subroutine CharCurvesProcessTables
+
 ! ************************************************************************** !  
   
-
 subroutine CharacteristicCurvesTest(characteristic_curves,option)
   ! 
   ! Outputs values of characteristic curves over a range of values
@@ -2077,6 +2104,55 @@ subroutine CharacteristicCurvesTest(characteristic_curves,option)
   end if
 
 end subroutine CharacteristicCurvesTest
+
+! ************************************************************************** !  
+  
+subroutine CharacteristicCurvesUnitTest(characteristic_curves,option)
+  ! 
+  ! Calls the unit tests for characteristic curves.
+  ! 
+  ! Author: Jennifer M. Frederick
+  ! Date: 11/04/2020
+  !
+  use Option_module
+
+  implicit none
+  
+  class(characteristic_curves_type) :: characteristic_curves
+  type(option_type) :: option
+
+  character(len=MAXWORDLENGTH) :: phase
+
+  if (associated(characteristic_curves%saturation_function)) then
+    if (characteristic_curves%saturation_function%unit_test) then
+      call characteristic_curves%saturation_function%UnitTest( &
+             characteristic_curves%name, &
+             characteristic_curves%saturation_function%input_filename, &
+             option)
+    endif
+  end if
+
+  if (associated(characteristic_curves%liq_rel_perm_function)) then
+    phase = 'liquid'
+    if (characteristic_curves%liq_rel_perm_function%unit_test) then
+      call characteristic_curves%liq_rel_perm_function%UnitTest( &
+             characteristic_curves%name,phase, &
+             characteristic_curves%liq_rel_perm_function%input_filename, &
+             option)
+    endif
+  end if
+              
+  if (associated(characteristic_curves%gas_rel_perm_function)) then
+    phase = 'gas'
+    if (characteristic_curves%gas_rel_perm_function%unit_test) then
+      call characteristic_curves%gas_rel_perm_function%UnitTest( &
+             characteristic_curves%name,phase, &
+             characteristic_curves%gas_rel_perm_function%input_filename, &
+             option)
+    endif
+  end if
+
+end subroutine CharacteristicCurvesUnitTest
 
 ! ************************************************************************** !
 

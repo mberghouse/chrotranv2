@@ -331,7 +331,7 @@ subroutine InitSubsurfAssignMatProperties(realization)
       material_property => &
         patch%material_property_array(material_id)%ptr
       
-    call GeomechanicsSubsurfacePropsAuxvarInit( &
+      call GeomechanicsSubsurfacePropsAuxvarInit( &
           material_property%geomechanics_subsurface_properties, &
           patch%aux%Material%auxvars(ghosted_id))
         
@@ -341,9 +341,9 @@ subroutine InitSubsurfAssignMatProperties(realization)
           CreepClosureGetID(wipp%creep_closure_tables_array, &
                              material_property%creep_closure_name, &
                              material_property%name,option)
-      ! copy creep closure table id from material to material_aux
-      patch%aux%Material%auxvars(ghosted_id)%creep_closure_id = &
-        material_property%creep_closure_id
+        ! copy creep closure table id from material to material_aux
+        patch%aux%Material%auxvars(ghosted_id)%creep_closure_id = &
+          material_property%creep_closure_id
       endif
     endif
   enddo
