@@ -685,7 +685,7 @@ subroutine MaterialAuxVarSetValue(material_auxvar,ivar,value)
     case(BASE_POROSITY)
       material_auxvar%porosity_base = value * material_auxvar%epsilon
     case(POROSITY)
-      material_auxvar%porosity = value
+      material_auxvar%porosity = value * material_auxvar%epsilon
     case(TORTUOSITY)
       material_auxvar%tortuosity = value
     case(PERMEABILITY_X)
