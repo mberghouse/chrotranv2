@@ -202,9 +202,10 @@ END
 \end{itemize}
 
 \begin{semiverbatim}
-
-TIMESTEPPER FLOW
-  MAX_STEPS 1
+NUMERICAL_METHODS FLOW
+  TIMESTEPPER
+    MAX_STEPS 1
+  /
 END
 \end{semiverbatim}
 
@@ -213,11 +214,10 @@ END
 \end{itemize}
 
 \begin{semiverbatim}
-
 skip \bluecomment{! \greencomment{skip} until encounter \greencomment{noskip}}
-TIMESTEPPER FLOW
-  MAX_STEPS 1
-END
+  TIMESTEPPER FLOW
+    MAX_STEPS 1
+  /
 noskip \bluecomment{! begin using input again}
 \end{semiverbatim}
 

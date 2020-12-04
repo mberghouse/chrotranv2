@@ -902,12 +902,12 @@ END
 \begin{frame}[fragile]\frametitle{\bf TIMESTEPPER}
 
 \begin{semiverbatim}
-TIMESTEPPER FLOW            
-  INITIALIZE_TO_STEADY_STATE 1.d-8 \bluecomment{! steady state}
-END
+NUMERICAL_METHODS TRANSPORT
 
-TIMESTEPPER TRANSPORT
-  TS_ACCELERATION 32
+  TIMESTEPPER
+    TS_ACCELERATION 32
+  /
+  
 END
 \end{semiverbatim}
 
