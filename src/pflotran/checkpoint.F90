@@ -386,10 +386,8 @@ subroutine CheckpointFlowProcessModelBinary(viewer,realization)
     ! since we have yet to add the full-tensor formulation.)
     call MaterialGetAuxVarVecLoc(realization%patch%aux%Material, &
          field%work_loc,POROSITY,POROSITY_BASE)
- !   do ghosted_id=1, realization%patch%aux%Material%num_aux
- !      realization%patch%aux%Material%auxvars(ghosted_id)%porosity_base = &
- !           realization%patch%aux%Material%auxvars(ghosted_id)%porosity_base * 0.8d0
- !   enddo
+    
+    call VecScale(field%work_loc,1.25d0,ierr)
 
     call DiscretizationLocalToGlobal(discretization,field%work_loc, &
                                       global_vec,ONEDOF)
@@ -478,6 +476,7 @@ subroutine RestartFlowProcessModelBinary(viewer,realization)
     end select
     
     call VecLoad(global_vec,viewer,ierr);CHKERRQ(ierr)
+    call VecScale(global_vec,0.8d0,ierr)
     call DiscretizationGlobalToLocal(discretization,global_vec, &
                                       field%work_loc,ONEDOF)
     call MaterialSetAuxVarVecLoc(realization%patch%aux%Material, &
@@ -1102,7 +1101,10 @@ subroutine CheckpointFlowProcessModelHDF5(pm_grp_id, realization)
     ! (We only write diagonal terms of the permeability tensor for now,
     ! since we have yet to add the full-tensor formulation.)
     call MaterialGetAuxVarVecLoc(realization%patch%aux%Material, &
-                                 field%work_loc,POROSITY,POROSITY_BASE)
+         field%work_loc,POROSITY,POROSITY_BASE)
+
+    call VecScale(field%work_loc,1.25d0,ierr);
+    
     call DiscretizationLocalToGlobal(discretization,field%work_loc, &
                                      global_vec,ONEDOF)
     call DiscretizationGlobalToNatural(discretization, global_vec, &
@@ -1237,13 +1239,12 @@ subroutine RestartFlowProcessModelHDF5(pm_grp_id, realization)
     call DiscretizationNaturalToGlobal(discretization, natural_vec, global_vec, &
                                        ONEDOF)
     call DiscretizationGlobalToLocal(discretization, global_vec, field%work_loc, &
-                                     ONEDOF)
+         ONEDOF)
+
+    call VecScale(field%work_loc,0.80d0,ierr);
     call MaterialSetAuxVarVecLoc(realization%patch%aux%Material, &
                                  field%work_loc,POROSITY,POROSITY_BASE)
-    do ghosted_id=1, realization%patch%aux%Material%num_aux
-       realization%patch%aux%Material%auxvars(ghosted_id)%porosity_base = &
-            realization%patch%aux%Material%auxvars(ghosted_id)%porosity_base * 0.8d0
-    enddo
+
     dataset_name = "Permeability_X" // CHAR(0)
     call HDF5ReadDataSetInVec(dataset_name, option, natural_vec, &
                               pm_grp_id, H5T_NATIVE_DOUBLE)

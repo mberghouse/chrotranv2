@@ -621,11 +621,11 @@ function MaterialAuxVarGetValue(material_auxvar,ivar)
     case(INITIAL_POROSITY)
       MaterialAuxVarGetValue = material_auxvar%porosity_0
     case(BASE_POROSITY)
-      MaterialAuxVarGetValue = material_auxvar%porosity_base !/ &
-                            !   material_auxvar%epsilon
+      MaterialAuxVarGetValue = material_auxvar%porosity_base / &
+                               material_auxvar%epsilon
     case(POROSITY)
-      MaterialAuxVarGetValue = material_auxvar%porosity !/ &
-                            !   material_auxvar%epsilon   
+      MaterialAuxVarGetValue = material_auxvar%porosity / &
+                               material_auxvar%epsilon   
     case(TORTUOSITY)
       MaterialAuxVarGetValue = material_auxvar%tortuosity
     case(PERMEABILITY_X)

@@ -7273,13 +7273,19 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
         vec_ptr(local_id) = &
           patch%aux%Global%auxvars(grid%nL2G(local_id))%istate
       enddo
-    case(POROSITY,BASE_POROSITY,INITIAL_POROSITY, &
-         VOLUME,TORTUOSITY,SOIL_COMPRESSIBILITY, &
+    case(VOLUME,TORTUOSITY,SOIL_COMPRESSIBILITY, &
          SOIL_REFERENCE_PRESSURE)
       do local_id=1,grid%nlmax
         vec_ptr(local_id) = &
           MaterialAuxVarGetValue(material_auxvars(grid%nL2G(local_id)),ivar)
-      enddo
+     enddo
+     case(POROSITY,BASE_POROSITY,INITIAL_POROSITY)
+           do local_id=1,grid%nlmax
+           vec_ptr(local_id) = &
+                MaterialAuxVarGetValue(material_auxvars(grid%nL2G(local_id)),ivar)
+           vec_ptr(local_id)=vec_ptr(local_id)*1.25d0
+        enddo
+        
     case(PERMEABILITY,PERMEABILITY_X,PERMEABILITY_Y, PERMEABILITY_Z, &
          PERMEABILITY_XY,PERMEABILITY_XZ,PERMEABILITY_YZ, &
          GAS_PERMEABILITY,GAS_PERMEABILITY_X,GAS_PERMEABILITY_Y, &
