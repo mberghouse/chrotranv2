@@ -867,15 +867,19 @@ subroutine MaterialCompressSoilUnitTest(input_filename,ext_id,int_id, &
   do local_id = 1, grid%nlmax
     ghosted_id = grid%nL2G(local_id)
     mat_id = auxvars(ghosted_id)%id
-    if (mat_id == int_id) auxvar => auxvars(ghosted_id)
-  !----- for creating input files only --------------------!
-    call MaterialCompressSoilTest(2.5d5,auxvar)
-    call MaterialCompressSoilTest(7.5d5,auxvar)
-    call MaterialCompressSoilTest(9.0d5,auxvar)
-    call MaterialCompressSoilTest(1.5d6,auxvar)
-    call MaterialCompressSoilTest(3.0d6,auxvar)
-    call MaterialCompressSoilTest(5.0d6,auxvar)
-  !--------------------------------------------------------!
+    !WRITE(*,*) 'mat_id = '
+    !WRITE(*,*) mat_id
+    if (mat_id == int_id) then
+      auxvar => auxvars(ghosted_id)
+    !----- for creating input files only --------------------!
+      !call MaterialCompressSoilTest(2.5d5,auxvar)
+      !call MaterialCompressSoilTest(7.5d5,auxvar)
+      !call MaterialCompressSoilTest(9.0d5,auxvar)
+      !call MaterialCompressSoilTest(1.5d6,auxvar)
+      !call MaterialCompressSoilTest(3.0d6,auxvar)
+      !call MaterialCompressSoilTest(5.0d6,auxvar)
+    !--------------------------------------------------------!
+    endif
   enddo
 
   filename_out = trim('./compress_') // trim(material_name(1)) // trim('.out')

@@ -733,7 +733,7 @@ recursive subroutine PMWIPPFloInitializeRun(this)
     call FractureUnitTest(patch%aux%Material%auxvars,grid)
   endif
   cur_material_property => this%realization%material_properties
-  do                                      
+  do                                  
     if (.not.associated(cur_material_property)) exit
     if (cur_material_property%unit_test) then
       call MaterialCompressSoilUnitTest( &
