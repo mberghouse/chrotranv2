@@ -527,6 +527,8 @@ subroutine InitSubsurfAssignMatProperties(realization)
                material_property%internal_id,PETSC_FALSE,field%porosity0)
         ! if tortuosity is a function of porosity, we must calculate the
         ! the tortuosity on a cell to cell basis.
+!        if (field%epsilon0 /=
+       
         if (field%tortuosity0 /= PETSC_NULL_VEC .and. &
             material_property%tortuosity_function_of_porosity) then
           call VecGetArrayF90(field%porosity0,por0_p,ierr);CHKERRQ(ierr)
@@ -600,7 +602,8 @@ subroutine InitSubsurfAssignMatProperties(realization)
   call DiscretizationGlobalToLocal(discretization,field%epsilon0, &
                                     field%work_loc,ONEDOF)
   call MaterialSetAuxVarVecLoc(patch%aux%Material,field%work_loc, &
-                               EPSILON,ZERO_INTEGER)
+       EPSILON,ZERO_INTEGER)
+   call VecScale(field%porosity0,0.8d0,ierr)
   call DiscretizationGlobalToLocal(discretization,field%porosity0, &
                                    field%work_loc,ONEDOF)
   call MaterialSetAuxVarVecLoc(patch%aux%Material,field%work_loc, &

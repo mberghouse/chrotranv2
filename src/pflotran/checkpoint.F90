@@ -345,6 +345,7 @@ subroutine CheckpointFlowProcessModelBinary(viewer,realization)
   PetscViewer :: viewer
   class(realization_subsurface_type) :: realization
   PetscErrorCode :: ierr
+  PetscInt :: ghosted_id
 
   type(option_type), pointer :: option
   type(field_type), pointer :: field
@@ -384,7 +385,12 @@ subroutine CheckpointFlowProcessModelBinary(viewer,realization)
     ! (We only write diagonal terms of the permeability tensor for now, 
     ! since we have yet to add the full-tensor formulation.)
     call MaterialGetAuxVarVecLoc(realization%patch%aux%Material, &
-                                  field%work_loc,POROSITY,POROSITY_BASE)
+         field%work_loc,POROSITY,POROSITY_BASE)
+ !   do ghosted_id=1, realization%patch%aux%Material%num_aux
+ !      realization%patch%aux%Material%auxvars(ghosted_id)%porosity_base = &
+ !           realization%patch%aux%Material%auxvars(ghosted_id)%porosity_base * 0.8d0
+ !   enddo
+
     call DiscretizationLocalToGlobal(discretization,field%work_loc, &
                                       global_vec,ONEDOF)
     call VecView(global_vec,viewer,ierr);CHKERRQ(ierr)
@@ -1176,7 +1182,7 @@ subroutine RestartFlowProcessModelHDF5(pm_grp_id, realization)
   Vec :: global_vec
   Vec :: natural_vec
   character(len=MAXSTRINGLENGTH) :: dataset_name
-
+  PetscInt :: ghosted_id
   option => realization%option
   field => realization%field
   discretization => realization%discretization
@@ -1234,7 +1240,10 @@ subroutine RestartFlowProcessModelHDF5(pm_grp_id, realization)
                                      ONEDOF)
     call MaterialSetAuxVarVecLoc(realization%patch%aux%Material, &
                                  field%work_loc,POROSITY,POROSITY_BASE)
-
+    do ghosted_id=1, realization%patch%aux%Material%num_aux
+       realization%patch%aux%Material%auxvars(ghosted_id)%porosity_base = &
+            realization%patch%aux%Material%auxvars(ghosted_id)%porosity_base * 0.8d0
+    enddo
     dataset_name = "Permeability_X" // CHAR(0)
     call HDF5ReadDataSetInVec(dataset_name, option, natural_vec, &
                               pm_grp_id, H5T_NATIVE_DOUBLE)

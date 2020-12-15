@@ -183,7 +183,7 @@ function MaterialPropertyCreate()
   material_property%tortuosity = 1.d0
   material_property%tortuosity_pwr = 0.d0
   material_property%tortuosity_func_porosity_pwr = UNINITIALIZED_DOUBLE
-  material_property%epsilon = 1.d0
+  material_property%epsilon = 1.25d0
   material_property%saturation_function_id = 0
   material_property%thermal_conductivity_function_id = UNINITIALIZED_INTEGER
   material_property%saturation_function_name = ''
@@ -273,6 +273,7 @@ subroutine MaterialPropertyRead(material_property,input,option)
   PetscInt, parameter :: TMP_BULK_COMPRESSIBILITY = 2
   PetscInt, parameter :: TMP_POROSITY_COMPRESSIBILITY = 3
   PetscInt :: soil_or_bulk_compressibility
+  PetscErrorCode :: ierr
 
   soil_or_bulk_compressibility = UNINITIALIZED_INTEGER
 
@@ -426,6 +427,9 @@ subroutine MaterialPropertyRead(material_property,input,option)
         call DatasetReadDoubleOrDataset(input,material_property%porosity, &
                                         material_property%porosity_dataset, &
                                         'porosity','MATERIAL_PROPERTY',option)
+!        material_property%porosity = material_property%porosity *0.8d0
+        
+!        call VecScale(material_property%porosity_dataset%data,0.8d0,ierr)
       case('TORTUOSITY')
         call DatasetReadDoubleOrDataset(input,material_property%tortuosity, &
                                         material_property%tortuosity_dataset, &
@@ -846,7 +850,7 @@ subroutine MaterialPropertyRead(material_property,input,option)
       call PrintErrMsg(option)
     endif
     if (.not.associated(material_property%porosity_dataset)) then
-      material_property%tortuosity = material_property%porosity** &
+      material_property%tortuosity = (material_property%porosity)** &
         material_property%tortuosity_func_porosity_pwr
     endif
   endif
@@ -1838,13 +1842,13 @@ subroutine MaterialGetAuxVarVecLoc(Material,vec_loc,ivar,isubvar)
       select case(isubvar)
         case(POROSITY_CURRENT)
           do ghosted_id=1, Material%num_aux
-            vec_loc_p(ghosted_id) = Material%auxvars(ghosted_id)%porosity / &
-                                    Material%auxvars(ghosted_id)%epsilon
+            vec_loc_p(ghosted_id) = Material%auxvars(ghosted_id)%porosity! / &
+                                !    Material%auxvars(ghosted_id)%epsilon
           enddo
         case(POROSITY_BASE)
           do ghosted_id=1, Material%num_aux
-            vec_loc_p(ghosted_id) = Material%auxvars(ghosted_id)%porosity_base / &
-                                    Material%auxvars(ghosted_id)%epsilon
+            vec_loc_p(ghosted_id) = Material%auxvars(ghosted_id)%porosity_base !/ &
+                           !         Material%auxvars(ghosted_id)%epsilon
           enddo
         case(POROSITY_INITIAL)
           do ghosted_id=1, Material%num_aux
