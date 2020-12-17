@@ -270,13 +270,7 @@ subroutine ConvergenceTest(snes_,i_iteration,xnorm,unorm,fnorm,reason, &
     
     ! force the minimum number of iterations
     if (i_iteration < solver%newton_min_iterations .and. reason /= -88) then
-      if (reason == 6) then
-        reason = 6  ! reason = 6 will also force the next iteration for TR
-                    ! on 0th iteration
-      else
         reason = 0
-      endif
-      
     endif
 
     if (option%print_screen_flag .and. solver%print_convergence) then
