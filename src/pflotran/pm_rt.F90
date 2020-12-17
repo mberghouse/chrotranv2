@@ -29,6 +29,7 @@ module PM_RT_class
     ! these govern the size of subsequent time steps
     PetscReal, pointer :: max_concentration_change(:)
     PetscReal, pointer :: max_volfrac_change(:)
+    PetscReal :: conc_change_governor
     PetscReal :: volfrac_change_governor
     PetscReal :: cfl_governor
     PetscBool :: temperature_dependent_diffusion
@@ -131,6 +132,7 @@ subroutine PMRTInit(pm_rt)
   pm_rt%check_post_convergence = PETSC_FALSE
   nullify(pm_rt%max_concentration_change)
   nullify(pm_rt%max_volfrac_change)
+  pm_rt%conc_change_governor = 1.d0
   pm_rt%volfrac_change_governor = 1.d0
   pm_rt%cfl_governor = UNINITIALIZED_DOUBLE
   pm_rt%temperature_dependent_diffusion = PETSC_FALSE
@@ -239,6 +241,9 @@ subroutine PMRTReadTSSelectCase(this,input,keyword,found, &
       call InputErrorMsg(input,option,keyword,error_string)
     case('VOLUME_FRACTION_CHANGE_GOVERNOR')
       call InputReadDouble(input,option,this%volfrac_change_governor)
+      call InputErrorMsg(input,option,keyword,error_string)
+    case('CONCENTRATION_CHANGE_GOVERNOR')
+      call InputReadDouble(input,option,this%conc_change_governor)
       call InputErrorMsg(input,option,keyword,error_string)
     case default
       found = PETSC_FALSE
@@ -710,11 +715,13 @@ subroutine PMRTUpdateTimestep(this,dt,dt_min,dt_max,iacceleration, &
   PetscReal :: tfac(:)
   PetscReal :: time_step_max_growth_factor
   
-  PetscReal :: dtt, uvf, dt_vf, dt_tfac, fac
+  PetscReal :: dtt, dt_vf, dt_tfac, fac
+  PetscReal :: uc, uvf, umin
   PetscInt :: ifac
-  PetscReal, parameter :: pert = 1.d-20
+  PetscReal, parameter :: conc_pert = 1.d-100
+  PetscReal, parameter :: vf_pert = 1.d-20
   
-  if (this%volfrac_change_governor < 1.d0) then
+  if (this%conc_change_governor*this%volfrac_change_governor < 1.d0) then
     ! with volume fraction potentially scaling the time step.
     if (iacceleration > 0) then
       fac = 0.5d0
@@ -722,17 +729,24 @@ subroutine PMRTUpdateTimestep(this,dt,dt_min,dt_max,iacceleration, &
         fac = 0.33d0
         uvf = 0.d0
       else
+        uc = this%conc_change_governor/ &
+             (maxval(this%max_concentration_change)+conc_pert)
         uvf = this%volfrac_change_governor/ &
-              (maxval(this%max_volfrac_change)+pert)
+              (maxval(this%max_volfrac_change)+vf_pert)
+        umin = min(uc,uvf)
       endif
-      dtt = fac * dt * (1.d0 + uvf)
+      dtt = fac * dt * (1.d0 + umin)
     else
       ifac = max(min(num_newton_iterations,size(tfac)),1)
       dt_tfac = tfac(ifac) * dt
 
       fac = 0.5d0
-      uvf= this%volfrac_change_governor/(maxval(this%max_volfrac_change)+pert)
-      dt_vf = fac * dt * (1.d0 + uvf)
+      uc = this%conc_change_governor/ &
+           (maxval(this%max_concentration_change)+conc_pert)
+      uvf = this%volfrac_change_governor/ &
+            (maxval(this%max_volfrac_change)+vf_pert)
+      umin = min(uc,uvf)
+      dt_vf = fac * dt * (1.d0 + umin)
 
       dtt = min(dt_tfac,dt_vf)
     endif
