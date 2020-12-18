@@ -609,7 +609,7 @@ subroutine SaturationFunctionRead(saturation_function,input,option)
   type(option_type) :: option
   
   character(len=MAXWORDLENGTH) :: keyword, word
-  character(len=MAXSTRINGLENGTH) :: error_string
+  character(len=MAXSTRINGLENGTH) :: error_string, utest_filename
   PetscBool :: found
   PetscBool :: smooth
 
@@ -676,8 +676,8 @@ subroutine SaturationFunctionRead(saturation_function,input,option)
         smooth = PETSC_TRUE
       case('UNIT_TEST')
         saturation_function%unit_test = PETSC_TRUE
-        call InputReadFilename(input,option,word)
-        saturation_function%input_filename = trim(word)
+        call InputReadFilename(input,option,utest_filename)
+        saturation_function%input_filename = trim(utest_filename)
         call InputErrorMsg(input,option,'UNIT_TEST INPUT FILENAME', &
                            error_string)
       case default
@@ -1048,7 +1048,7 @@ subroutine PermeabilityFunctionRead(permeability_function,phase_keyword, &
   type(option_type) :: option
   
   character(len=MAXWORDLENGTH) :: keyword, new_phase_keyword, word
-  character(len=MAXSTRINGLENGTH) :: error_string
+  character(len=MAXSTRINGLENGTH) :: error_string, utest_filename
   PetscBool :: found
   PetscBool :: smooth
 
@@ -1154,8 +1154,8 @@ subroutine PermeabilityFunctionRead(permeability_function,phase_keyword, &
         smooth = PETSC_TRUE
       case('UNIT_TEST')
         permeability_function%unit_test = PETSC_TRUE
-        call InputReadFilename(input,option,word)
-        permeability_function%input_filename = word
+        call InputReadFilename(input,option,utest_filename)
+        permeability_function%input_filename = utest_filename
         call InputErrorMsg(input,option,'UNIT_TEST INPUT FILENAME', &
                            error_string)
       case default
