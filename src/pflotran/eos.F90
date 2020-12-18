@@ -288,6 +288,11 @@ subroutine EOSRead(input,option)
                                 test_uniform_temp, test_uniform_pres, &
                                 test_filename)
             endif
+          case('UNIT_TEST')
+            call InputReadFilename(input,option,word)
+            call InputErrorMsg(input,option,'TEST INPUT FILENAME', &
+                               'EOS WATER,UNIT_TEST')
+            call EOSWaterUnitTest(word)
           case default
             call InputKeywordUnrecognized(input,keyword,'EOS,WATER',option)
         end select
@@ -508,6 +513,11 @@ subroutine EOSRead(input,option)
                               test_uniform_temp, test_uniform_pres, &
                               test_filename)
             endif
+          case('UNIT_TEST')
+            call InputReadFilename(input,option,word)
+            call InputErrorMsg(input,option,'TEST INPUT FILENAME', &
+                               'EOS GAS,UNIT_TEST')
+            call EOSGasUnitTest(word)
           case('FORMULA_WEIGHT')
             call InputReadDouble(input,option,tempreal)
             call InputErrorMsg(input,option,'VALUE','EOS,GAS,FORMULA_WEIGHT')

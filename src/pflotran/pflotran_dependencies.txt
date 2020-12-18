@@ -413,7 +413,7 @@ material.o : characteristic_curves.o communicator_base.o dataset.o \
              global_aux.o input_aux.o material_aux.o option.o \
              pflotran_constants.o string.o units.o utility.o variables.o \
              wipp.o
-material_aux.o : option.o pflotran_constants.o utility.o variables.o
+material_aux.o : grid.o option.o pflotran_constants.o utility.o variables.o
 matrix_block_aux.o : option.o pflotran_constants.o utility.o
 matrix_buffer.o : grid.o grid_structured.o pflotran_constants.o
 matrix_zeroing.o : pflotran_constants.o utility.o
@@ -687,7 +687,7 @@ pm_wipp_flow.o : checkpoint.o convergence.o dataset.o dataset_base.o \
                  pm_base.o pm_subsurface_flow.o pm_wipp_srcsink.o \
                  realization_base.o realization_subsurface.o region.o \
                  saturation_function.o string.o upwind_direction.o utility.o \
-                 variables.o wipp_flow.o wipp_flow_aux.o
+                 variables.o wipp.o wipp_flow.o wipp_flow_aux.o
 pm_wipp_srcsink.o : data_mediator_vec.o eos_gas.o eos_water.o global_aux.o \
                     grid.o input_aux.o material.o material_aux.o option.o \
                     output_aux.o patch.o pflotran_constants.o pm_base.o \
@@ -1081,9 +1081,9 @@ well_solver.o : auxiliary.o auxvars_toil_ims.o auxvars_towg.o eos_gas.o \
                 material_aux.o option.o pflotran_constants.o pm_toil_ims_aux.o \
                 pm_towg_aux.o well_data.o well_type.o
 well_type.o : pflotran_constants.o
-wipp.o : characteristic_curves_base.o characteristic_curves_wipp.o input_aux.o \
-         lookup_table.o material_aux.o option.o pflotran_constants.o string.o \
-         units.o utility.o
+wipp.o : characteristic_curves_base.o characteristic_curves_wipp.o grid.o \
+         input_aux.o lookup_table.o material_aux.o option.o \
+         pflotran_constants.o string.o units.o utility.o
 wipp_flow.o : characteristic_curves.o connection.o coupler.o debug.o \
               discretization.o field.o general_aux.o global_aux.o grid.o \
               material.o material_aux.o matrix_zeroing.o option.o output_aux.o \

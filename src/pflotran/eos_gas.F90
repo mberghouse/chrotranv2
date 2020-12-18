@@ -172,7 +172,8 @@ module EOS_Gas_module
             EOSGasDensityEnergy, &
             EOSGasHenry, &
             EOSGasInputRecord, &
-            EOSGasTest
+            EOSGasTest, &
+            EOSGasUnitTest
             
   public :: EOSGasSetDensityIdeal, &
             EOSGasSetEnergyIdeal, &
@@ -2266,6 +2267,284 @@ subroutine EOSGasTest(temp_low,temp_high,pres_low,pres_high, &
   deallocate(henry)
 
 end subroutine EOSGasTest
+
+! ************************************************************************** !
+
+subroutine EOSGasUnitTest(input_filename)
+
+  use EOS_Water_module, only : EOSWaterSaturationPressure
+
+  implicit none
+  
+  character(len=MAXWORDLENGTH) :: input_filename
+
+  character(len=MAXWORDLENGTH) :: eos_density_name
+  character(len=MAXWORDLENGTH) :: eos_energy_name
+  character(len=MAXWORDLENGTH) :: eos_viscosity_name
+  character(len=MAXWORDLENGTH) :: eos_saturation_pressure_name
+  character(len=MAXWORDLENGTH) :: eos_henry_name
+  character(len=MAXSTRINGLENGTH) :: string
+  ! inputs:
+  PetscReal, pointer :: pressure(:)                ! [Pa]
+  PetscReal, pointer :: temperature(:)             ! [C]
+  PetscReal, pointer :: temp_pressure(:)           ! [Pa]
+  PetscReal, pointer :: temp_temperature(:)        ! [C]
+  ! outputs/intermediates:
+  PetscReal, pointer :: saturation_press(:)        ! [Pa]
+  PetscReal, pointer :: henry(:)                   ! [-]
+  PetscReal, pointer :: density_kg(:)              ! [kg/m3]
+  PetscReal, pointer :: enthalpy(:)                ! [J/kmol]
+  PetscReal, pointer :: internal_energy(:)         ! [J/kmol]
+  PetscReal, pointer :: viscosity(:)               ! [Pa-sec]
+  PetscReal, pointer :: corr_density_kg(:)         ! [kg/m3]
+  PetscReal, pointer :: corr_enthalpy(:)           ! [J/kmol]
+  PetscReal, pointer :: corr_internal_energy(:)    ! [J/kmol]
+  PetscReal, pointer :: corr_viscosity(:)          ! [Pa-sec]
+  PetscReal, pointer :: temp_corr_density_kg(:)    ! [kg/m3]
+  PetscReal, pointer :: temp_corr_enthalpy(:)      ! [J/kmol]
+  PetscReal, pointer :: temp_corr_internal_energy(:) ! [J/kmol]
+  PetscReal, pointer :: temp_corr_viscosity(:)     ! [Pa-sec]
+
+  PetscReal :: dum1, dum2, dum3, dum4
+  PetscReal :: air_pressure
+
+  PetscErrorCode :: ierr
+  PetscReal, parameter :: tolerance = 1.d-8
+  PetscReal :: diff
+  PetscInt :: i, k
+  character(len=MAXWORDLENGTH) :: pass_fail
+  character(len=MAXWORDLENGTH) :: filename_out, id
+  PetscBool :: input_file_given
+  PetscInt :: rc_in, rc_out, fu_in, fu_out
+  PetscInt :: values(8)
+  character(len=8) :: date
+  character(len=5) :: zone
+  character(len=10) :: time
+
+  allocate(temp_pressure(99))
+  allocate(temp_temperature(99))
+  allocate(temp_corr_density_kg(99))
+  allocate(temp_corr_enthalpy(99))
+  allocate(temp_corr_internal_energy(99))
+  allocate(temp_corr_viscosity(99))  
+
+  i = 1
+  open(action='read', file=trim(input_filename), iostat=rc_in, &
+      newunit=fu_in)
+  read(fu_in, *) ! skip header line
+  do
+    read (fu_in, *, iostat=rc_in) temp_temperature(i), &
+                                  temp_pressure(i), &
+                                  temp_corr_density_kg(i), &
+                                  temp_corr_enthalpy(i), &
+                                  temp_corr_internal_energy(i), &
+                                  temp_corr_viscosity(i)
+    if (rc_in /= 0) exit 
+    i = i + 1 
+  enddo
+  allocate(pressure(i-1))
+  allocate(temperature(i-1))
+  pressure(:) = temp_pressure(1:i-1)
+  temperature(:) = temp_temperature(1:i-1)
+  allocate(corr_density_kg(i-1))
+  allocate(corr_enthalpy(i-1))
+  allocate(corr_internal_energy(i-1))
+  allocate(corr_viscosity(i-1))
+  corr_density_kg(:) = temp_corr_density_kg(1:i-1)
+  corr_enthalpy(:) = temp_corr_enthalpy(1:i-1)
+  corr_internal_energy(:) = temp_corr_internal_energy(1:i-1)
+  corr_viscosity(:) = temp_corr_viscosity(1:i-1)
+
+  allocate(saturation_press(i-1))
+  allocate(henry(i-1))
+  allocate(density_kg(i-1))
+  allocate(enthalpy(i-1))
+  allocate(internal_energy(i-1))
+  allocate(viscosity(i-1))
+  saturation_press(:) = 0.d0
+  henry(:) = 0.d0 
+  density_kg(:) = 0.d0 
+  enthalpy(:) = 0.d0 
+  internal_energy(:) = 0.d0 
+  viscosity(:) = -999.0 
+
+  filename_out = 'eos_gas.out'
+
+  ! density
+  if (associated(EOSGasDensityPtr,EOSGasDensityConstant)) then
+    eos_density_name = 'Constant'
+  else if (associated(EOSGasDensityPtr,EOSGasDensityIdeal)) then
+    eos_density_name = 'Ideal Gas Law'
+  else if (associated(EOSGasDensityPtr,EOSGasDensityRKS)) then
+    eos_density_name = 'Redlich-Kwong-Soave'
+  else if (associated(EOSGasDensityPtr,EOSGasDensityPRMethane)) then
+    eos_density_name = 'Peng-Robinson Methane'
+  else 
+    eos_density_name = 'Unknown'
+  endif
+
+  ! energy
+  if (associated(EOSGasEnergyPtr,EOSGasEnergyConstant)) then
+    eos_energy_name = 'Constant'
+  else if (associated(EOSGasEnergyPtr,EOSGasEnergyIdeal)) then
+    eos_energy_name = 'Ideal Gas Law'
+  else if (associated(EOSGasEnergyPtr,EOSGasEnergyIdealMethane)) then
+    eos_energy_name = 'Ideal Gas Law - Methane'
+  else
+    eos_energy_name = 'Unknown'
+  endif
+
+  ! viscosity
+  if (associated(EOSGasViscosityPtr,EOSGasViscosityConstant)) then
+    eos_viscosity_name = 'Constant'
+  else if (associated(EOSGasViscosityPtr,EOSGasViscosity1)) then
+    eos_viscosity_name = 'Default'
+  else
+    eos_viscosity_name = 'Unknown'
+  endif
+
+  ! Henry's constant
+  if (associated(EOSGasHenryPtr,EOSGasHenryConstant)) then
+    eos_henry_name = 'Constant'
+  else if (associated(EOSGasHenryPtr,EOSGasHenry_air)) then
+    eos_henry_name = 'Default'
+  else
+    eos_henry_name = 'Unknown'
+  endif
+
+  ! saturation pressure
+  eos_saturation_pressure_name = 'Unknown'
+
+  open(action='write', file=filename_out, iostat=rc_out, newunit=fu_out)
+  call date_and_time(DATE=date,ZONE=zone,TIME=time,VALUES=values)
+  write(fu_out,*) date(1:4),'/',date(5:6),'/',date(7:8),' ',time(1:2),':', &
+                  time(3:4),' ',zone(1:3),':',zone(4:5),'UTC'
+  write(fu_out,*)
+  write(fu_out,'(a)') 'NOTE: The input file provided was:'
+  write(fu_out,'(a,a)') '      ', trim(input_filename)
+  write(fu_out,'(a,d17.10,a)') 'NOTE: The validation test tolerance is ', &
+                               tolerance, '.'
+  write(fu_out,*)
+
+  i = 0
+  do k=1,size(temperature)
+    write(fu_out,'(a,I2,a)') '||-----------TEST-#',k,'-----------------------&
+                             &--------------||'
+    write(fu_out,'(a)') '  [in]  temperature [C]:'
+    write(fu_out,'(d17.10)') temperature(k)
+    write(fu_out,'(a)') '  [in]  pressure [Pa]:'
+    write(fu_out,'(d17.10)') pressure(k)
+    ! Need saturation pressure to calculate air partial pressure
+    call EOSWaterSaturationPressure(temperature(k),saturation_press(k),ierr)
+    call EOSGasHenry(temperature(k),saturation_press(k),henry(k),ierr)
+    call EOSGasDensityPtr(temperature(k),pressure(k),density_kg(k), &
+                          dum1,dum2,ierr)
+    write(fu_out,'(a,a,a)') '  [out]  density [kg/m3] (', trim(eos_density_name), &
+                            '):'
+    write(fu_out,'(d17.10)') density_kg(k)
+    write(fu_out,'(a,a,a)') '  [correct]  density [kg/m3] (', &
+                            trim(eos_density_name), '):'
+    write(fu_out,'(d17.10)') corr_density_kg(k)
+    diff = abs(corr_density_kg(k)-density_kg(k))
+    if (diff > (tolerance*corr_density_kg(k))) then
+      pass_fail = 'FAIL!'
+      i = i + 1
+    else
+      pass_fail = 'pass'
+    endif
+    write(fu_out,'(a)') trim(pass_fail)
+
+    call EOSGasEnergyPtr(temperature(k),pressure(k),enthalpy(k),dum1,dum2, &
+                         internal_energy(k),dum3,dum4,ierr)
+    write(fu_out,'(a,a,a)') '  [out]  enthalpy [J/kmol] (', &
+                            trim(eos_energy_name), '):'
+    write(fu_out,'(d17.10)') enthalpy(k)
+    write(fu_out,'(a,a,a)') '  [correct]  enthalpy [J/kmol] (', &
+                            trim(eos_energy_name), '):'
+    write(fu_out,'(d17.10)') corr_enthalpy(k)
+    diff = abs(corr_enthalpy(k)-enthalpy(k))
+    if (diff > (tolerance*corr_enthalpy(k))) then
+      pass_fail = 'FAIL!'
+      i = i + 1
+    else
+      pass_fail = 'pass'
+    endif
+    write(fu_out,'(a)') trim(pass_fail)
+
+    write(fu_out,'(a,a,a)') '  [out]  internal energy [J/kmol] (', &
+                            trim(eos_energy_name), '):'
+    write(fu_out,'(d17.10)') internal_energy(k)
+    write(fu_out,'(a,a,a)') '  [correct]  internal energy [J/kmol] (', &
+                            trim(eos_energy_name), '):'
+    write(fu_out,'(d17.10)') corr_internal_energy(k)
+    diff = abs(corr_internal_energy(k)-internal_energy(k))
+    if (diff > (tolerance*corr_internal_energy(k))) then
+      pass_fail = 'FAIL!'
+      i = i + 1
+    else
+      pass_fail = 'pass'
+    endif
+    write(fu_out,'(a)') trim(pass_fail)
+
+    air_pressure = pressure(k) - saturation_press(k)
+    write(fu_out,'(a,a,a)') '  [out]  viscosity [Pa-sec] (', &
+                            trim(eos_viscosity_name), '):'
+    if (air_pressure > 0.d0) then
+      call EOSGasViscosityPtr(temperature(k),air_pressure,pressure(k), &
+                              density_kg(k),viscosity(k),PETSC_FALSE, &
+                              dum1,dum2,dum3,dum4,ierr)
+      write(fu_out,'(d17.10)') viscosity(k)
+      write(fu_out,'(a,a,a)') '  [correct]  viscosity [Pa-sec] (', &
+                              trim(eos_viscosity_name), '):'
+      write(fu_out,'(d17.10)') corr_viscosity(k)
+      diff = abs(corr_viscosity(k)-viscosity(k))
+      if (diff > (tolerance*corr_viscosity(k))) then
+        pass_fail = 'FAIL!'
+        i = i + 1
+      else
+        pass_fail = 'pass'
+      endif
+      write(fu_out,'(a)') trim(pass_fail)
+    else
+      write(fu_out,'(d17.10)') 'NaN'
+    endif
+
+    write(fu_out,'(a,a,a)') "  [out]  Henry's constant [-] (", &
+                            trim(eos_henry_name), '):'
+    write(fu_out,'(d17.10)') henry(k)
+    write(fu_out,*)
+  enddo
+  write(fu_out,'(a)') 'TEST SUMMARY:'
+  if (i == 0) then
+    write(fu_out,'(a)') ' All tests passed!'
+  else
+    write(fu_out,'(a,I3,a)') ' A total of (', i, ') test(s) failed!'
+  endif
+
+  close(fu_out)
+  close(fu_in)
+
+  deallocate(temperature)
+  deallocate(pressure)
+  deallocate(saturation_press)
+  deallocate(henry)
+  deallocate(density_kg)
+  deallocate(enthalpy)
+  deallocate(internal_energy)
+  deallocate(viscosity)
+  deallocate(corr_density_kg)
+  deallocate(corr_enthalpy)
+  deallocate(corr_internal_energy)
+  deallocate(corr_viscosity)
+  deallocate(temp_temperature)
+  deallocate(temp_pressure)
+  deallocate(temp_corr_density_kg)
+  deallocate(temp_corr_enthalpy)
+  deallocate(temp_corr_internal_energy)
+  deallocate(temp_corr_viscosity)
+
+
+end subroutine EOSGasUnitTest
 
 ! ************************************************************************** !
 

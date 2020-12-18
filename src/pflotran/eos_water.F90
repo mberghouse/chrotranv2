@@ -238,7 +238,8 @@ module EOS_Water_module
 
   public :: TestEOSWaterBatzleAndWang, &
             EOSWaterTest, &
-            EOSWaterSteamTest
+            EOSWaterSteamTest, &
+            EOSWaterUnitTest
  
   contains
 
@@ -4025,6 +4026,279 @@ subroutine EOSWaterTest(temp_low,temp_high,pres_low,pres_high, &
   deallocate(saturation_pressure_array)
 
 end subroutine EOSWaterTest
+
+! ************************************************************************** !
+
+subroutine EOSWaterUnitTest(input_filename)
+
+  implicit none
+  
+  character(len=MAXWORDLENGTH) :: input_filename
+
+  character(len=MAXWORDLENGTH) :: eos_density_name
+  character(len=MAXWORDLENGTH) :: eos_enthalpy_name
+  character(len=MAXWORDLENGTH) :: eos_viscosity_name
+  character(len=MAXWORDLENGTH) :: eos_saturation_pressure_name
+  character(len=MAXSTRINGLENGTH) :: string
+  ! inputs:
+  PetscReal, pointer :: pressure(:)                ! [Pa]
+  PetscReal, pointer :: temperature(:)             ! [C]
+  PetscReal, pointer :: temp_pressure(:)           ! [Pa]
+  PetscReal, pointer :: temp_temperature(:)        ! [C]
+  ! outputs:
+  PetscReal, pointer :: density_kg(:)              ! [kg/m3]
+  PetscReal, pointer :: enthalpy(:)                ! [J/kmol]
+  PetscReal, pointer :: saturation_press(:)        ! [Pa]
+  PetscReal, pointer :: viscosity(:)               ! [Pa-sec]
+  PetscReal, pointer :: corr_density_kg(:)         ! [kg/m3]
+  PetscReal, pointer :: corr_enthalpy(:)           ! [J/kmol]
+  PetscReal, pointer :: corr_saturation_press(:)   ! [Pa]
+  PetscReal, pointer :: corr_viscosity(:)          ! [Pa-sec]
+  PetscReal, pointer :: temp_corr_density_kg(:)    ! [kg/m3]
+  PetscReal, pointer :: temp_corr_enthalpy(:)      ! [J/kmol]
+  PetscReal, pointer :: temp_corr_saturation_press(:) ! [Pa]
+  PetscReal, pointer :: temp_corr_viscosity(:)     ! [Pa-sec]
+
+  PetscReal :: dum1, dum2, dum3, dum4
+  PetscReal :: air_pressure
+
+  PetscErrorCode :: ierr
+  PetscReal, parameter :: tolerance = 1.d-8
+  PetscReal :: diff
+  PetscInt :: i, k
+  character(len=MAXWORDLENGTH) :: pass_fail
+  character(len=MAXWORDLENGTH) :: filename_out, id
+  PetscBool :: input_file_given
+  PetscInt :: rc_in, rc_out, fu_in, fu_out
+  PetscInt :: values(8)
+  character(len=8) :: date
+  character(len=5) :: zone
+  character(len=10) :: time
+
+  allocate(temp_pressure(99))
+  allocate(temp_temperature(99))
+  allocate(temp_corr_density_kg(99))
+  allocate(temp_corr_enthalpy(99))
+  allocate(temp_corr_saturation_press(99))
+  allocate(temp_corr_viscosity(99))  
+
+  i = 1
+  open(action='read', file=trim(input_filename), iostat=rc_in, &
+      newunit=fu_in)
+  read(fu_in, *) ! skip header line
+  do
+    read (fu_in, *, iostat=rc_in) temp_temperature(i), &
+                                  temp_pressure(i), &
+                                  temp_corr_density_kg(i), &
+                                  temp_corr_enthalpy(i), &
+                                  temp_corr_viscosity(i), &
+                                  temp_corr_saturation_press(i)
+    if (rc_in /= 0) exit 
+    i = i + 1 
+  enddo
+  allocate(pressure(i-1))
+  allocate(temperature(i-1))
+  pressure(:) = temp_pressure(1:i-1)
+  temperature(:) = temp_temperature(1:i-1)
+
+  allocate(corr_density_kg(i-1))
+  allocate(corr_enthalpy(i-1))
+  allocate(corr_saturation_press(i-1))
+  allocate(corr_viscosity(i-1))
+  corr_density_kg(:) = temp_corr_density_kg(1:i-1)
+  corr_enthalpy(:) = temp_corr_enthalpy(1:i-1)
+  corr_saturation_press(:) = temp_corr_saturation_press(1:i-1)
+  corr_viscosity(:) = temp_corr_viscosity(1:i-1)
+
+  allocate(density_kg(i-1))
+  allocate(enthalpy(i-1))
+  allocate(saturation_press(i-1))
+  allocate(viscosity(i-1))
+  density_kg(:) = 0.d0 
+  enthalpy(:) = 0.d0 
+  saturation_press(:) = 0.d0 
+  viscosity(:) = -999.0 
+
+  filename_out = 'eos_water.out'
+
+  ! density
+  if (associated(EOSWaterDensityPtr,EOSWaterDensityConstant)) then
+    eos_density_name = 'Constant'
+  else if (associated(EOSWaterDensityPtr,EOSWaterDensityExponential)) then
+    eos_density_name = 'Exponential'
+  else if (associated(EOSWaterDensityPtr,EOSWaterDensityLinear)) then
+    eos_density_name = 'Linear'
+  else if (associated(EOSWaterDensityPtr,EOSWaterDensityBRAGFLO)) then
+    eos_density_name = 'BRAGFLO'
+  else if (associated(EOSWaterDensityPtr,EOSWaterDensityIFC67)) then
+    eos_density_name = 'IFC67'
+  else if (associated(EOSWaterDensityPtr,EOSWaterDensityTGDPB01)) then
+    eos_density_name = 'TGDPB01'
+  else if (associated(EOSWaterDensityPtr,EOSWaterDensityPainter)) then
+    eos_density_name = 'Painter'
+  else if (associated(EOSWaterDensityPtr,EOSWaterDensityBatzleAndWang)) then
+    eos_density_name = 'Batzle and Wang'
+  else if (associated(EOSWaterDensityPtr,EOSWaterDensityQuadratic)) then
+    eos_density_name = 'Quadratic'
+  else if (associated(EOSWaterDensityPtr,EOSWaterDensityTrangenstein)) then
+    eos_density_name = 'Trangenstein'
+  else 
+    eos_density_name = 'Unknown'
+  endif
+
+  ! enthalpy
+  if (associated(EOSWaterEnthalpyPtr,EOSWaterEnthalpyConstant)) then
+    eos_enthalpy_name = 'Constant'
+  else if (associated(EOSWaterEnthalpyPtr,EOSWaterEnthalpyIFC67)) then
+    eos_enthalpy_name = 'IFC67'
+  else if (associated(EOSWaterEnthalpyPtr,EOSWaterEnthalpyPainter)) then
+    eos_enthalpy_name = 'Painter'
+  else
+    eos_enthalpy_name = 'Unknown'
+  endif
+
+  ! viscosity
+  if (associated(EOSWaterViscosityPtr,EOSWaterViscosityConstant)) then
+    eos_viscosity_name = 'Constant'
+  else if (associated(EOSWaterViscosityPtr,EOSWaterViscosity1)) then
+    eos_viscosity_name = 'Default'
+  else if (associated(EOSWaterViscosityPtr,EOSWaterViscosityBatzleAndWang)) then
+    eos_viscosity_name = 'Batzle and Wang'
+  else if (associated(EOSWaterViscosityPtr,EOSWaterViscosityGrabowski)) then
+    eos_viscosity_name = 'Grabowski'
+  else
+    eos_viscosity_name = 'Unknown'
+  endif
+
+  ! saturation pressure
+  if (associated(EOSWaterSaturationPressurePtr, &
+                 EOSWaterSaturationPressureIFC67)) then
+    eos_saturation_pressure_name = 'IFC67'
+  elseif (associated(EOSWaterSaturationPressurePtr, &
+                     EOSWaterSatPresWagnerPruss)) then
+    eos_saturation_pressure_name = 'WagnerAndPruss'
+  else
+    eos_saturation_pressure_name = 'Unknown'
+  endif
+
+  open(action='write', file=filename_out, iostat=rc_out, newunit=fu_out)
+  call date_and_time(DATE=date,ZONE=zone,TIME=time,VALUES=values)
+  write(fu_out,*) date(1:4),'/',date(5:6),'/',date(7:8),' ',time(1:2),':', &
+                  time(3:4),' ',zone(1:3),':',zone(4:5),'UTC'
+  write(fu_out,*)
+  write(fu_out,'(a)') 'NOTE: The input file provided was:'
+  write(fu_out,'(a,a)') '      ', trim(input_filename)
+  write(fu_out,'(a,d17.10,a)') 'NOTE: The validation test tolerance is ', &
+                               tolerance, '.'
+  write(fu_out,*)
+
+  i = 0
+  do k=1,size(temperature)
+    write(fu_out,'(a,I2,a)') '||-----------TEST-#',k,'-----------------------&
+                             &--------------||'
+    write(fu_out,'(a)') '  [in]  temperature [C]:'
+    write(fu_out,'(d17.10)') temperature(k)
+    write(fu_out,'(a)') '  [in]  pressure [Pa]:'
+    write(fu_out,'(d17.10)') pressure(k)
+
+    call EOSWaterSaturationPressure(temperature(k),saturation_press(k),ierr)
+
+    call EOSWaterDensityPtr(temperature(k),pressure(k),PETSC_FALSE, &
+                            density_kg(k),dum1,dum2,dum3,ierr)
+    write(fu_out,'(a,a,a)') '  [out]  density [kg/m3] (', trim(eos_density_name), &
+                            '):'
+    write(fu_out,'(d17.10)') density_kg(k)
+    write(fu_out,'(a,a,a)') '  [correct]  density [kg/m3] (', &
+                            trim(eos_density_name), '):'
+    write(fu_out,'(d17.10)') corr_density_kg(k)
+    diff = abs(corr_density_kg(k)-density_kg(k))
+    if (diff > (tolerance*corr_density_kg(k))) then
+      pass_fail = 'FAIL!'
+      i = i + 1
+    else
+      pass_fail = 'pass'
+    endif
+    write(fu_out,'(a)') trim(pass_fail)
+
+    call EOSWaterEnthalpyPtr(temperature(k),pressure(k),PETSC_FALSE, &
+                             enthalpy(k),dum1,dum2,ierr)
+    write(fu_out,'(a,a,a)') '  [out]  enthalpy [J/kmol] (', &
+                            trim(eos_enthalpy_name), '):'
+    write(fu_out,'(d17.10)') enthalpy(k)
+    write(fu_out,'(a,a,a)') '  [correct]  enthalpy [J/kmol] (', &
+                            trim(eos_enthalpy_name), '):'
+    write(fu_out,'(d17.10)') corr_enthalpy(k)
+    diff = abs(corr_enthalpy(k)-enthalpy(k))
+    if (diff > (tolerance*corr_enthalpy(k))) then
+      pass_fail = 'FAIL!'
+      i = i + 1
+    else
+      pass_fail = 'pass'
+    endif
+    write(fu_out,'(a)') trim(pass_fail)
+
+    write(fu_out,'(a,a,a)') '  [out]  viscosity [Pa-sec] (', &
+                            trim(eos_viscosity_name), '):'
+    call EOSWaterViscosityPtr(temperature(k),pressure(k),saturation_press(k), &
+                              dum1,PETSC_FALSE,viscosity(k),dum2,dum3,ierr)
+    write(fu_out,'(d17.10)') viscosity(k)
+    write(fu_out,'(a,a,a)') '  [correct]  viscosity [Pa-sec] (', &
+                            trim(eos_viscosity_name), '):'
+    write(fu_out,'(d17.10)') corr_viscosity(k)
+    diff = abs(corr_viscosity(k)-viscosity(k))
+    if (diff > (tolerance*corr_viscosity(k))) then
+      pass_fail = 'FAIL!'
+      i = i + 1
+    else
+      pass_fail = 'pass'
+    endif
+    write(fu_out,'(a)') trim(pass_fail)
+
+    write(fu_out,'(a,a,a)') '  [out]  saturation pressure [Pa] (', &
+                            trim(eos_saturation_pressure_name), '):'
+    write(fu_out,'(d17.10)') saturation_press(k)
+    write(fu_out,'(a,a,a)') '  [correct]  saturation pressure [Pa] (', &
+                            trim(eos_saturation_pressure_name), '):'
+    write(fu_out,'(d17.10)') corr_saturation_press(k)
+    diff = abs(corr_saturation_press(k)-saturation_press(k))
+    if (diff > (tolerance*corr_saturation_press(k))) then
+      pass_fail = 'FAIL!'
+      i = i + 1
+    else
+      pass_fail = 'pass'
+    endif
+    write(fu_out,'(a)') trim(pass_fail)
+
+    write(fu_out,*)
+  enddo
+  write(fu_out,'(a)') 'TEST SUMMARY:'
+  if (i == 0) then
+    write(fu_out,'(a)') ' All tests passed!'
+  else
+    write(fu_out,'(a,I3,a)') ' A total of (', i, ') test(s) failed!'
+  endif
+
+  close(fu_out)
+  close(fu_in)
+
+  deallocate(temperature)
+  deallocate(pressure)
+  deallocate(saturation_press)
+  deallocate(density_kg)
+  deallocate(enthalpy)
+  deallocate(viscosity)
+  deallocate(corr_density_kg)
+  deallocate(corr_enthalpy)
+  deallocate(corr_saturation_press)
+  deallocate(corr_viscosity)
+  deallocate(temp_temperature)
+  deallocate(temp_pressure)
+  deallocate(temp_corr_density_kg)
+  deallocate(temp_corr_enthalpy)
+  deallocate(temp_corr_saturation_press)
+  deallocate(temp_corr_viscosity)
+
+end subroutine EOSWaterUnitTest
 
 ! ************************************************************************** !
 
