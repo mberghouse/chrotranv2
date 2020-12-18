@@ -2154,7 +2154,7 @@ subroutine RealizationUpdatePropertiesTS(realization)
       if (porosity_base_ > critical_porosity .and. &
           porosity0_p(local_id) > critical_porosity) then
         scale = ((porosity_base_ - critical_porosity) / &
-                 (porosity0_p(local_id) - critical_porosity)) ** &
+                 (porosity0_p(local_id)*1.25d0 - critical_porosity)) ** &
                 material_property_array(imat)%ptr%permeability_pwr
       endif
       scale = max(material_property_array(imat)%ptr% &
@@ -2375,14 +2375,15 @@ subroutine RealizationCalcMineralPorosity(realization)
       ! the adjusted porosity becomes:
       ! 1 - sum(mineral volume fractions), but is truncated.
       material_auxvars(ghosted_id)%porosity_base = &
-        max(1.d0-sum_volfrac,reaction%minimum_porosity)
+           max(1.d0-sum_volfrac,reaction%minimum_porosity)
     enddo
   endif
   ! update ghosted porosities
+  
   call MaterialGetAuxVarVecLoc(patch%aux%Material,field%work_loc, &
                                POROSITY,POROSITY_BASE)
   call DiscretizationLocalToLocal(discretization,field%work_loc, &
-                                  field%work_loc,ONEDOF)
+       field%work_loc,ONEDOF)
   call MaterialSetAuxVarVecLoc(patch%aux%Material,field%work_loc, &
                                POROSITY,POROSITY_BASE)
   call MaterialSetAuxVarVecLoc(patch%aux%Material,field%work_loc, &

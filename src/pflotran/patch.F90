@@ -8600,9 +8600,11 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
       end select
     case(STATE,PHASE)
       value = patch%aux%Global%auxvars(ghosted_id)%istate
-    case(POROSITY,BASE_POROSITY,INITIAL_POROSITY, &
-         VOLUME,TORTUOSITY,SOIL_COMPRESSIBILITY,SOIL_REFERENCE_PRESSURE)
-      value = MaterialAuxVarGetValue(material_auxvars(ghosted_id),ivar)
+    case(VOLUME,TORTUOSITY,SOIL_COMPRESSIBILITY,SOIL_REFERENCE_PRESSURE)
+       value = MaterialAuxVarGetValue(material_auxvars(ghosted_id),ivar)
+    case(POROSITY,BASE_POROSITY,INITIAL_POROSITY)
+       value = MaterialAuxVarGetValue(material_auxvars(ghosted_id),ivar)
+       value = value *1.25d0
     case(PERMEABILITY,PERMEABILITY_X,PERMEABILITY_Y, PERMEABILITY_Z, &
          PERMEABILITY_XY,PERMEABILITY_XZ,PERMEABILITY_YZ, &
          GAS_PERMEABILITY,GAS_PERMEABILITY_X,GAS_PERMEABILITY_Y, &
