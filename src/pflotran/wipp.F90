@@ -425,9 +425,11 @@ subroutine FractureTest(liq_pressure,auxvar)
   call FracturePermScale(auxvar,liq_pressure,compressed_porosity, &
                          scaling_factor)
 
-  print *, '[material ID], [liq. pressure], [intact porosity], &
-           &[altered porosity], [d_por/d_press], [perm. scaling factor]'
-  print *, auxvar%id, liq_pressure, auxvar%porosity_base, compressed_porosity, &
+  print *, '[material ID], [INIT. LIQ. PRESSURE], [liq. pressure], &
+           &[intact porosity], [altered porosity], [d_por/d_press], &
+           &[perm. scaling factor]'
+  print *, auxvar%id, auxvar%fracture%initial_pressure, liq_pressure, &
+           auxvar%porosity_base, compressed_porosity, &
            dcompressed_porosity_dp, scaling_factor
   
 end subroutine FractureTest
@@ -450,21 +452,21 @@ subroutine FractureUnitTest(auxvars,grid)
 
   class(fracture_auxvar_type), pointer :: fracture
   class(material_auxvar_type), pointer :: auxvar
+  PetscReal, pointer :: liq_pressure_init(:)           ! [Pa]
+  PetscReal, pointer :: temp_liq_pressure_init(:)      ! [Pa]
   PetscReal, pointer :: liq_pressure(:)                ! [Pa]
   PetscReal, pointer :: temp_liq_pressure(:)           ! [Pa]
   PetscReal, pointer :: material_id(:)                 ! [  ]
   PetscReal :: compressed_porosity                     ! [  ]
-  PetscReal :: dcompressed_porosity_dp                 ! [1/Pa]
   PetscReal :: scaling_factor                          ! [  ]
+  PetscReal :: liq_press_init_hold
   PetscReal, pointer :: corr_compressed_porosity(:)    ! [  ]
-  PetscReal, pointer :: corr_dcompressed_porosity_dp(:)! [1/Pa]
   PetscReal, pointer :: corr_scaling_factor(:)         ! [  ]  
   PetscReal, pointer :: temp_corr_comp_porosity(:)     ! [  ]
-  PetscReal, pointer :: temp_corr_dcomp_porosity_dp(:) ! [1/Pa]
   PetscReal, pointer :: temp_corr_scaling_factor(:)    ! [  ]     
   PetscReal, pointer :: temp_material_id(:)            ! [  ]           
   PetscReal, parameter :: tolerance = 1.d-8
-  PetscReal :: diff
+  PetscReal :: diff, dum1
   PetscInt :: i, j, k
   PetscInt :: local_id, ghosted_id
   PetscInt :: prev_mat_id, mat_id
@@ -478,9 +480,9 @@ subroutine FractureUnitTest(auxvars,grid)
   character(len=10) :: time
 
   allocate(temp_material_id(99))
+  allocate(temp_liq_pressure_init(99))
   allocate(temp_liq_pressure(99))
   allocate(temp_corr_comp_porosity(99))
-  allocate(temp_corr_dcomp_porosity_dp(99))
   allocate(temp_corr_scaling_factor(99))
 
   ! find the fracture input filename
@@ -503,23 +505,24 @@ subroutine FractureUnitTest(auxvars,grid)
     read(fu_in, *) ! skip header line
     do
       read (fu_in, *, iostat=rc_in) temp_material_id(i), &
+                                    temp_liq_pressure_init(i), &
                                     temp_liq_pressure(i), &
                                     temp_corr_comp_porosity(i), &
-                                    temp_corr_dcomp_porosity_dp(i), &
                                     temp_corr_scaling_factor(i)
       if (rc_in /= 0) exit 
       i = i + 1 
+    if (i > 99) exit
     enddo
     ! read in values while counting how many values with i
     allocate(material_id(i-1))
+    allocate(liq_pressure_init(i-1))
     allocate(liq_pressure(i-1))
     allocate(corr_compressed_porosity(i-1))
-    allocate(corr_dcompressed_porosity_dp(i-1))
     allocate(corr_scaling_factor(i-1))
     material_id(:) = temp_material_id(1:i-1)
+    liq_pressure_init(:) = temp_liq_pressure_init(1:i-1)
     liq_pressure(:) = temp_liq_pressure(1:i-1)
     corr_compressed_porosity(:) = temp_corr_comp_porosity(1:i-1)
-    corr_dcompressed_porosity_dp(:) = temp_corr_dcomp_porosity_dp(1:i-1)
     corr_scaling_factor(:) = temp_corr_scaling_factor(1:i-1)
   else
   !------- an input file was not provided ---------------------------
@@ -535,16 +538,9 @@ subroutine FractureUnitTest(auxvars,grid)
     auxvar => auxvars(ghosted_id)
     fracture => auxvar%fracture
     if (auxvar%fracture%fracture_is_on) then 
-    
-  !----- for creating input files only --------------------!
-    call FractureTest(2.5d5,auxvar)
-    call FractureTest(7.5d5,auxvar)
-    call FractureTest(9.0d5,auxvar)
-    call FractureTest(1.5d6,auxvar)
-    call FractureTest(3.0d6,auxvar)
-    call FractureTest(5.0d6,auxvar)
-  !--------------------------------------------------------!
 
+    liq_press_init_hold = auxvar%fracture%initial_pressure
+    
     write(id,'(I2)') fracture%id
     filename_out = trim('./fracture_id') // trim(id) // trim('.out')
 
@@ -564,33 +560,26 @@ subroutine FractureUnitTest(auxvars,grid)
     
       i = 0
       do k=1,size(liq_pressure)
-        if (material_id(k) == fracture%id) then
+        if (material_id(k) == fracture%id) then     
+          auxvar%fracture%initial_pressure = liq_pressure_init(k)
+          !----- for creating input files only --------------------!
+          !  call FractureTest(liq_pressure(k),auxvar)
+          !--------------------------------------------------------!
           write(fu_out,'(a,I2,a)') '||-----------TEST-#',k,'-----------------------&
                                      &--------------||'
+          write(fu_out,'(a)') '[in]  init. liquid pressure [Pa]:'
+          write(fu_out,'(d17.10)') liq_pressure_init(k)
           write(fu_out,'(a)') '[in]  liquid pressure [Pa]:'
           write(fu_out,'(d17.10)') liq_pressure(k)
 
           write(fu_out,'(a)') '[out]  altered porosity [-]:'
           call FracturePoroEvaluate(auxvar,liq_pressure(k),compressed_porosity, &
-                                    dcompressed_porosity_dp)
+                                    dum1)
           write(fu_out,'(d17.10)') compressed_porosity
           write(fu_out,'(a)') '[correct] altered porosity [-]:'
           write(fu_out,'(d17.10)') corr_compressed_porosity(k)
           diff = abs(corr_compressed_porosity(k)-compressed_porosity)
           if (diff > (tolerance*corr_compressed_porosity(k))) then
-            pass_fail = 'FAIL!'
-            i = i + 1
-          else
-            pass_fail = 'pass'
-          endif
-          write(fu_out,'(a)') trim(pass_fail)
-
-          write(fu_out,'(a)') '[out] d altered porosity dp [1/Pa]:'
-          write(fu_out,'(d17.10)') dcompressed_porosity_dp
-          write(fu_out,'(a)') '[correct] d altered porosity dp [1/Pa]:'
-          write(fu_out,'(d17.10)') corr_dcompressed_porosity_dp(k)
-          diff = abs(corr_dcompressed_porosity_dp(k)-dcompressed_porosity_dp)
-          if (diff > (tolerance*corr_dcompressed_porosity_dp(k))) then
             pass_fail = 'FAIL!'
             i = i + 1
           else
@@ -626,6 +615,8 @@ subroutine FractureUnitTest(auxvars,grid)
 
     close(fu_in)
 
+    auxvar%fracture%initial_pressure = liq_press_init_hold
+
     endif
   enddo
 
@@ -633,13 +624,11 @@ subroutine FractureUnitTest(auxvars,grid)
     deallocate(material_id)
     deallocate(liq_pressure)
     deallocate(corr_compressed_porosity)
-    deallocate(corr_dcompressed_porosity_dp)
     deallocate(corr_scaling_factor)
   endif
   deallocate(temp_material_id)
   deallocate(temp_liq_pressure)
   deallocate(temp_corr_comp_porosity)
-  deallocate(temp_corr_dcomp_porosity_dp)
   deallocate(temp_corr_scaling_factor)
   
 end subroutine FractureUnitTest
@@ -1405,6 +1394,7 @@ subroutine KlinkenbergUnitTest(this)
                                     temp_corr_gas_perm(i,3) 
       if (rc_in /= 0) exit 
       i = i + 1 
+      if (i > 99) exit
     enddo
     ! read in values while counting how many values with i
     allocate(gas_pressure(i-1))
@@ -1427,6 +1417,13 @@ subroutine KlinkenbergUnitTest(this)
       liquid_permeability(k,:) = lp_init + (k-1)*lp_space
     enddo
   endif
+
+  !--- For-generating-input-decks-only----------------------------------!
+  !WRITE(*,*) 'Klinkenberg input deck values and solution:'
+  !do k=1,size(gas_pressure)
+  !  call KlinkenbergTest(this,liquid_permeability(k,:),gas_pressure(k))
+  !enddo
+  !---------------------------------------------------------------------!
 
   i = 0
   do k=1,size(gas_pressure)

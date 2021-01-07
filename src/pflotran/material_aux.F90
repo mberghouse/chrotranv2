@@ -808,13 +808,10 @@ subroutine MaterialCompressSoilUnitTest(input_filename,ext_id,int_id, &
   PetscInt, pointer :: material_id(:)                  ! [  ]    
   PetscInt, pointer :: temp_material_id(:)             ! [  ]
   PetscReal, pointer :: corr_compressed_porosity(:)    ! [  ]
-  PetscReal, pointer :: corr_dcompressed_porosity_dp(:)! [1/Pa]
   PetscReal, pointer :: temp_corr_comp_porosity(:)     ! [  ]
-  PetscReal, pointer :: temp_corr_dcomp_porosity_dp(:) ! [1/Pa]
-  PetscReal :: compressed_porosity                     ! [  ]
-  PetscReal :: dcompressed_porosity_dp                 ! [1/Pa]        
+  PetscReal :: compressed_porosity                     ! [  ]        
   PetscReal, parameter :: tolerance = 1.d-8
-  PetscReal :: diff
+  PetscReal :: diff, dum1
   PetscInt :: i, j, k
   PetscInt :: local_id, ghosted_id
   PetscInt :: prev_mat_id, mat_id
@@ -831,7 +828,6 @@ subroutine MaterialCompressSoilUnitTest(input_filename,ext_id,int_id, &
   allocate(temp_material_id(99))
   allocate(temp_liq_pressure(99))
   allocate(temp_corr_comp_porosity(99))
-  allocate(temp_corr_dcomp_porosity_dp(99))
 
   if (len(trim(input_filename)) > 0) then
   !------- an input file was provided -------------------------------
@@ -843,22 +839,20 @@ subroutine MaterialCompressSoilUnitTest(input_filename,ext_id,int_id, &
       read (fu_in, *, iostat=rc_in) temp_material_name(i), &
                                     temp_material_id(i), &
                                     temp_liq_pressure(i), &
-                                    temp_corr_comp_porosity(i), &
-                                    temp_corr_dcomp_porosity_dp(i)
+                                    temp_corr_comp_porosity(i)
       if (rc_in /= 0) exit 
       i = i + 1 
+      if (i > 99) exit
     enddo
     ! read in values while counting how many values with i
     allocate(material_name(i-1))
     allocate(material_id(i-1))
     allocate(liq_pressure(i-1))
     allocate(corr_compressed_porosity(i-1))
-    allocate(corr_dcompressed_porosity_dp(i-1))
     material_name(:) = temp_material_name(1:i-1)
     material_id(:) = temp_material_id(1:i-1)
     liq_pressure(:) = temp_liq_pressure(1:i-1)
     corr_compressed_porosity(:) = temp_corr_comp_porosity(1:i-1)
-    corr_dcompressed_porosity_dp(:) = temp_corr_dcomp_porosity_dp(1:i-1)
   else
   !------- an input file was not provided ---------------------------
     input_file_given = PETSC_FALSE
@@ -872,12 +866,20 @@ subroutine MaterialCompressSoilUnitTest(input_filename,ext_id,int_id, &
     if (mat_id == int_id) then
       auxvar => auxvars(ghosted_id)
     !----- for creating input files only --------------------!
-      !call MaterialCompressSoilTest(2.5d5,auxvar)
+      !call MaterialCompressSoilTest(5.0d4,auxvar)
+      !call MaterialCompressSoilTest(1.0d5,auxvar)
+      !call MaterialCompressSoilTest(3.5d5,auxvar)
       !call MaterialCompressSoilTest(7.5d5,auxvar)
-      !call MaterialCompressSoilTest(9.0d5,auxvar)
-      !call MaterialCompressSoilTest(1.5d6,auxvar)
-      !call MaterialCompressSoilTest(3.0d6,auxvar)
+      !call MaterialCompressSoilTest(9.5d5,auxvar)
+      !call MaterialCompressSoilTest(1.0d6,auxvar)
+      !call MaterialCompressSoilTest(2.5d6,auxvar)
       !call MaterialCompressSoilTest(5.0d6,auxvar)
+      !call MaterialCompressSoilTest(8.0d6,auxvar)
+      !call MaterialCompressSoilTest(1.0d7,auxvar)
+      !call MaterialCompressSoilTest(3.0d7,auxvar)
+      !call MaterialCompressSoilTest(6.0d7,auxvar)
+      !call MaterialCompressSoilTest(8.5d7,auxvar)
+      !call MaterialCompressSoilTest(1.0d8,auxvar)
     !--------------------------------------------------------!
     endif
   enddo
@@ -906,8 +908,8 @@ subroutine MaterialCompressSoilUnitTest(input_filename,ext_id,int_id, &
       write(fu_out,'(a)') '[in]  liquid pressure [Pa]:'
       write(fu_out,'(d17.10)') liq_pressure(k)
       write(fu_out,'(a)') '[out]  altered porosity [-]:'
-      call MaterialCompressSoilBRAGFLO(auxvar,liq_pressure(k),compressed_porosity, &
-                                       dcompressed_porosity_dp)
+      call MaterialCompressSoilPoroExp(auxvar,liq_pressure(k),compressed_porosity, &
+                                       dum1)
       write(fu_out,'(d17.10)') compressed_porosity
       write(fu_out,'(a)') '[correct] altered porosity [-]:'
       write(fu_out,'(d17.10)') corr_compressed_porosity(k)
@@ -920,18 +922,6 @@ subroutine MaterialCompressSoilUnitTest(input_filename,ext_id,int_id, &
       endif
       write(fu_out,'(a)') trim(pass_fail)
 
-      write(fu_out,'(a)') '[out] d altered porosity dp [1/Pa]:'
-      write(fu_out,'(d17.10)') dcompressed_porosity_dp
-      write(fu_out,'(a)') '[correct] d altered porosity dp [1/Pa]:'
-      write(fu_out,'(d17.10)') corr_dcompressed_porosity_dp(k)
-      diff = abs(corr_dcompressed_porosity_dp(k)-dcompressed_porosity_dp)
-      if (diff > (tolerance*corr_dcompressed_porosity_dp(k))) then
-        pass_fail = 'FAIL!'
-        i = i + 1
-      else
-        pass_fail = 'pass'
-      endif
-      write(fu_out,'(a)') trim(pass_fail)
       write(fu_out,*)
     enddo
 
@@ -951,13 +941,11 @@ subroutine MaterialCompressSoilUnitTest(input_filename,ext_id,int_id, &
     deallocate(material_id)
     deallocate(liq_pressure)
     deallocate(corr_compressed_porosity)
-    deallocate(corr_dcompressed_porosity_dp)
   endif
   deallocate(temp_material_name)
   deallocate(temp_material_id)
   deallocate(temp_liq_pressure)
   deallocate(temp_corr_comp_porosity)
-  deallocate(temp_corr_dcomp_porosity_dp)
 
 end subroutine MaterialCompressSoilUnitTest
 

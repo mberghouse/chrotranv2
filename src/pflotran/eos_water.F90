@@ -4095,6 +4095,7 @@ subroutine EOSWaterUnitTest(input_filename)
                                   temp_corr_saturation_press(i)
     if (rc_in /= 0) exit 
     i = i + 1 
+    if (i > 99) exit
   enddo
   allocate(pressure(i-1))
   allocate(temperature(i-1))
