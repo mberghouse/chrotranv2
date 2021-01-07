@@ -611,12 +611,11 @@ subroutine FractureUnitTest(auxvars,grid)
         write(fu_out,'(a,I3,a)') ' A total of (', i, ') test(s) failed!'
       endif
       close(fu_out)
+
+      close(fu_in)
     endif
 
-    close(fu_in)
-
     auxvar%fracture%initial_pressure = liq_press_init_hold
-
     endif
   enddo
 
