@@ -54,7 +54,7 @@ subroutine EOSRead(input,option)
 
   character(len=MAXWORDLENGTH) :: keyword, word, subkeyword
   character(len=MAXWORDLENGTH) :: test_filename
-  character(len=MAXSTRINGLENGTH) :: string
+  character(len=MAXSTRINGLENGTH) :: string, utest_filename
   PetscReal :: tempreal, tempreal2
   PetscReal :: rks_tc = UNINITIALIZED_DOUBLE
   PetscReal :: rks_pc = UNINITIALIZED_DOUBLE
@@ -289,10 +289,10 @@ subroutine EOSRead(input,option)
                                 test_filename)
             endif
           case('UNIT_TEST')
-            call InputReadFilename(input,option,word)
+            call InputReadFilename(input,option,utest_filename)
             call InputErrorMsg(input,option,'TEST INPUT FILENAME', &
                                'EOS WATER,UNIT_TEST')
-            call EOSWaterUnitTest(word)
+            call EOSWaterUnitTest(utest_filename)
           case default
             call InputKeywordUnrecognized(input,keyword,'EOS,WATER',option)
         end select
@@ -514,10 +514,10 @@ subroutine EOSRead(input,option)
                               test_filename)
             endif
           case('UNIT_TEST')
-            call InputReadFilename(input,option,word)
+            call InputReadFilename(input,option,utest_filename)
             call InputErrorMsg(input,option,'TEST INPUT FILENAME', &
                                'EOS GAS,UNIT_TEST')
-            call EOSGasUnitTest(word)
+            call EOSGasUnitTest(utest_filename)
           case('FORMULA_WEIGHT')
             call InputReadDouble(input,option,tempreal)
             call InputErrorMsg(input,option,'VALUE','EOS,GAS,FORMULA_WEIGHT')
