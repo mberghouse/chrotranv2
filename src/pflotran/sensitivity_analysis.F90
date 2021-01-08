@@ -86,6 +86,7 @@ subroutine RichardsSensitivity(realization,ivar,ierr)
   use Logging_module
   use Debug_module
   use Discretization_module
+  use Output_Sensitivity_module
 
   implicit none
 
@@ -124,6 +125,7 @@ subroutine RichardsSensitivity(realization,ivar,ierr)
 
   select case(ivar)
     case(PERMEABILITY)
+      !call OutputSensitivity(J,option,realization%output_option)
       call DebugWriteFilename(realization%debug,string,'K_Sensitivity','', &
                               richards_ts_count,richards_ts_cut_count, &
                               richards_ni_count)
@@ -198,8 +200,6 @@ subroutine RichardsSensitivityInternalConn(A,realization,ivar,ierr)
   class(material_auxvar_type), pointer :: material_auxvars(:)
   
   character(len=MAXSTRINGLENGTH) :: string
-
-  PetscViewer :: viewer
 
   patch => realization%patch
   grid => patch%grid
@@ -492,8 +492,6 @@ subroutine RichardsSensitivityBoundaryConn(A,realization,ivar,ierr)
   
   character(len=MAXSTRINGLENGTH) :: string
 
-  PetscViewer :: viewer
-
   patch => realization%patch
   grid => patch%grid
   option => realization%option
@@ -727,7 +725,6 @@ subroutine RichardsSensitivitySourceSink(A,realization,ivar,ierr)
   type(global_auxvar_type), pointer :: global_auxvars(:)
   class(material_auxvar_type), pointer :: material_auxvars(:)
   PetscInt :: flow_pc
-  PetscViewer :: viewer
   PetscReal, pointer :: mmsrc(:)
   PetscReal :: well_status
   PetscReal :: well_factor
@@ -832,17 +829,6 @@ subroutine RichardsSensitivitySourceSink(A,realization,ivar,ierr)
 
   !call RichardsSSSandbox(null_vec,A,PETSC_TRUE,grid,material_auxvars, &
   !                       global_auxvars,rich_auxvars,option)
-
-  if (realization%debug%matview_Jacobian_detailed) then
-    call MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
-    call MatAssemblyEnd(A,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
-    call DebugWriteFilename(realization%debug,string,'Rjacobian_srcsink','', &
-                            richards_ts_count,richards_ts_cut_count, &
-                            richards_ni_count)
-    call DebugCreateViewer(realization%debug,string,option,viewer)
-    call MatView(A,viewer,ierr);CHKERRQ(ierr)
-    call DebugViewerDestroy(realization%debug,viewer)
-  endif
   
 #ifdef BUFFER_MATRIX
   if (option%use_matrix_buffer) then
@@ -918,7 +904,6 @@ subroutine RichardsSensitivityAccumulation(A,realization,ivar,ierr)
   type(global_auxvar_type), pointer :: global_auxvars(:)
   class(material_auxvar_type), pointer :: material_auxvars(:)
   !type(inlinesurface_auxvar_type), pointer :: inlinesurface_auxvars(:)
-  PetscViewer :: viewer
   character(len=MAXSTRINGLENGTH) :: string
 
   patch => realization%patch
@@ -973,17 +958,6 @@ subroutine RichardsSensitivityAccumulation(A,realization,ivar,ierr)
     endif
 #endif
 
-  endif
-
-  if (realization%debug%matview_Jacobian_detailed) then
-    call MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
-    call MatAssemblyEnd(A,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
-    call DebugWriteFilename(realization%debug,string,'Rjacobian_accum','', &
-                            richards_ts_count,richards_ts_cut_count, &
-                            richards_ni_count)
-    call DebugCreateViewer(realization%debug,string,option,viewer)
-    call MatView(A,viewer,ierr);CHKERRQ(ierr)
-    call DebugViewerDestroy(realization%debug,viewer)
   endif
 
 end subroutine RichardsSensitivityAccumulation
