@@ -20,7 +20,7 @@ module Debug_module
     PetscBool :: matview_Matrix_detailed
     PetscBool :: norm_Matrix
     
-    PetscBool :: matview_perm_sensibility
+    PetscBool :: matview_perm_sensitivity
 
     PetscInt  :: output_format
     PetscBool :: verbose_filename
@@ -63,7 +63,7 @@ function DebugCreate()
   debug%matview_Matrix = PETSC_FALSE
   debug%matview_Matrix_detailed = PETSC_FALSE
   debug%norm_Matrix = PETSC_FALSE
-  debug%matview_perm_sensibility = PETSC_FALSE
+  debug%matview_perm_sensitivity = PETSC_FALSE
 
   debug%output_format = DEBUG_ASCII_FORMAT
   debug%verbose_filename = PETSC_FALSE
