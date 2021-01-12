@@ -2,6 +2,8 @@ module PM_Sensitivity_Richards_class
 
 #include "petsc/finclude/petscsys.h"
   use petscsys
+#include "petsc/finclude/petscsnes.h"
+  use petscsnes
   use PM_Base_class
   use Realization_Subsurface_class
   use PFLOTRAN_Constants_module
@@ -22,7 +24,7 @@ module PM_Sensitivity_Richards_class
     procedure, public :: InitializeTimestep => PMSensitivityRichardsInitializeTimestep
     procedure, public :: FinalizeTimestep => PMSensitivityRichardsFinalizeTimestep
     procedure, public :: Solve => PMSensitivityRichardsSolve
-    procedure, public :: Output => PMSensitivityRichardsOutput
+    !procedure, public :: Output => PMSensitivityRichardsOutput
     procedure, public :: InputRecord => PMSensitivityRichardsInputRecord
     procedure, public :: Destroy => PMSensitivityRichardsDestroy
   end type pm_sensitivity_richards_type
@@ -133,6 +135,8 @@ END
     call InputReadCard(input,option,word)
     call InputErrorMsg(input,option,'keyword',error_string)
     call StringToUpper(word)
+  option%io_buffer = word
+  call PrintMsg(option)
 
     select case(trim(word))
     !-----------------------------------------
@@ -152,7 +156,7 @@ END
         call StringToUpper(word)
         call OutputSensitivityOptionSetOutputTimeOption( &
                                                   output_sensitivity_option,&
-                                                  option,word)
+                                                  option,word,input)
     !-----------------------------------------
       case default
         call InputKeywordUnrecognized(input,word,'SENSITIVITY_RICHARDS', &
@@ -161,6 +165,7 @@ END
     end select  
   enddo
   call InputPopBlock(input,option)
+  
   
 end subroutine PMSensitivityRichardsReadPMBlock
 
@@ -283,7 +288,7 @@ end subroutine PMSensitivityRichardsInitializeTimestep
 
  subroutine PMSensitivityRichardsSolve(this,time,ierr)
   ! 
-  ! Main driver for outputting the richards sensitivities
+  ! Just determine and update the output flag
   ! 
   ! Author: Moise Rousseau
   ! Date: 01/04/2021
@@ -301,38 +306,35 @@ end subroutine PMSensitivityRichardsInitializeTimestep
   
   type(output_sensitivity_option_type), pointer :: output_sensitivity_option
   type(option_type), pointer :: option
-  PetscBool :: to_output
+  PetscBool :: timestep_flag, last_flag, sync_flag
   
   output_sensitivity_option => this%output_sensitivity_option
   option => this%realization%option
-  to_output = PETSC_FALSE
+  timestep_flag = PETSC_FALSE
+  last_flag = PETSC_FALSE
+  sync_flag = PETSC_FALSE
+  ierr = 0
   
+  !update time for future calling of output
+  output_sensitivity_option%time = time
+  output_sensitivity_option%plot_number = &
+                       output_sensitivity_option%plot_number + 1
+  output_sensitivity_option%plot_flag = PETSC_FALSE
   
-  option%io_buffer = "debug: solve"
-  call PrintMsg(option)
-  
-  option%io_buffer = "print output time option"
-  call PrintMsg(option)
-  write(option%io_buffer,'(i8)') output_sensitivity_option%output_time_option
-  call PrintMsg(option)
+  !check for timestep
+  if (floor(real(output_sensitivity_option%plot_number) / &
+            output_sensitivity_option%output_every_timestep) /= 0) &
+    timestep_flag = PETSC_TRUE
+  !check for last
+  ! TODO (moise)
+  !check for sync
+  ! TODO (moise)
   
   ! check if it's the time to output
   call OutputSensitivityOptionIsTimeToOutput(output_sensitivity_option,&
-                                             to_output)
+                                             timestep_flag,last_flag,sync_flag)
   
-  option%io_buffer = "solve"
-  call PrintMsg(option)
-  ! compute the sensitivities at the output time
-  if (to_output) then
-    option%io_buffer = "compute sensitivity"
-    call PrintMsg(option)
-  endif
-  
-  ! output it
-  if (to_output) then
-    option%io_buffer = "output sensitivity"
-    call PrintMsg(option)
-  endif
+  call PMSensitivityRichardsOutput(this)
 
 end subroutine PMSensitivityRichardsSolve
 
@@ -361,6 +363,8 @@ subroutine PMSensitivityRichardsOutput(this)
   
   use Option_module
   use Output_Sensitivity_module
+  use Sensitivity_Analysis_module
+  use Discretization_module
   
   implicit none
 
@@ -368,8 +372,50 @@ subroutine PMSensitivityRichardsOutput(this)
   
   type(option_type), pointer :: option
   type(output_sensitivity_option_type), pointer :: output_sensitivity_option
+  type(output_sensitivity_variable_type), pointer :: output_variable
+  Mat :: J
+  MatType :: J_mat_type
+  PetscErrorCode :: ierr
   
-  ! TODO
+  output_sensitivity_option => this%output_sensitivity_option
+  option => this%realization%option
+  
+  if (output_sensitivity_option%plot_flag) then
+    
+    !prepare J matrix
+    J_mat_type = MATBAIJ
+    call DiscretizationCreateJacobian(this%realization%discretization, &
+                                      option%nflowdof, J_mat_type, J, option)
+    call MatSetOptionsPrefix(J,"Sensitivity_",ierr);CHKERRQ(ierr)
+    
+    output_variable => output_sensitivity_option%output_variables%first
+    do 
+      
+      ! compute sensitivity using finite difference
+      option%io_buffer = "SENSITIVITY ANALYSIS: Compute " // &
+                         trim(output_variable%name) // " Sensitivity Matrix"
+      call PrintMsg(option)
+      
+      call MatZeroEntries(J,ierr);CHKERRQ(ierr)
+      call RichardsSensitivityInternalConn(J,this%realization,&
+                                           output_variable%ivar,ierr)
+      call RichardsSensitivityBoundaryConn(J,this%realization,&
+                                           output_variable%ivar,ierr)
+      !call RichardsSensitivitySourceSink(J,realization,ivar,ierr)
+      !update here when porosity ok
+      !call RichardsSensitivityAccumulation(J,realization,ivar,ierr)
+      call MatAssemblyBegin(J,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
+      call MatAssemblyEnd(J,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
+      
+      !output it
+      call OutputSensitivity(J,option,output_sensitivity_option,&
+                             output_variable%name)
+      
+      if (.not.associated(output_variable%next)) exit
+      output_variable => output_variable%next
+    enddo
+    
+  endif 
   
 end subroutine PMSensitivityRichardsOutput
 
