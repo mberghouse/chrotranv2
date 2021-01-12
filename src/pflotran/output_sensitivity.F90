@@ -15,7 +15,9 @@ module Output_Sensitivity_module
   
   PetscMPIInt, parameter :: ON=1, OFF=0
   PetscInt, parameter :: OUTPUT_HDF5=0, OUTPUT_MATLAB=1, OUTPUT_BINARY=2
+  PetscInt, parameter :: OUTPUT_ASCII=3
   PetscInt, parameter :: SYNC_OUTPUT=0, EVERY_X_TIMESTEP=1, LAST=2
+  PetscInt, parameter :: MAX_FACE_PER_CELL_OUTPUT = 60
   
   !output variable
   PetscInt, parameter :: PRESSURE         = 0
@@ -121,15 +123,16 @@ subroutine OutputSensitivityAddVariable(output_sensitivity_option,word)
   
   type(output_sensitivity_variable_type), pointer :: variable
   allocate(variable)
+  nullify(variable%next)
   
   select case(trim(word))
     case('PRESSURE')
       variable%name = 'Pressure'
-      variable%units = '1/Pa' ! TODO (moise)
+      variable%units = '1.Pa-1' ! TODO (moise)
       variable%ivar = PRESSURE
     case('PERMEABILITY')
       variable%name = 'Permeability'
-      variable%units = '1/m/s' ! TODO (moise)
+      variable%units = '1.s-1' ! TODO (moise)
       variable%ivar = PERMEABILITY
     case('POROSITY')
       variable%name = 'Porosity'
@@ -253,7 +256,8 @@ end subroutine OutputSensitivityOptionSetOutputFormat
 
 ! ************************************************************************** !
 
-subroutine OutputSensitivity(J,option,output_sensitivity_option,variable_name)
+subroutine OutputSensitivity(J,option,output_option, &
+                             output_sensitivity_option,variable)
   ! 
   ! Output the J matrix in the desired format
   ! 
@@ -264,23 +268,25 @@ subroutine OutputSensitivity(J,option,output_sensitivity_option,variable_name)
   use Option_module
   use Output_Aux_module
   use HDF5_module
+  use Output_HDF5_module
   
   implicit none
   
   
   Mat :: J
   type(option_type), pointer :: option
+  type(output_option_type), pointer :: output_option
   type(output_sensitivity_option_type), pointer :: output_sensitivity_option
   
   PetscBool :: first
   integer(HID_T) :: file_id
   character(len=MAXSTRINGLENGTH) :: filename
-  character(len=MAXWORDLENGTH) :: variable_name
+  type(output_sensitivity_variable_type) :: variable
   PetscViewer :: viewer
   PetscErrorCode :: ierr
   
   call OutputSensitivityCreateFilename(output_sensitivity_option,option,&
-                                       variable_name,filename)
+                                       variable%name,filename)
   
   select case(output_sensitivity_option%format)
     case(OUTPUT_HDF5)
@@ -290,14 +296,26 @@ subroutine OutputSensitivity(J,option,output_sensitivity_option,variable_name)
         !call OutputHDF5Provenance(option, output_option, file_id)
         call OutputSensitivityWriteMatrixIJ(J,option,file_id)
       endif
-      call OutputSensitivityWriteMatrixData(J,option,file_id)
-      call OutputHDF5CloseFile(file_id)
+      call OutputSensitivityWriteMatrixData(J,option,output_option, &
+                                            output_sensitivity_option, &
+                                            variable,file_id)
+      call OutputHDF5CloseFile(option,file_id)
+    case(OUTPUT_ASCII)
+      option%io_buffer = '--> writing sensitivity to ascii file: ' // &
+                                                     trim(filename)
+      call PrintMsg(option)
+      call PetscViewerASCIIOpen(option%mycomm,filename, &
+                                 viewer,ierr);CHKERRQ(ierr)
+      call MatView(J,viewer,ierr);CHKERRQ(ierr)
+      call PetscViewerDestroy(viewer,ierr);CHKERRQ(ierr)
     case(OUTPUT_MATLAB)
       option%io_buffer = '--> writing sensitivity to matlab ascii file: ' // &
                                                      trim(filename)
       call PrintMsg(option)
       call PetscViewerASCIIOpen(option%mycomm,filename, &
                                  viewer,ierr);CHKERRQ(ierr)
+      call PetscViewerPushFormat(viewer,PETSC_VIEWER_ASCII_MATLAB, &
+                                 ierr);CHKERRQ(ierr)
       call MatView(J,viewer,ierr);CHKERRQ(ierr)
       call PetscViewerPopFormat(viewer,ierr);CHKERRQ(ierr)
       call PetscViewerDestroy(viewer,ierr);CHKERRQ(ierr)
@@ -349,10 +367,10 @@ subroutine OutputSensitivityOpenHDF5(option,output_sensitivity_option, &
 #ifndef SERIAL_HDF5
   call h5pset_fapl_mpio_f(prop_id,option%mycomm,MPI_INFO_NULL,hdf5_err)
 #endif
-  if (output_sensitivity_option%plot_number > 0) then
-    first = PETSC_FALSE
-  else
+  if (output_sensitivity_option%plot_number == 1) then
     first = PETSC_TRUE
+  else
+    first = PETSC_FALSE
   endif
   if (.not. first) then
     call h5eset_auto_f(OFF,hdf5_err)
@@ -435,7 +453,7 @@ subroutine OutputSensitivityCreateFilename(output_sensitivity_option, &
     string2 = trim(variable_name)
     call StringToLower(string2)
     filename = trim(option%global_prefix) // trim(option%group_prefix) // &
-                '-sensitivity-' // string2 // '-' // trim(string)
+                '-sensitivity-' // trim(string2) // '-' // trim(string)
     select case(output_sensitivity_option%format)
       case(OUTPUT_MATLAB)
         filename = trim(filename) // '.mat'
@@ -463,7 +481,7 @@ end subroutine OutputHDF5CloseFile
 
 ! ************************************************************************** !
 
-subroutine OutputSensitivityWriteMatrixIJ(J, option, file_id)
+subroutine OutputSensitivityWriteMatrixIJ(J,option,file_id)
   ! 
   ! Write matrix IJ data
   ! 
@@ -485,53 +503,62 @@ subroutine OutputSensitivityWriteMatrixIJ(J, option, file_id)
   PetscReal :: info(MAT_INFO_SIZE)
   PetscInt :: mat_non_zeros_global, count
   PetscInt :: nrows, irow, ncols, icol
-  PetscInt, allocatable :: cols(:)
-  PetscReal, allocatable :: values(:)
+  PetscInt :: local_size
+  PetscInt :: cols(MAX_FACE_PER_CELL_OUTPUT)
   PetscInt :: ierr
   character(len=MAXSTRINGLENGTH) :: string
   integer(HID_T) :: grp_id
   PetscMPIInt :: hdf5_err
   
-  !create mpi output vec
+  !get matrix size and non zeros
   !MAT_GLOBAL=2
   call MatGetInfo(J, 2, info, ierr);CHKERRQ(ierr)
   mat_non_zeros_global = info(MAT_INFO_NZ_ALLOCATED)
+  call MatGetSize(J,nrows,ncols,ierr);CHKERRQ(ierr)
+  
+  !create mpi output vec
   call VecCreateMPI(option%mycomm,PETSC_DECIDE, mat_non_zeros_global, &
                     global_i,ierr);CHKERRQ(ierr)
   call VecCreateMPI(option%mycomm,PETSC_DECIDE, mat_non_zeros_global, &
                     global_j,ierr);CHKERRQ(ierr)
+  call VecGetLocalSize(global_i,local_size,ierr);CHKERRQ(ierr)
+  call VecGetLocalSize(global_j,local_size,ierr);CHKERRQ(ierr)
   
   !fill them
-  call MatGetSize(J,nrows,ncols,ierr);CHKERRQ(ierr)
-  call VecGetArrayF90(global_i,vec_ptr,ierr);CHKERRQ(ierr)
-  call VecGetArrayF90(global_j,vec_ptr2,ierr);CHKERRQ(ierr)
-  vec_ptr(:) = UNINITIALIZED_DOUBLE
-  vec_ptr2(:) = UNINITIALIZED_DOUBLE
-  count = 1
-  do irow = 1, nrows
-    call MatGetRow(J,irow,ncols,cols,values,ierr);CHKERRQ(ierr)
-    do icol = 1, ncols
-      vec_ptr(count) = irow
-      vec_ptr2(count) = cols(icol)
-      count = count + 1
-    enddo
-  enddo
-  call VecRestoreArrayF90(global_i,vec_ptr,ierr);CHKERRQ(ierr)
-  call VecRestoreArrayF90(global_j,vec_ptr2,ierr);CHKERRQ(ierr)
+  if (option%mycommsize == 1) then
+		call VecGetArrayF90(global_i,vec_ptr,ierr);CHKERRQ(ierr)
+		call VecGetArrayF90(global_j,vec_ptr2,ierr);CHKERRQ(ierr)
+		vec_ptr(:) = UNINITIALIZED_DOUBLE
+		vec_ptr2(:) = UNINITIALIZED_DOUBLE
+		count = 1
+		do irow = 0, nrows-1
+		  call MatGetRow(J,irow,ncols,cols,PETSC_NULL_SCALAR,ierr);CHKERRQ(ierr)
+		  do icol = 1, ncols
+		    vec_ptr(count) = dble(irow)
+		    vec_ptr2(count) = dble(cols(icol))
+		    count = count + 1
+		  enddo
+		  call MatRestoreRow(J,irow,ncols,cols,PETSC_NULL_SCALAR, &
+		                     ierr);CHKERRQ(ierr)
+		enddo
+		call VecRestoreArrayF90(global_i,vec_ptr,ierr);CHKERRQ(ierr)
+		call VecRestoreArrayF90(global_j,vec_ptr2,ierr);CHKERRQ(ierr)
+  else
+    ! TODO (moise) check output_common.F90 line 477 or test it in parallel
+  endif
   
   !merge all data in a single vector 
   ! not needed but verify this TODO
   
   !output it
-  string = "Mat indice I"
+  string = "Mat Structure"
   call h5gcreate_f(file_id,string,grp_id,hdf5_err,OBJECT_NAMELEN_DEFAULT_F)
+  string = "Rows"
   call HDF5WriteDataSetFromVec(string,option,global_i,grp_id, &
-                               H5T_NATIVE_DOUBLE)
-  call h5gclose_f(grp_id,hdf5_err)
-  string = "Mat indice J"
-  call h5gcreate_f(file_id,string,grp_id,hdf5_err,OBJECT_NAMELEN_DEFAULT_F)
+                               H5T_NATIVE_INTEGER)
+  string = "Columns"
   call HDF5WriteDataSetFromVec(string,option,global_j,grp_id, &
-                               H5T_NATIVE_DOUBLE)
+                               H5T_NATIVE_INTEGER)
   call h5gclose_f(grp_id,hdf5_err)
   
   call VecDestroy(global_i,ierr);CHKERRQ(ierr)
@@ -541,7 +568,9 @@ end subroutine OutputSensitivityWriteMatrixIJ
 
 ! ************************************************************************** !
 
-subroutine OutputSensitivityWriteMatrixData(J,option,file_id)
+subroutine OutputSensitivityWriteMatrixData(J,option,output_option, &
+                                            output_sensitivity_option, &
+                                            variable,file_id)
   ! 
   ! Write matrix data
   ! 
@@ -553,36 +582,72 @@ subroutine OutputSensitivityWriteMatrixData(J,option,file_id)
   use Output_Aux_module
   use hdf5
   use String_module
-  !use HDF5_module
+  use HDF5_module, only : HDF5WriteDataSetFromVec
   
   implicit none
   
   Mat :: J
   type(option_type), pointer :: option
-  !type(output_option_type), pointer :: output_option
+  type(output_option_type), pointer :: output_option
+  type(output_sensitivity_option_type), pointer :: output_sensitivity_option
+  type(output_sensitivity_variable_type) :: variable
   integer(HID_T) :: file_id
   
+  Vec :: datas
+  PetscReal, pointer :: vec_ptr(:)
+  PetscReal :: info(MAT_INFO_SIZE)
+  PetscInt :: mat_non_zeros_global, count
+  PetscInt :: nrows, irow, ncols, icol
+  PetscInt :: local_size
+  PetscReal :: values(MAX_FACE_PER_CELL_OUTPUT)
+  PetscInt :: ierr
   character(len=MAXSTRINGLENGTH) :: string
   integer(HID_T) :: grp_id
   PetscMPIInt :: hdf5_err
   
-  ! create a group for the data set TODO review this
-!  write(string,'(''Time'',es13.5,x,a1)') &
-!        option%time/output_option%tconv,output_option%tunit
-!  if (len_trim(output_option%plot_name) > 2) then
-!    string = trim(string) // ' ' // output_option%plot_name
-!  endif
-  !string = trim(string3) // ' ' // trim(string)
-
-  call h5eset_auto_f(OFF,hdf5_err)
-  call h5gopen_f(file_id,string,grp_id,hdf5_err)
-  if (hdf5_err /= 0) then
-    call h5gcreate_f(file_id,string,grp_id,hdf5_err,OBJECT_NAMELEN_DEFAULT_F)
+  !get matrix size and non zeros
+  !MAT_GLOBAL=2
+  call MatGetInfo(J, 2, info, ierr);CHKERRQ(ierr)
+  mat_non_zeros_global = info(MAT_INFO_NZ_ALLOCATED)
+  call MatGetSize(J,nrows,ncols,ierr);CHKERRQ(ierr)
+  
+  !create mpi output vec
+  call VecCreateMPI(option%mycomm,PETSC_DECIDE, mat_non_zeros_global, &
+                    datas,ierr);CHKERRQ(ierr)
+  call VecGetLocalSize(datas,local_size,ierr);CHKERRQ(ierr)
+  
+  !fill them
+  if (option%mycommsize == 1) then
+		call VecGetArrayF90(datas,vec_ptr,ierr);CHKERRQ(ierr)
+		vec_ptr(:) = UNINITIALIZED_DOUBLE
+		count = 1
+		do irow = 0, nrows-1
+		  call MatGetRow(J,irow,ncols,PETSC_NULL_INTEGER,values,ierr);CHKERRQ(ierr)
+		  do icol = 1, ncols
+		    vec_ptr(count) = dble(values(icol))
+		    count = count + 1
+		  enddo
+		  call MatRestoreRow(J,irow,ncols,PETSC_NULL_INTEGER,values, &
+		                     ierr);CHKERRQ(ierr)
+		enddo
+		call VecRestoreArrayF90(datas,vec_ptr,ierr);CHKERRQ(ierr)
+  else
+    ! TODO (moise) check output_common.F90 line 477 or test it in parallel
   endif
+  
+  !output it
+  write(string,'(''Time:'',es13.5,x,a1)') &
+        option%time/output_option%tconv,output_option%tunit
+  call h5eset_auto_f(OFF,hdf5_err)
+  call h5gopen_f(file_id,string,grp_id,hdf5_err,OBJECT_NAMELEN_DEFAULT_F)
+  if (hdf5_err /= 0) &
+    call h5gcreate_f(file_id,string,grp_id,hdf5_err,OBJECT_NAMELEN_DEFAULT_F)
   call h5eset_auto_f(ON,hdf5_err)
-
-  ! write group attributes
-  !call OutputHDF5WriteSnapShotAtts(grp_id,option) TODO
+  call HDF5WriteDataSetFromVec(string,option,datas,grp_id, &
+                               H5T_NATIVE_DOUBLE)
+  call h5gclose_f(grp_id,hdf5_err)
+  
+  call VecDestroy(datas,ierr);CHKERRQ(ierr)
 
 end subroutine OutputSensitivityWriteMatrixData
 

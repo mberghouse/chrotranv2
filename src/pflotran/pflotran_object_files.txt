@@ -71,6 +71,7 @@ mode_process_model_obj = \
 	${common_src}pm_waste_form.o \
 	${common_src}pm_wipp_srcsink.o \
 	${common_src}pm_ufd_biosphere.o \
+	${common_src}pm_sensitivity_richards.o \
 	${common_src}pm_zflow.o \
 
 mode_obj = \
@@ -205,6 +206,7 @@ io_obj = \
 	${common_src}output_hdf5.o \
 	${common_src}output_observation.o \
 	${common_src}output_tecplot.o \
+	${common_src}output_sensitivity.o \
 	${common_src}output_vtk.o
 
 misc_obj = \
