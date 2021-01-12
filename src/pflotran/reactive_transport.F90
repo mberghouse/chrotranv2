@@ -258,7 +258,7 @@ subroutine RTSetup(realization)
     allocate(rt_sec_transport_vars(grid%ngmax))  
     do ghosted_id = 1, grid%ngmax
     ! Assuming the same secondary continuum type for all regions
-      call SecondaryRTAuxVarInit(patch%material_property_array(1)%ptr, &
+      call SecondaryRTAuxVarInit(patch%material_property_array(1)%ptr%multicontinuum, &
                                  rt_sec_transport_vars(ghosted_id), &
                                  reaction,initial_condition, &
                                  sec_tran_constraint,option)
@@ -854,7 +854,7 @@ subroutine RTUpdateKineticState(realization)
       ghosted_id = grid%nL2G(local_id)
       if (patch%imat(ghosted_id) <= 0) cycle
         sec_porosity = patch%material_property_array(1)%ptr% &
-                        secondary_continuum_porosity
+                        multicontinuum%porosity
 
         call SecondaryRTUpdateKineticState(rt_sec_transport_vars(ghosted_id), &
                                            global_auxvars(ghosted_id), &
@@ -976,8 +976,8 @@ subroutine RTUpdateFixedAccumulation(realization)
     endif
         
     if (option%use_mc) then
-      accum_p(istart:iendall) = accum_p(istart:iendall)* &
-        rt_sec_transport_vars(ghosted_id)%epsilon
+      accum_p(istart:iendall) = accum_p(istart:iendall)!* &
+      !  rt_sec_transport_vars(ghosted_id)%epsilon
     endif
     
   enddo
@@ -1109,23 +1109,21 @@ subroutine RTUpdateTransportCoefs(realization)
           cell_centered_Darcy_velocities_ghosted(:,1:nphase,ghosted_id_dn)
       endif
 
-      if (option%use_mc) then
-        epsilon_up = rt_sec_transport_vars(ghosted_id_up)%epsilon
-        epsilon_dn = rt_sec_transport_vars(ghosted_id_dn)%epsilon
-      endif
+!      if (option%use_mc) then
+!        epsilon_up = rt_sec_transport_vars(ghosted_id_up)%epsilon
+!        epsilon_dn = rt_sec_transport_vars(ghosted_id_dn)%epsilon
+!      endif
 
       call TDispersion(global_auxvars(ghosted_id_up), &
                       material_auxvars(ghosted_id_up), &
                       local_Darcy_velocities_up, &
                      patch%material_property_array(patch%imat(ghosted_id_up))% &
                         ptr%dispersivity, &
-                      epsilon_up, &
                       global_auxvars(ghosted_id_dn), &
                       material_auxvars(ghosted_id_dn), &
                       local_Darcy_velocities_dn, &
                      patch%material_property_array(patch%imat(ghosted_id_dn))% &
                         ptr%dispersivity, &
-                      epsilon_dn, &
                       cur_connection_set%dist(:,iconn), &
                       rt_parameter,option, &
                       patch%internal_velocities(:,sum_connection), &
@@ -1166,7 +1164,6 @@ subroutine RTUpdateTransportCoefs(realization)
                         local_Darcy_velocities_up, &
                         patch%material_property_array(patch%imat(ghosted_id))% &
                           ptr%dispersivity, &
-                        epsilon_dn, &
                         cur_connection_set%dist(:,iconn), &
                         rt_parameter,option, &
                         patch%boundary_velocities(:,sum_connection), &
@@ -2758,7 +2755,7 @@ subroutine RTResidualNonFlux(snes,xx,r,realization,ierr)
       Res = Res / option%tran_dt
 
       if (option%use_mc) then
-        Res = Res*rt_sec_transport_vars(ghosted_id)%epsilon
+        Res = Res!*rt_sec_transport_vars(ghosted_id)%epsilon
       endif        
       
       r_p(istartall:iendall) = r_p(istartall:iendall) + Res(1:reaction%ncomp)
@@ -2795,9 +2792,9 @@ subroutine RTResidualNonFlux(snes,xx,r,realization,ierr)
          
       sec_diffusion_coefficient = patch% &
                                   material_property_array(1)%ptr% &
-                                  secondary_continuum_diff_coeff
+                                  multicontinuum%diff_coeff
       sec_porosity = patch%material_property_array(1)%ptr% &
-                     secondary_continuum_porosity
+                     multicontinuum%porosity
 
       call SecondaryRTResJacMulti(rt_sec_transport_vars(ghosted_id), &
                                   rt_auxvars(ghosted_id), &
@@ -2946,7 +2943,7 @@ subroutine RTResidualNonFlux(snes,xx,r,realization,ierr)
                      material_auxvars(ghosted_id), &
                      reaction,option)
       if (option%use_mc) then
-        Res = Res*rt_sec_transport_vars(ghosted_id)%epsilon
+        Res = Res!*rt_sec_transport_vars(ghosted_id)%epsilon
       endif 
       r_p(istartall:iendall) = r_p(istartall:iendall) + Res(1:reaction%ncomp)                    
 
@@ -3553,12 +3550,12 @@ subroutine RTJacobianNonFlux(snes,xx,A,B,realization,ierr)
       
       if (option%use_mc) then
       
-        Jup = Jup*rt_sec_transport_vars(ghosted_id)%epsilon
+        Jup = Jup!*rt_sec_transport_vars(ghosted_id)%epsilon
 
         sec_diffusion_coefficient = patch%material_property_array(1)% &
-                                    ptr%secondary_continuum_diff_coeff
+                                    ptr%multicontinuum%diff_coeff
         sec_porosity = patch%material_property_array(1)%ptr% &
-                       secondary_continuum_porosity
+                       multicontinuum%porosity
                         
         if (realization%reaction%ncomp /= realization%reaction%naqcomp) then
           option%io_buffer = 'Current multicomponent implementation is for '// &
@@ -3653,7 +3650,7 @@ subroutine RTJacobianNonFlux(snes,xx,A,B,realization,ierr)
                                material_auxvars(ghosted_id), &
                                reaction,option)
       if (option%use_mc) then
-        Jup = Jup*rt_sec_transport_vars(ghosted_id)%epsilon
+        Jup = Jup!*rt_sec_transport_vars(ghosted_id)%epsilon
       endif
       call MatSetValuesBlockedLocal(A,1,ghosted_id-1,1,ghosted_id-1, &
                                     Jup,ADD_VALUES,ierr);CHKERRQ(ierr)

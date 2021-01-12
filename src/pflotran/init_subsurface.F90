@@ -435,7 +435,7 @@ subroutine InitSubsurfAssignMatProperties(realization)
     endif
     por0_p(local_id) = material_property%porosity
     tor0_p(local_id) = material_property%tortuosity
-    eps0_p(local_id) = material_property%epsilon
+    eps0_p(local_id) = material_property%multicontinuum%epsilon
 
     if (GetIsGrdecl()) then
 
@@ -546,11 +546,6 @@ subroutine InitSubsurfAssignMatProperties(realization)
         call SubsurfReadDatasetToVecWithMask(realization, &
                material_property%tortuosity_dataset, &
                material_property%internal_id,PETSC_FALSE,field%tortuosity0)
-      endif
-      if (associated(material_property%epsilon_dataset)) then
-        call SubsurfReadDatasetToVecWithMask(realization, &
-               material_property%epsilon_dataset, &
-               material_property%internal_id,PETSC_FALSE,field%epsilon0)
       endif
     endif
   enddo
