@@ -2128,10 +2128,6 @@ subroutine RichardsJacobian(snes,xx,A,B,realization,ierr)
     write(option%io_buffer,'("inf norm: ",es11.4)') norm
     call PrintMsg(option)
   endif
-  !Added by Moise Rousseau 09-03-2020
-  if (realization%debug%matview_perm_sensitivity) then
-    call RichardsPermeabilitySensitivity(realization,ierr)
-  endif
 
 #if 0
     call PetscViewerASCIIOpen(realization%option%mycomm,'flow_dxx.out', &

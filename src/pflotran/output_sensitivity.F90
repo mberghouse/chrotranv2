@@ -41,7 +41,9 @@ module Output_Sensitivity_module
     PetscInt :: format !hdf5, binary, matlab
     PetscInt :: output_time_option !sync, x timestep, last
     PetscInt :: output_every_timestep !when x timestep option
-    PetscInt :: timestep_per_output !x timestep per output file
+    PetscInt :: timestep_per_hdf5_file !x timestep per output file
+    PetscReal :: time !simulation time
+    PetscBool :: plot_flag
     type(output_sensitivity_variable_list_type), pointer :: output_variables
   end type output_sensitivity_option_type
   
@@ -72,7 +74,9 @@ subroutine OutputSensitivityOptionInit(output_sensitivity_option)
   output_sensitivity_option%format = OUTPUT_HDF5
   output_sensitivity_option%output_time_option = SYNC_OUTPUT
   output_sensitivity_option%output_every_timestep = 0
-  output_sensitivity_option%timestep_per_output = 0 !no limit
+  output_sensitivity_option%timestep_per_hdf5_file = 0 !no limit
+  output_sensitivity_option%time = 0.d0
+  output_sensitivity_option%plot_flag = PETSC_FALSE
   allocate(output_sensitivity_option%output_variables)
   call OutputSensitivityVaraibleListInit( &
                                  output_sensitivity_option%output_variables)
@@ -124,7 +128,13 @@ subroutine OutputSensitivityAddVariable(output_sensitivity_option,word)
       variable%units = '1/Pa' ! TODO (moise)
       variable%ivar = PRESSURE
     case('PERMEABILITY')
+      variable%name = 'Permeability'
+      variable%units = '1/m/s' ! TODO (moise)
+      variable%ivar = PERMEABILITY
     case('POROSITY')
+      variable%name = 'Porosity'
+      variable%units = '' ! TODO (moise)
+      variable%ivar = POROSITY
   end select
   
   if (.not. associated(output_sensitivity_option%output_variables%first)) then
@@ -142,7 +152,8 @@ end subroutine OutputSensitivityAddVariable
 ! ************************************************************************** !
 
 subroutine OutputSensitivityOptionIsTimeToOutput(output_sensitivity_option,&
-                                                 to_output)
+                                                 timestep_flag,last_flag,&
+                                                 sync_flag)
   ! 
   ! Determine if it's the time to output the sensitivity
   ! 
@@ -153,22 +164,15 @@ subroutine OutputSensitivityOptionIsTimeToOutput(output_sensitivity_option,&
   implicit none
   
   type(output_sensitivity_option_type), pointer :: output_sensitivity_option
-  PetscBool, intent(out) :: to_output
+  PetscBool :: timestep_flag, last_flag, sync_flag
   
   select case(output_sensitivity_option%output_time_option)
     case(SYNC_OUTPUT)
-      !if () then
-      !  to_output = PETSC_TRUE
-      !endif
+      if (sync_flag) output_sensitivity_option%plot_flag = PETSC_TRUE
     case(EVERY_X_TIMESTEP)
-      if (floor(real(output_sensitivity_option%plot_number) / &
-            output_sensitivity_option%output_every_timestep) /= 0) &
-                   to_output = PETSC_TRUE
+      if (timestep_flag) output_sensitivity_option%plot_flag = PETSC_TRUE
     case(LAST)
-      ! TODO
-      !if (option%time == option%final_time) then
-      !  to_output = PETSC_TRUE
-      !endif
+      if (last_flag) output_sensitivity_option%plot_flag = PETSC_TRUE
   end select
   
 end subroutine OutputSensitivityOptionIsTimeToOutput
@@ -177,7 +181,7 @@ end subroutine OutputSensitivityOptionIsTimeToOutput
 
 subroutine OutputSensitivityOptionSetOutputTimeOption( &
                                                 output_sensitivity_option,&
-                                                option,word)
+                                                option,word,input)
   ! 
   ! Set the time when to output the sensitivity
   ! 
@@ -191,10 +195,9 @@ subroutine OutputSensitivityOptionSetOutputTimeOption( &
   implicit none
   
   type(output_sensitivity_option_type), pointer :: output_sensitivity_option
-  character(len=MAXWORDLENGTH) :: word
-  
-  type(input_type), pointer :: input
   type(option_type), pointer :: option
+  character(len=MAXWORDLENGTH) :: word
+  type(input_type), pointer :: input
   
   select case(trim(word))
     case('SYNC_WITH_SNAPSHOT_FILE')
@@ -250,9 +253,9 @@ end subroutine OutputSensitivityOptionSetOutputFormat
 
 ! ************************************************************************** !
 
-subroutine OutputSensitivity(J,option,output_sensitivity_option)
+subroutine OutputSensitivity(J,option,output_sensitivity_option,variable_name)
   ! 
-  ! Main output sensitivity driver
+  ! Output the J matrix in the desired format
   ! 
   ! Author: Moise Rousseau
   ! Date: 20 dec 2020
@@ -264,6 +267,7 @@ subroutine OutputSensitivity(J,option,output_sensitivity_option)
   
   implicit none
   
+  
   Mat :: J
   type(option_type), pointer :: option
   type(output_sensitivity_option_type), pointer :: output_sensitivity_option
@@ -271,8 +275,12 @@ subroutine OutputSensitivity(J,option,output_sensitivity_option)
   PetscBool :: first
   integer(HID_T) :: file_id
   character(len=MAXSTRINGLENGTH) :: filename
+  character(len=MAXWORDLENGTH) :: variable_name
+  PetscViewer :: viewer
+  PetscErrorCode :: ierr
   
-  call OutputSensitivityCreateFilename(output_sensitivity_option,option,filename)
+  call OutputSensitivityCreateFilename(output_sensitivity_option,option,&
+                                       variable_name,filename)
   
   select case(output_sensitivity_option%format)
     case(OUTPUT_HDF5)
@@ -285,15 +293,23 @@ subroutine OutputSensitivity(J,option,output_sensitivity_option)
       call OutputSensitivityWriteMatrixData(J,option,file_id)
       call OutputHDF5CloseFile(file_id)
     case(OUTPUT_MATLAB)
-!      call DebugWriteFilename(realization%debug,string,'K_Sensitivity','', &
-!                              richards_ts_count,richards_ts_cut_count, &
-!                              richards_ni_count)
-!      call DebugCreateViewer(realization%debug,string,option,viewer)
-      ! TODO create viewer
-!      call MatView(J,viewer,ierr);CHKERRQ(ierr)
-!      call DebugViewerDestroy(realization%debug,viewer)
+      option%io_buffer = '--> writing sensitivity to matlab ascii file: ' // &
+                                                     trim(filename)
+      call PrintMsg(option)
+      call PetscViewerASCIIOpen(option%mycomm,filename, &
+                                 viewer,ierr);CHKERRQ(ierr)
+      call MatView(J,viewer,ierr);CHKERRQ(ierr)
+      call PetscViewerPopFormat(viewer,ierr);CHKERRQ(ierr)
+      call PetscViewerDestroy(viewer,ierr);CHKERRQ(ierr)
     case(OUTPUT_BINARY)
-      ! TODO
+      option%io_buffer = '--> writing sensitivity to matlab binary file: ' // &
+                                                     trim(filename)
+      call PrintMsg(option)
+      call PetscViewerBinaryOpen(option%mycomm,filename, &
+                                 FILE_MODE_WRITE,viewer,ierr);CHKERRQ(ierr)
+      call MatView(J,viewer,ierr);CHKERRQ(ierr)
+      call PetscViewerPopFormat(viewer,ierr);CHKERRQ(ierr)
+      call PetscViewerDestroy(viewer,ierr);CHKERRQ(ierr)
   end select
   
 end subroutine OutputSensitivity
@@ -364,7 +380,7 @@ end subroutine OutputSensitivityOpenHDF5
 ! ************************************************************************** !
 
 subroutine OutputSensitivityCreateFilename(output_sensitivity_option, &
-                                           option,filename)
+                                           option,variable_name,filename)
   ! 
   ! Create sensitivity output filename
   ! 
@@ -372,41 +388,62 @@ subroutine OutputSensitivityCreateFilename(output_sensitivity_option, &
   ! Date: 01/04/2021
   
   use Option_module
+  use String_module
 
   implicit none
   
   type(output_sensitivity_option_type), pointer :: output_sensitivity_option
   type(option_type), pointer :: option
+  character(len=MAXWORDLENGTH) :: variable_name
   character(len=MAXSTRINGLENGTH), intent(out) :: filename
   
   PetscInt :: file_number
-  character(len=MAXSTRINGLENGTH) :: string
-
-  if (output_sensitivity_option%timestep_per_output > 0) then
-    file_number = floor(real(output_sensitivity_option%plot_number) / &
-                           output_sensitivity_option%timestep_per_output)
-    if (file_number < 10) then
-      write(string,'("00",i1)') file_number
-    else if (file_number < 100) then
-      write(string,'("0",i2)') file_number  
-    else if (file_number < 1000) then
-      write(string,'(i3)') file_number  
-    else if (file_number < 10000) then
-      write(string,'(i4)') file_number
-    else if (file_number < 100000) then
-      write(string,'(i5)') file_number
-    else
-      option%io_buffer = 'Plot number exceeds current maximum of 10^5.'
-      call PrintErrMsgToDev(option,'ask for a higher maximum')
-    endif 
-    string = adjustl(string)
-    filename = trim(option%global_prefix) // trim(option%group_prefix) // &
-                '-' // trim(string) // '-sensitivity.h5'
+  character(len=MAXSTRINGLENGTH) :: string, string2
+  
+  if (output_sensitivity_option%format == OUTPUT_HDF5) then
+    if (output_sensitivity_option%timestep_per_hdf5_file > 0) &
+      file_number = floor(real(output_sensitivity_option%plot_number) / &
+                         output_sensitivity_option%timestep_per_hdf5_file)
   else
-    filename = trim(option%global_prefix) // trim(option%group_prefix) // &
-                '-sensitivity.h5'
+    file_number = output_sensitivity_option%plot_number
   endif
+  if (file_number < 10) then
+    write(string,'("00",i1)') file_number
+  else if (file_number < 100) then
+    write(string,'("0",i2)') file_number  
+  else if (file_number < 1000) then
+    write(string,'(i3)') file_number  
+  else if (file_number < 10000) then
+    write(string,'(i4)') file_number
+  else if (file_number < 100000) then
+    write(string,'(i5)') file_number
+  else
+    option%io_buffer = 'Plot number exceeds current maximum of 10^5.'
+    call PrintErrMsgToDev(option,'ask for a higher maximum')
+  endif 
+  string = adjustl(string)
 
+  if (output_sensitivity_option%format == OUTPUT_HDF5) then
+    if (output_sensitivity_option%timestep_per_hdf5_file > 0) then
+      filename = trim(option%global_prefix) // trim(option%group_prefix) // &
+                  '-sensitivity-' // trim(string) // '.h5'
+    else
+      filename = trim(option%global_prefix) // trim(option%group_prefix) // &
+                  '-sensitivity.h5'
+    endif
+  else
+    string2 = trim(variable_name)
+    call StringToLower(string2)
+    filename = trim(option%global_prefix) // trim(option%group_prefix) // &
+                '-sensitivity-' // string2 // '-' // trim(string)
+    select case(output_sensitivity_option%format)
+      case(OUTPUT_MATLAB)
+        filename = trim(filename) // '.mat'
+      case(OUTPUT_BINARY)
+        filename = trim(filename) // '.bin'
+    end select
+  endif
+ 
 end subroutine OutputSensitivityCreateFilename
 
 ! ************************************************************************** !

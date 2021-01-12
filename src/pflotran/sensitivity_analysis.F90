@@ -20,131 +20,21 @@ module Sensitivity_Analysis_module
 
   private
   
-  PetscInt, parameter :: PERMEABILITY = 1
-  PetscInt, parameter :: POROSITY = 2
+  PetscInt, parameter :: PRESSURE         = 0
+  PetscInt, parameter :: PERMEABILITY     = 1
+  PetscInt, parameter :: POROSITY         = 2
   
   ! Cutoff parameters
   PetscReal, parameter :: eps       = 1.D-8
   PetscReal, parameter :: floweps   = 1.D-24
   PetscReal, parameter :: perturbation_tolerance = 1.d-3
 
-  public :: RichardsPermeabilitySensitivity, &
-            RichardsPorositySensitivity
+  public :: RichardsSensitivityInternalConn, &
+            RichardsFluxSensitivity, &
+            RichardsSensitivityBoundaryConn, &
+            RichardsSensitivitySourceSink
 
 contains
-
-! ************************************************************************** !
-
-subroutine SensitivityAnalysisCreate()
-
-end subroutine SensitivityAnalysisCreate
-
-! ************************************************************************** !
-
-subroutine RichardsPermeabilitySensitivity(realization,ierr)
-
-  use Realization_Subsurface_class
-  
-  type(realization_subsurface_type) :: realization
-  PetscErrorCode :: ierr
-  
-  call RichardsSensitivity(realization,PERMEABILITY,ierr)
-
-end subroutine
-
-! ************************************************************************** !
-
-subroutine RichardsPorositySensitivity(realization,ierr)
-
-  use Realization_Subsurface_class
-  
-  type(realization_subsurface_type) :: realization
-  PetscErrorCode :: ierr
-  
-  call RichardsSensitivity(realization,POROSITY,ierr)
-
-end subroutine
-
-! ************************************************************************** !
-
-subroutine RichardsSensitivity(realization,ivar,ierr)
-  ! 
-  ! Computes derivative of the residual according to the ivar at 
-  ! each grid cell
-  ! Structure similar to RichardsJacobian
-  ! 
-  ! Author: Moise Rousseau
-  ! Date: 09/03/2020
-  ! 
-  ! Note:
-  ! Inline surface flow not considered
-
-  use Realization_Subsurface_class
-  use Patch_module
-  use Grid_module
-  use Option_module
-  use Logging_module
-  use Debug_module
-  use Discretization_module
-  use Output_Sensitivity_module
-
-  implicit none
-
-  type(realization_subsurface_type) :: realization
-  PetscInt :: ivar
-  PetscErrorCode :: ierr
-  
-  Mat :: J
-  MatType :: J_mat_type
-  PetscViewer :: viewer
-  type(option_type), pointer :: option
-  character(len=MAXSTRINGLENGTH) :: string
-  
-  call PetscLogEventBegin(logging%event_r_jacobian,ierr);CHKERRQ(ierr)
-  
-  option => realization%option
-  
-  !prepare J matrix
-  J_mat_type = MATBAIJ
-  call DiscretizationCreateJacobian(realization%discretization, &
-                                    realization%option%nflowdof, &
-                                    J_mat_type, J, option)
-
-  call MatSetOptionsPrefix(J,"Sensitivity_",ierr);CHKERRQ(ierr)
-  
-  call MatZeroEntries(J,ierr);CHKERRQ(ierr)
-
-  call RichardsSensitivityInternalConn(J,realization,ivar,ierr)
-  call RichardsSensitivityBoundaryConn(J,realization,ivar,ierr)
-  !call RichardsSensitivitySourceSink(J,realization,ivar,ierr)
-  !update here when porosity ok
-  !call RichardsSensitivityAccumulation(J,realization,ivar,ierr)
-  
-  call MatAssemblyBegin(J,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
-  call MatAssemblyEnd(J,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
-
-  select case(ivar)
-    case(PERMEABILITY)
-      !call OutputSensitivity(J,option,realization%output_option)
-      call DebugWriteFilename(realization%debug,string,'K_Sensitivity','', &
-                              richards_ts_count,richards_ts_cut_count, &
-                              richards_ni_count)
-      call DebugCreateViewer(realization%debug,string,option,viewer)
-      call MatView(J,viewer,ierr);CHKERRQ(ierr)
-      call DebugViewerDestroy(realization%debug,viewer)
-    case(POROSITY)
-      call DebugWriteFilename(realization%debug,string, &
-                              'Porosity_Sensitivity', '', &
-                              richards_ts_count,richards_ts_cut_count, &
-                              richards_ni_count)
-    case default
-      call PrintErrMsg(option, "Wrong value of ivar in RichardsSensitivity")
-  end select
-  
-  !destroy J
-  call MatDestroy(J,ierr);CHKERRQ(ierr)
-    
-end subroutine
 
 ! ************************************************************************** !
 
@@ -200,7 +90,7 @@ subroutine RichardsSensitivityInternalConn(A,realization,ivar,ierr)
   class(material_auxvar_type), pointer :: material_auxvars(:)
   
   character(len=MAXSTRINGLENGTH) :: string
-
+  
   patch => realization%patch
   grid => patch%grid
   option => realization%option
