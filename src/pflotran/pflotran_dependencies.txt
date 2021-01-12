@@ -502,7 +502,7 @@ output_observation.o : connection.o coupler.o discretization.o eos_gas.o \
                        realization_subsurface.o region.o richards.o string.o \
                        th.o toil_ims.o towg.o utility.o variables.o \
                        well_data.o well_type.o wipp_flow.o wipp_flow_aux.o
-output_sensitivity.o: output_aux.o option.o string.o hdf5.o
+output_sensitivity.o: output_aux.o option.o string.o hdf5.o output_hdf5.o
 output_surface.o : connection.o coupler.o discretization.o field.o grid.o \
                    grid_unstructured_aux.o grid_unstructured_cell.o hdf5.o \
                    hdf5_aux.o input_aux.o logging.o option.o output_aux.o \
@@ -944,8 +944,7 @@ secondary_continuum_aux.o : option.o pflotran_constants.o \
 sensitivity_analysis.o : characteristic_curves.o connection.o eos_water.o \
                          global_aux.o grid.o material_aux.o option.o patch.o \
                          pflotran_constants.o realization_subsurface.o \
-                         richards_aux.o richards_common.o utility.o \
-                         output_sensitivity.o
+                         richards_aux.o richards_common.o utility.o 
 shape_function.o : gauss.o grid_unstructured_cell.o pflotran_constants.o
 simulation_aux.o : option.o pflotran_constants.o
 simulation_base.o : checkpoint.o eos.o input_aux.o logging.o option.o output.o \

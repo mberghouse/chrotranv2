@@ -135,8 +135,6 @@ END
     call InputReadCard(input,option,word)
     call InputErrorMsg(input,option,'keyword',error_string)
     call StringToUpper(word)
-  option%io_buffer = word
-  call PrintMsg(option)
 
     select case(trim(word))
     !-----------------------------------------
@@ -151,7 +149,7 @@ END
         call PMSensitivityRichardsReadOutputVariables(this, &
                                               output_sensitivity_option,input)
     !-----------------------------------------
-      case('OUTPUT_TIME')
+      case('OUTPUT')
         call InputReadCard(input,option,word)
         call StringToUpper(word)
         call OutputSensitivityOptionSetOutputTimeOption( &
@@ -362,6 +360,7 @@ subroutine PMSensitivityRichardsOutput(this)
   !
   
   use Option_module
+  use Output_Aux_module
   use Output_Sensitivity_module
   use Sensitivity_Analysis_module
   use Discretization_module
@@ -371,12 +370,14 @@ subroutine PMSensitivityRichardsOutput(this)
   class(pm_sensitivity_richards_type) :: this
   
   type(option_type), pointer :: option
+  type(output_option_type), pointer :: output_option
   type(output_sensitivity_option_type), pointer :: output_sensitivity_option
   type(output_sensitivity_variable_type), pointer :: output_variable
   Mat :: J
   MatType :: J_mat_type
   PetscErrorCode :: ierr
   
+  output_option => this%realization%output_option
   output_sensitivity_option => this%output_sensitivity_option
   option => this%realization%option
   
@@ -408,14 +409,18 @@ subroutine PMSensitivityRichardsOutput(this)
       call MatAssemblyEnd(J,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
       
       !output it
-      call OutputSensitivity(J,option,output_sensitivity_option,&
-                             output_variable%name)
+      call OutputSensitivity(J,option,output_option, &
+                             output_sensitivity_option, &
+                             output_variable)
       
       if (.not.associated(output_variable%next)) exit
       output_variable => output_variable%next
     enddo
     
   endif 
+  
+  option%io_buffer = "END SENSITIVITY ANALYSIS" // achar(10)
+  call PrintMsg(option)
   
 end subroutine PMSensitivityRichardsOutput
 

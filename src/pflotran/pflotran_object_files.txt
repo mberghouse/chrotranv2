@@ -82,6 +82,7 @@ mode_aux_obj = \
 	${common_src}pm_waste_form.o \
 	${common_src}pm_wipp_srcsink.o \
 	${common_src}pm_ufd_biosphere.o \
+	${common_src}pm_sensitivity_richards.o \
 	${common_src}richards_aux.o \
 	${common_src}th_aux.o \
 	${common_src}inlinesurface_aux.o
@@ -219,6 +220,7 @@ io_obj = \
 	${common_src}output_observation.o \
 	${common_src}output_surface.o \
 	${common_src}output_tecplot.o \
+	${common_src}output_sensitivity.o \
 	${common_src}output_vtk.o
 
 misc_obj = \
