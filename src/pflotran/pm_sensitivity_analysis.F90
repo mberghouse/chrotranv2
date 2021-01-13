@@ -207,10 +207,25 @@ END
             sensitivity_output_option%format = SENSITIVITY_OUTPUT_HDF5
           case('MATLAB')
             sensitivity_output_option%format = SENSITIVITY_OUTPUT_MATLAB
+            if (option%mycommsize > 1) then
+              option%io_buffer = "Sensitivities output for parallel &
+                                  &simulations required HDF5 output format"
+              call PrintErrMsg(option)
+            endif
           case('BINARY')
             sensitivity_output_option%format = SENSITIVITY_OUTPUT_BINARY
+            if (option%mycommsize > 1) then
+              option%io_buffer = "Sensitivities output for parallel &
+                                  &simulations required HDF5 output format"
+              call PrintErrMsg(option)
+            endif
           case('ASCII')
             sensitivity_output_option%format = SENSITIVITY_OUTPUT_ASCII
+            if (option%mycommsize > 1) then
+              option%io_buffer = "Sensitivities output for parallel &
+                                  &simulations required HDF5 output format"
+              call PrintErrMsg(option)
+            endif
           case default
             call InputKeywordUnrecognized(input,word,'SENSITIVITY_FLOW,&
                                           &FORMAT',option)
@@ -475,6 +490,7 @@ subroutine PMSensitivityOutput(this)
   !use Sensitivity_TH_module
   !use Sensitivity_Transport_module
   use Sensitivity_Output_module
+  use Grid_module
   
   implicit none
 
@@ -484,6 +500,7 @@ subroutine PMSensitivityOutput(this)
   type(output_option_type), pointer :: output_option
   type(sensitivity_output_option_type), pointer :: sensitivity_output_option
   type(sensitivity_output_variable_type), pointer :: output_variable
+  type(grid_type), pointer :: grid
   Mat :: J
   MatType :: J_mat_type
   PetscErrorCode :: ierr
@@ -492,6 +509,7 @@ subroutine PMSensitivityOutput(this)
   output_option => this%realization%output_option
   sensitivity_output_option => this%sensitivity_output_option
   option => this%realization%option
+  grid => this%realization%discretization%grid
   
   if (sensitivity_output_option%plot_flag) then
     
@@ -524,9 +542,9 @@ subroutine PMSensitivityOutput(this)
         
         !output it
         word = "flow"
-        call OutputSensitivity(J,option,output_option, &
-	                             sensitivity_output_option, &
-	                             output_variable, word)
+        call OutputSensitivity(J,grid,option,output_option, &
+	                       sensitivity_output_option, &
+	                       output_variable, word)
 	    endif
 	    
 	    if (this%sensitivity_transport) then
@@ -541,10 +559,10 @@ subroutine PMSensitivityOutput(this)
       if (.not.associated(output_variable)) exit
     enddo
     
+    option%io_buffer = "END " // trim(this%header) // achar(10)
+    call PrintMsg(option)
+    
   endif 
-  
-  option%io_buffer = "END " // trim(this%header) // achar(10)
-  call PrintMsg(option)
   
 end subroutine PMSensitivityOutput
 

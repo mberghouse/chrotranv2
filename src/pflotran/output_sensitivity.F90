@@ -5,6 +5,8 @@ module Sensitivity_Output_module
   use petscsys
 #include "petsc/finclude/petscsnes.h"
   use petscsnes
+#include "petsc/finclude/petscmat.h"
+  use petscmat
   use hdf5
   use PFLOTRAN_Constants_module
   use Sensitivity_Aux_module
@@ -21,7 +23,7 @@ contains
 
 ! ************************************************************************** !
 
-subroutine OutputSensitivity(J,option,output_option, &
+subroutine OutputSensitivity(J,grid,option,output_option, &
                              sensitivity_output_option,variable,mode)
   ! 
   ! Output the J matrix in the desired format
@@ -34,10 +36,12 @@ subroutine OutputSensitivity(J,option,output_option, &
   use Output_Aux_module
   use HDF5_module
   use Output_HDF5_module
+  use Grid_module
   
   implicit none
   
   Mat :: J
+  type(grid_type), pointer :: grid
   type(option_type), pointer :: option
   type(output_option_type), pointer :: output_option
   type(sensitivity_output_option_type), pointer :: sensitivity_output_option
@@ -58,10 +62,10 @@ subroutine OutputSensitivity(J,option,output_option, &
       call OutputSensitivityOpenHDF5(option,sensitivity_output_option,&
                                      filename,file_id,first)
       if (first) then
-        call OutputSensitivityWriteMatrixIJ(J,option,file_id)
-      endif
+        call OutputSensitivityWriteMatrixIJ(J,grid,option,file_id)
         !call OutputHDF5Provenance(option, output_option, file_id)
-      call OutputSensitivityWriteMatrixData(J,option,output_option, &
+      endif
+      call OutputSensitivityWriteMatrixData(J,grid,option,output_option, &
                                             sensitivity_output_option, &
                                             variable,file_id)
         !call OutputHDF5Provenance(option, output_option, file_id)
@@ -252,7 +256,7 @@ end subroutine OutputHDF5CloseFile
 
 ! ************************************************************************** !
 
-subroutine OutputSensitivityWriteMatrixIJ(J,option,file_id)
+subroutine OutputSensitivityWriteMatrixIJ(J,grid,option,file_id)
   ! 
   ! Write matrix IJ data
   ! 
@@ -264,82 +268,237 @@ subroutine OutputSensitivityWriteMatrixIJ(J,option,file_id)
   use hdf5
   use HDF5_module, only : HDF5WriteDataSetFromVec
   use String_module
+  use Grid_module
   
   Mat :: J
+  type(grid_type), pointer :: grid
   type(option_type), pointer :: option
   integer(HID_T) :: file_id
   
-  Vec :: global_i, global_j, datas
-  PetscReal, pointer :: vec_ptr(:), vec_ptr2(:)
+  PetscInt, allocatable :: local_i(:), local_j(:)
   PetscReal :: info(MAT_INFO_SIZE)
-  PetscInt :: mat_non_zeros_global, count
-  PetscInt :: nrows, irow, ncols, icol
-  PetscInt :: local_size
-  PetscInt :: cols(SENSITIVITY_MAX_FACE_PER_CELL_OUTPUT)
+  PetscInt :: mat_non_zeros_local, mat_non_zeros_global
+  PetscInt :: ineighbor, neighbor_id
+  PetscInt :: local_id, ghosted_id, natural_id, count
+  PetscInt :: iconn, id_up, id_dn
   PetscInt :: ierr
   character(len=MAXSTRINGLENGTH) :: string
+  integer(HID_T) :: file_space_id,memory_space_id, data_set_id, prop_id
+  PetscMPIInt :: rank_mpi
+  integer(HSIZE_T) :: dims(3)
+  integer(HSIZE_T) :: start(3), length(3), stride(3)
   integer(HID_T) :: grp_id
   PetscMPIInt :: hdf5_err
+  PetscInt :: istart
   
-  !get matrix size and non zeros
-  !MAT_GLOBAL=2
-  call MatGetInfo(J, 2, info, ierr);CHKERRQ(ierr)
+  
+  !get matrix size for output vector
+  !MAT_LOCAL = 1
+  call MatGetInfo(J,1,info,ierr);CHKERRQ(ierr)
+  mat_non_zeros_local = info(MAT_INFO_NZ_ALLOCATED)
+  !MAT_SUM_GLOBAL = 3
+  call MatGetInfo(J, 3, info, ierr);CHKERRQ(ierr)
   mat_non_zeros_global = info(MAT_INFO_NZ_ALLOCATED)
-  call MatGetSize(J,nrows,ncols,ierr);CHKERRQ(ierr)
   
-  !create mpi output vec
-  call VecCreateMPI(option%mycomm,PETSC_DECIDE, mat_non_zeros_global, &
-                    global_i,ierr);CHKERRQ(ierr)
-  call VecCreateMPI(option%mycomm,PETSC_DECIDE, mat_non_zeros_global, &
-                    global_j,ierr);CHKERRQ(ierr)
-  call VecGetLocalSize(global_i,local_size,ierr);CHKERRQ(ierr)
-  call VecGetLocalSize(global_j,local_size,ierr);CHKERRQ(ierr)
+  !create output array
+  allocate(local_i(mat_non_zeros_local))
+  allocate(local_j(mat_non_zeros_local))
   
-  !fill them
-  if (option%mycommsize == 1) then
-		call VecGetArrayF90(global_i,vec_ptr,ierr);CHKERRQ(ierr)
-		call VecGetArrayF90(global_j,vec_ptr2,ierr);CHKERRQ(ierr)
-		vec_ptr(:) = UNINITIALIZED_DOUBLE
-		vec_ptr2(:) = UNINITIALIZED_DOUBLE
-		count = 1
-		do irow = 0, nrows-1
-		  call MatGetRow(J,irow,ncols,cols,PETSC_NULL_SCALAR,ierr);CHKERRQ(ierr)
-		  do icol = 1, ncols
-		    vec_ptr(count) = dble(irow)
-		    vec_ptr2(count) = dble(cols(icol))
-		    count = count + 1
-		  enddo
-		  call MatRestoreRow(J,irow,ncols,cols,PETSC_NULL_SCALAR, &
-		                     ierr);CHKERRQ(ierr)
-		enddo
-		call VecRestoreArrayF90(global_i,vec_ptr,ierr);CHKERRQ(ierr)
-		call VecRestoreArrayF90(global_j,vec_ptr2,ierr);CHKERRQ(ierr)
+  local_i = UNINITIALIZED_INTEGER
+  local_j = UNINITIALIZED_INTEGER
+  count = 1
+  !populate
+  if (associated(grid%unstructured_grid)) then
+    ! -----------------------------------------------------
+    ! copy structure from function UGridDMCreateJacobian in 
+    ! grid_unstructured_aux.F90
+    ! -----------------------------------------------------
+    if (associated(grid%unstructured_grid%explicit_grid)) then
+      ! unstructured explicit grid
+      do local_id = 1, grid%unstructured_grid%nlmax
+        !call MatSetValuesBlockedLocal(J,1,ghosted_id-1,1,ghosted_id-1, &
+        !                              values,ADD_VALUES,ierr);CHKERRQ(ierr)
+        ghosted_id = local_id
+        natural_id = grid%nG2A(ghosted_id)
+        local_i(count) = natural_id
+        local_j(count) = natural_id
+        count = count + 1
+      enddo
+      
+      do iconn = 1, size(grid%unstructured_grid%explicit_grid%connections,2)
+        id_up = grid%unstructured_grid%explicit_grid%connections(1,iconn)
+        id_dn = grid%unstructured_grid%explicit_grid%connections(2,iconn)
+        if (id_up <= grid%unstructured_grid%nlmax) then ! local
+          !call MatSetValuesBlockedLocal(J,1,id_up-1,1,id_up-1,values, &
+          !                               ADD_VALUES,ierr);CHKERRQ(ierr)
+          natural_id = grid%nG2A(id_up)
+          local_i(count) = natural_id
+          local_j(count) = natural_id
+          count = count + 1
+          !call MatSetValuesBlockedLocal(J,1,id_up-1,1,id_dn-1,values, &
+          !                               ADD_VALUES,ierr);CHKERRQ(ierr)
+          local_i(count) = natural_id
+          natural_id = grid%nG2A(id_dn)
+          local_j(count) = natural_id
+          count = count + 1
+        endif
+        if (id_dn <= grid%unstructured_grid%nlmax) then ! local
+          !call MatSetValuesBlockedLocal(J,1,id_dn-1,1,id_dn-1,values, &
+          !                             ADD_VALUES,ierr);CHKERRQ(ierr)
+          natural_id = grid%nG2A(id_dn)
+          local_i(count) = natural_id
+          local_j(count) = natural_id
+          count = count + 1
+          !call MatSetValuesBlockedLocal(J,1,id_dn-1,1,id_up-1,values, &
+          !                              ADD_VALUES,ierr);CHKERRQ(ierr)
+          local_i(count) = natural_id
+          natural_id = grid%nG2A(id_up)
+          local_j(count) = natural_id
+          count = count + 1
+        endif
+      enddo
+    else
+      !unstructured implicit grid
+      do local_id = 1, grid%unstructured_grid%nlmax
+        !call MatSetValuesBlockedLocal(J,1,ghosted_id-1,1,ghosted_id-1, &
+        !                              values,ADD_VALUES,ierr);CHKERRQ(ierr)
+        ghosted_id = local_id
+        natural_id = grid%nG2A(ghosted_id)
+        local_i(count) = natural_id
+        local_j(count) = natural_id
+        count = count + 1
+        do ineighbor = 1, grid%unstructured_grid% &
+                            cell_neighbors_local_ghosted(0,local_id)
+          neighbor_id = abs(grid%unstructured_grid% &
+                            cell_neighbors_local_ghosted(ineighbor,local_id))
+          !call MatSetValuesBlockedLocal(J,1,ghosted_id-1,1,neighbor_id-1, &
+          !                              values,ADD_VALUES,ierr);CHKERRQ(ierr)
+          local_i(count) = natural_id
+          local_j(count) = grid%nG2A(neighbor_id)
+          count = count + 1
+        enddo
+      enddo
+    endif
   else
-    ! TODO (moise) check output_common.F90 line 477 or test it in parallel
+    !structured grid
+    ! TODO (moise)
   endif
-  
-  !merge all data in a single vector 
-  ! not needed but verify this TODO
-  
+	
+	
   !output it
+  !create group
   string = "Mat Structure"
   call h5gcreate_f(file_id,string,grp_id,hdf5_err,OBJECT_NAMELEN_DEFAULT_F)
-  string = "Rows"
-  call HDF5WriteDataSetFromVec(string,option,global_i,grp_id, &
-                               H5T_NATIVE_INTEGER)
-  string = "Columns"
-  call HDF5WriteDataSetFromVec(string,option,global_j,grp_id, &
-                               H5T_NATIVE_INTEGER)
-  call h5gclose_f(grp_id,hdf5_err)
+
+  ! -- ROWS -- !
+  ! Ask for space and organize it
+  ! memory space which is a 1D vector
+  rank_mpi = 1
+  dims(1) = mat_non_zeros_local
+  call h5screate_simple_f(rank_mpi,dims,memory_space_id,hdf5_err,dims)
+  ! file space which is a 2D block
+  dims(1) = mat_non_zeros_global
+  call h5pcreate_f(H5P_DATASET_CREATE_F,prop_id,hdf5_err)
   
-  call VecDestroy(global_i,ierr);CHKERRQ(ierr)
-  call VecDestroy(global_j,ierr);CHKERRQ(ierr)
+  string = "Row Indices" // CHAR(0)
+  call h5eset_auto_f(OFF,hdf5_err)
+  call h5dopen_f(grp_id,string,data_set_id,hdf5_err)
+  if (hdf5_err < 0) then
+    call h5eset_auto_f(ON,hdf5_err)
+    ! if the dataset does not exist, create it
+    call h5screate_simple_f(rank_mpi,dims,file_space_id,hdf5_err,dims)
+    call h5dcreate_f(grp_id,string,H5T_NATIVE_INTEGER,file_space_id, &
+                     data_set_id,hdf5_err,prop_id)
+  else
+    call h5eset_auto_f(ON,hdf5_err)
+    call h5dget_space_f(data_set_id,file_space_id,hdf5_err)
+  endif
+  call h5pclose_f(prop_id,hdf5_err)
+  
+  !geh: cannot use dims(1) in MPI_Allreduce as it causes errors on 
+  !     Juqueen
+  istart = 0
+  call MPI_Exscan(mat_non_zeros_local, istart, ONE_INTEGER_MPI, MPIU_INTEGER, &
+                  MPI_SUM, option%mycomm, ierr);CHKERRQ(ierr)
+  start(1) = istart
+  length(1) = mat_non_zeros_local
+  stride = 1
+  call h5sselect_hyperslab_f(file_space_id,H5S_SELECT_SET_F,start,length, &
+                             hdf5_err,stride,stride)
+  ! write the data
+  call h5pcreate_f(H5P_DATASET_XFER_F,prop_id,hdf5_err)
+#ifndef SERIAL_HDF5
+    call h5pset_dxpl_mpio_f(prop_id,H5FD_MPIO_INDEPENDENT_F, &
+                            hdf5_err)
+#endif
+  !call PetscLogEventBegin(logging%event_h5dwrite_f,ierr);CHKERRQ(ierr)
+  call h5dwrite_f(data_set_id,H5T_NATIVE_INTEGER,local_i,dims, &
+                  hdf5_err,memory_space_id,file_space_id,prop_id)
+  !call PetscLogEventEnd(logging%event_h5dwrite_f,ierr);CHKERRQ(ierr) 
+  
+  call h5pclose_f(prop_id,hdf5_err)
+  call h5dclose_f(data_set_id,hdf5_err)
+  call h5sclose_f(file_space_id,hdf5_err)
+
+
+  ! -- COLUMNS -- !
+  ! Ask for space and organize it
+  ! memory space which is a 1D vector
+  rank_mpi = 1
+  dims(1) = mat_non_zeros_local
+  call h5screate_simple_f(rank_mpi,dims,memory_space_id,hdf5_err,dims)
+  ! file space which is a 2D block
+  dims(1) = mat_non_zeros_global
+  call h5pcreate_f(H5P_DATASET_CREATE_F,prop_id,hdf5_err)
+  
+  string = "Column Indices" // CHAR(0)
+  call h5eset_auto_f(OFF,hdf5_err)
+  call h5dopen_f(grp_id,string,data_set_id,hdf5_err)
+  if (hdf5_err < 0) then
+    call h5eset_auto_f(ON,hdf5_err)
+    ! if the dataset does not exist, create it
+    call h5screate_simple_f(rank_mpi,dims,file_space_id,hdf5_err,dims)
+    call h5dcreate_f(grp_id,string,H5T_NATIVE_INTEGER,file_space_id, &
+                     data_set_id,hdf5_err,prop_id)
+  else
+    call h5eset_auto_f(ON,hdf5_err)
+    call h5dget_space_f(data_set_id,file_space_id,hdf5_err)
+  endif
+  call h5pclose_f(prop_id,hdf5_err)
+  
+  !geh: cannot use dims(1) in MPI_Allreduce as it causes errors on 
+  !     Juqueen
+  istart = 0
+  call MPI_Exscan(mat_non_zeros_local, istart, ONE_INTEGER_MPI, MPIU_INTEGER, &
+                  MPI_SUM, option%mycomm, ierr);CHKERRQ(ierr)
+  start(1) = istart
+  length(1) = mat_non_zeros_local
+  stride = 1
+  call h5sselect_hyperslab_f(file_space_id,H5S_SELECT_SET_F,start,length, &
+                             hdf5_err,stride,stride)
+  ! write the data
+  call h5pcreate_f(H5P_DATASET_XFER_F,prop_id,hdf5_err)
+#ifndef SERIAL_HDF5
+    call h5pset_dxpl_mpio_f(prop_id,H5FD_MPIO_INDEPENDENT_F, &
+                            hdf5_err)
+#endif
+  !call PetscLogEventBegin(logging%event_h5dwrite_f,ierr);CHKERRQ(ierr)
+  call h5dwrite_f(data_set_id,H5T_NATIVE_INTEGER,local_j,dims, &
+                  hdf5_err,memory_space_id,file_space_id,prop_id)
+  !call PetscLogEventEnd(logging%event_h5dwrite_f,ierr);CHKERRQ(ierr) 
+  
+  call h5pclose_f(prop_id,hdf5_err)
+  call h5dclose_f(data_set_id,hdf5_err)
+  call h5sclose_f(file_space_id,hdf5_err)
+
+  
+  call h5gclose_f(grp_id,hdf5_err)
                     
 end subroutine OutputSensitivityWriteMatrixIJ
 
 ! ************************************************************************** !
 
-subroutine OutputSensitivityWriteMatrixData(J,option,output_option, &
+subroutine OutputSensitivityWriteMatrixData(J,grid,option,output_option, &
                                             sensitivity_output_option, &
                                             variable,file_id)
   ! 
@@ -354,58 +513,113 @@ subroutine OutputSensitivityWriteMatrixData(J,option,output_option, &
   use hdf5
   use String_module
   use HDF5_module, only : HDF5WriteDataSetFromVec
+  use Grid_module
   
   implicit none
   
   Mat :: J
+  type(grid_type), pointer :: grid
   type(option_type), pointer :: option
   type(output_option_type), pointer :: output_option
   type(sensitivity_output_option_type), pointer :: sensitivity_output_option
   type(sensitivity_output_variable_type) :: variable
   integer(HID_T) :: file_id
   
-  Vec :: datas
-  PetscReal, pointer :: vec_ptr(:)
+  PetscReal, allocatable :: datas(:)
   PetscReal :: info(MAT_INFO_SIZE)
-  PetscInt :: mat_non_zeros_global, count
-  PetscInt :: nrows, irow, ncols, icol
-  PetscInt :: local_size
-  PetscReal :: values(SENSITIVITY_MAX_FACE_PER_CELL_OUTPUT)
+  PetscScalar :: scalar(100,100)
+  PetscInt :: mat_non_zeros_local, mat_non_zeros_global
+  PetscInt :: ineighbor, neighbor_id
+  PetscInt :: local_id, ghosted_id, natural_id, count
+  PetscInt :: iconn, id_up, id_dn
   PetscInt :: ierr
   character(len=MAXSTRINGLENGTH) :: string
+  integer(HID_T) :: file_space_id,memory_space_id, data_set_id, prop_id
+  PetscMPIInt :: rank_mpi
+  integer(HSIZE_T) :: dims(3)
+  integer(HSIZE_T) :: start(3), length(3), stride(3)
   integer(HID_T) :: grp_id
   PetscMPIInt :: hdf5_err
+  PetscInt :: istart
   
-  !get matrix size and non zeros
-  !MAT_GLOBAL=2
-  call MatGetInfo(J, 2, info, ierr);CHKERRQ(ierr)
+  !get matrix size for output vector
+  !MAT_LOCAL = 1
+  call MatGetInfo(J, 1, info, ierr);CHKERRQ(ierr)
+  mat_non_zeros_local = info(MAT_INFO_NZ_ALLOCATED)
+  !MAT_SUM_GLOBAL = 3
+  call MatGetInfo(J, 3, info, ierr);CHKERRQ(ierr)
   mat_non_zeros_global = info(MAT_INFO_NZ_ALLOCATED)
-  call MatGetSize(J,nrows,ncols,ierr);CHKERRQ(ierr)
   
-  !create mpi output vec
-  call VecCreateMPI(option%mycomm,PETSC_DECIDE, mat_non_zeros_global, &
-                    datas,ierr);CHKERRQ(ierr)
-  call VecGetLocalSize(datas,local_size,ierr);CHKERRQ(ierr)
-  
-  !fill them
-  if (option%mycommsize == 1) then
-		call VecGetArrayF90(datas,vec_ptr,ierr);CHKERRQ(ierr)
-		vec_ptr(:) = UNINITIALIZED_DOUBLE
-		count = 1
-		do irow = 0, nrows-1
-		  call MatGetRow(J,irow,ncols,PETSC_NULL_INTEGER,values,ierr);CHKERRQ(ierr)
-		  do icol = 1, ncols
-		    vec_ptr(count) = dble(values(icol))
-		    count = count + 1
-		  enddo
-		  call MatRestoreRow(J,irow,ncols,PETSC_NULL_INTEGER,values, &
-		                     ierr);CHKERRQ(ierr)
-		enddo
-		call VecRestoreArrayF90(datas,vec_ptr,ierr);CHKERRQ(ierr)
+  !create output array
+  allocate(datas(mat_non_zeros_local))
+  datas = UNINITIALIZED_DOUBLE
+  count = 1
+  !populate
+  if (associated(grid%unstructured_grid)) then
+    ! -----------------------------------------------------
+    ! copy structure from function UGridDMCreateJacobian in 
+    ! grid_unstructured_aux.F90
+    ! -----------------------------------------------------
+    if (associated(grid%unstructured_grid%explicit_grid)) then
+      ! unstructured explicit grid
+      do local_id = 1, grid%unstructured_grid%nlmax
+        ghosted_id = local_id
+        !call MatSetValuesBlockedLocal(J,1,ghosted_id-1,1,ghosted_id-1, &
+        !                              values,ADD_VALUES,ierr);CHKERRQ(ierr)
+        !call MatGetValuesLocal(J,1,ghosted_id-1,1,ghosted_id-1,scalar)
+        !datas(count) = scalar(1,1)
+        count = count + 1
+      enddo
+      
+      do iconn = 1, size(grid%unstructured_grid%explicit_grid%connections,2)
+        id_up = grid%unstructured_grid%explicit_grid%connections(1,iconn)
+        id_dn = grid%unstructured_grid%explicit_grid%connections(2,iconn)
+        if (id_up <= grid%unstructured_grid%nlmax) then ! local
+          !call MatSetValuesBlockedLocal(J,1,id_up-1,1,id_up-1,values, &
+          !                               ADD_VALUES,ierr);CHKERRQ(ierr)
+          !call MatGetValuesLocal(J,1,id_up-1,1,id_up-1,datas(count))
+          count = count + 1
+          !call MatSetValuesBlockedLocal(J,1,id_up-1,1,id_dn-1,values, &
+          !                               ADD_VALUES,ierr);CHKERRQ(ierr)
+          !call MatGetValuesLocal(J,1,id_up-1,1,id_dn-1,datas(count))
+          count = count + 1
+        endif
+        if (id_dn <= grid%unstructured_grid%nlmax) then ! local
+          !call MatSetValuesBlockedLocal(J,1,id_dn-1,1,id_dn-1,values, &
+          !                             ADD_VALUES,ierr);CHKERRQ(ierr)
+          !call MatGetValuesLocal(J,1,id_dn-1,1,id_dn-1,datas(count))
+          count = count + 1
+          !call MatSetValuesBlockedLocal(J,1,id_dn-1,1,id_up-1,values, &
+          !                              ADD_VALUES,ierr);CHKERRQ(ierr)
+          !call MatGetValuesLocal(J,1,id_dn-1,1,id_up-1,datas(count))
+          count = count + 1
+        endif
+      enddo
+    else
+      !unstructured implicit grid
+      do local_id = 1, grid%unstructured_grid%nlmax
+        !call MatSetValuesBlockedLocal(J,1,ghosted_id-1,1,ghosted_id-1, &
+        !                              values,ADD_VALUES,ierr);CHKERRQ(ierr)
+        !call MatGetValuesLocal(J,1,ghosted_id-1,1,ghosted_id-1,datas(count))
+        count = count + 1
+        do ineighbor = 1, grid%unstructured_grid% &
+                            cell_neighbors_local_ghosted(0,local_id)
+          neighbor_id = abs(grid%unstructured_grid% &
+                            cell_neighbors_local_ghosted(ineighbor,local_id))
+          !call MatSetValuesBlockedLocal(J,1,ghosted_id-1,1,neighbor_id-1, &
+          !                              values,ADD_VALUES,ierr);CHKERRQ(ierr)
+          !call MatGetValuesLocal(J,1,1,ghosted_id-1,1,neighbor_id-1,&
+          !                       datas(count))
+          count = count + 1
+        enddo
+      enddo
+    endif
   else
-    ! TODO (moise) check output_common.F90 line 477 or test it in parallel
+    !structured grid
+    ! TODO (moise)
   endif
   
+  ! -- Output it ---
   !open or create the corresponding time group
   write(string,'(''Time:'',es13.5,x,a1)') &
         option%time/output_option%tconv,output_option%tunit
@@ -415,13 +629,57 @@ subroutine OutputSensitivityWriteMatrixData(J,option,output_option, &
     call h5gcreate_f(file_id,string,grp_id,hdf5_err,OBJECT_NAMELEN_DEFAULT_F)
   endif
   call h5eset_auto_f(ON,hdf5_err)
-  !output dataset
-  string = trim(variable%name) // " [" // trim(variable%units) // ']'
-  call HDF5WriteDataSetFromVec(string,option,datas,grp_id, &
-                               H5T_NATIVE_DOUBLE)
-  call h5gclose_f(grp_id,hdf5_err)
+
+  ! Ask for space and organize it
+  ! memory space which is a 1D vector
+  rank_mpi = 1
+  dims(1) = mat_non_zeros_local
+  call h5screate_simple_f(rank_mpi,dims,memory_space_id,hdf5_err,dims)
+  ! file space which is a 2D block
+  dims(1) = mat_non_zeros_global
+  call h5pcreate_f(H5P_DATASET_CREATE_F,prop_id,hdf5_err)
   
-  call VecDestroy(datas,ierr);CHKERRQ(ierr)
+  string = trim(variable%name) // " [" // trim(variable%units) // ']'
+  call h5eset_auto_f(OFF,hdf5_err)
+  call h5dopen_f(grp_id,string,data_set_id,hdf5_err)
+  if (hdf5_err < 0) then
+    call h5eset_auto_f(ON,hdf5_err)
+    ! if the dataset does not exist, create it
+    call h5screate_simple_f(rank_mpi,dims,file_space_id,hdf5_err,dims)
+    call h5dcreate_f(grp_id,string,H5T_NATIVE_INTEGER,file_space_id, &
+                     data_set_id,hdf5_err,prop_id)
+  else
+    call h5eset_auto_f(ON,hdf5_err)
+    call h5dget_space_f(data_set_id,file_space_id,hdf5_err)
+  endif
+  call h5pclose_f(prop_id,hdf5_err)
+  
+  !geh: cannot use dims(1) in MPI_Allreduce as it causes errors on 
+  !     Juqueen
+  istart = 0
+  call MPI_Exscan(mat_non_zeros_local, istart, ONE_INTEGER_MPI, MPIU_INTEGER, &
+                  MPI_SUM, option%mycomm, ierr);CHKERRQ(ierr)
+  start(1) = istart
+  length(1) = mat_non_zeros_local
+  stride = 1
+  call h5sselect_hyperslab_f(file_space_id,H5S_SELECT_SET_F,start,length, &
+                             hdf5_err,stride,stride)
+  ! write the data
+  call h5pcreate_f(H5P_DATASET_XFER_F,prop_id,hdf5_err)
+#ifndef SERIAL_HDF5
+    call h5pset_dxpl_mpio_f(prop_id,H5FD_MPIO_INDEPENDENT_F, &
+                            hdf5_err)
+#endif
+  !call PetscLogEventBegin(logging%event_h5dwrite_f,ierr);CHKERRQ(ierr)
+  call h5dwrite_f(data_set_id,H5T_NATIVE_INTEGER,datas,dims, &
+                  hdf5_err,memory_space_id,file_space_id,prop_id)
+  !call PetscLogEventEnd(logging%event_h5dwrite_f,ierr);CHKERRQ(ierr) 
+  
+  call h5pclose_f(prop_id,hdf5_err)
+  call h5dclose_f(data_set_id,hdf5_err)
+  call h5sclose_f(file_space_id,hdf5_err)
+
+  call h5gclose_f(grp_id,hdf5_err)
 
 end subroutine OutputSensitivityWriteMatrixData
 
