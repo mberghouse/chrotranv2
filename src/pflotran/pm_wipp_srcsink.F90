@@ -263,6 +263,7 @@ module PM_WIPP_SrcSink_class
     PetscReal :: srado2
     PetscReal :: gh2avg
     PetscReal :: gdepfac
+    PetscReal :: radiolysis_start
   end type radiolysis_parameter_type
   
 ! -------------------------------------------
@@ -559,7 +560,8 @@ function PMWSSCreate()
   pm%radiolysis_parameters%srado2 = UNINITIALIZED_DOUBLE
   pm%radiolysis_parameters%gh2avg = UNINITIALIZED_DOUBLE
   pm%radiolysis_parameters%gdepfac = UNINITIALIZED_DOUBLE
-  
+  pm%radiolysis_parameters%radiolysis_start = 1.d0 
+ 
   call PMBaseInit(pm)
   
   PMWSSCreate => pm
@@ -1501,6 +1503,10 @@ subroutine PMWSSReadPMBlock(this,input)
                   call InputReadDouble(input,option,input_double)
                   call InputErrorMsg(input,option,'GDEPFAC',error_string2)
                   this%radiolysis_parameters%gdepfac = input_double
+                case('RADIOLYSIS_START')
+                  call InputReadDouble(input,option,input_double)
+                  call InputErrorMsg(input,option,'RADIOLYSIS_START',error_string2)
+                  this%radiolysis_parameters%radiolysis_start = input_double
                 case default
                   call InputKeywordUnrecognized(input,word,error_string,option)
               end select
@@ -4802,7 +4808,7 @@ subroutine Radiolysis(rad_inventory, wippflo_auxvar, material_auxvar, dt, &
   time = option%time
   gid = option%gas_phase
 
-  radiolysis_start = 1.d0 ! TIMEICRESET in Bragflo
+  radiolysis_start = radiolysis_parameters%radiolysis_start ! TIMEICRESET in Bragflo
   
   if (time < radiolysis_start .or. rad_inventory%name == '') return
   
