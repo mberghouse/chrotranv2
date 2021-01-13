@@ -57,7 +57,8 @@ module Sensitivity_Aux_module
   public :: SensitivityOutputVariableCreate, &
             SensitivityOutputOptionInit, &
             SensitivityOutputOptionIsTimeToOutput, &
-            SensitivityAddOutputVariableToList
+            SensitivityAddOutputVariableToList, &
+            SensitivityOutputOptionDestroy
 
 contains
 
@@ -244,7 +245,7 @@ subroutine SensitivityOutputOptionDestroy(sensitivity_output_option)
   call SensitivityDestroyOutputVariableList( &
                                  sensitivity_output_option%output_variables)
   
-end subroutine SensitivityOutputOptionInit
+end subroutine SensitivityOutputOptionDestroy
 
 ! ************************************************************************** !
  
