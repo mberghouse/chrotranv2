@@ -397,7 +397,11 @@ subroutine SFBaseUnitTest(this,cc_name,input_filename,option)
   PetscReal, pointer :: temp_capillary_pressure(:)      ! [Pa]
   PetscReal, pointer :: corr_liq_saturation(:)          ! [-]
   PetscReal, pointer :: temp_corr_liq_saturation(:)     ! [-]
-  PetscReal :: liq_saturation
+  PetscReal, pointer :: liq_saturation(:)               ! [-]
+  PetscReal, pointer :: temp_liq_saturation(:)          ! [-]
+  PetscReal, pointer :: corr_capillary_pressure(:)      ! [Pa]
+  PetscReal, pointer :: temp_corr_capillary_pressure(:) ! [Pa]
+  PetscReal :: liq_saturation_calcd, capillary_press_calcd
   PetscReal, parameter :: tolerance = 1.d-8
   PetscReal :: dum1
   PetscReal :: diff
@@ -410,9 +414,11 @@ subroutine SFBaseUnitTest(this,cc_name,input_filename,option)
   character(len=5) :: zone
   character(len=10) :: time
 
-  allocate(temp_name(99))
-  allocate(temp_capillary_pressure(99))
-  allocate(temp_corr_liq_saturation(99))
+  allocate(temp_name(150))
+  allocate(temp_capillary_pressure(150))
+  allocate(temp_corr_liq_saturation(150))
+  allocate(temp_liq_saturation(150))
+  allocate(temp_corr_capillary_pressure(150))
 
   i = 1
   open(action='read', file=trim(input_filename), iostat=rc_in, &
@@ -421,17 +427,24 @@ subroutine SFBaseUnitTest(this,cc_name,input_filename,option)
   do
     read (fu_in, *, iostat=rc_in) temp_name(i), &
                                   temp_capillary_pressure(i), &
-                                  temp_corr_liq_saturation(i)
+                                  temp_corr_liq_saturation(i), &
+                                  temp_liq_saturation(i), &
+                                  temp_corr_capillary_pressure(i)
     if (rc_in /= 0) exit 
     i = i + 1 
+    if (i > 150) exit
   enddo
 
   allocate(name(i-1))
   allocate(capillary_pressure(i-1))
   allocate(corr_liq_saturation(i-1))
+  allocate(liq_saturation(i-1))
+  allocate(corr_capillary_pressure(i-1))
   name(:) = temp_name(1:i-1)
   capillary_pressure(:) = temp_capillary_pressure(1:i-1)
   corr_liq_saturation(:) = temp_corr_liq_saturation(1:i-1)
+  liq_saturation(:) = temp_liq_saturation(1:i-1)
+  corr_capillary_pressure(:) = temp_corr_capillary_pressure(1:i-1)
 
   filename_out = 'sf_' // trim(cc_name) //'.out'
 
@@ -448,20 +461,36 @@ subroutine SFBaseUnitTest(this,cc_name,input_filename,option)
 
   i = 0
   do k=1,size(name)
-    write(fu_out,'(a,I2,a)') '||-----------TEST-#',k,'-----------------------&
+    write(fu_out,'(a,I3,a)') '||-----------TEST-#',k,'-----------------------&
                              &--------------||'
     write(fu_out,'(a)') '  [in]  characteristic curves name:'
     write(fu_out,'(a)') name(k)
     write(fu_out,'(a)') '  [in]  capillary pressure [Pa]:'
     write(fu_out,'(d17.10)') capillary_pressure(k)
-
-    call this%Saturation(capillary_pressure(k),liq_saturation,dum1,option)
-    write(fu_out,'(a)') '  [out] liquid saturation [-]:'
-    write(fu_out,'(d17.10)') liq_saturation
+    call this%Saturation(capillary_pressure(k),liq_saturation_calcd,dum1,option)
+    write(fu_out,'(a)') '  [out]  liquid saturation [-]:'
+    write(fu_out,'(d17.10)') liq_saturation_calcd
     write(fu_out,'(a)') '  [correct]  liquid saturation [-]:'
     write(fu_out,'(d17.10)') corr_liq_saturation(k)
-    diff = abs(corr_liq_saturation(k)-liq_saturation)
+    diff = abs(corr_liq_saturation(k)-liq_saturation_calcd)
     if (diff > (tolerance*corr_liq_saturation(k))) then
+      pass_fail = 'FAIL!'
+      i = i + 1
+    else
+      pass_fail = 'pass'
+    endif
+    write(fu_out,'(a)') trim(pass_fail)
+
+    write(fu_out,'(a)') '  [in]  liquid saturation [-]:'
+    write(fu_out,'(d17.10)') liq_saturation(k)
+    call this%CapillaryPressure(liq_saturation(k),capillary_press_calcd, &
+                                dum1,option)
+    write(fu_out,'(a)') '  [out]  capillary pressure [Pa]:'
+    write(fu_out,'(d17.10)') capillary_press_calcd
+    write(fu_out,'(a)') '  [correct]  capillary pressure [Pa]:'
+    write(fu_out,'(d17.10)') corr_capillary_pressure(k)
+    diff = abs(corr_capillary_pressure(k)-capillary_press_calcd)
+    if (diff > (tolerance*corr_capillary_pressure(k))) then
       pass_fail = 'FAIL!'
       i = i + 1
     else
@@ -485,9 +514,13 @@ subroutine SFBaseUnitTest(this,cc_name,input_filename,option)
   deallocate(temp_name)
   deallocate(temp_capillary_pressure)
   deallocate(temp_corr_liq_saturation)
+  deallocate(temp_liq_saturation)
+  deallocate(temp_corr_capillary_pressure)
   deallocate(name)
   deallocate(capillary_pressure)
   deallocate(corr_liq_saturation)
+  deallocate(liq_saturation)
+  deallocate(corr_capillary_pressure)
 
 end subroutine SFBaseUnitTest
 
@@ -618,6 +651,7 @@ subroutine RPF_Base_UnitTest(this,cc_name,phase,input_filename,option)
                                   temp_corr_rel_perm(i)
     if (rc_in /= 0) exit 
     i = i + 1 
+    if (i > 99) exit
   enddo
 
   allocate(name(i-1))
