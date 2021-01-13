@@ -1,263 +1,28 @@
 
-module Output_Sensitivity_module
+module Sensitivity_Output_module
 
 #include "petsc/finclude/petscsys.h"
   use petscsys
 #include "petsc/finclude/petscsnes.h"
   use petscsnes
-  use Logging_module
   use hdf5
   use PFLOTRAN_Constants_module
+  use Sensitivity_Aux_module
   
   implicit none
 
   private
   
   PetscMPIInt, parameter :: ON=1, OFF=0
-  PetscInt, parameter :: OUTPUT_HDF5=0, OUTPUT_MATLAB=1, OUTPUT_BINARY=2
-  PetscInt, parameter :: OUTPUT_ASCII=3
-  PetscInt, parameter :: SYNC_OUTPUT=0, EVERY_X_TIMESTEP=1, LAST=2
-  PetscInt, parameter :: MAX_FACE_PER_CELL_OUTPUT = 60
   
-  !output variable
-  PetscInt, parameter :: PRESSURE         = 0
-  PetscInt, parameter :: PERMEABILITY     = 1
-  PetscInt, parameter :: POROSITY         = 2
-  
-  type, public :: output_sensitivity_variable_list_type
-    type(output_sensitivity_variable_type), pointer :: first
-    type(output_sensitivity_variable_type), pointer :: last
-    !type(output_sensitivity_variable_type), pointer :: array(:)
-    PetscInt :: nvars
-  end type output_sensitivity_variable_list_type
-  
-  type, public :: output_sensitivity_variable_type
-    character(len=MAXWORDLENGTH) :: name   ! string that appears in hdf5 file
-    character(len=MAXWORDLENGTH) :: units
-    PetscInt :: ivar
-    type(output_sensitivity_variable_type), pointer :: next
-  end type output_sensitivity_variable_type
-  
-  type, public :: output_sensitivity_option_type
-    PetscInt :: plot_number
-    PetscInt :: format !hdf5, binary, matlab
-    PetscInt :: output_time_option !sync, x timestep, last
-    PetscInt :: output_every_timestep !when x timestep option
-    PetscInt :: timestep_per_hdf5_file !x timestep per output file
-    PetscReal :: time !simulation time
-    PetscBool :: plot_flag
-    type(output_sensitivity_variable_list_type), pointer :: output_variables
-  end type output_sensitivity_option_type
-  
-  public :: OutputSensitivity, &
-            OutputSensitivityOptionInit, &
-            OutputSensitivityOptionIsTimeToOutput, &
-            OutputSensitivityOptionSetOutputTimeOption, &
-            OutputSensitivityOptionSetOutputFormat, &
-            OutputSensitivityAddVariable
+  public :: OutputSensitivity
 
 contains
 
 ! ************************************************************************** !
 
-subroutine OutputSensitivityOptionInit(output_sensitivity_option)
-  ! 
-  ! Initialize an output sensitivity option instance
-  ! 
-  ! Author: Moise Rousseau
-  ! Date: 01/04/2021
-  ! 
-  
-  implicit none
-  
-  type(output_sensitivity_option_type), pointer :: output_sensitivity_option
-  
-  output_sensitivity_option%plot_number = 0
-  output_sensitivity_option%format = OUTPUT_HDF5
-  output_sensitivity_option%output_time_option = SYNC_OUTPUT
-  output_sensitivity_option%output_every_timestep = 0
-  output_sensitivity_option%timestep_per_hdf5_file = 0 !no limit
-  output_sensitivity_option%time = 0.d0
-  output_sensitivity_option%plot_flag = PETSC_FALSE
-  allocate(output_sensitivity_option%output_variables)
-  call OutputSensitivityVaraibleListInit( &
-                                 output_sensitivity_option%output_variables)
-  
-end subroutine OutputSensitivityOptionInit
-
-! ************************************************************************** !
-
-subroutine OutputSensitivityVaraibleListInit(list)
-  ! 
-  ! Initialize an output sensitivity option output variable list
-  ! 
-  ! Author: Moise Rousseau
-  ! Date: 01/04/2021
-  ! 
-  
-  implicit none
-  
-  type(output_sensitivity_variable_list_type), pointer :: list
-  
-  nullify(list%first)
-  nullify(list%last)
-  !nullify(list%array)
-  list%nvars = 0 
-  
-end subroutine OutputSensitivityVaraibleListInit
-
-! ************************************************************************** !
-
-subroutine OutputSensitivityAddVariable(output_sensitivity_option,word)
-  ! 
-  ! Add an output sensitivity variable to the output variable list
-  ! 
-  ! Author: Moise Rousseau
-  ! Date: 01/04/2021
-  ! 
-  
-  implicit none
-  
-  type(output_sensitivity_option_type), pointer :: output_sensitivity_option
-  character(len=MAXWORDLENGTH) :: word
-  
-  type(output_sensitivity_variable_type), pointer :: variable
-  allocate(variable)
-  nullify(variable%next)
-  
-  select case(trim(word))
-    case('PRESSURE')
-      variable%name = 'Pressure'
-      variable%units = '1.Pa-1' ! TODO (moise)
-      variable%ivar = PRESSURE
-    case('PERMEABILITY')
-      variable%name = 'Permeability'
-      variable%units = '1.s-1' ! TODO (moise)
-      variable%ivar = PERMEABILITY
-    case('POROSITY')
-      variable%name = 'Porosity'
-      variable%units = '' ! TODO (moise)
-      variable%ivar = POROSITY
-  end select
-  
-  if (.not. associated(output_sensitivity_option%output_variables%first)) then
-    output_sensitivity_option%output_variables%first => variable
-  else
-    output_sensitivity_option%output_variables%last%next => variable
-  endif
-  output_sensitivity_option%output_variables%last => variable
-  
-  output_sensitivity_option%output_variables%nvars = &
-                           output_sensitivity_option%output_variables%nvars+1
-  
-end subroutine OutputSensitivityAddVariable
-
-! ************************************************************************** !
-
-subroutine OutputSensitivityOptionIsTimeToOutput(output_sensitivity_option,&
-                                                 timestep_flag,last_flag,&
-                                                 sync_flag)
-  ! 
-  ! Determine if it's the time to output the sensitivity
-  ! 
-  ! Author: Moise Rousseau
-  ! Date: 01/04/2021
-  ! 
-  
-  implicit none
-  
-  type(output_sensitivity_option_type), pointer :: output_sensitivity_option
-  PetscBool :: timestep_flag, last_flag, sync_flag
-  
-  select case(output_sensitivity_option%output_time_option)
-    case(SYNC_OUTPUT)
-      if (sync_flag) output_sensitivity_option%plot_flag = PETSC_TRUE
-    case(EVERY_X_TIMESTEP)
-      if (timestep_flag) output_sensitivity_option%plot_flag = PETSC_TRUE
-    case(LAST)
-      if (last_flag) output_sensitivity_option%plot_flag = PETSC_TRUE
-  end select
-  
-end subroutine OutputSensitivityOptionIsTimeToOutput
-
-! ************************************************************************** !
-
-subroutine OutputSensitivityOptionSetOutputTimeOption( &
-                                                output_sensitivity_option,&
-                                                option,word,input)
-  ! 
-  ! Set the time when to output the sensitivity
-  ! 
-  ! Author: Moise Rousseau
-  ! Date: 01/04/2021
-  ! 
-  
-  use Input_Aux_module
-  use Option_module
-  
-  implicit none
-  
-  type(output_sensitivity_option_type), pointer :: output_sensitivity_option
-  type(option_type), pointer :: option
-  character(len=MAXWORDLENGTH) :: word
-  type(input_type), pointer :: input
-  
-  select case(trim(word))
-    case('SYNC_WITH_SNAPSHOT_FILE')
-      output_sensitivity_option%output_time_option = SYNC_OUTPUT
-    case('PERIODIC_TIMESTEP')
-      output_sensitivity_option%output_time_option = EVERY_X_TIMESTEP
-      call InputReadInt(input,option,&
-                        output_sensitivity_option%output_every_timestep)
-    case('LAST_TIMESTEP')
-      output_sensitivity_option%output_time_option = LAST
-    case default
-      call InputKeywordUnrecognized(input,word,'SENSITIVITY_RICHARDS,&
-                                    &OUTPUT_TIME',option)
-  end select
-
-end subroutine OutputSensitivityOptionSetOutputTimeOption
-
-! ************************************************************************** !
-
-subroutine OutputSensitivityOptionSetOutputFormat(output_sensitivity_option,&
-                                                option,word)
-  ! 
-  ! Set the time when to output the sensitivity
-  ! 
-  ! Author: Moise Rousseau
-  ! Date: 01/04/2021
-  ! 
-  
-  use Input_Aux_module
-  use Option_module
-  
-  implicit none
-  
-  type(output_sensitivity_option_type), pointer :: output_sensitivity_option
-  character(len=MAXWORDLENGTH) :: word
-  
-  type(input_type), pointer :: input
-  type(option_type), pointer :: option
-  
-  select case(trim(word))
-    case('HDF5')
-      output_sensitivity_option%format = OUTPUT_HDF5
-    case('MATLAB')
-      output_sensitivity_option%format = OUTPUT_MATLAB
-    case('BINARY')
-      output_sensitivity_option%format = OUTPUT_BINARY
-    case default
-      call InputKeywordUnrecognized(input,word,'SENSITIVITY_RICHARDS,&
-                                    &FORMAT',option)
-  end select
-
-end subroutine OutputSensitivityOptionSetOutputFormat
-
-! ************************************************************************** !
-
 subroutine OutputSensitivity(J,option,output_option, &
-                             output_sensitivity_option,variable)
+                             sensitivity_output_option,variable,mode)
   ! 
   ! Output the J matrix in the desired format
   ! 
@@ -272,35 +37,36 @@ subroutine OutputSensitivity(J,option,output_option, &
   
   implicit none
   
-  
   Mat :: J
   type(option_type), pointer :: option
   type(output_option_type), pointer :: output_option
-  type(output_sensitivity_option_type), pointer :: output_sensitivity_option
+  type(sensitivity_output_option_type), pointer :: sensitivity_output_option
+  character(len=MAXWORDLENGTH) :: mode
   
   PetscBool :: first
   integer(HID_T) :: file_id
   character(len=MAXSTRINGLENGTH) :: filename
-  type(output_sensitivity_variable_type) :: variable
+  type(sensitivity_output_variable_type) :: variable
   PetscViewer :: viewer
   PetscErrorCode :: ierr
   
-  call OutputSensitivityCreateFilename(output_sensitivity_option,option,&
-                                       variable%name,filename)
+  call OutputSensitivityCreateFilename(sensitivity_output_option,option,&
+                                       variable%name,mode,filename)
   
-  select case(output_sensitivity_option%format)
-    case(OUTPUT_HDF5)
-      call OutputSensitivityOpenHDF5(option,output_sensitivity_option,&
+  select case(sensitivity_output_option%format)
+    case(SENSITIVITY_OUTPUT_HDF5)
+      call OutputSensitivityOpenHDF5(option,sensitivity_output_option,&
                                      filename,file_id,first)
       if (first) then
-        !call OutputHDF5Provenance(option, output_option, file_id)
         call OutputSensitivityWriteMatrixIJ(J,option,file_id)
       endif
+        !call OutputHDF5Provenance(option, output_option, file_id)
       call OutputSensitivityWriteMatrixData(J,option,output_option, &
-                                            output_sensitivity_option, &
+                                            sensitivity_output_option, &
                                             variable,file_id)
+        !call OutputHDF5Provenance(option, output_option, file_id)
       call OutputHDF5CloseFile(option,file_id)
-    case(OUTPUT_ASCII)
+    case(SENSITIVITY_OUTPUT_ASCII)
       option%io_buffer = '--> writing sensitivity to ascii file: ' // &
                                                      trim(filename)
       call PrintMsg(option)
@@ -308,7 +74,7 @@ subroutine OutputSensitivity(J,option,output_option, &
                                  viewer,ierr);CHKERRQ(ierr)
       call MatView(J,viewer,ierr);CHKERRQ(ierr)
       call PetscViewerDestroy(viewer,ierr);CHKERRQ(ierr)
-    case(OUTPUT_MATLAB)
+    case(SENSITIVITY_OUTPUT_MATLAB)
       option%io_buffer = '--> writing sensitivity to matlab ascii file: ' // &
                                                      trim(filename)
       call PrintMsg(option)
@@ -319,7 +85,7 @@ subroutine OutputSensitivity(J,option,output_option, &
       call MatView(J,viewer,ierr);CHKERRQ(ierr)
       call PetscViewerPopFormat(viewer,ierr);CHKERRQ(ierr)
       call PetscViewerDestroy(viewer,ierr);CHKERRQ(ierr)
-    case(OUTPUT_BINARY)
+    case(SENSITIVITY_OUTPUT_BINARY)
       option%io_buffer = '--> writing sensitivity to matlab binary file: ' // &
                                                      trim(filename)
       call PrintMsg(option)
@@ -328,13 +94,14 @@ subroutine OutputSensitivity(J,option,output_option, &
       call MatView(J,viewer,ierr);CHKERRQ(ierr)
       call PetscViewerPopFormat(viewer,ierr);CHKERRQ(ierr)
       call PetscViewerDestroy(viewer,ierr);CHKERRQ(ierr)
+    case default
   end select
   
 end subroutine OutputSensitivity
 
 ! ************************************************************************** !
 
-subroutine OutputSensitivityOpenHDF5(option,output_sensitivity_option, &
+subroutine OutputSensitivityOpenHDF5(option,sensitivity_output_option, &
                                      filename,file_id,first)
   !
   ! Determine the propper hdf5 sensitivity output file name and open it.
@@ -351,32 +118,30 @@ subroutine OutputSensitivityOpenHDF5(option,output_sensitivity_option, &
   implicit none
 
   type(option_type), pointer :: option
-  type(output_sensitivity_option_type), pointer :: output_sensitivity_option
+  type(sensitivity_output_option_type), pointer :: sensitivity_output_option
   character(len=MAXSTRINGLENGTH) :: filename
   PetscBool, intent(out) :: first
   integer(HID_T), intent(out) :: file_id
   
   PetscErrorCode :: ierr
   integer(HID_T) :: prop_id
-  
   PetscMPIInt :: hdf5_err
-
-  !create filename
 
   call h5pcreate_f(H5P_FILE_ACCESS_F,prop_id,hdf5_err)
 #ifndef SERIAL_HDF5
   call h5pset_fapl_mpio_f(prop_id,option%mycomm,MPI_INFO_NULL,hdf5_err)
 #endif
-  if (output_sensitivity_option%plot_number == 1) then
+  if (sensitivity_output_option%first_plot_flag) then
     first = PETSC_TRUE
+    sensitivity_output_option%first_plot_flag = PETSC_FALSE
   else
     first = PETSC_FALSE
   endif
   if (.not. first) then
-    call h5eset_auto_f(OFF,hdf5_err)
-    call h5fopen_f(filename,H5F_ACC_RDWR_F,file_id,hdf5_err,prop_id)
-    if (hdf5_err /= 0) first = PETSC_TRUE
-    call h5eset_auto_f(ON,hdf5_err)
+		call h5eset_auto_f(OFF,hdf5_err)
+		call h5fopen_f(filename,H5F_ACC_RDWR_F,file_id,hdf5_err,prop_id)
+		if (hdf5_err /= 0) first = PETSC_TRUE
+		call h5eset_auto_f(ON,hdf5_err)
   endif
   if (first) then 
     call h5fcreate_f(filename,H5F_ACC_TRUNC_F,file_id,hdf5_err, &
@@ -397,8 +162,8 @@ end subroutine OutputSensitivityOpenHDF5
 
 ! ************************************************************************** !
 
-subroutine OutputSensitivityCreateFilename(output_sensitivity_option, &
-                                           option,variable_name,filename)
+subroutine OutputSensitivityCreateFilename(sensitivity_output_option, &
+                                           option,variable_name,mode,filename)
   ! 
   ! Create sensitivity output filename
   ! 
@@ -410,20 +175,21 @@ subroutine OutputSensitivityCreateFilename(output_sensitivity_option, &
 
   implicit none
   
-  type(output_sensitivity_option_type), pointer :: output_sensitivity_option
+  type(sensitivity_output_option_type), pointer :: sensitivity_output_option
   type(option_type), pointer :: option
   character(len=MAXWORDLENGTH) :: variable_name
+  character(len=MAXWORDLENGTH) :: mode
   character(len=MAXSTRINGLENGTH), intent(out) :: filename
   
   PetscInt :: file_number
   character(len=MAXSTRINGLENGTH) :: string, string2
   
-  if (output_sensitivity_option%format == OUTPUT_HDF5) then
-    if (output_sensitivity_option%timestep_per_hdf5_file > 0) &
-      file_number = floor(real(output_sensitivity_option%plot_number) / &
-                         output_sensitivity_option%timestep_per_hdf5_file)
+  if (sensitivity_output_option%format == SENSITIVITY_OUTPUT_HDF5 .and. &
+      sensitivity_output_option%timestep_per_hdf5_file > 0) then
+      file_number = floor(real(sensitivity_output_option%plot_number) / &
+                         sensitivity_output_option%timestep_per_hdf5_file)
   else
-    file_number = output_sensitivity_option%plot_number
+    file_number = sensitivity_output_option%plot_number
   endif
   if (file_number < 10) then
     write(string,'("00",i1)') file_number
@@ -436,29 +202,34 @@ subroutine OutputSensitivityCreateFilename(output_sensitivity_option, &
   else if (file_number < 100000) then
     write(string,'(i5)') file_number
   else
+    !write(option%io_buffer, '(i10)') file_number
+    !call PrintMsg(option)
     option%io_buffer = 'Plot number exceeds current maximum of 10^5.'
     call PrintErrMsgToDev(option,'ask for a higher maximum')
   endif 
   string = adjustl(string)
 
-  if (output_sensitivity_option%format == OUTPUT_HDF5) then
-    if (output_sensitivity_option%timestep_per_hdf5_file > 0) then
+  if (sensitivity_output_option%format == SENSITIVITY_OUTPUT_HDF5) then
+    if (sensitivity_output_option%timestep_per_hdf5_file > 0) then
       filename = trim(option%global_prefix) // trim(option%group_prefix) // &
-                  '-sensitivity-' // trim(string) // '.h5'
+                  '-sensitivity-' // trim(mode) // '-' // trim(string) // '.h5'
     else
       filename = trim(option%global_prefix) // trim(option%group_prefix) // &
-                  '-sensitivity.h5'
+                  '-sensitivity-flow.h5'
     endif
   else
     string2 = trim(variable_name)
     call StringToLower(string2)
     filename = trim(option%global_prefix) // trim(option%group_prefix) // &
-                '-sensitivity-' // trim(string2) // '-' // trim(string)
-    select case(output_sensitivity_option%format)
-      case(OUTPUT_MATLAB)
+                '-sensitivity-' // trim(mode) // '-'  // trim(string2) // &
+                 '-' // trim(string)
+    select case(sensitivity_output_option%format)
+      case(SENSITIVITY_OUTPUT_MATLAB)
         filename = trim(filename) // '.mat'
-      case(OUTPUT_BINARY)
+      case(SENSITIVITY_OUTPUT_BINARY)
         filename = trim(filename) // '.bin'
+      case(SENSITIVITY_OUTPUT_ASCII)
+        filename = trim(filename) // '.txt'
     end select
   endif
  
@@ -504,7 +275,7 @@ subroutine OutputSensitivityWriteMatrixIJ(J,option,file_id)
   PetscInt :: mat_non_zeros_global, count
   PetscInt :: nrows, irow, ncols, icol
   PetscInt :: local_size
-  PetscInt :: cols(MAX_FACE_PER_CELL_OUTPUT)
+  PetscInt :: cols(SENSITIVITY_MAX_FACE_PER_CELL_OUTPUT)
   PetscInt :: ierr
   character(len=MAXSTRINGLENGTH) :: string
   integer(HID_T) :: grp_id
@@ -569,7 +340,7 @@ end subroutine OutputSensitivityWriteMatrixIJ
 ! ************************************************************************** !
 
 subroutine OutputSensitivityWriteMatrixData(J,option,output_option, &
-                                            output_sensitivity_option, &
+                                            sensitivity_output_option, &
                                             variable,file_id)
   ! 
   ! Write matrix data
@@ -589,8 +360,8 @@ subroutine OutputSensitivityWriteMatrixData(J,option,output_option, &
   Mat :: J
   type(option_type), pointer :: option
   type(output_option_type), pointer :: output_option
-  type(output_sensitivity_option_type), pointer :: output_sensitivity_option
-  type(output_sensitivity_variable_type) :: variable
+  type(sensitivity_output_option_type), pointer :: sensitivity_output_option
+  type(sensitivity_output_variable_type) :: variable
   integer(HID_T) :: file_id
   
   Vec :: datas
@@ -599,7 +370,7 @@ subroutine OutputSensitivityWriteMatrixData(J,option,output_option, &
   PetscInt :: mat_non_zeros_global, count
   PetscInt :: nrows, irow, ncols, icol
   PetscInt :: local_size
-  PetscReal :: values(MAX_FACE_PER_CELL_OUTPUT)
+  PetscReal :: values(SENSITIVITY_MAX_FACE_PER_CELL_OUTPUT)
   PetscInt :: ierr
   character(len=MAXSTRINGLENGTH) :: string
   integer(HID_T) :: grp_id
@@ -635,14 +406,17 @@ subroutine OutputSensitivityWriteMatrixData(J,option,output_option, &
     ! TODO (moise) check output_common.F90 line 477 or test it in parallel
   endif
   
-  !output it
+  !open or create the corresponding time group
   write(string,'(''Time:'',es13.5,x,a1)') &
         option%time/output_option%tconv,output_option%tunit
   call h5eset_auto_f(OFF,hdf5_err)
-  call h5gopen_f(file_id,string,grp_id,hdf5_err,OBJECT_NAMELEN_DEFAULT_F)
-  if (hdf5_err /= 0) &
+  call h5gopen_f(file_id,string,grp_id,hdf5_err)
+  if (hdf5_err /= 0) then
     call h5gcreate_f(file_id,string,grp_id,hdf5_err,OBJECT_NAMELEN_DEFAULT_F)
+  endif
   call h5eset_auto_f(ON,hdf5_err)
+  !output dataset
+  string = trim(variable%name) // " [" // trim(variable%units) // ']'
   call HDF5WriteDataSetFromVec(string,option,datas,grp_id, &
                                H5T_NATIVE_DOUBLE)
   call h5gclose_f(grp_id,hdf5_err)

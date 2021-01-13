@@ -1,10 +1,4 @@
-! TODO
-! Initialization to not create the J matrix at each time
-! Make card for input deck (i.e. no more called by debug)
-! Find where to call the sensitivity analysis
-! update to consider porosity
-
-module Sensitivity_Analysis_module
+module Sensitivity_Richards_module
 
 #include "petsc/finclude/petscsys.h"
   use petscsys
@@ -15,26 +9,56 @@ module Sensitivity_Analysis_module
   use Global_Aux_module
   use PFLOTRAN_Constants_module
   use Material_Aux_class
+  use Sensitivity_Aux_module
   
   implicit none
 
   private
-  
-  PetscInt, parameter :: PRESSURE         = 0
-  PetscInt, parameter :: PERMEABILITY     = 1
-  PetscInt, parameter :: POROSITY         = 2
   
   ! Cutoff parameters
   PetscReal, parameter :: eps       = 1.D-8
   PetscReal, parameter :: floweps   = 1.D-24
   PetscReal, parameter :: perturbation_tolerance = 1.d-3
 
-  public :: RichardsSensitivityInternalConn, &
-            RichardsFluxSensitivity, &
-            RichardsSensitivityBoundaryConn, &
-            RichardsSensitivitySourceSink
+  public :: RichardsSensitivity
 
 contains
+
+! ************************************************************************** !
+
+subroutine RichardsSensitivity(J,realization,ivar)
+  ! 
+  ! Main driver for computing the sensitivity
+  ! 
+  ! Author: Moise Rousseau
+  ! Date: 01/12/2021
+  ! 
+  
+  use Realization_Subsurface_class
+  use Option_module
+  use Richards_module !for jacobian
+
+  implicit none
+
+  Mat, intent(inout) :: J
+  type(realization_subsurface_type) :: realization
+  PetscInt :: ivar
+  PetscErrorCode :: ierr
+  
+  if (ivar == SENSITIVITY_PRESSURE) then
+    call RichardsJacobianInternalConn(J,realization,ierr)
+    call RichardsJacobianBoundaryConn(J,realization,ierr)
+    call RichardsJacobianAccumulation(J,realization,ierr)
+    call RichardsJacobianSourceSink(J,realization,ierr)
+  else
+    call RichardsSensitivityInternalConn(J,realization,ivar,ierr)
+    call RichardsSensitivityBoundaryConn(J,realization,ivar,ierr)
+    !call RichardsSensitivitySourceSink(J,realization,ivar,ierr)
+    !update here when porosity ok
+    !call RichardsSensitivityAccumulation(J,realization,ivar,ierr)
+  endif
+
+end subroutine RichardsSensitivity
 
 ! ************************************************************************** !
 
@@ -273,14 +297,14 @@ subroutine RichardsFluxSensitivity(rich_auxvar_up,global_auxvar_up, &
   
   !modify ivar
   select case (ivar)
-    case (PERMEABILITY)
+    case (SENSITIVITY_PERMEABILITY)
       call PerturbatePermeability(material_auxvar_up, &
                                   material_auxvar_pert_up, &
                                   pert_up, option)
       call PerturbatePermeability(material_auxvar_dn, &
                                   material_auxvar_pert_dn, &
                                   pert_dn, option)
-    case (POROSITY)
+    case (SENSITIVITY_POROSITY)
       ! TODO: add check for porosity update
       x_up = material_auxvar_up%porosity
       pert_up = perturbation_tolerance*x_up
@@ -534,11 +558,11 @@ subroutine RichardsBCFluxSensitivity(ibndtype,auxvars, &
   ideriv = 1
   
   select case(ivar)
-    case (PERMEABILITY)
+    case (SENSITIVITY_PERMEABILITY)
       call PerturbatePermeability(material_auxvar_dn, & 
                                   material_auxvar_pert_dn, &
                                   pert_dn, option)
-    case (POROSITY)
+    case (SENSITIVITY_POROSITY)
     
     case default
     
@@ -901,9 +925,9 @@ subroutine RichardsAccumSensitivity(rich_auxvar,global_auxvar, &
   vol_over_dt = material_auxvar%volume/option%flow_dt
   
   select case(ivar)
-    case (PERMEABILITY)
-      ! TODO it's null
-    case (POROSITY)
+    case (SENSITIVITY_PERMEABILITY)
+      ! TODO (moise) it's null
+    case (SENSITIVITY_POROSITY)
       ! I may compute this analytically
       ! accumulation term units = dkmol/dp
       J(1,1) = (material_auxvar%dporosity_dp*global_auxvar%sat(1)* &

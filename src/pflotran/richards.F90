@@ -44,9 +44,11 @@ module Richards_module
          RichardsUpdateSurfacePress, &
          RichardsResidualInternalConn, &
          RichardsResidualBoundaryConn, &
+         RichardsResidualAccumulation, &
          RichardsResidualSourceSink, &
          RichardsJacobianInternalConn, &
          RichardsJacobianBoundaryConn, &
+         RichardsJacobianAccumulation, &
          RichardsJacobianSourceSink
 
 contains
@@ -2062,7 +2064,6 @@ subroutine RichardsJacobian(snes,xx,A,B,realization,ierr)
   use Option_module
   use Logging_module
   use Debug_module
-  use Sensitivity_analysis_module
 
   implicit none
 

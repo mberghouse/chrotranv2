@@ -176,7 +176,7 @@ factory_subsurface.o : characteristic_curves.o characteristic_curves_thermal.o \
                        pm_auxiliary.o pm_base.o pm_base_pointer.o pm_flash2.o \
                        pm_general.o pm_hydrate.o pm_immis.o pm_miscible.o \
                        pm_mphase.o pm_nwt.o pm_osrt.o pm_richards.o \
-                       pm_richards_ts.o pm_rt.o pm_sensitivity_richards.o \
+                       pm_richards_ts.o pm_rt.o pm_sensitivity_analysis.o \
                        pm_subsurface_flow.o pm_th.o \
                        pm_th_ts.o pm_toil_ims.o pm_towg.o pm_towg_aux.o \
                        pm_ufd_biosphere.o pm_ufd_decay.o pm_waste_form.o \
@@ -502,7 +502,8 @@ output_observation.o : connection.o coupler.o discretization.o eos_gas.o \
                        realization_subsurface.o region.o richards.o string.o \
                        th.o toil_ims.o towg.o utility.o variables.o \
                        well_data.o well_type.o wipp_flow.o wipp_flow_aux.o
-output_sensitivity.o: output_aux.o option.o string.o hdf5.o output_hdf5.o
+output_sensitivity.o: output_aux.o option.o string.o hdf5.o output_hdf5.o \
+                      sensitivity_aux.o
 output_surface.o : connection.o coupler.o discretization.o field.o grid.o \
                    grid_unstructured_aux.o grid_unstructured_cell.o hdf5.o \
                    hdf5_aux.o input_aux.o logging.o option.o output_aux.o \
@@ -616,9 +617,10 @@ pm_rt.o : checkpoint.o communicator_base.o communicator_structured.o \
           reaction_aux.o reactive_transport.o reactive_transport_aux.o \
           realization_base.o realization_subsurface.o secondary_continuum.o \
           string.o utility.o variables.o
-pm_sensitivity_richards.o : input_aux.o option.o pflotran_constants.o pm_base.o \
+pm_sensitivity_analysis.o : input_aux.o option.o pflotran_constants.o pm_base.o \
                             realization_subsurface.o string.o utility.o \
-                            sensitivity_analysis.o output_sensitivity.o
+                            sensitivity_richards.o output_sensitivity.o \
+                            sensitivity_aux.o
 pm_subsurface_flow.o : auxvars_flow.o characteristic_curves.o \
                        characteristic_curves_wipp.o checkpoint.o \
                        communicator_base.o communicator_structured.o \
@@ -918,7 +920,7 @@ richards.o : connection.o coupler.o debug.o discretization.o eos_water.o \
              logging.o material.o material_aux.o matrix_buffer.o option.o \
              output_aux.o patch.o pflotran_constants.o realization_base.o \
              realization_subsurface.o region.o richards_aux.o \
-             richards_common.o sensitivity_analysis.o srcsink_sandbox.o \
+             richards_common.o srcsink_sandbox.o \
              srcsink_sandbox_base.o srcsink_sandbox_downreg.o string.o \
              utility.o variables.o
 richards_aux.o : characteristic_curves.o characteristic_curves_common.o \
@@ -941,10 +943,12 @@ secondary_continuum.o : block_solve.o block_tridiag.o condition.o coupler.o \
                         utility.o
 secondary_continuum_aux.o : option.o pflotran_constants.o \
                             reactive_transport_aux.o utility.o
-sensitivity_analysis.o : characteristic_curves.o connection.o eos_water.o \
+sensitivity_richards.o : characteristic_curves.o connection.o eos_water.o \
                          global_aux.o grid.o material_aux.o option.o patch.o \
                          pflotran_constants.o realization_subsurface.o \
-                         richards_aux.o richards_common.o utility.o 
+                         sensitivity_aux.o richards_aux.o richards_common.o \
+                         utility.o 
+sensitivity_aux.o : pflotran_constants.o
 shape_function.o : gauss.o grid_unstructured_cell.o pflotran_constants.o
 simulation_aux.o : option.o pflotran_constants.o
 simulation_base.o : checkpoint.o eos.o input_aux.o logging.o option.o output.o \
