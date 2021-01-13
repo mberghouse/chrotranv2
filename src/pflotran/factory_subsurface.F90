@@ -68,7 +68,7 @@ subroutine FactorySubsurfaceInitPostPetsc(simulation)
   use PM_Waste_Form_class
   use PM_UFD_Decay_class
   use PM_UFD_Biosphere_class
-  use PM_Sensitivity_Richards_class
+  use PM_Sensitivity_Analysis_class
   use PM_Auxiliary_class
   use Realization_Subsurface_class
   use Simulation_Subsurface_class
@@ -85,7 +85,7 @@ subroutine FactorySubsurfaceInitPostPetsc(simulation)
   class(pm_ufd_decay_type), pointer :: pm_ufd_decay
   class(pm_ufd_biosphere_type), pointer :: pm_ufd_biosphere
   class(pm_base_type), pointer :: pm_geop
-  class(pm_sensitivity_richards_type), pointer :: pm_sensitivity_richards
+  class(pm_sensitivity_type), pointer :: pm_sensitivity
   class(pm_auxiliary_type), pointer :: pm_auxiliary
   class(realization_subsurface_type), pointer :: realization
 
@@ -97,7 +97,7 @@ subroutine FactorySubsurfaceInitPostPetsc(simulation)
   nullify(pm_ufd_decay)
   nullify(pm_ufd_biosphere)
   nullify(pm_geop)
-  nullify(pm_sensitivity_richards)
+  nullify(pm_sensitivity)
   nullify(pm_auxiliary)
 
   ! process command line arguments specific to subsurface
@@ -105,7 +105,7 @@ subroutine FactorySubsurfaceInitPostPetsc(simulation)
 
   call ExtractPMsFromPMList(simulation,pm_flow,pm_tran,pm_waste_form,&
                             pm_ufd_decay,pm_ufd_biosphere,pm_geop,&
-                            pm_sensitivity_richards,pm_auxiliary)
+                            pm_sensitivity,pm_auxiliary)
 
   call SubsurfaceSetFlowMode(pm_flow,option)
   call SubsurfaceSetGeopMode(pm_geop,option)
@@ -119,8 +119,7 @@ subroutine FactorySubsurfaceInitPostPetsc(simulation)
   ! Setup linkages between PMCs
   call SetupPMCLinkages(simulation,pm_flow,pm_tran,pm_waste_form,&
                         pm_ufd_decay,pm_ufd_biosphere,pm_geop, &
-                        pm_sensitivity_richards,pm_auxiliary,realization)
-
+                        pm_sensitivity,pm_auxiliary,realization)
   ! SubsurfaceInitSimulation() must be called after pmc linkages are set above.
   call SubsurfaceInitSimulation(simulation)
 
@@ -133,7 +132,7 @@ end subroutine FactorySubsurfaceInitPostPetsc
 
 subroutine ExtractPMsFromPMList(simulation,pm_flow,pm_tran,pm_waste_form,&
                                 pm_ufd_decay,pm_ufd_biosphere,pm_geop,&
-                                pm_sensitivity_richards,pm_auxiliary)
+                                pm_sensitivity,pm_auxiliary)
   !
   ! Extracts all possible PMs from the PM list
   !
@@ -149,7 +148,7 @@ subroutine ExtractPMsFromPMList(simulation,pm_flow,pm_tran,pm_waste_form,&
   use PM_UFD_Decay_class
   use PM_UFD_Biosphere_class
   use PM_ERT_class
-  use PM_Sensitivity_Richards_class
+  use PM_Sensitivity_Analysis_class
   use PM_Auxiliary_class
   use Option_module
   use Simulation_Subsurface_class
@@ -165,7 +164,7 @@ subroutine ExtractPMsFromPMList(simulation,pm_flow,pm_tran,pm_waste_form,&
   class(pm_ufd_decay_type), pointer :: pm_ufd_decay
   class(pm_ufd_biosphere_type), pointer :: pm_ufd_biosphere
   class(pm_base_type), pointer :: pm_geop
-  class(pm_sensitivity_richards_type), pointer :: pm_sensitivity_richards
+  class(pm_sensitivity_type), pointer :: pm_sensitivity
   class(pm_auxiliary_type), pointer :: pm_auxiliary
   class(pm_base_type), pointer :: cur_pm, prev_pm
 
@@ -176,7 +175,7 @@ subroutine ExtractPMsFromPMList(simulation,pm_flow,pm_tran,pm_waste_form,&
   nullify(pm_waste_form)
   nullify(pm_ufd_decay)
   nullify(pm_ufd_biosphere)
-  nullify(pm_sensitivity_richards)
+  nullify(pm_sensitivity)
   nullify(pm_auxiliary)
 
   cur_pm => simulation%process_model_list
@@ -197,8 +196,8 @@ subroutine ExtractPMsFromPMList(simulation,pm_flow,pm_tran,pm_waste_form,&
         pm_ufd_biosphere => cur_pm
       class is(pm_ert_type)
         pm_geop => cur_pm
-      class is(pm_sensitivity_richards_type)
-        pm_sensitivity_richards => cur_pm
+      class is(pm_sensitivity_type)
+        pm_sensitivity => cur_pm
       class is(pm_auxiliary_type)
         pm_auxiliary => cur_pm
       class default
@@ -222,7 +221,7 @@ end subroutine ExtractPMsFromPMList
 
 subroutine SetupPMCLinkages(simulation,pm_flow,pm_tran,pm_waste_form, &
                             pm_ufd_decay,pm_ufd_biosphere,pm_geop, &
-                            pm_sensitivity_richards,pm_auxiliary, &
+                            pm_sensitivity,pm_auxiliary, &
                             realization)
   !
   ! Sets up all PMC linkages
@@ -236,7 +235,7 @@ subroutine SetupPMCLinkages(simulation,pm_flow,pm_tran,pm_waste_form, &
   use PM_Waste_Form_class
   use PM_UFD_Decay_class
   use PM_UFD_Biosphere_class
-  use PM_Sensitivity_Richards_class
+  use PM_Sensitivity_Analysis_class
   use PM_Auxiliary_class
   use Realization_Subsurface_class
   use Option_module
@@ -251,7 +250,7 @@ subroutine SetupPMCLinkages(simulation,pm_flow,pm_tran,pm_waste_form, &
   class(pm_ufd_decay_type), pointer :: pm_ufd_decay
   class(pm_ufd_biosphere_type), pointer :: pm_ufd_biosphere
   class(pm_base_type), pointer :: pm_geop
-  class(pm_sensitivity_richards_type), pointer :: pm_sensitivity_richards
+  class(pm_sensitivity_type), pointer :: pm_sensitivity
   class(pm_auxiliary_type), pointer :: pm_auxiliary
   class(realization_subsurface_type), pointer :: realization
 
@@ -290,9 +289,9 @@ subroutine SetupPMCLinkages(simulation,pm_flow,pm_tran,pm_waste_form, &
     call AddPMCUDFBiosphere(simulation,pm_ufd_biosphere,'PMC3PUFDBiosphere',&
                             associated(pm_ufd_decay),realization,input,option)
 
-  if (associated(pm_sensitivity_richards)) &
-    call AddPMCSensitivityRichards(simulation,pm_sensitivity_richards,&
-                                   'PMC3PSensitivityRichards',&
+  if (associated(pm_sensitivity)) &
+    call AddPMCSensitivityAnalysis(simulation,pm_sensitivity,&
+                                   'PMC3PSensitivityAnalysis',&
                                    realization,input,option)
 
   if (associated(pm_auxiliary)) &
@@ -763,7 +762,7 @@ end subroutine AddPMCSubsurfaceGeophysics
 
 ! ************************************************************************** !
 
-subroutine AddPMCSensitivityRichards(simulation,pm_sensitivity_richards,&
+subroutine AddPMCSensitivityAnalysis(simulation,pm_sensitivity,&
                                      pmc_name,realization,input,option)
 
   !
@@ -775,7 +774,7 @@ subroutine AddPMCSensitivityRichards(simulation,pm_sensitivity_richards,&
 
   use PMC_Base_class
   use PMC_Third_Party_class
-  use PM_Sensitivity_Richards_class
+  use PM_Sensitivity_Analysis_class
   use Realization_Subsurface_class
   use Option_module
   use Logging_module
@@ -784,45 +783,60 @@ subroutine AddPMCSensitivityRichards(simulation,pm_sensitivity_richards,&
   implicit none
 
   class(simulation_subsurface_type) :: simulation
-  class(pm_sensitivity_richards_type), pointer :: pm_sensitivity_richards
+  class(pm_sensitivity_type), pointer :: pm_sensitivity
   character(len=*) :: pmc_name
   class(realization_subsurface_type), pointer :: realization
   type(input_type), pointer :: input
   type(option_type), pointer :: option
 
-  class(pmc_third_party_type), pointer :: pmc_sensitivity_richards
+  class(pmc_third_party_type), pointer :: pmc_sensitivity_analysis
   character(len=MAXSTRINGLENGTH) :: string
   class(pmc_base_type), pointer :: pmc_dummy
 
   nullify(pmc_dummy)
+  
+  if (pm_sensitivity%sensitivity_flow) then
+    string = 'SENSITIVITY_FLOW'
+    call InputFindStringInFile(input,option,string)
+    call InputFindStringErrorMsg(input,option,string)
+    call pm_sensitivity%ReadPMBlock(input)
+    if (option%iflowmode /= RICHARDS_MODE) then
+       option%io_buffer = 'The SENSITIVITY FLOW process model requires &
+	                         RICHARDS flow mode.'
+       call PrintErrMsg(option)
+    endif
 
-  string = 'SENSITIVITY_RICHARDS'
-  call InputFindStringInFile(input,option,string)
-  call InputFindStringErrorMsg(input,option,string)
-  call pm_sensitivity_richards%ReadPMBlock(input)
-  if (option%iflowmode /= RICHARDS_MODE) then
-     option%io_buffer = 'The RICHARDS_SENSITIVITY process model requires &
-          RICHARDS flow mode.'
-     call PrintErrMsg(option)
-  endif
+    pmc_sensitivity_analysis => PMCThirdPartyCreate()
+    call pmc_sensitivity_analysis%SetName(pmc_name)
+    call pmc_sensitivity_analysis%SetOption(option)
+    call pmc_sensitivity_analysis%SetCheckpointOption( &
+                                             simulation%checkpoint_option)
+    call pmc_sensitivity_analysis%SetWaypointList( &
+                                       simulation%waypoint_list_subsurface)
+    pmc_sensitivity_analysis%pm_list => pm_sensitivity
+    pmc_sensitivity_analysis%pm_ptr%pm => pm_sensitivity
+    pmc_sensitivity_analysis%realization => realization
 
-  pmc_sensitivity_richards => PMCThirdPartyCreate()
-  call pmc_sensitivity_richards%SetName(pmc_name)
-  call pmc_sensitivity_richards%SetOption(option)
-  call pmc_sensitivity_richards%SetCheckpointOption(simulation%checkpoint_option)
-  call pmc_sensitivity_richards%SetWaypointList(simulation%waypoint_list_subsurface)
-  pmc_sensitivity_richards%pm_list => pm_sensitivity_richards
-  pmc_sensitivity_richards%pm_ptr%pm => pm_sensitivity_richards
-  pmc_sensitivity_richards%realization => realization
+    ! set up logging stage
+    string = 'SENSITIVITY_FLOW'
+    call LoggingCreateStage(string,pmc_sensitivity_analysis%stage)
+    call PMCBaseSetChildPeerPtr(PMCCastToBase(pmc_sensitivity_analysis), &
+           PM_CHILD,PMCCastToBase(simulation%flow_process_model_coupler), &
+	         pmc_dummy,PM_APPEND)
+	endif
+	
+	if (pm_sensitivity%sensitivity_transport) then
+	  string = 'SENSITIVITY_TRANSPORT'
+    call InputFindStringInFile(input,option,string)
+    call InputFindStringErrorMsg(input,option,string)
+    option%io_buffer = 'The SENSITIVITY TRANSPORT process model is not yet &
+	                      implemented.'
+    call PrintErrMsg(option)
+    !call pm_sensitivity%ReadPMBlock(input)
+    ! TODO (moise)
+	endif
 
-  ! set up logging stage
-  string = 'SENSITIVITY_RICHARDS'
-  call LoggingCreateStage(string,pmc_sensitivity_richards%stage)
-  call PMCBaseSetChildPeerPtr(PMCCastToBase(pmc_sensitivity_richards),PM_CHILD, &
-         PMCCastToBase(simulation%flow_process_model_coupler), &
-         pmc_dummy,PM_APPEND)
-
-end subroutine AddPMCSensitivityRichards
+end subroutine AddPMCSensitivityAnalysis
 
 ! ************************************************************************** !
 
@@ -1531,7 +1545,7 @@ subroutine FactorySubsurfaceReadSensitivityPM(input,option,pm)
   use String_module
 
   use PM_Base_class
-  use PM_Sensitivity_Richards_class
+  use PM_Sensitivity_Analysis_class
 
   implicit none
 
@@ -1544,38 +1558,16 @@ subroutine FactorySubsurfaceReadSensitivityPM(input,option,pm)
 
   error_string = 'SIMULATION,PROCESS_MODELS,SENSITIVITY_ANALYSIS'
 
-  !pm => PMSensitivityRichardsCreate()
-  !pm%option => option
+  pm => PMSensitivityCreate()
+  pm%option => option
   
-  word = ''
-  call InputPushBlock(input,option)
-  do
-    call InputReadPflotranString(input,option)
-    if (InputCheckExit(input,option)) exit
-    call InputReadCard(input,option,word,PETSC_FALSE)
-    call StringToUpper(word)
-    select case(word)
-      case('SENSITIVITY_FLOW')
-        pm => PMSensitivityRichardsCreate()
-        pm%option => option
-        ! TODO (moise): generalize to other flow mode
-        ! and check the correct flow mode
-      case('SENSITIVITY_TRANSPORT')
-        option%io_buffer = 'SENSITIVITY_ANALYSIS for TRANSPORT process ' // &
-                           'not yet implemented'
-        call PrintErrMsg(option)
-      case default
-        option%io_buffer = 'Keyword ' // trim(word) // &
-              ' not recognized for the ' // trim(error_string) // ' block.'
-        call PrintErrMsg(option)
-    end select
-  enddo
   if (.not.associated(pm)) then
     option%io_buffer = 'SENSITIVITY_ANALYSIS block require keyword ' // &
                        'SENSITIVITY_FLOW or TRANSPORT. See documentation'
     call PrintErrMsg(option)
   endif
-  call InputPopBlock(input,option)
+  
+  call pm%ReadSimulationOptionsBlock(input)
   
 end subroutine FactorySubsurfaceReadSensitivityPM
 
@@ -1746,7 +1738,7 @@ recursive subroutine SetUpPMApproach(pmc,simulation)
   use PM_UFD_Decay_class
   use PM_UFD_Biosphere_class
   use PM_ERT_class
-  use PM_Sensitivity_Richards_class
+  use PM_Sensitivity_Analysis_class
   use Option_module
   use Simulation_Subsurface_class
   use Realization_Subsurface_class
@@ -1805,7 +1797,7 @@ recursive subroutine SetUpPMApproach(pmc,simulation)
       class is(pm_ufd_biosphere_type)
         call cur_pm%SetRealization(realization)
       
-      class is(pm_sensitivity_richards_type)
+      class is(pm_sensitivity_type)
         call cur_pm%SetRealization(realization)
 
       class is(pm_ert_type)

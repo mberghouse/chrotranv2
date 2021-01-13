@@ -71,8 +71,9 @@ mode_process_model_obj = \
 	${common_src}pm_waste_form.o \
 	${common_src}pm_wipp_srcsink.o \
 	${common_src}pm_ufd_biosphere.o \
-	${common_src}pm_sensitivity_richards.o \
-	${common_src}pm_zflow.o \
+	${common_src}pm_sensitivity_analysis.o \
+	${common_src}sensitivity_aux.o \
+	${common_src}pm_zflow.o
 
 mode_obj = \
 	${common_src}general.o \
@@ -87,7 +88,7 @@ mode_obj = \
 	${common_src}pnf.o \
 	${common_src}reactive_transport.o \
 	${common_src}richards.o \
-	${common_src}sensitivity_analysis.o \
+	${common_src}sensitivity_richards.o \
 	${common_src}richards_common.o \
 	${common_src}th.o \
 	${common_src}zflow.o \
