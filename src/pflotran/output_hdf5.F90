@@ -1305,6 +1305,7 @@ subroutine OutputHDF5UGridXDMFExplicit(realization_base,var_list_type)
   call VecDestroy(natural_vec,ierr);CHKERRQ(ierr)
   if (output_option%print_face_variable) &
                 call VecDestroy(face_vec,ierr);CHKERRQ(ierr)
+  
   call h5gclose_f(grp_id,hdf5_err)
    
   call h5fclose_f(file_id,hdf5_err)    

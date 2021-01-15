@@ -1,4 +1,3 @@
-#Description: Tracer test for determining the fracture and matrix porosity
 
 SIMULATION
   SIMULATION_TYPE SUBSURFACE
