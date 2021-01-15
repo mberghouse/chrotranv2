@@ -907,6 +907,19 @@ function StructGridComputeInternConnect(structured_grid, xc, yc, zc, option)
               connections%id_up(iconn) = id_up
               connections%id_dn(iconn) = id_dn
               
+              connections%local(iconn) = 1
+              connections%num_connections_unique = &
+		                     connections%num_connections_unique + 1
+              if (structured_grid%npx_final > 1) then
+                if (structured_grid%istart == 0 .and. i == lenx) &
+                                               connections%local(iconn) = -1
+                if (structured_grid%istart /= 0 .and. i == 1) then
+                  connections%local(iconn) = 0
+		              connections%num_connections_unique = &
+		                                   connections%num_connections_unique - 1
+	              endif
+	            endif
+              
               if (associated(connections%id_up2)) then
                 if (i == 1) then
                   ! id_up indexes tvd_ghost_vec, see StructGridCreateTVDGhosts() 
@@ -949,6 +962,20 @@ function StructGridComputeInternConnect(structured_grid, xc, yc, zc, option)
               id_dn = id_up + 1
               connections%id_up(iconn) = id_up
               connections%id_dn(iconn) = id_dn
+              
+              connections%local(iconn) = 1
+		          connections%num_connections_unique = &
+		                         connections%num_connections_unique + 1
+              if (structured_grid%npx_final > 1) then
+                if (structured_grid%istart == 0 .and. i == lenx) then
+                  connections%local(iconn) = 0
+		              connections%num_connections_unique = &
+		                             connections%num_connections_unique - 1
+		            endif
+                if (structured_grid%istart /= 0 .and. i == 1) &
+                                           connections%local(iconn) = -1
+              endif
+		          
               connections%dist(-1:3,iconn) = 0.d0
               dist_up = 0.5d0*structured_grid%dx(id_up)
               dist_dn = 0.5d0*structured_grid%dx(id_dn)
@@ -969,6 +996,20 @@ function StructGridComputeInternConnect(structured_grid, xc, yc, zc, option)
               id_dn = id_up + 1
               connections%id_up(iconn) = id_up
               connections%id_dn(iconn) = id_dn
+              
+              connections%local(iconn) = 1
+		          connections%num_connections_unique = &
+		                         connections%num_connections_unique + 1
+              if (structured_grid%npx_final > 1) then
+                if (structured_grid%istart == 0 .and. i == lenx) then
+                  connections%local(iconn) = 0
+		              connections%num_connections_unique = &
+		                             connections%num_connections_unique - 1
+		            endif
+                if (structured_grid%istart /= 0 .and. i == 1) &
+                                           connections%local(iconn) = -1
+              endif
+		          
               connections%dist(-1:3,iconn) = 0.d0
               dist_up = 0.5d0*structured_grid%dx(id_up)
               dist_dn = 0.5d0*structured_grid%dx(id_dn)
@@ -990,11 +1031,24 @@ function StructGridComputeInternConnect(structured_grid, xc, yc, zc, option)
           do i = structured_grid%istart, structured_grid%iend
             do j = 1, leny
               iconn = iconn+1
-
-              id_up = i + 1 + (j-1) * structured_grid%ngx + k * structured_grid%ngxy
+              id_up = i + 1 + (j-1) * structured_grid%ngx + &
+                                                  k * structured_grid%ngxy
               id_dn = id_up + structured_grid%ngx
               connections%id_up(iconn) = id_up
               connections%id_dn(iconn) = id_dn
+              
+              connections%local(iconn) = 1
+		          connections%num_connections_unique = &
+		                         connections%num_connections_unique + 1
+              if (structured_grid%npy_final > 1) then
+                if (structured_grid%jstart == 0 .and. j == leny) then
+                  connections%local(iconn) = 0
+		              connections%num_connections_unique = &
+		                             connections%num_connections_unique - 1
+		            endif
+                if (structured_grid%jstart /= 0 .and. j == 1) &
+                                          connections%local(iconn) = -1
+              endif
               
               if (associated(connections%id_up2)) then
                 if (j == 1) then
@@ -1054,6 +1108,19 @@ function StructGridComputeInternConnect(structured_grid, xc, yc, zc, option)
               id_dn = id_up + structured_grid%ngxy
               connections%id_up(iconn) = id_up
               connections%id_dn(iconn) = id_dn
+              
+              connections%local(iconn) = 1
+		          connections%num_connections_unique = &
+		                         connections%num_connections_unique + 1
+              if (structured_grid%npz_final > 1) then
+                if (structured_grid%kstart == 0 .and. k == lenz) then
+                  connections%local(iconn) = 0
+		              connections%num_connections_unique = &
+		                             connections%num_connections_unique - 1
+                endif
+                if (structured_grid%kstart /= 0 .and. k == 1) &
+                                               connections%local(iconn) = -1
+              endif
               
               if (associated(connections%id_up2)) then
                 if (k == 1) then

@@ -14,6 +14,8 @@ module Connection_module
     PetscInt :: num_connections_unique ! number of connections to be treat uniquely
     PetscInt :: offset
     PetscInt, pointer :: local(:)      ! 1 if connection is local, 0 if connection is ghosted
+                                       ! -1 if ghosted but owned by the set uniquely
+                                       ! structured grid only
     PetscInt, pointer :: id_up(:)      ! list of ids of upwind cells
     PetscInt, pointer :: id_dn(:)      ! list of ids of downwind cells
     PetscInt, pointer :: id_up2(:)     ! list of ids of 2nd upwind cells

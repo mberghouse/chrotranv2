@@ -641,6 +641,7 @@ subroutine OutputVariableRead(input,option,output_variable_list)
   implicit none
 
   type(option_type), pointer :: option
+  type(output_option_type), pointer :: output_option
   type(input_type), pointer :: input
   type(output_variable_list_type), pointer :: output_variable_list
 
@@ -985,6 +986,8 @@ subroutine OutputVariableRead(input,option,output_variable_list)
       case default
         call OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
                                 option)
+        if (category == OUTPUT_FACE) &
+                    output_option%print_face_variable = PETSC_TRUE
         if (Uninitialized(id)) &
           call InputKeywordUnrecognized(input,word,'VARIABLES',option)
 
