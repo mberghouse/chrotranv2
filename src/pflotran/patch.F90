@@ -7407,7 +7407,8 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
         call PatchGetKOrthogonalityError(grid, material_auxvars, vec_ptr)
         !vec_ptr(:) = UNINITIALIZED_DOUBLE
       endif
-    case(FACE_PERMEABILITY,FACE_AREA,FACE_UPWIND_FRACTION) 
+    case(FACE_PERMEABILITY,FACE_AREA,FACE_UPWIND_FRACTION, &
+         FACE_NON_ORTHO_ANGLE) 
         ! or all other connection indexed output
         call PatchGetFaceVariable(patch, material_auxvars, ivar, vec_ptr,option)
     case default
@@ -10326,7 +10327,7 @@ end subroutine PatchGetKOrthogonalityError
 
 ! ************************************************************************** !
 
-subroutine PatchGetFaceVariable(patch, material_auxvars, ivar, vec_ptr,option)
+subroutine PatchGetFaceVariable(patch,material_auxvars,ivar,vec_ptr,option)
   !
   ! Populate the vec_ptr with face variable
   !
@@ -10337,8 +10338,9 @@ subroutine PatchGetFaceVariable(patch, material_auxvars, ivar, vec_ptr,option)
   use Coupler_module
   use Variables_module
   use Material_Aux_class
-  use Utility_module, only : DotProduct
+  use Utility_module, only : DotProduct, CrossProduct
   use Option_module
+  use Geometry_module  
   
   type(patch_type), pointer :: patch
   class(material_auxvar_type), pointer :: material_auxvars(:)
@@ -10349,8 +10351,11 @@ subroutine PatchGetFaceVariable(patch, material_auxvars, ivar, vec_ptr,option)
   class (connection_set_type), pointer :: cur_connection_set
   type(coupler_type), pointer :: boundary_condition
   PetscInt :: iconn, icount
-  PetscInt :: local_id_up, local_id_dn, ghosted_id_up, ghosted_id_dn
+  PetscInt :: local_id_up, local_id_dn, ghosted_id_up, ghosted_id_dn, face_id
   PetscReal :: perm_up, perm_dn, dd_up, dd_dn, dist(-1:3)
+  PetscReal :: temp_real
+  type(point3d_type) :: point1, point2, point3
+  PetscReal :: v1(3), v2(3), v3(3)
 
   nullify(boundary_condition)
   nullify(cur_connection_set)
@@ -10384,6 +10389,29 @@ subroutine PatchGetFaceVariable(patch, material_auxvars, ivar, vec_ptr,option)
           vec_ptr(icount) = cur_connection_set%area(iconn)
           icount = icount + 1
         enddo
+      case(FACE_NON_ORTHO_ANGLE)
+        do iconn = 1, cur_connection_set%num_connections
+          if (cur_connection_set%local(iconn) == 0) cycle
+          ghosted_id_up = cur_connection_set%id_up(iconn)
+          ghosted_id_dn = cur_connection_set%id_dn(iconn)
+          face_id = cur_connection_set%face_id(iconn)
+          point1 = patch%grid%unstructured_grid%vertices( &
+                      patch%grid%unstructured_grid%face_to_vertex(1,face_id))
+          point2 = patch%grid%unstructured_grid%vertices( &
+                      patch%grid%unstructured_grid%face_to_vertex(2,face_id))
+          point3 = patch%grid%unstructured_grid%vertices( &
+                      patch%grid%unstructured_grid%face_to_vertex(3,face_id))
+          v1(1) = point3%x-point2%x
+          v1(2) = point3%y-point2%y
+          v1(3) = point3%z-point2%z
+          v2(1) = point1%x-point2%x
+          v2(2) = point1%y-point2%y
+          v2(3) = point1%z-point2%z
+          v3 = CrossProduct(v1,v2) !normal stored in v1
+          temp_real = abs( DotProduct(v3,cur_connection_set%dist(1:3,iconn)) )
+          vec_ptr(icount) = 1.d0 - temp_real / sqrt(DotProduct(v3,v3)) !dist is unit
+          icount = icount + 1
+        enddo
       case(FACE_UPWIND_FRACTION)
         do iconn = 1, cur_connection_set%num_connections
           if (cur_connection_set%local(iconn) == 0) cycle
@@ -10412,6 +10440,11 @@ subroutine PatchGetFaceVariable(patch, material_auxvars, ivar, vec_ptr,option)
       case(FACE_AREA)
         do iconn = 1, cur_connection_set%num_connections
           vec_ptr(icount) = cur_connection_set%area(iconn)
+          icount = icount + 1
+        enddo
+      case(FACE_NON_ORTHO_ANGLE)
+        do iconn = 1, cur_connection_set%num_connections
+          vec_ptr(icount) = 0.
           icount = icount + 1
         enddo
       case(FACE_UPWIND_FRACTION)

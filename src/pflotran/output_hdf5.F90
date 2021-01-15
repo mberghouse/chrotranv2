@@ -2515,7 +2515,7 @@ subroutine WriteHDF5ConnectionIds(realization_base,option,file_id)
     ibound_con = - boundary_condition%id
     cur_connection_set => boundary_condition%connection_set
     do iconn = 1, cur_connection_set%num_connections
-      ghosted_id = cur_connection_set%id_dn(iconn)
+      ghosted_id = grid%nL2G( cur_connection_set%id_dn(iconn) )
       nat_id_dn = grid%nG2A( ghosted_id )
       int_array(icount) = nat_id_dn
       int_array(icount + 1) = ibound_con

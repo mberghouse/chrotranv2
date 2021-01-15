@@ -185,6 +185,7 @@ module Variables_module
   
   PetscInt, parameter, public :: FACE_PERMEABILITY       = 149
   PetscInt, parameter, public :: FACE_AREA               = 150
-  PetscInt, parameter, public :: FACE_UPWIND_FRACTION    = 151
+  PetscInt, parameter, public :: FACE_NON_ORTHO_ANGLE    = 151
+  PetscInt, parameter, public :: FACE_UPWIND_FRACTION    = 152
 
 end module Variables_module

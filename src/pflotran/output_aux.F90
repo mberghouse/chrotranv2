@@ -1282,6 +1282,11 @@ subroutine OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
       name = 'Face Upwind Fraction'
       category = OUTPUT_FACE
       id = FACE_UPWIND_FRACTION
+    case ('FACE_NON_ORTHOGONALITY_ANGLE')
+      units = ''
+      name = 'Face Non Orthogonality Angle'
+      category = OUTPUT_FACE
+      id = FACE_NON_ORTHO_ANGLE
     case ('FACE_NORMAL')
       units = 'm'
       name = 'Face Normal'
