@@ -188,4 +188,6 @@ module Variables_module
   PetscInt, parameter, public :: FACE_NON_ORTHO_ANGLE    = 151
   PetscInt, parameter, public :: FACE_UPWIND_FRACTION    = 152
 
+  PetscInt, parameter, public :: SECONDARY_CONTINUUM_UPDATED_CONC = 141
+
 end module Variables_module
