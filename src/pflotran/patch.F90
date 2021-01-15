@@ -10441,28 +10441,34 @@ subroutine PatchGetFaceVariable(patch,material_auxvars,ivar,vec_ptr,option)
           icount = icount + 1
         enddo
       case(FACE_NON_ORTHO_ANGLE)
-        do iconn = 1, cur_connection_set%num_connections
-          if (cur_connection_set%local(iconn) == 0) cycle
-          ghosted_id_up = cur_connection_set%id_up(iconn)
-          ghosted_id_dn = cur_connection_set%id_dn(iconn)
-          face_id = cur_connection_set%face_id(iconn)
-          point1 = patch%grid%unstructured_grid%vertices( &
-                      patch%grid%unstructured_grid%face_to_vertex(1,face_id))
-          point2 = patch%grid%unstructured_grid%vertices( &
-                      patch%grid%unstructured_grid%face_to_vertex(2,face_id))
-          point3 = patch%grid%unstructured_grid%vertices( &
-                      patch%grid%unstructured_grid%face_to_vertex(3,face_id))
-          v1(1) = point3%x-point2%x
-          v1(2) = point3%y-point2%y
-          v1(3) = point3%z-point2%z
-          v2(1) = point1%x-point2%x
-          v2(2) = point1%y-point2%y
-          v2(3) = point1%z-point2%z
-          v3 = CrossProduct(v1,v2) !normal stored in v1
-          temp_real = abs( DotProduct(v3,cur_connection_set%dist(1:3,iconn)) )
-          vec_ptr(icount) = 1.d0 - temp_real / sqrt(DotProduct(v3,v3)) !dist is unit
-          icount = icount + 1
-        enddo
+        if (patch%grid%itype == STRUCTURED_GRID .or. &
+            patch%grid%itype == EXPLICIT_UNSTRUCTURED_GRID) then
+            vec_ptr = -1. !not defined
+            return
+        else
+          do iconn = 1, cur_connection_set%num_connections
+            if (cur_connection_set%local(iconn) == 0) cycle
+            ghosted_id_up = cur_connection_set%id_up(iconn)
+            ghosted_id_dn = cur_connection_set%id_dn(iconn)
+            face_id = cur_connection_set%face_id(iconn)
+            point1 = patch%grid%unstructured_grid%vertices( &
+                        patch%grid%unstructured_grid%face_to_vertex(1,face_id))
+            point2 = patch%grid%unstructured_grid%vertices( &
+                        patch%grid%unstructured_grid%face_to_vertex(2,face_id))
+            point3 = patch%grid%unstructured_grid%vertices( &
+                        patch%grid%unstructured_grid%face_to_vertex(3,face_id))
+            v1(1) = point3%x-point2%x
+            v1(2) = point3%y-point2%y
+            v1(3) = point3%z-point2%z
+            v2(1) = point1%x-point2%x
+            v2(2) = point1%y-point2%y
+            v2(3) = point1%z-point2%z
+            v3 = CrossProduct(v1,v2) !normal stored in v1
+            temp_real = abs(DotProduct(v3,cur_connection_set%dist(1:3,iconn)))
+            vec_ptr(icount) = 1.d0 - temp_real / sqrt(DotProduct(v3,v3))
+            icount = icount + 1
+          enddo
+        endif
       case(FACE_UPWIND_FRACTION)
         do iconn = 1, cur_connection_set%num_connections
           if (cur_connection_set%local(iconn) == 0) cycle
