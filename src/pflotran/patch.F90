@@ -10362,9 +10362,7 @@ subroutine PatchGetFaceVariable(patch, material_auxvars, ivar, vec_ptr,option)
     select case(ivar)
       case(FACE_PERMEABILITY)
         do iconn = 1, cur_connection_set%num_connections
-          if (cur_connection_set%local(iconn) == 0 .and. & 
-              patch%grid%nG2A(cur_connection_set%id_up(iconn)) < & 
-              patch%grid%nG2A(cur_connection_set%id_dn(iconn))) cycle
+          if (cur_connection_set%local(iconn) == 0) cycle
           !Cell ids from both side of the face
           ghosted_id_up = cur_connection_set%id_up(iconn)
           ghosted_id_dn = cur_connection_set%id_dn(iconn)
@@ -10382,17 +10380,13 @@ subroutine PatchGetFaceVariable(patch, material_auxvars, ivar, vec_ptr,option)
         enddo
       case(FACE_AREA)
         do iconn = 1, cur_connection_set%num_connections
-          if (cur_connection_set%local(iconn) == 0 .and. & 
-              patch%grid%nG2A(cur_connection_set%id_up(iconn)) < & 
-              patch%grid%nG2A(cur_connection_set%id_dn(iconn))) cycle
+          if (cur_connection_set%local(iconn) == 0) cycle
           vec_ptr(icount) = cur_connection_set%area(iconn)
           icount = icount + 1
         enddo
       case(FACE_UPWIND_FRACTION)
         do iconn = 1, cur_connection_set%num_connections
-          if (cur_connection_set%local(iconn) == 0 .and. & 
-              patch%grid%nG2A(cur_connection_set%id_up(iconn)) < & 
-              patch%grid%nG2A(cur_connection_set%id_dn(iconn))) cycle
+          if (cur_connection_set%local(iconn) == 0) cycle
           vec_ptr(icount) = cur_connection_set%dist(-1,iconn)
           icount = icount + 1
         enddo

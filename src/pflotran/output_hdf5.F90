@@ -122,6 +122,7 @@ subroutine OutputHDF5(realization_base,var_list_type)
   Vec :: global_vec_vy
   Vec :: global_vec_vz
   Vec :: natural_vec
+  Vec :: face_vec
   PetscReal, pointer :: v_ptr
   
   character(len=MAXSTRINGLENGTH) :: string
@@ -138,6 +139,7 @@ subroutine OutputHDF5(realization_base,var_list_type)
   PetscInt :: ivar, isubvar, var_type
   PetscBool :: include_gas_phase
   PetscErrorCode :: ierr
+  PetscInt :: nlconnection, total_num_connections
 
   discretization => realization_base%discretization
   patch => realization_base%patch
@@ -189,6 +191,10 @@ subroutine OutputHDF5(realization_base,var_list_type)
     !GEH - Structured Grid Dependence - End
 
     call h5gclose_f(grp_id,hdf5_err)
+    
+    if (output_option%print_hdf5_connection_ids) then
+      call WriteHDF5ConnectionIds(realization_base,option,file_id)
+    endif
 
   endif
         
@@ -215,6 +221,14 @@ subroutine OutputHDF5(realization_base,var_list_type)
   call DiscretizationDuplicateVector(discretization,global_vec,global_vec_vx)
   call DiscretizationDuplicateVector(discretization,global_vec,global_vec_vy)
   call DiscretizationDuplicateVector(discretization,global_vec,global_vec_vz)
+  
+  if (output_option%print_face_variable) then
+    call OutputGetNumberOfFaceConnectionLocal(realization_base, nlconnection)
+    call MPI_Allreduce(nlconnection,total_num_connections,ONE_INTEGER_MPI, &
+                       MPIU_INTEGER, MPI_SUM,option%mycomm,ierr);CHKERRQ(ierr)
+    call VecCreateMPI(option%mycomm,nlconnection, total_num_connections, & 
+                      face_vec,ierr);CHKERRQ(ierr)
+  endif
 
   select case (var_list_type)
 
@@ -223,7 +237,7 @@ subroutine OutputHDF5(realization_base,var_list_type)
       cur_variable => output_option%output_snap_variable_list%first
       do
         if (.not.associated(cur_variable)) exit
-        call OutputGetVariableArray(realization_base,global_vec,cur_variable)
+        
         string = cur_variable%name
         call StringSwapChar(string," ","_")
         if (len_trim(cur_variable%units) > 0) then
@@ -231,6 +245,21 @@ subroutine OutputHDF5(realization_base,var_list_type)
           call HDF5MakeStringCompatible(word)
           string = trim(string) // ' [' // trim(word) // ']'
         endif
+        
+        if (cur_variable%icategory == OUTPUT_FACE) then
+          call OutputGetVariableArray(realization_base,face_vec,cur_variable)
+          if (cur_variable%iformat == 0) then
+            call HDF5WriteDataSetFromVec(string,option,face_vec,grp_id, &
+                                         H5T_NATIVE_DOUBLE)
+          else
+            call HDF5WriteDataSetFromVec(string,option,face_vec,grp_id, &
+                                         H5T_NATIVE_INTEGER)
+          endif
+          cur_variable => cur_variable%next
+          cycle
+        endif
+        
+        call OutputGetVariableArray(realization_base,global_vec,cur_variable)
         if (cur_variable%iformat == 0) then
           call HDF5WriteStructDataSetFromVec(string,realization_base, &
                                              global_vec,grp_id, &
@@ -350,6 +379,8 @@ subroutine OutputHDF5(realization_base,var_list_type)
   call VecDestroy(global_vec_vx,ierr);CHKERRQ(ierr)
   call VecDestroy(global_vec_vy,ierr);CHKERRQ(ierr)
   call VecDestroy(global_vec_vz,ierr);CHKERRQ(ierr)
+  if (output_option%print_face_variable) &
+                call VecDestroy(face_vec,ierr);CHKERRQ(ierr)
 
   call h5gclose_f(grp_id,hdf5_err)
 
@@ -683,11 +714,13 @@ subroutine OutputHDF5UGridXDMF(realization_base,var_list_type)
   call DiscretizationDuplicateVector(discretization,global_vec,global_vec_vy)
   call DiscretizationDuplicateVector(discretization,global_vec,global_vec_vz)
   
-  call OutputGetNumberOfFaceConnection(realization_base, nlconnection)
-  call MPI_Allreduce(nlconnection,total_num_connections,ONE_INTEGER_MPI, &
-                     MPIU_INTEGER, MPI_SUM,option%mycomm,ierr);CHKERRQ(ierr)
-  call VecCreateMPI(option%mycomm,nlconnection, total_num_connections, & 
-                    face_vec,ierr);CHKERRQ(ierr)
+  if (output_option%print_face_variable) then
+    call OutputGetNumberOfFaceConnectionLocal(realization_base,nlconnection)
+    call MPI_Allreduce(nlconnection,total_num_connections,ONE_INTEGER_MPI, &
+                       MPIU_INTEGER, MPI_SUM,option%mycomm,ierr);CHKERRQ(ierr)
+    call VecCreateMPI(option%mycomm,nlconnection, total_num_connections, & 
+                      face_vec,ierr);CHKERRQ(ierr)
+  endif
 
   select case (var_list_type)
 
@@ -871,7 +904,8 @@ subroutine OutputHDF5UGridXDMF(realization_base,var_list_type)
   call VecDestroy(global_vec_vx,ierr);CHKERRQ(ierr)
   call VecDestroy(global_vec_vy,ierr);CHKERRQ(ierr)
   call VecDestroy(global_vec_vz,ierr);CHKERRQ(ierr)
-  call VecDestroy(face_vec,ierr);CHKERRQ(ierr)
+  if (output_option%print_face_variable) &
+                call VecDestroy(face_vec,ierr);CHKERRQ(ierr)
 
   call h5gclose_f(grp_id,hdf5_err)
 
@@ -1117,9 +1151,7 @@ subroutine OutputHDF5UGridXDMFExplicit(realization_base,var_list_type)
     write_xdmf = PETSC_TRUE
   endif
   
-  if (first .and. &
-     (output_option%print_explicit_primal_grid .or. &
-      output_option%print_hdf5_connection_ids)) then
+  if (first .and. output_option%print_explicit_primal_grid) then
     call h5pcreate_f(H5P_FILE_ACCESS_F,new_prop_id,hdf5_err)
     call h5fcreate_f(domain_filename_path,H5F_ACC_TRUNC_F,new_file_id, &
                      hdf5_err,H5P_DEFAULT_F,new_prop_id)
@@ -1132,14 +1164,14 @@ subroutine OutputHDF5UGridXDMFExplicit(realization_base,var_list_type)
       call WriteHDF5CoordinatesUGridXDMFExplicit(realization_base,option, &
                                                  new_grp_id)
     endif
-    if (output_option%print_hdf5_connection_ids) then
-      call WriteHDF5ConnectionIdsUGridXDMF(realization_base,option, &
-                                           new_grp_id)
-    endif
     num_cells = realization_base%output_option%xmf_vert_len
     call h5gclose_f(new_grp_id,hdf5_err)
     call h5fclose_f(new_file_id,hdf5_err)    
-  endif   
+  endif 
+  
+  if (first .and. output_option%print_hdf5_connection_ids) then
+    call WriteHDF5ConnectionIds(realization_base,option,file_id)
+  endif  
   
   if (write_xdmf) then
     option%io_buffer = '--> write xmf output file: ' // trim(xmf_filename)
@@ -1183,11 +1215,13 @@ subroutine OutputHDF5UGridXDMFExplicit(realization_base,var_list_type)
   call DiscretizationCreateVector(discretization,ONEDOF,natural_vec,NATURAL, &
                                   option)
   
-  call OutputGetNumberOfFaceConnection(realization_base, nlconnection)
-  call MPI_Allreduce(nlconnection,total_num_connections,ONE_INTEGER_MPI, &
-                     MPIU_INTEGER, MPI_SUM,option%mycomm,ierr);CHKERRQ(ierr)
-  call VecCreateMPI(option%mycomm,nlconnection, total_num_connections, & 
-                    face_vec,ierr);CHKERRQ(ierr)
+  if (output_option%print_face_variable) then
+    call OutputGetNumberOfFaceConnectionLocal(realization_base, nlconnection)
+    call MPI_Allreduce(nlconnection,total_num_connections,ONE_INTEGER_MPI, &
+                       MPIU_INTEGER, MPI_SUM,option%mycomm,ierr);CHKERRQ(ierr)
+    call VecCreateMPI(option%mycomm,nlconnection, total_num_connections, & 
+                      face_vec,ierr);CHKERRQ(ierr)
+  endif
 
   select case (var_list_type)
 
@@ -1269,6 +1303,8 @@ subroutine OutputHDF5UGridXDMFExplicit(realization_base,var_list_type)
 
   call VecDestroy(global_vec,ierr);CHKERRQ(ierr)
   call VecDestroy(natural_vec,ierr);CHKERRQ(ierr)
+  if (output_option%print_face_variable) &
+                call VecDestroy(face_vec,ierr);CHKERRQ(ierr)
   call h5gclose_f(grp_id,hdf5_err)
    
   call h5fclose_f(file_id,hdf5_err)    
@@ -2100,7 +2136,7 @@ subroutine WriteHDF5CoordinatesUGridXDMF(realization_base,option,file_id)
   
   ! Added by Moise Rousseau 09/16/20
   if (realization_base%output_option%print_hdf5_connection_ids) then
-    call WriteHDF5ConnectionIdsUGridXDMF(realization_base,option,file_id)
+    call WriteHDF5ConnectionIds(realization_base,option,file_id)
   endif
 
   ! Cell center X/Y/Z
@@ -2341,10 +2377,10 @@ end subroutine WriteHDF5CoordinatesUGridXDMF
   
 ! ************************************************************************** !
 
-subroutine WriteHDF5ConnectionIdsUGridXDMF(realization_base,option,file_id)
+subroutine WriteHDF5ConnectionIds(realization_base,option,file_id)
   ! 
   ! Write the detail of connection ids in the output HDF5 file
-  ! and in Domain/Connection Ids
+  ! under file_id / Connection Ids
   ! Used to index the velocity_at_face_by_connection and 
   ! permeability_at_face as well as all other face centered variables
   ! 
@@ -2358,6 +2394,7 @@ subroutine WriteHDF5ConnectionIdsUGridXDMF(realization_base,option,file_id)
   use Connection_module
   use Coupler_module
   use Variables_module
+  use Grid_module
   
   implicit none
   
@@ -2367,7 +2404,8 @@ subroutine WriteHDF5ConnectionIdsUGridXDMF(realization_base,option,file_id)
   
   type(connection_set_type), pointer :: cur_connection_set
   type(coupler_type), pointer :: boundary_condition
-  PetscInt :: icount, iconn, istart
+  type(grid_type), pointer :: grid
+  PetscInt :: icount, iconn, istart, ibound_con
   PetscInt :: ghosted_id, nat_id_up, nat_id_dn
   PetscInt :: total_num_connections, nlconnection !local connection
   PetscInt, allocatable :: int_array(:)
@@ -2388,14 +2426,13 @@ subroutine WriteHDF5ConnectionIdsUGridXDMF(realization_base,option,file_id)
   PetscMPIInt :: hdf5_err
   character(len=MAXSTRINGLENGTH) :: string
   
+  grid => realization_base%patch%grid
+  
   ! Ask for space and organize it
   ! number of connections
   total_num_connections = 0
   nlconnection = 0
-  call OutputGetNumberOfFaceConnection(realization_base, nlconnection)
-  
-  write(option%io_buffer, '(i10)') nlconnection
-  call PrintMsg(option)
+  call OutputGetNumberOfFaceConnectionLocal(realization_base, nlconnection)
   
   ! memory space which is a 1D vector
   rank_mpi = 1
@@ -2406,8 +2443,6 @@ subroutine WriteHDF5ConnectionIdsUGridXDMF(realization_base,option,file_id)
   ! file space which is a 2D block
   call MPI_Allreduce(nlconnection,total_num_connections,ONE_INTEGER_MPI, &
                      MPIU_INTEGER, MPI_SUM,option%mycomm,ierr);CHKERRQ(ierr)
-  write(option%io_buffer, '(i10)') total_num_connections
-  call PrintMsg(option)
   rank_mpi = 2
   dims = 0
   dims(2) = total_num_connections
@@ -2454,20 +2489,17 @@ subroutine WriteHDF5ConnectionIdsUGridXDMF(realization_base,option,file_id)
 #endif
 
   allocate(int_array(nlconnection*2))
+  int_array = UNINITIALIZED_INTEGER
   icount = 1
   nullify(boundary_condition)
   nullify(cur_connection_set)
   !internal connections
-  cur_connection_set => &
-            realization_base%patch%grid%internal_connection_set_list%first
+  cur_connection_set => grid%internal_connection_set_list%first
   do
     do iconn = 1, cur_connection_set%num_connections
-      nat_id_up = realization_base%patch%grid%nG2A( &
-                                      cur_connection_set%id_up(iconn))
-      nat_id_dn = realization_base%patch%grid%nG2A( &
-                                        cur_connection_set%id_dn(iconn))
-      if (cur_connection_set%local(iconn) == 0 .and. &
-          nat_id_up < nat_id_dn) cycle
+      nat_id_up = grid%nG2A( cur_connection_set%id_up(iconn) )
+      nat_id_dn = grid%nG2A( cur_connection_set%id_dn(iconn) )
+      if (cur_connection_set%local(iconn) == 0) cycle
       int_array(icount) = nat_id_dn
       int_array(icount + 1) = nat_id_up
       icount = icount + 2
@@ -2475,22 +2507,24 @@ subroutine WriteHDF5ConnectionIdsUGridXDMF(realization_base,option,file_id)
     cur_connection_set => cur_connection_set%next
     if (.not.associated(cur_connection_set)) exit
   enddo
+  
   ! boundary connections
   boundary_condition => & 
              realization_base%patch%boundary_condition_list%first
   do
+    ibound_con = - boundary_condition%id
     cur_connection_set => boundary_condition%connection_set
     do iconn = 1, cur_connection_set%num_connections
       ghosted_id = cur_connection_set%id_dn(iconn)
-      nat_id_dn = realization_base%patch%grid%nG2A(ghosted_id)
+      nat_id_dn = grid%nG2A( ghosted_id )
       int_array(icount) = nat_id_dn
-      int_array(icount + 1) = -1
+      int_array(icount + 1) = ibound_con
       icount = icount + 2
     enddo
     boundary_condition => boundary_condition%next
     if (.not.associated(boundary_condition)) exit
   enddo
-
+  
   call PetscLogEventBegin(logging%event_h5dwrite_f,ierr);CHKERRQ(ierr)
   call h5dwrite_f(data_set_id,H5T_NATIVE_INTEGER,int_array,dims, &
                   hdf5_err,memory_space_id,file_space_id,prop_id)
@@ -2502,7 +2536,7 @@ subroutine WriteHDF5ConnectionIdsUGridXDMF(realization_base,option,file_id)
   
   deallocate(int_array)
 
-end subroutine WriteHDF5ConnectionIdsUGridXDMF
+end subroutine WriteHDF5ConnectionIds
 
 ! ************************************************************************** !
 

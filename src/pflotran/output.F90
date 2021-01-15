@@ -535,10 +535,10 @@ subroutine OutputFileRead(input,realization,output_option, &
       case('VARIABLES')
         select case(trim(block_name))
           case('SNAPSHOT_FILE')           
-            call OutputVariableRead(input,option, &
+            call OutputVariableRead(input,option,output_option, &
                  output_option%output_snap_variable_list)
           case('OBSERVATION_FILE')           
-            call OutputVariableRead(input,option, &
+            call OutputVariableRead(input,option,output_option,&
                  output_option%output_obs_variable_list)
           case('MASS_BALANCE_FILE')
             option%io_buffer = 'A variable list cannot be specified within &
@@ -675,7 +675,7 @@ end subroutine OutputFileRead
 
 ! ************************************************************************** !
 
-subroutine OutputVariableRead(input,option,output_variable_list)
+subroutine OutputVariableRead(input,option,output_option,output_variable_list)
   ! 
   ! This routine reads a variable from the input file.
   ! 
@@ -691,6 +691,7 @@ subroutine OutputVariableRead(input,option,output_variable_list)
   implicit none
 
   type(option_type), pointer :: option
+  type(output_option_type), pointer :: output_option
   type(input_type), pointer :: input
   type(output_variable_list_type), pointer :: output_variable_list
   
@@ -982,6 +983,8 @@ subroutine OutputVariableRead(input,option,output_variable_list)
       case default
         call OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
                                 option)
+        if (category == OUTPUT_FACE) &
+                    output_option%print_face_variable = PETSC_TRUE
         if (Uninitialized(id)) &
           call InputKeywordUnrecognized(input,word,'VARIABLES',option)
 

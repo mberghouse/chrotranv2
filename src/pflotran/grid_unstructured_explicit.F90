@@ -1355,7 +1355,6 @@ function UGridExplicitSetInternConnect(explicit_grid,upwind_fraction_method, &
     connections%id_up(iconn) = id_up
     connections%id_dn(iconn) = id_dn
     connections%local(iconn) = 0
-    if (explicit_grid%face_locals(iconn) > 0.1) connections%local(iconn) = 1
     
     pt_up(1) = explicit_grid%cell_centroids(id_up)%x
     pt_up(2) = explicit_grid%cell_centroids(id_up)%y
@@ -1364,6 +1363,37 @@ function UGridExplicitSetInternConnect(explicit_grid,upwind_fraction_method, &
     pt_dn(1) = explicit_grid%cell_centroids(id_dn)%x
     pt_dn(2) = explicit_grid%cell_centroids(id_dn)%y
     pt_dn(3) = explicit_grid%cell_centroids(id_dn)%z
+    
+    !added by Moise Rousseau (01-14-21)
+    !uniquely identify the ghosted connection
+    if (explicit_grid%face_locals(iconn) < 0.1)  then
+      if (pt_up(1) > pt_dn(1)) then
+        connections%local(iconn) = -1
+        connections%num_connections_unique = &
+                           connections%num_connections_unique + 1
+      else
+        if (pt_up(1) == pt_dn(1)) then
+          if (pt_up(2) > pt_dn(2)) then
+            connections%local(iconn) = -1
+            connections%num_connections_unique = &
+                           connections%num_connections_unique + 1
+          else 
+            if (pt_up(2) == pt_dn(2)) then
+              if (pt_up(3) > pt_dn(3)) then
+                connections%local(iconn) = -1
+                connections%num_connections_unique = &
+                           connections%num_connections_unique + 1
+               endif
+            endif
+          endif
+        endif
+      endif
+    else 
+      connections%local(iconn) = 1
+      connections%num_connections_unique = &
+                           connections%num_connections_unique + 1
+    endif
+    !end of addition
 
     pt_center(1) = explicit_grid%face_centroids(iconn)%x
     pt_center(2) = explicit_grid%face_centroids(iconn)%y

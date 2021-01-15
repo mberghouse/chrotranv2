@@ -3055,10 +3055,10 @@ subroutine SubsurfaceReadInput(simulation,input)
               output_option%tconv = &
                 UnitsConvertToInternal(word,internal_units,option)
             case('VARIABLES')
-              call OutputVariableRead(input,option, &
+              call OutputVariableRead(input,option,output_option, &
                                       output_option%output_variable_list)
             case('AVERAGE_VARIABLES')
-              call OutputVariableRead(input,option, &
+              call OutputVariableRead(input,option,output_option, &
                                       output_option%aveg_output_variable_list)
             case('UNFILTER_NON_STATE_VARIABLES')
               output_option%filter_non_state_variables = PETSC_FALSE

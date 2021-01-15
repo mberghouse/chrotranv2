@@ -2198,19 +2198,48 @@ function UGridComputeInternConnect(unstructured_grid,grid_x,grid_y,grid_z, &
         connections%id_up(iconn) = local_id
         connections%id_dn(iconn) = abs(dual_local_id)
         connections%face_id(iconn) = cell_to_face(iface,local_id)
+        connections%local(iconn) = 0
+        
+        point_up%x = grid_x(local_id)
+        point_up%y = grid_y(local_id)
+        point_up%z = grid_z(local_id)
+        point_dn%x = grid_x(abs(dual_local_id))
+        point_dn%y = grid_y(abs(dual_local_id))
+        point_dn%z = grid_z(abs(dual_local_id))
+          
+        !added by Moise Rousseau (01-14-21)
+        !uniquely identify the ghosted connection
         if (dual_local_id < 0) then
-          connections%local(iconn) = 0
+          if (point_up%x > point_dn%x) then
+            connections%local(iconn) = -1
+		        connections%num_connections_unique = &
+		                           connections%num_connections_unique + 1
+          else
+            if (point_up%x == point_dn%x) then
+              if (point_up%y > point_dn%y) then
+                connections%local(iconn) = -1
+		            connections%num_connections_unique = &
+		                           connections%num_connections_unique + 1
+              else 
+                if (point_up%y == point_dn%y) then
+                  if (point_up%z > point_dn%z) then
+                    connections%local(iconn) = -1
+		                connections%num_connections_unique = &
+		                           connections%num_connections_unique + 1
+		               endif
+                endif
+              endif
+            endif
+          endif
         else 
           connections%local(iconn) = 1
+		      connections%num_connections_unique = &
+		                           connections%num_connections_unique + 1
         endif
+        !end of addition
+        
         if (face_type == LINE_FACE_TYPE) then
-
-          point_up%x = grid_x(local_id)
-          point_up%y = grid_y(local_id)
-          point_up%z = grid_z(local_id)
-          point_dn%x = grid_x(abs(dual_local_id))
-          point_dn%y = grid_y(abs(dual_local_id))
-          point_dn%z = grid_z(abs(dual_local_id))
+        
           point1 = unstructured_grid%vertices(unstructured_grid%face_to_vertex(1,face_id))
           point2 = unstructured_grid%vertices(unstructured_grid%face_to_vertex(2,face_id))
 
@@ -2241,12 +2270,6 @@ function UGridComputeInternConnect(unstructured_grid,grid_x,grid_y,grid_z, &
           
           call GeometryComputePlaneWithPoints(plane1,point1,point2,point3)
          
-          point_up%x = grid_x(local_id)
-          point_up%y = grid_y(local_id)
-          point_up%z = grid_z(local_id)
-          point_dn%x = grid_x(abs(dual_local_id))
-          point_dn%y = grid_y(abs(dual_local_id))
-          point_dn%z = grid_z(abs(dual_local_id))
           v1(1) = point_dn%x-point_up%x
           v1(2) = point_dn%y-point_up%y
           v1(3) = point_dn%z-point_up%z
