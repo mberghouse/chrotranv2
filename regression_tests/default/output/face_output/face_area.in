@@ -1,0 +1,135 @@
+#Description: Tracer test for determining the fracture and matrix porosity
+
+SIMULATION
+  SIMULATION_TYPE SUBSURFACE
+  PROCESS_MODELS
+    SUBSURFACE_FLOW flow
+      MODE RICHARDS
+    /
+  /
+END
+
+SUBSURFACE
+
+
+#=========================== solver ========================================
+NUMERICAL_METHODS FLOW
+  NEWTON_SOLVER
+    #ANALYTICAL_JACOBIAN
+  /
+END
+
+
+#=========================== discretization ===================================
+
+GRID
+  TYPE UNSTRUCTURED mesh.ugi
+  #IMPLICIT_GRID_AREA_CALCULATION TRUE_AREA
+END
+REGION BC1
+  FILE BC1.ss
+END
+REGION BC2
+  FILE BC2.ss
+END
+
+
+#=========================== EOS ===================================
+EOS WATER
+  #simplified value for hydraulic conductivity computation
+  DENSITY CONSTANT 997.16d0 kg/m^3
+  VISCOSITY CONSTANT 8.904156d-4 Pa-s
+END
+
+
+#=========================== material properties ==============================
+
+MATERIAL_PROPERTY mater
+  ID 1
+  POROSITY 0.3
+  TORTUOSITY 0.1
+  SATURATION_FUNCTION default
+  PERMEABILITY
+    PERM_ISO 1e-12
+  /
+END
+
+
+#=========================== characteristic curves ============================
+CHARACTERISTIC_CURVES default
+  DEFAULT
+END
+
+
+#=========================== output options ===================================
+OUTPUT
+  FORMAT HDF5
+  VARIABLES
+    FACE_AREA
+    FACE_NON_ORTHOGONALITY_ANGLE
+    PROCESS_ID
+  /
+  SNAPSHOT_FILE 
+    PERIODIC TIMESTEP 1
+    PRINT_CONNECTION_IDS
+  /
+  NO_PRINT_INITIAL
+END
+
+
+#=========================== times ============================================
+TIME
+  FINAL_TIME 50 y
+  INITIAL_TIMESTEP_SIZE 50 y
+  MAXIMUM_TIMESTEP_SIZE 1e2 y
+END
+
+
+
+#=========================== regions ==========================================
+REGION all
+  COORDINATES
+    -1e6 -1e6 -1e6
+    1e6 1e6  1e6
+  /
+END
+
+
+
+#=========================== flow conditions ==================================
+FLOW_CONDITION initial
+  TYPE
+    PRESSURE hydrostatic
+  /
+  DATUM 0 0 100
+  PRESSURE 101325.
+END
+
+
+
+#=========================== condition couplers ===============================
+# initial condition
+INITIAL_CONDITION
+  FLOW_CONDITION initial
+  REGION all
+END
+
+BOUNDARY_CONDITION bc1
+  FLOW_CONDITION initial
+  REGION BC1
+END
+
+BOUNDARY_CONDITION bc2
+  FLOW_CONDITION initial
+  REGION BC2
+END
+
+
+
+#=========================== stratigraphy couplers ============================
+STRATA
+  REGION all
+  MATERIAL mater
+END
+
+END_SUBSURFACE
