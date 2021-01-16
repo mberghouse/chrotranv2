@@ -559,8 +559,10 @@ subroutine PMSensitivityOutput(this)
       if (.not.associated(output_variable)) exit
     enddo
     
+    call MatDestroy(J,ierr);CHKERRQ(ierr)
     option%io_buffer = "END " // trim(this%header) // achar(10)
     call PrintMsg(option)
+    
     
   endif 
   

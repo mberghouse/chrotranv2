@@ -1,0 +1,141 @@
+#Description: Tracer test for determining the fracture and matrix porosity
+
+SIMULATION
+  SIMULATION_TYPE SUBSURFACE
+  PROCESS_MODELS
+    SUBSURFACE_FLOW flow
+      MODE RICHARDS
+    /
+    SENSITIVITY_ANALYSIS sensitivity
+      SENSITIVITY_FLOW
+    /
+  /
+END
+
+SUBSURFACE
+
+#=========================== discretization ===================================
+GRID
+  TYPE UNSTRUCTURED ./struct_quad_128.ugi
+END
+REGION ymin
+  FILE ./ymin.ss
+END
+REGION ymax
+  FILE ./ymax.ss
+END
+REGION top
+  FILE ./top.ss
+END
+
+
+#=========================== EOS ===================================
+EOS WATER
+  #simplified value for hydraulic conductivity computation
+  DENSITY CONSTANT 997.16d0 kg/m^3
+  VISCOSITY CONSTANT 8.904156d-4 Pa-s
+END
+
+
+#=========================== material properties ==============================
+MATERIAL_PROPERTY mater
+  ID 1
+  POROSITY 0.3
+  TORTUOSITY 0.1
+  SATURATION_FUNCTION default
+  PERMEABILITY
+    PERM_ISO 1d-12
+  /
+END
+
+
+#=========================== characteristic curves ============================
+CHARACTERISTIC_CURVES default
+  DEFAULT
+END
+
+
+#=========================== output options ===================================
+OUTPUT
+  FORMAT HDF5
+  NO_PRINT_INITIAL
+END
+
+
+#=========================== times ============================================
+TIME
+  FINAL_TIME 1e2 y
+  INITIAL_TIMESTEP_SIZE 10 y
+  MAXIMUM_TIMESTEP_SIZE 1e2 y
+END
+
+
+
+#=========================== regions ==========================================
+REGION all
+  COORDINATES
+    -1e6 -1e6 -1e6
+    1e6 1e6  1e6
+  /
+END
+
+
+
+#=========================== flow conditions ==================================
+FLOW_CONDITION initial
+  TYPE
+    PRESSURE hydrostatic
+  /
+  DATUM 0 0 10
+  GRADIENT 
+    PRESSURE -0.01 0. 0.
+  /
+  PRESSURE 101325.
+END
+FLOW_CONDITION inj_rain
+  TYPE
+    FLUX NEUMANN
+  /
+  FLUX 500d-8
+END
+
+
+
+#=========================== condition couplers ===============================
+# initial condition
+INITIAL_CONDITION
+  FLOW_CONDITION initial
+  REGION all
+END
+BOUNDARY_CONDITION west
+  FLOW_CONDITION initial
+  REGION ymin
+END
+BOUNDARY_CONDITION east
+  FLOW_CONDITION initial
+  REGION ymax
+END
+BOUNDARY_CONDITION rain
+  FLOW_CONDITION inj_rain
+  REGION top
+END
+
+
+#=========================== stratigraphy couplers ============================
+STRATA
+  REGION all
+  MATERIAL mater
+END
+
+END_SUBSURFACE
+
+
+#=========================== sensitivity analysis =============================
+SENSITIVITY_FLOW
+  OUTPUT PERIODIC_TIMESTEP 4
+  VARIABLES
+    PRESSURE
+    PERMEABILITY
+  /
+  FORMAT HDF5
+END
