@@ -199,7 +199,7 @@ END
     select case(trim(word))
     !-----------------------------------------
     !-----------------------------------------
-      case('FORMAT') !HDF5 or petsc viewer (ascii, binary)
+      case('SENSITIVITY_OUTPUT_FORMAT') !HDF5 or petsc viewer (ascii, binary)
         call InputReadCard(input,option,word)
         call StringToUpper(word)
         select case(trim(word))
@@ -236,23 +236,8 @@ END
                                               sensitivity_output_option,input)
     !-----------------------------------------
       case('OUTPUT')
-        call InputReadCard(input,option,word)
-        call StringToUpper(word)
-        select case(trim(word))
-          case('SYNC_WITH_SNAPSHOT_FILE')
-            sensitivity_output_option%output_time_option = &
-                                                SENSITIVITY_SYNC_OUTPUT
-          case('PERIODIC_TIMESTEP')
-            sensitivity_output_option%output_time_option = &
-                                                SENSITIVITY_EVERY_X_TIMESTEP
-            call InputReadInt(input,option,&
-                              sensitivity_output_option%output_every_timestep)
-          case('LAST_TIMESTEP')
-            sensitivity_output_option%output_time_option = SENSITIVITY_LAST
-          case default
-            call InputKeywordUnrecognized(input,word,'SENSITIVITY_FLOW,&
-                                          &OUTPUT_TIME',option)
-        end select
+        call PMSensitivityReadOutputTimes(this, &
+                                              sensitivity_output_option,input)
     !-----------------------------------------
       case default
         call InputKeywordUnrecognized(input,word,'SENSITIVITY_FLOW',option)
@@ -305,17 +290,17 @@ subroutine PMSensitivityReadOutputVariables(this, &
       case('PRESSURE')
         variable => SensitivityOutputVariableCreate()
         variable%name = 'Pressure'
-        variable%units = '1.Pa-1' ! TODO (moise)
+        variable%units = ''
         variable%ivar = SENSITIVITY_PRESSURE
       case('PERMEABILITY')
         variable => SensitivityOutputVariableCreate()
         variable%name = 'Permeability'
-        variable%units = '1.s-1' ! TODO (moise)
+        variable%units = ''
         variable%ivar = SENSITIVITY_PERMEABILITY
       case('POROSITY')
         variable => SensitivityOutputVariableCreate()
         variable%name = 'Porosity'
-        variable%units = '' ! TODO (moise)
+        variable%units = ''
         variable%ivar = SENSITIVITY_POROSITY
       case default
         call InputKeywordUnrecognized(input,word, &
@@ -329,6 +314,55 @@ subroutine PMSensitivityReadOutputVariables(this, &
   call InputPopBlock(input,option)
   
 end subroutine PMSensitivityReadOutputVariables
+
+! *************************************************************************** !
+
+subroutine PMSensitivityReadOutputTimes(this,sensitivity_output_option, &
+                                            input)
+
+  use Input_Aux_module
+  use Option_module
+  use String_module
+  use Sensitivity_Aux_module
+  
+  implicit none
+  
+  class(pm_sensitivity_type) :: this
+  type(sensitivity_output_option_type), pointer :: sensitivity_output_option
+  type(input_type), pointer :: input
+  
+  type(option_type), pointer :: option
+  character(len=MAXWORDLENGTH) :: word
+  type(sensitivity_output_variable_type), pointer :: variable
+  
+  option => this%option
+  
+  call InputPushBlock(input,option)
+  do
+    call InputReadPflotranString(input,option)
+    if (InputError(input)) exit
+    if (InputCheckExit(input,option)) exit
+    call InputReadCard(input,option,word)
+    call InputErrorMsg(input,option,'keyword', &
+                       'sensitivity, VARIABLES')
+    call StringToUpper(word)
+    select case(trim(word))
+!      case('SYNC_WITH_SNAPSHOT_FILE')
+!        sensitivity_output_option%output_time_option = &
+!                                            SENSITIVITY_SYNC_OUTPUT
+      case('PERIODIC_TIMESTEP')
+        call InputReadInt(input,option,&
+                          sensitivity_output_option%output_every_timestep)
+      case('PRINT_FINAL_TIMESTEP')
+        sensitivity_output_option%print_last_timestep = PETSC_TRUE
+      case default
+        call InputKeywordUnrecognized(input,word,'SENSITIVITY_FLOW,&
+                                      &OUTPUT_TIME',option)
+    end select
+  end do
+  call InputPopBlock(input,option)
+
+end subroutine PMSensitivityReadOutputTimes
 
 ! *************************************************************************** !
 
@@ -427,36 +461,19 @@ end subroutine PMSensitivityInitializeTimestep
   PetscErrorCode :: ierr
   
   type(sensitivity_output_option_type), pointer :: sensitivity_output_option
-  type(option_type), pointer :: option
-  PetscBool :: timestep_flag, last_flag, sync_flag
+  PetscBool :: plot_flag
   
   sensitivity_output_option => this%sensitivity_output_option
-  option => this%realization%option
-  timestep_flag = PETSC_FALSE
-  last_flag = PETSC_FALSE
-  sync_flag = PETSC_FALSE
-  ierr = 0
   
   !update time for future calling of output
   sensitivity_output_option%time = time
-  sensitivity_output_option%plot_number = &
-                       sensitivity_output_option%plot_number + 1
-  sensitivity_output_option%plot_flag = PETSC_FALSE
+  sensitivity_output_option%steps = sensitivity_output_option%steps + 1
   
-  !check for timestep
-  if (floor(real(sensitivity_output_option%plot_number) / &
-            sensitivity_output_option%output_every_timestep) /= 0) &
-    timestep_flag = PETSC_TRUE
-  !check for last
-  ! TODO (moise)
-  !check for sync
-  ! TODO (moise)
+  call SensitivityOutputOptionIsTimeToOutput(sensitivity_output_option, &
+                                             plot_flag)
+  if (plot_flag) call PMSensitivityOutput(this)
   
-  ! check if it's the time to output
-  call SensitivityOutputOptionIsTimeToOutput(sensitivity_output_option,&
-                                             timestep_flag,last_flag,sync_flag)
-  
-  call PMSensitivityOutput(this)
+  ierr = 0
 
 end subroutine PMSensitivitySolve
 
@@ -511,60 +528,60 @@ subroutine PMSensitivityOutput(this)
   option => this%realization%option
   grid => this%realization%discretization%grid
   
-  if (sensitivity_output_option%plot_flag) then
     
-    !prepare J matrix
-    J_mat_type = MATBAIJ
-    call DiscretizationCreateJacobian(this%realization%discretization, &
-                                      option%nflowdof, J_mat_type, J, option)
-    call MatSetOptionsPrefix(J,"Sensitivity_",ierr);CHKERRQ(ierr)
+  !prepare J matrix
+  J_mat_type = MATBAIJ
+  call DiscretizationCreateJacobian(this%realization%discretization, &
+                                    option%nflowdof, J_mat_type, J, option)
+  call MatSetOptionsPrefix(J,"Sensitivity_",ierr);CHKERRQ(ierr)
+  
+  output_variable => sensitivity_output_option%output_variables%first
+  do 
     
-    output_variable => sensitivity_output_option%output_variables%first
-    do 
+    if (.not.associated(output_variable)) exit
+    if (this%sensitivity_flow) then
+      ! compute sensitivity using finite difference
+      option%io_buffer = trim(this%header) //": Compute " // &
+                   trim(output_variable%name) // " Flow &
+                   &Sensitivity Matrix"
+      call PrintMsg(option)
       
-      if (this%sensitivity_flow) then
-        ! compute sensitivity using finite difference
-        option%io_buffer = trim(this%header) //": Compute " // &
-	                   trim(output_variable%name) // " Flow &
-	                   &Sensitivity Matrix"
-        call PrintMsg(option)
-        
-        call MatZeroEntries(J,ierr);CHKERRQ(ierr)
-        select case(option%iflowmode)
-	        case(RICHARDS_MODE)
-	          call RichardsSensitivity(J,this%realization,output_variable%ivar)
-	        !case(TH)
-	        !  call THSensitivity()
-	        case default
-        end select
-        call MatAssemblyBegin(J,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
-        call MatAssemblyEnd(J,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
-        
-        !output it
-        word = "flow"
-        call OutputSensitivity(J,grid,option,output_option, &
-	                       sensitivity_output_option, &
-	                       output_variable, word)
-	    endif
-	    
-	    if (this%sensitivity_transport) then
-	      ! TODO (moise)
-	      option%io_buffer = trim(this%header) //": Compute " // &
-	                   trim(output_variable%name) // " Transport &&
-	                   Sensitivity Matrix"
-        call PrintMsg(option)
-	    endif
+      call MatZeroEntries(J,ierr);CHKERRQ(ierr)
+      select case(option%iflowmode)
+        case(RICHARDS_MODE)
+          call RichardsSensitivity(J,this%realization,output_variable%ivar)
+        !case(TH)
+        !  call THSensitivity()
+        case default
+      end select
+      call MatAssemblyBegin(J,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
+      call MatAssemblyEnd(J,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
       
-      output_variable => output_variable%next
-      if (.not.associated(output_variable)) exit
-    enddo
+      !output it
+      word = "flow"
+      call OutputSensitivity(J,grid,option,output_option, &
+                       sensitivity_output_option, &
+                       output_variable, word)
+    endif
     
-    call MatDestroy(J,ierr);CHKERRQ(ierr)
-    option%io_buffer = "END " // trim(this%header) // achar(10)
-    call PrintMsg(option)
+    if (this%sensitivity_transport) then
+      ! TODO (moise)
+      option%io_buffer = trim(this%header) //": Compute " // &
+                   trim(output_variable%name) // " Transport &&
+                   Sensitivity Matrix"
+      call PrintMsg(option)
+    endif
     
-    
-  endif 
+    output_variable => output_variable%next
+    if (.not.associated(output_variable)) exit
+  enddo
+  
+  call MatDestroy(J,ierr);CHKERRQ(ierr)
+  option%io_buffer = "END " // trim(this%header) // achar(10)
+  call PrintMsg(option)
+  
+  sensitivity_output_option%plot_number = &
+           sensitivity_output_option%plot_number + 1
   
 end subroutine PMSensitivityOutput
 
@@ -626,6 +643,11 @@ subroutine PMSensitivityDestroy(this)
   implicit none
   
   class(pm_sensitivity_type) :: this
+  
+  !if we destroy, that mean we reach the last timestep, therefore:
+  !if (this%sensitivity_output_option%print_last_timestep) &
+  !  call PMSensitivityOutput(this)
+  !that's ugly, but it's the only way i found...
   
   call PMSensitivityStrip(this)
   
