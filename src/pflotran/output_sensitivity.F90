@@ -332,9 +332,9 @@ subroutine OutputSensitivityWriteMatrixIJ(J,grid,option,file_id)
           !call MatSetValuesBlockedLocal(J,1,id_up-1,1,id_up-1,values, &
           !                               ADD_VALUES,ierr);CHKERRQ(ierr)
           natural_id = grid%nG2A(id_up)
-          local_i(count) = natural_id
-          local_j(count) = natural_id
-          count = count + 1
+          !local_i(count) = natural_id
+          !local_j(count) = natural_id
+          !count = count + 1
           !call MatSetValuesBlockedLocal(J,1,id_up-1,1,id_dn-1,values, &
           !                               ADD_VALUES,ierr);CHKERRQ(ierr)
           local_i(count) = natural_id
@@ -346,9 +346,9 @@ subroutine OutputSensitivityWriteMatrixIJ(J,grid,option,file_id)
           !call MatSetValuesBlockedLocal(J,1,id_dn-1,1,id_dn-1,values, &
           !                             ADD_VALUES,ierr);CHKERRQ(ierr)
           natural_id = grid%nG2A(id_dn)
-          local_i(count) = natural_id
-          local_j(count) = natural_id
-          count = count + 1
+          !local_i(count) = natural_id
+          !local_j(count) = natural_id
+          !count = count + 1
           !call MatSetValuesBlockedLocal(J,1,id_dn-1,1,id_up-1,values, &
           !                              ADD_VALUES,ierr);CHKERRQ(ierr)
           local_i(count) = natural_id
@@ -383,7 +383,6 @@ subroutine OutputSensitivityWriteMatrixIJ(J,grid,option,file_id)
     !structured grid
     ! TODO (moise)
   endif
-	
 	
   !output it
   !create group
@@ -440,7 +439,6 @@ subroutine OutputSensitivityWriteMatrixIJ(J,grid,option,file_id)
   call h5dclose_f(data_set_id,hdf5_err)
   call h5sclose_f(file_space_id,hdf5_err)
 
-
   ! -- COLUMNS -- !
   ! Ask for space and organize it
   ! memory space which is a 1D vector
@@ -491,8 +489,9 @@ subroutine OutputSensitivityWriteMatrixIJ(J,grid,option,file_id)
   call h5dclose_f(data_set_id,hdf5_err)
   call h5sclose_f(file_space_id,hdf5_err)
 
-  
   call h5gclose_f(grp_id,hdf5_err)
+  deallocate(local_i)
+  deallocate(local_j)
                     
 end subroutine OutputSensitivityWriteMatrixIJ
 
@@ -568,47 +567,31 @@ subroutine OutputSensitivityWriteMatrixData(J,grid,option,output_option, &
         temp_id_in(1) = local_id - 1
         call ISLocalToGlobalMappingApply(rmapping,1,temp_id_in, &
                                          temp_id_out,ierr);CHKERRQ(ierr)
-        !call MatSetValuesBlockedLocal(J,1,ghosted_id-1,1,ghosted_id-1, &
-        !                              values,ADD_VALUES,ierr);CHKERRQ(ierr)
         call MatGetValues(J,1,temp_id_out(1),1,temp_id_out(1), &
                           datas(count),ierr);CHKERRQ(ierr)
-        !call MatGetValuesLocal(J,1,global_id-1,1,global_id-1,scalar)
-        !datas(count) = scalar(1,1)
         count = count + 1
       enddo
       
       do iconn = 1, size(grid%unstructured_grid%explicit_grid%connections,2)
         id_up = grid%unstructured_grid%explicit_grid%connections(1,iconn)
         id_dn = grid%unstructured_grid%explicit_grid%connections(2,iconn)
-        if (id_up <= grid%unstructured_grid%nlmax) then ! local
-          !call MatSetValuesBlockedLocal(J,1,id_up-1,1,id_up-1,values, &
-          !                               ADD_VALUES,ierr);CHKERRQ(ierr)
-          temp_id_in(1) = id_up - 1
-          call ISLocalToGlobalMappingApply(rmapping,1,temp_id_in, &
-                                           temp_id_out,ierr);CHKERRQ(ierr)
-          temp_id_in(1) = id_dn - 1
-          call ISLocalToGlobalMappingApply(rmapping,1,temp_id_in, &
-                                           neighbor_id,ierr);CHKERRQ(ierr)
-          call MatGetValuesLocal(J,1,temp_id_out(1),1,temp_id_out(1), &
-                                 datas(count),ierr);CHKERRQ(ierr)
-          count = count + 1
-          !call MatSetValuesBlockedLocal(J,1,id_up-1,1,id_dn-1,values, &
-          !                               ADD_VALUES,ierr);CHKERRQ(ierr)
-          call MatGetValuesLocal(J,1,temp_id_out(1),1,neighbor_id(1), &
-                                 datas(count),ierr);CHKERRQ(ierr)
+        !map local to global matrix indices
+        temp_id_in(1) = id_up - 1
+        call ISLocalToGlobalMappingApply(rmapping,1,temp_id_in, &
+                                         temp_id_out,ierr);CHKERRQ(ierr)
+        temp_id_in(1) = id_dn - 1
+        call ISLocalToGlobalMappingApply(rmapping,1,temp_id_in, &
+                                         neighbor_id,ierr);CHKERRQ(ierr)
+        
+        if (id_dn <= grid%unstructured_grid%nlmax) then ! local
+          call MatGetValues(J,1,temp_id_out(1),1,neighbor_id(1), &
+                                   datas(count),ierr);CHKERRQ(ierr)
           count = count + 1
         endif
+        
         if (id_dn <= grid%unstructured_grid%nlmax) then ! local
-          !call MatSetValuesBlockedLocal(J,1,id_dn-1,1,id_dn-1,values, &
-          !                             ADD_VALUES,ierr);CHKERRQ(ierr)
-          !call MatGetValuesLocal(J,1,id_dn-1,1,id_dn-1,datas(count))
-          call MatGetValuesLocal(J,1,neighbor_id(1),1,neighbor_id(1), &
-                                 datas(count),ierr);CHKERRQ(ierr)
-          count = count + 1
-          !call MatSetValuesBlockedLocal(J,1,id_dn-1,1,id_up-1,values, &
-          !                              ADD_VALUES,ierr);CHKERRQ(ierr)
-          call MatGetValuesLocal(J,1,neighbor_id(1),1,temp_id_out(1), &
-                                 datas(count),ierr);CHKERRQ(ierr)
+          call MatGetValues(J,1,neighbor_id(1),1,temp_id_out(1), &
+                                   datas(count),ierr);CHKERRQ(ierr)
           count = count + 1
         endif
       enddo
@@ -627,7 +610,8 @@ subroutine OutputSensitivityWriteMatrixData(J,grid,option,output_option, &
                             cell_neighbors_local_ghosted(0,local_id)
           temp_id_in(1) = abs(grid%unstructured_grid% &
                           cell_neighbors_local_ghosted(ineighbor,local_id)) - 1
-          call ISLocalToGlobalMappingApply(cmapping,1,temp_id_in,neighbor_id,ierr)
+          call ISLocalToGlobalMappingApply(cmapping,1,temp_id_in, &
+                                           neighbor_id,ierr)
           !call MatSetValuesBlockedLocal(J,1,ghosted_id-1,1,neighbor_id-1, &
           !                              values,ADD_VALUES,ierr);CHKERRQ(ierr)
           call MatGetValues(J,1,temp_id_out(1),1,neighbor_id(1),&
@@ -702,6 +686,7 @@ subroutine OutputSensitivityWriteMatrixData(J,grid,option,output_option, &
   call h5sclose_f(file_space_id,hdf5_err)
 
   call h5gclose_f(grp_id,hdf5_err)
+  deallocate(datas)
 
 end subroutine OutputSensitivityWriteMatrixData
 

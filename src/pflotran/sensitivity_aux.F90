@@ -46,11 +46,11 @@ module Sensitivity_Aux_module
     PetscInt :: plot_number
     PetscBool :: first_plot_flag
     PetscInt :: format !hdf5, binary, matlab
-    PetscInt :: output_time_option !sync, x timestep, last
+    PetscBool :: print_last_timestep 
     PetscInt :: output_every_timestep !when x timestep option
     PetscInt :: timestep_per_hdf5_file !x timestep per output file
     PetscReal :: time !simulation time
-    PetscBool :: plot_flag
+    PetscInt :: steps !simulation steps
     type(sensitivity_output_variable_list_type), pointer :: output_variables
   end type sensitivity_output_option_type
   
@@ -101,15 +101,16 @@ subroutine SensitivityOutputOptionInit(sensitivity_output_option)
   implicit none
   
   type(sensitivity_output_option_type), pointer :: sensitivity_output_option
+  sensitivity_output_option%time = 0.d0
+  sensitivity_output_option%steps = 0
   
   sensitivity_output_option%plot_number = 0
   sensitivity_output_option%first_plot_flag = PETSC_TRUE
   sensitivity_output_option%format = SENSITIVITY_OUTPUT_HDF5
-  sensitivity_output_option%output_time_option = SENSITIVITY_SYNC_OUTPUT
-  sensitivity_output_option%output_every_timestep = 0
+  sensitivity_output_option%print_last_timestep = PETSC_FALSE
+  sensitivity_output_option%output_every_timestep = -1
   sensitivity_output_option%timestep_per_hdf5_file = 0 !no limit
-  sensitivity_output_option%time = 0.d0
-  sensitivity_output_option%plot_flag = PETSC_FALSE
+  
   allocate(sensitivity_output_option%output_variables)
   call SensitivityOutputVaraibleListInit( &
                                  sensitivity_output_option%output_variables)
@@ -168,9 +169,8 @@ end subroutine SensitivityAddOutputVariableToList
 
 ! ************************************************************************** !
 
-subroutine SensitivityOutputOptionIsTimeToOutput(sensitivity_output_option,&
-                                                 timestep_flag,last_flag,&
-                                                 sync_flag)
+subroutine SensitivityOutputOptionIsTimeToOutput(sensitivity_output_option, &
+                                                 plot_flag)
   ! 
   ! Determine if it's the time to output the sensitivity
   ! 
@@ -181,16 +181,14 @@ subroutine SensitivityOutputOptionIsTimeToOutput(sensitivity_output_option,&
   implicit none
   
   type(sensitivity_output_option_type), pointer :: sensitivity_output_option
-  PetscBool :: timestep_flag, last_flag, sync_flag
+  PetscBool, intent(out) :: plot_flag
   
-  select case(sensitivity_output_option%output_time_option)
-    case(SENSITIVITY_SYNC_OUTPUT)
-      if (sync_flag) sensitivity_output_option%plot_flag = PETSC_TRUE
-    case(SENSITIVITY_EVERY_X_TIMESTEP)
-      if (timestep_flag) sensitivity_output_option%plot_flag = PETSC_TRUE
-    case(SENSITIVITY_LAST)
-      if (last_flag) sensitivity_output_option%plot_flag = PETSC_TRUE
-  end select
+  plot_flag = PETSC_FALSE
+  if (sensitivity_output_option%output_every_timestep > 0) then
+    if (mod(sensitivity_output_option%steps, &
+                  sensitivity_output_option%output_every_timestep) == 0) &
+          plot_flag = PETSC_TRUE
+  endif
   
 end subroutine SensitivityOutputOptionIsTimeToOutput
 

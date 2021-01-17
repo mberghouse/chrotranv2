@@ -132,10 +132,12 @@ END_SUBSURFACE
 
 #=========================== sensitivity analysis =============================
 SENSITIVITY_FLOW
-  OUTPUT PERIODIC_TIMESTEP 4
+  OUTPUT 
+    PERIODIC_TIMESTEP 4
+  /
   VARIABLES
     PRESSURE
     PERMEABILITY
   /
-  FORMAT HDF5
+  SENSITIVITY_OUTPUT_FORMAT HDF5
 END
