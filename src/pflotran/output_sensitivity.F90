@@ -269,19 +269,22 @@ subroutine OutputSensitivityWriteMatrixIJ(J,grid,option,file_id)
   use HDF5_module, only : HDF5WriteDataSetFromVec
   use String_module
   use Grid_module
+  use Connection_module
   
   Mat :: J
   type(grid_type), pointer :: grid
   type(option_type), pointer :: option
+  type(connection_set_type), pointer :: cur_connection_set
   integer(HID_T) :: file_id
   
+  !get indices
   PetscInt, allocatable :: local_i(:), local_j(:)
   PetscReal :: info(MAT_INFO_SIZE)
   PetscInt :: mat_non_zeros_local, mat_non_zeros_global
-  PetscInt :: ineighbor, neighbor_id
   PetscInt :: local_id, ghosted_id, natural_id, count
-  PetscInt :: iconn, id_up, id_dn
+  PetscInt :: nlmax, iconn, id_up, id_dn
   PetscInt :: ierr
+  !save indices
   character(len=MAXSTRINGLENGTH) :: string
   integer(HID_T) :: file_space_id,memory_space_id, data_set_id, prop_id
   PetscMPIInt :: rank_mpi
@@ -291,6 +294,7 @@ subroutine OutputSensitivityWriteMatrixIJ(J,grid,option,file_id)
   PetscMPIInt :: hdf5_err
   PetscInt :: istart
   
+  cur_connection_set => grid%internal_connection_set_list%first
   
   !get matrix size for output vector
   !MAT_LOCAL = 1
@@ -303,86 +307,50 @@ subroutine OutputSensitivityWriteMatrixIJ(J,grid,option,file_id)
   !create output array
   allocate(local_i(mat_non_zeros_local))
   allocate(local_j(mat_non_zeros_local))
-  
   local_i = UNINITIALIZED_INTEGER
   local_j = UNINITIALIZED_INTEGER
-  count = 1
-  !populate
-  if (associated(grid%unstructured_grid)) then
-    ! -----------------------------------------------------
-    ! copy structure from function UGridDMCreateJacobian in 
-    ! grid_unstructured_aux.F90
-    ! -----------------------------------------------------
-    if (associated(grid%unstructured_grid%explicit_grid)) then
-      ! unstructured explicit grid
-      do local_id = 1, grid%unstructured_grid%nlmax
-        !call MatSetValuesBlockedLocal(J,1,ghosted_id-1,1,ghosted_id-1, &
-        !                              values,ADD_VALUES,ierr);CHKERRQ(ierr)
-        ghosted_id = local_id
-        natural_id = grid%nG2A(ghosted_id)
-        local_i(count) = natural_id
-        local_j(count) = natural_id
-        count = count + 1
-      enddo
-      
-      do iconn = 1, size(grid%unstructured_grid%explicit_grid%connections,2)
-        id_up = grid%unstructured_grid%explicit_grid%connections(1,iconn)
-        id_dn = grid%unstructured_grid%explicit_grid%connections(2,iconn)
-        if (id_up <= grid%unstructured_grid%nlmax) then ! local
-          !call MatSetValuesBlockedLocal(J,1,id_up-1,1,id_up-1,values, &
-          !                               ADD_VALUES,ierr);CHKERRQ(ierr)
-          natural_id = grid%nG2A(id_up)
-          !local_i(count) = natural_id
-          !local_j(count) = natural_id
-          !count = count + 1
-          !call MatSetValuesBlockedLocal(J,1,id_up-1,1,id_dn-1,values, &
-          !                               ADD_VALUES,ierr);CHKERRQ(ierr)
-          local_i(count) = natural_id
-          natural_id = grid%nG2A(id_dn)
-          local_j(count) = natural_id
-          count = count + 1
-        endif
-        if (id_dn <= grid%unstructured_grid%nlmax) then ! local
-          !call MatSetValuesBlockedLocal(J,1,id_dn-1,1,id_dn-1,values, &
-          !                             ADD_VALUES,ierr);CHKERRQ(ierr)
-          natural_id = grid%nG2A(id_dn)
-          !local_i(count) = natural_id
-          !local_j(count) = natural_id
-          !count = count + 1
-          !call MatSetValuesBlockedLocal(J,1,id_dn-1,1,id_up-1,values, &
-          !                              ADD_VALUES,ierr);CHKERRQ(ierr)
-          local_i(count) = natural_id
-          natural_id = grid%nG2A(id_up)
-          local_j(count) = natural_id
-          count = count + 1
-        endif
-      enddo
-    else
-      !unstructured implicit grid
-      do local_id = 1, grid%unstructured_grid%nlmax
-        !call MatSetValuesBlockedLocal(J,1,ghosted_id-1,1,ghosted_id-1, &
-        !                              values,ADD_VALUES,ierr);CHKERRQ(ierr)
-        ghosted_id = local_id
-        natural_id = grid%nG2A(ghosted_id)
-        local_i(count) = natural_id
-        local_j(count) = natural_id
-        count = count + 1
-        do ineighbor = 1, grid%unstructured_grid% &
-                            cell_neighbors_local_ghosted(0,local_id)
-          neighbor_id = abs(grid%unstructured_grid% &
-                            cell_neighbors_local_ghosted(ineighbor,local_id))
-          !call MatSetValuesBlockedLocal(J,1,ghosted_id-1,1,neighbor_id-1, &
-          !                              values,ADD_VALUES,ierr);CHKERRQ(ierr)
-          local_i(count) = natural_id
-          local_j(count) = grid%nG2A(neighbor_id)
-          count = count + 1
-        enddo
-      enddo
-    endif
+  if (associated(grid%unstructured_grid)) then 
+    nlmax = grid%unstructured_grid%nlmax
   else
-    !structured grid
-    ! TODO (moise)
+    nlmax = grid%structured_grid%nlmax
   endif
+  
+  count = 1
+  !diag term
+  do local_id = 1, nlmax
+    ghosted_id = local_id
+    natural_id = grid%nG2A(ghosted_id)
+    local_i(count) = natural_id
+    local_j(count) = natural_id
+    count = count + 1
+  enddo
+  
+  !neighbors term
+  cur_connection_set => grid%internal_connection_set_list%first
+  do
+    if (.not. associated(cur_connection_set)) exit
+    do iconn = 1, cur_connection_set%num_connections
+      id_up = cur_connection_set%id_up(iconn)
+      id_dn = cur_connection_set%id_dn(iconn)
+      !get values
+      if (id_up <= nlmax) then ! local
+        natural_id = grid%nG2A(id_up)
+        local_i(count) = natural_id
+        natural_id = grid%nG2A(id_dn)
+        local_j(count) = natural_id
+        count = count + 1
+      endif
+      if (id_dn <= nlmax) then ! local
+        natural_id = grid%nG2A(id_dn)
+        local_i(count) = natural_id
+        natural_id = grid%nG2A(id_up)
+        local_j(count) = natural_id
+        count = count + 1
+      endif
+    enddo
+    cur_connection_set => cur_connection_set%next
+  enddo
+  
 	
   !output it
   !create group
@@ -511,6 +479,7 @@ subroutine OutputSensitivityWriteMatrixData(J,grid,option,output_option, &
   use Output_Aux_module
   use hdf5
   use String_module
+  use Connection_module
   use HDF5_module, only : HDF5WriteDataSetFromVec
   use Grid_module
   
@@ -524,14 +493,17 @@ subroutine OutputSensitivityWriteMatrixData(J,grid,option,output_option, &
   type(sensitivity_output_variable_type) :: variable
   integer(HID_T) :: file_id
   
+  !compute sensitivity
   PetscReal, allocatable :: datas(:)
   PetscReal :: info(MAT_INFO_SIZE)
   PetscInt :: mat_non_zeros_local, mat_non_zeros_global
-  PetscInt :: ineighbor
-  PetscInt :: local_id, global_id, natural_id, count
+  PetscInt :: local_id, count
   PetscInt :: temp_id_in(1), temp_id_out(1), neighbor_id(1)
-  PetscInt :: iconn, id_up, id_dn
+  PetscInt :: nlmax, iconn, id_up, id_dn
   PetscInt :: ierr
+  ISLocalToGlobalMapping :: rmapping,cmapping
+  type(connection_set_type), pointer :: cur_connection_set
+  !save sensitivity
   character(len=MAXSTRINGLENGTH) :: string
   integer(HID_T) :: file_space_id,memory_space_id, data_set_id, prop_id
   PetscMPIInt :: rank_mpi
@@ -540,7 +512,6 @@ subroutine OutputSensitivityWriteMatrixData(J,grid,option,output_option, &
   integer(HID_T) :: grp_id
   PetscMPIInt :: hdf5_err
   PetscInt :: istart
-  ISLocalToGlobalMapping :: rmapping,cmapping
   
   !get matrix size for output vector
   !MAT_LOCAL = 1
@@ -551,79 +522,53 @@ subroutine OutputSensitivityWriteMatrixData(J,grid,option,output_option, &
   mat_non_zeros_global = info(MAT_INFO_NZ_ALLOCATED)
   call MatGetLocalToGlobalMapping(J,rmapping,cmapping,ierr);CHKERRQ(ierr)
 
-  !create output array
   allocate(datas(mat_non_zeros_local))
   datas = UNINITIALIZED_DOUBLE
-  count = 1
-  !populate
-  if (associated(grid%unstructured_grid)) then
-    ! -----------------------------------------------------
-    ! copy structure from function UGridDMCreateJacobian in 
-    ! grid_unstructured_aux.F90
-    ! -----------------------------------------------------
-    if (associated(grid%unstructured_grid%explicit_grid)) then
-      ! unstructured explicit grid
-      do local_id = 1, grid%unstructured_grid%nlmax
-        temp_id_in(1) = local_id - 1
-        call ISLocalToGlobalMappingApply(rmapping,1,temp_id_in, &
-                                         temp_id_out,ierr);CHKERRQ(ierr)
-        call MatGetValues(J,1,temp_id_out(1),1,temp_id_out(1), &
-                          datas(count),ierr);CHKERRQ(ierr)
-        count = count + 1
-      enddo
-      
-      do iconn = 1, size(grid%unstructured_grid%explicit_grid%connections,2)
-        id_up = grid%unstructured_grid%explicit_grid%connections(1,iconn)
-        id_dn = grid%unstructured_grid%explicit_grid%connections(2,iconn)
-        !map local to global matrix indices
-        temp_id_in(1) = id_up - 1
-        call ISLocalToGlobalMappingApply(rmapping,1,temp_id_in, &
-                                         temp_id_out,ierr);CHKERRQ(ierr)
-        temp_id_in(1) = id_dn - 1
-        call ISLocalToGlobalMappingApply(rmapping,1,temp_id_in, &
-                                         neighbor_id,ierr);CHKERRQ(ierr)
-        
-        if (id_dn <= grid%unstructured_grid%nlmax) then ! local
-          call MatGetValues(J,1,temp_id_out(1),1,neighbor_id(1), &
-                                   datas(count),ierr);CHKERRQ(ierr)
-          count = count + 1
-        endif
-        
-        if (id_dn <= grid%unstructured_grid%nlmax) then ! local
-          call MatGetValues(J,1,neighbor_id(1),1,temp_id_out(1), &
-                                   datas(count),ierr);CHKERRQ(ierr)
-          count = count + 1
-        endif
-      enddo
-    else
-      !unstructured implicit grid
-      do local_id = 1, grid%unstructured_grid%nlmax
-        temp_id_in(1) = local_id - 1
-        call ISLocalToGlobalMappingApply(rmapping,1,temp_id_in, &
-                                         temp_id_out,ierr)
-        !call MatSetValuesBlockedLocal(J,1,ghosted_id-1,1,ghosted_id-1, &
-        !                              values,ADD_VALUES,ierr);CHKERRQ(ierr)
-        call MatGetValues(J,1,temp_id_out(1),1,temp_id_out(1), &
-                          datas(count),ierr);CHKERRQ(ierr)
-        count = count + 1
-        do ineighbor = 1, grid%unstructured_grid% &
-                            cell_neighbors_local_ghosted(0,local_id)
-          temp_id_in(1) = abs(grid%unstructured_grid% &
-                          cell_neighbors_local_ghosted(ineighbor,local_id)) - 1
-          call ISLocalToGlobalMappingApply(cmapping,1,temp_id_in, &
-                                           neighbor_id,ierr)
-          !call MatSetValuesBlockedLocal(J,1,ghosted_id-1,1,neighbor_id-1, &
-          !                              values,ADD_VALUES,ierr);CHKERRQ(ierr)
-          call MatGetValues(J,1,temp_id_out(1),1,neighbor_id(1),&
-                                 datas(count),ierr);CHKERRQ(ierr)
-          count = count + 1
-        enddo
-      enddo
-    endif
+  if (associated(grid%unstructured_grid)) then 
+    nlmax = grid%unstructured_grid%nlmax
   else
-    !structured grid
-    ! TODO (moise)
+    nlmax = grid%structured_grid%nlmax
   endif
+  
+  count = 1
+  !diag term
+  do local_id = 1, nlmax
+    temp_id_in(1) = local_id - 1
+    call ISLocalToGlobalMappingApply(rmapping,1,temp_id_in, &
+                                     temp_id_out,ierr);CHKERRQ(ierr)
+    call MatGetValues(J,1,temp_id_out(1),1,temp_id_out(1), &
+                      datas(count),ierr);CHKERRQ(ierr)
+    count = count + 1
+  enddo
+  
+  !neighbors term
+  cur_connection_set => grid%internal_connection_set_list%first
+  do
+    if (.not. associated(cur_connection_set)) exit
+    do iconn = 1, cur_connection_set%num_connections
+      id_up = cur_connection_set%id_up(iconn)
+      id_dn = cur_connection_set%id_dn(iconn)
+      !convert ghosted id to mat local index
+      temp_id_in(1) = id_up - 1
+      call ISLocalToGlobalMappingApply(rmapping,1,temp_id_in, &
+                                       temp_id_out,ierr);CHKERRQ(ierr)
+      temp_id_in(1) = id_dn - 1
+      call ISLocalToGlobalMappingApply(cmapping,1,temp_id_in, &
+                                       neighbor_id,ierr);CHKERRQ(ierr)
+      !get values
+      if (id_up <= nlmax) then ! local
+        call MatGetValues(J,1,temp_id_out(1),1,neighbor_id(1), &
+                                 datas(count),ierr);CHKERRQ(ierr)
+        count = count + 1
+      endif
+      if (id_dn <= nlmax) then ! local
+        call MatGetValues(J,1,neighbor_id(1),1,temp_id_out(1), &
+                                 datas(count),ierr);CHKERRQ(ierr)
+        count = count + 1
+      endif
+    enddo
+    cur_connection_set => cur_connection_set%next
+  enddo
   
   ! -- Output it ---
   !open or create the corresponding time group

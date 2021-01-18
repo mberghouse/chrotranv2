@@ -1,33 +1,3 @@
-#Description: Tracer test for determining the fracture and matrix porosity
-
-SIMULATION
-  SIMULATION_TYPE SUBSURFACE
-  PROCESS_MODELS
-    SUBSURFACE_FLOW flow
-      MODE RICHARDS
-    /
-    SENSITIVITY_ANALYSIS sensitivity
-      SENSITIVITY_FLOW
-    /
-  /
-END
-
-SUBSURFACE
-
-#=========================== discretization ===================================
-GRID
-  TYPE UNSTRUCTURED ./struct_quad_128.ugi
-END
-REGION ymin
-  FILE ./ymin.ss
-END
-REGION ymax
-  FILE ./ymax.ss
-END
-REGION top
-  FILE ./top.ss
-END
-
 
 #=========================== EOS ===================================
 EOS WATER
@@ -38,13 +8,17 @@ END
 
 
 #=========================== material properties ==============================
+DATASET permeability
+  FILENAME permeability.h5
+END
+
 MATERIAL_PROPERTY mater
   ID 1
   POROSITY 0.3
   TORTUOSITY 0.1
   SATURATION_FUNCTION default
   PERMEABILITY
-    PERM_ISO 1d-12
+    DATASET permeability
   /
 END
 
@@ -58,6 +32,10 @@ END
 #=========================== output options ===================================
 OUTPUT
   FORMAT HDF5
+  VARIABLES
+    LIQUID_PRESSURE
+    PERMEABILITY
+  /
   NO_PRINT_INITIAL
 END
 
@@ -65,7 +43,7 @@ END
 #=========================== times ============================================
 TIME
   FINAL_TIME 1e2 y
-  INITIAL_TIMESTEP_SIZE 10 y
+  INITIAL_TIMESTEP_SIZE 100 y
   MAXIMUM_TIMESTEP_SIZE 1e2 y
 END
 
@@ -92,12 +70,6 @@ FLOW_CONDITION initial
   /
   PRESSURE 101325.
 END
-FLOW_CONDITION inj_rain
-  TYPE
-    FLUX NEUMANN
-  /
-  FLUX 500d-8
-END
 
 
 
@@ -115,10 +87,6 @@ BOUNDARY_CONDITION east
   FLOW_CONDITION initial
   REGION ymax
 END
-BOUNDARY_CONDITION rain
-  FLOW_CONDITION inj_rain
-  REGION top
-END
 
 
 #=========================== stratigraphy couplers ============================
@@ -133,7 +101,7 @@ END_SUBSURFACE
 #=========================== sensitivity analysis =============================
 SENSITIVITY_FLOW
   OUTPUT 
-    PERIODIC_TIMESTEP 4
+    PERIODIC_TIMESTEP 1
   /
   VARIABLES
     PRESSURE
