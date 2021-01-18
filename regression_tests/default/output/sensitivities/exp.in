@@ -1,0 +1,19 @@
+#Output permeability and pressure sensitivities in hdf5 format using an 
+#explicit grid
+
+EXTERNAL_FILE pm.txt
+
+#=========================== discretization ===================================
+GRID
+  TYPE UNSTRUCTURED_EXPLICIT ./64.uge
+  UPWIND_FRACTION_METHOD ABSOLUTE_DISTANCE
+END
+REGION ymin
+  FILE ./ymin.ex
+END
+REGION ymax
+  FILE ./ymax.ex
+END
+
+
+EXTERNAL_FILE subsurface_card.txt

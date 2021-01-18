@@ -207,21 +207,21 @@ END
             sensitivity_output_option%format = SENSITIVITY_OUTPUT_HDF5
           case('MATLAB')
             sensitivity_output_option%format = SENSITIVITY_OUTPUT_MATLAB
-            if (option%mycommsize > 1) then
+            if (option%comm%mycommsize > 1) then
               option%io_buffer = "Sensitivities output for parallel &
                                   &simulations required HDF5 output format"
               call PrintErrMsg(option)
             endif
           case('BINARY')
             sensitivity_output_option%format = SENSITIVITY_OUTPUT_BINARY
-            if (option%mycommsize > 1) then
+            if (option%comm%mycommsize > 1) then
               option%io_buffer = "Sensitivities output for parallel &
                                   &simulations required HDF5 output format"
               call PrintErrMsg(option)
             endif
           case('ASCII')
             sensitivity_output_option%format = SENSITIVITY_OUTPUT_ASCII
-            if (option%mycommsize > 1) then
+            if (option%comm%mycommsize > 1) then
               option%io_buffer = "Sensitivities output for parallel &
                                   &simulations required HDF5 output format"
               call PrintErrMsg(option)
@@ -531,7 +531,7 @@ subroutine PMSensitivityOutput(this)
     
   !prepare J matrix
   J_mat_type = MATBAIJ
-  call DiscretizationCreateJacobian(this%realization%discretization, &
+  call DiscretizationCreateMatrix(this%realization%discretization, &
                                     option%nflowdof, J_mat_type, J, option)
   call MatSetOptionsPrefix(J,"Sensitivity_",ierr);CHKERRQ(ierr)
   

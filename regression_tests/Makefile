@@ -81,6 +81,7 @@ STANDARD_CFG = \
 	default/numerical/numerical.cfg \
 	default/output/compare/compare.cfg \
 	default/output/output.cfg \
+	default/output/sensitivities/sensitivities.cfg \
 	default/restart/restart.cfg \
 	default/restart/skip/skip.cfg \
 	default/reaction_sandbox/reaction_sandbox.cfg \
@@ -351,3 +352,25 @@ clean-tests :
 	-rm -f geophys/ert/*.h5
 	-rm -f geophys/ert/*.dat
 	-rm -f geophys/ert/*-ert-*
+	-rm -f default/output/output_biosphere-0.bio
+	-rm -f default/output/output_WIPP_pnl-0.pnl
+	-rm -f default/output/output_waste_form_wf-0.wf
+	-rm -f default/output/output_vtk-000.vtk
+	-rm -f default/output/output_vtk-np3-000.vtk
+	-rm -f default/output/output_xdmf_explicit-000.xmf
+	-rm -f default/output/output_xdmf_explicit_primal-000.xmf
+	-rm -f default/output/sensitivities/*.h5
+	-rm -f default/output/sensitivities/*.csv
+	-rm -f default/output/sensitivities/*.xml
+	-rm -f default/materials/full_tensor/*.h5
+	-rm -f default/materials/full_tensor/*.xml
+	-rm -f default/materials/full_tensor/*.dat
+	-rm -f default/materials/full_tensor/*.pft
+	-rm -f ufd/glass-0.wf
+	-rm -f ufd/fmdm_dummy-0.wf
+	-rm -f ufd/wf_doubles-0.wf
+	-rm -f ufd/wf_region-wf_mass-*.dat
+	-rm -f ufd/glass-*.vtk
+	-rm -f ufd/wf_doubles-*.vtk
+	-rm -f ufd/wf_region-*.vtk
+	-rm -f ufd/glass_full_geochem_np4-*.vtk
