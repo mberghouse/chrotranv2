@@ -31,7 +31,9 @@ module Secondary_Continuum_module
             SecondaryRTUpdateIterate, &
             SecondaryRTUpdateEquilState, &
             SecondaryRTUpdateKineticState, &
-            SecondaryRTTimeCut
+            SecondaryRTTimeCut, &
+            SecondaryRTGetVariable, &
+            SecondaryRTSetVariable
 
 contains
 
@@ -539,7 +541,7 @@ subroutine SecondaryRTAuxVarInit(ptr,rt_sec_transport_vars,reaction, &
 
   allocate(material_auxvar)
   call MaterialAuxVarInit(material_auxvar,option)
-  material_auxvar%porosity = option%reference_porosity
+  material_auxvar%porosity = option%flow%reference_porosity
 
   call SecondaryContinuumSetProperties( &
         rt_sec_transport_vars%sec_continuum, &
@@ -611,20 +613,20 @@ subroutine SecondaryRTAuxVarInit(ptr,rt_sec_transport_vars,reaction, &
           global_auxvar%pres = &
             initial_flow_condition%pressure%dataset%rarray(1)
         else
-          global_auxvar%pres = option%reference_pressure
+          global_auxvar%pres = option%flow%reference_pressure
         endif
       else 
-        global_auxvar%pres = option%reference_pressure
+        global_auxvar%pres = option%flow%reference_pressure
       endif
       if (associated(initial_flow_condition%temperature)) then
         if (associated(initial_flow_condition%temperature%dataset)) then
           global_auxvar%temp  = &
             initial_flow_condition%temperature%dataset%rarray(1)
         else
-          global_auxvar%temp = option%reference_temperature
+          global_auxvar%temp = option%flow%reference_temperature
         endif
       else
-        global_auxvar%temp = option%reference_temperature
+        global_auxvar%temp = option%flow%reference_temperature
       endif
         
       call EOSWaterDensity(global_auxvar%temp, &
@@ -632,18 +634,18 @@ subroutine SecondaryRTAuxVarInit(ptr,rt_sec_transport_vars,reaction, &
                            global_auxvar%den_kg(1), &
                            dum1,ierr)
     else
-      global_auxvar%pres = option%reference_pressure
-      global_auxvar%temp = option%reference_temperature
+      global_auxvar%pres = option%flow%reference_pressure
+      global_auxvar%temp = option%flow%reference_temperature
       global_auxvar%den_kg(option%liquid_phase) = &
-        option%reference_density(option%liquid_phase)
+        option%flow%reference_density(option%liquid_phase)
 
     endif
-    global_auxvar%sat = option%reference_saturation
+    global_auxvar%sat = option%flow%reference_saturation
 
     if (option%transport%nphase > option%nphase) then
       ! gas phase not considered explicitly on flow side
       global_auxvar%den_kg(option%gas_phase) = &
-        option%reference_density(option%gas_phase)
+        option%flow%reference_density(option%gas_phase)
       global_auxvar%sat(option%gas_phase) = &
         1.d0 - global_auxvar%sat(option%liquid_phase)
     endif
@@ -2264,6 +2266,150 @@ subroutine SecondaryRTotalSorbKD(rt_auxvar,global_auxvar,material_auxvar,reactio
 
 end subroutine SecondaryRTotalSorbKD
 
+! ************************************************************************** !
+
+subroutine SecondaryRTGetVariable(realization, vec, ivar, isubvar, mc_layer)
+ 
+  ! Extracts a secondary continuum variable for a layer of secondary
+  ! continuum cells. Similar to RealizationGetVariable, but now the "layer"
+  ! of the cells needs to be specified.
+
+#include "petsc/finclude/petscvec.h"
+  use Variables_module
+  use Grid_module
+  use Patch_module
+  use Realization_Subsurface_class
+  use petscvec
+
+  implicit none
+  
+  class(realization_subsurface_type) :: realization
+  Vec :: vec
+  PetscInt :: ivar
+  PetscInt :: isubvar
+  PetscInt :: mc_layer
+
+  type(grid_type), pointer :: grid
+  type(patch_type), pointer :: patch
+  PetscReal, pointer :: vec_p(:)
+  PetscInt :: local_id
+  PetscErrorCode :: ierr
+
+  patch => realization%patch
+  grid => patch%grid
+
+  call VecGetArrayF90(vec,vec_p,ierr);CHKERRQ(ierr)
+  
+  select case(ivar)
+    case(SECONDARY_CONTINUUM_UPDATED_CONC)
+      do local_id=1,grid%nlmax
+        vec_p(local_id) = &
+          patch%aux%SC_RT%sec_transport_vars(local_id)% &
+          updated_conc(isubvar,mc_layer)
+      enddo
+    case(MINERAL_VOLUME_FRACTION)
+      do local_id=1, grid%nlmax
+        vec_p(local_id) = &
+          patch%aux%SC_RT%sec_transport_vars(local_id)% &
+          sec_rt_auxvar(mc_layer)%mnrl_volfrac(isubvar)
+      enddo
+    case(REACTION_AUXILIARY)
+      do local_id=1, grid%nlmax
+        vec_p(local_id) = &
+          patch%aux%SC_RT%sec_transport_vars(local_id)% &
+          sec_rt_auxvar(mc_layer)%auxiliary_data(isubvar)
+      enddo
+    case(PRIMARY_ACTIVITY_COEF)
+      do local_id=1, grid%nlmax
+        vec_p(local_id) = &
+          patch%aux%SC_RT%sec_transport_vars(local_id)% &
+          sec_rt_auxvar(mc_layer)%pri_act_coef(isubvar)
+      enddo
+    case(SECONDARY_ACTIVITY_COEF)
+      do local_id=1, grid%nlmax
+        vec_p(local_id) = &
+          patch%aux%SC_RT%sec_transport_vars(local_id)% &
+          sec_rt_auxvar(mc_layer)%sec_act_coef(isubvar)
+      enddo
+  end select
+  
+  call VecRestoreArrayF90(vec,vec_p,ierr);CHKERRQ(ierr)
+
+end subroutine SecondaryRTGetVariable
+
+! ************************************************************************** !
+
+subroutine SecondaryRTSetVariable(realization, vec, vec_format, ivar, isubvar, mc_layer)
+  
+  ! Sets a secondary continuum variable to a layer of secondary
+  ! continuum cells. Similar to RealizationSetVariable, but now the "layer"
+  ! of the cells needs to be specified.
+
+#include "petsc/finclude/petscvec.h"
+  use Variables_module
+  use Grid_module
+  use Patch_module
+  use Realization_Subsurface_class
+  use Option_module
+  use petscvec
+
+  implicit none
+  
+  class(realization_subsurface_type) :: realization
+  Vec :: vec
+  PetscInt :: vec_format
+  PetscInt :: ivar
+  PetscInt :: isubvar
+  PetscInt :: mc_layer
+
+  type(grid_type), pointer :: grid
+  type(patch_type), pointer :: patch
+  PetscReal, pointer :: vec_p(:)
+  PetscInt :: local_id
+  PetscInt :: ghosted_id
+  PetscErrorCode :: ierr
+  patch => realization%patch
+  grid => patch%grid
+
+  if (vec_format == NATURAL .or. vec_format == LOCAL) then
+    call PrintErrMsg(realization%option,&
+                     'NATURAL and LOCAL vector formats not supported by &
+SecondaryRTSetVariable')
+  endif
+
+  call VecGetArrayF90(vec,vec_p,ierr);CHKERRQ(ierr)
+  
+  select case(ivar)
+    case(SECONDARY_CONTINUUM_UPDATED_CONC)
+      do local_id=1, grid%nlmax
+        patch%aux%SC_RT%sec_transport_vars(local_id)% &
+          updated_conc(isubvar,mc_layer) = vec_p(local_id)
+      enddo
+    case(MINERAL_VOLUME_FRACTION)
+      do local_id=1, grid%nlmax
+        patch%aux%SC_RT%sec_transport_vars(local_id)% &
+          sec_rt_auxvar(mc_layer)%mnrl_volfrac(isubvar) = vec_p(local_id)
+      enddo
+    case(REACTION_AUXILIARY)
+      do local_id=1, grid%nlmax
+        patch%aux%SC_RT%sec_transport_vars(local_id)% &
+          sec_rt_auxvar(mc_layer)%auxiliary_data(isubvar) = vec_p(local_id)
+      enddo
+    case(PRIMARY_ACTIVITY_COEF)
+      do local_id=1, grid%nlmax
+        patch%aux%SC_RT%sec_transport_vars(local_id)% &
+          sec_rt_auxvar(mc_layer)%pri_act_coef(isubvar) = vec_p(local_id)
+      enddo
+    case(SECONDARY_ACTIVITY_COEF)
+      do local_id=1, grid%nlmax
+        patch%aux%SC_RT%sec_transport_vars(local_id)% &
+          sec_rt_auxvar(mc_layer)%sec_act_coef(isubvar) = vec_p(local_id)
+      enddo
+  end select
+  
+  call VecRestoreArrayF90(vec,vec_p,ierr);CHKERRQ(ierr)
+
+end subroutine SecondaryRTSetVariable
 
 end module Secondary_Continuum_module
             

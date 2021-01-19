@@ -952,7 +952,7 @@ subroutine RichardsAccumSensitivity(rich_auxvar,global_auxvar, &
     ideriv = 1
     pert = max(dabs(x(ideriv)*perturbation_tolerance),0.1d0)
     x_pert = x
-    if (x_pert(ideriv) < option%reference_pressure) pert = -1.d0*pert
+    if (x_pert(ideriv) < option%flow%reference_pressure) pert = -1.d0*pert
     x_pert(ideriv) = x_pert(ideriv) + pert
     
     call RichardsAuxVarCompute(x_pert(1),rich_auxvar_pert,global_auxvar_pert, &

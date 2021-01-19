@@ -68,6 +68,7 @@ STANDARD_CFG = \
 	default/materials/mineral_volume/mineral_volume.cfg \
 	default/materials/full_tensor/full_tensor.cfg \
 	default/infiltrometer/infiltrometer.cfg \
+	default/infiltration1d/infiltration1d.cfg \
 	default/numerical/numerical.cfg \
 	default/output/output.cfg \
 	default/output/compare/compare.cfg \
@@ -79,7 +80,6 @@ STANDARD_CFG = \
 	default/condition/dataset/dataset.cfg \
 	default/multicontinuum/multicontinuum.cfg \
 	default/scco2/mphase/mphase.cfg \
-	default/scco2/flash2/flash2.cfg \
 	default/regions/regions.cfg \
 	default/regions/cell_mapping/cell_mapping.cfg \
 	default/salinity/salinity.cfg \
@@ -101,16 +101,11 @@ STANDARD_CFG = \
 	wipp/nuts/nuts.cfg \
 	wipp/transport/batch/wipp_batch.cfg \
 	wipp/transport/wipp_regular.cfg \
-	toil_ims/toil_ims.cfg \
-	towg/ims/towg_ims.cfg \
-	towg/tl/towg_tl.cfg \
-	towg/bo/towg_bo.cfg \
 	default/integral_flux/integral_flux.cfg
 #	wipp/bragflo/wipp_flow/wipp_flow.cfg 
 
 ifneq ($(strip $(HYPRE_LIB)),)
 STANDARD_CFG += \
-	CPR_preconditioner/CPR_preconditioner.cfg \
 	wipp/wipp_flow/cpr_wipp/cpr_wipp.cfg
 endif
 
@@ -125,8 +120,6 @@ STANDARD_CFG += \
 	geomech/uniaxial_loading/uniaxial_loading.cfg \
 	geomech/uniaxial_loading_biot/uniaxial_loading_biot.cfg \
 	geomech/terzaghi/terzaghi.cfg \
-	surfaceflow/surface_flow_only/surface_only.cfg \
-	surfaceflow/surface_th/surface_th.cfg \
 	surfaceflow/inlinesurface/inlinesurface.cfg
 endif
 
@@ -159,14 +152,10 @@ FLOW_CFG = \
 	default/condition/condition.cfg \
 	default/eos/eos.cfg \
 	default/infiltrometer/infiltrometer.cfg \
+	default/infiltration1d/infiltration1d.cfg \
 	default/steady/steady.cfg \
 	default/scco2/mphase/mphase.cfg \
-	default/scco2/flash2/flash2.cfg \
 	general/general.cfg \
-	toil_ims/toil_ims.cfg \
-	towg/ims/towg_ims.cfg \
-	towg/tl/towg_tl.cfg \
-	towg/bo/towg_bo.cfg \
 	shortcourse/1D_variably_saturated_flow/vsat_flow.cfg \
 	shortcourse/copper_leaching/cu_leaching.cfg
 #	wipp/bragflo/wipp_flow/wipp_flow.cfg
@@ -191,7 +180,6 @@ CHECK_CFG = \
 
 NOHDF5_CFG = \
 	default/column/column.cfg \
-	default/scco2/flash2/flash2.cfg \
 	geothermal_hpt/1D_Calcite/calcite_hpt.cfg \
 	default/materials/soil_compressibility/soil_compressibility.cfg \
 	wipp/nuts/nuts.cfg \

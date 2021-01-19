@@ -9,7 +9,6 @@ module Realization_Subsurface_class
   use Input_Aux_module
   use Region_module
   use Condition_module
-  use Well_Data_class
   use Transport_Constraint_Base_module
   use Transport_Constraint_module
   use Material_module
@@ -31,7 +30,6 @@ private
 
     type(region_list_type), pointer :: region_list
     type(condition_list_type), pointer :: flow_conditions
-    type(well_data_list_type), pointer :: well_data=>null()
     type(tran_condition_list_type), pointer :: transport_conditions
     type(tran_constraint_list_type), pointer :: transport_constraints
     
@@ -145,9 +143,6 @@ function RealizationCreate2(option)
 
   allocate(realization%flow_conditions)
   call FlowConditionInitList(realization%flow_conditions)
-! Allocate well_data and create its list of wells
-  allocate(realization%well_data)
-  call WellDataInitList(realization%well_data,option%nphase)
   allocate(realization%transport_conditions)
   call TranConditionInitList(realization%transport_conditions)
   allocate(realization%transport_constraints)
@@ -516,13 +511,13 @@ subroutine RealizationLocalizeRegions(realization)
   call RegionDestroyList(realization%region_list)
 
   ! compute regional connections for inline surface flow
-  if (option%inline_surface_flow) then
-     region => RegionGetPtrFromList(option%inline_surface_region_name, &
+  if (option%flow%inline_surface_flow) then
+     region => RegionGetPtrFromList(option%flow%inline_surface_region_name, &
           realization%patch%region_list)
      if (.not.associated(region)) then
         option%io_buffer = 'realization_subsurface.F90:RealizationLocalize&
              &Regions() --> Could not find a required region named "' // &
-             trim(option%inline_surface_region_name) // &
+             trim(option%flow%inline_surface_region_name) // &
              '" from the list of regions.'
         call PrintErrMsg(option)
      endif
@@ -740,6 +735,8 @@ subroutine RealProcessMatPropAndSatFunc(realization)
   use String_module
   use Dataset_Common_HDF5_class
   use Dataset_module
+  use Characteristic_Curves_Thermal_module
+  use TH_Aux_module, only : th_ice_model
   
   
   implicit none
@@ -754,7 +751,7 @@ subroutine RealProcessMatPropAndSatFunc(realization)
   type(patch_type), pointer :: patch
   character(len=MAXSTRINGLENGTH) :: string, verify_string, mat_string
   class(dataset_base_type), pointer :: dataset
-  class(cc_thermal_type), pointer :: default_thermal_cc
+  class(cc_thermal_type), pointer :: thermal_cc
 
   option => realization%option
   patch => realization%patch
@@ -801,6 +798,14 @@ subroutine RealProcessMatPropAndSatFunc(realization)
     call CharCurvesThermalConvertListToArray( &
          patch%characteristic_curves_thermal, &
          patch%char_curves_thermal_array, option)
+    do i = 1, size(patch%char_curves_thermal_array)
+      select type(tcf => patch%char_curves_thermal_array(i)%ptr% & 
+                  thermal_conductivity_function)
+      class is(kT_composite_type)
+        call CompositeTCCList(patch%characteristic_curves_thermal, &
+                              tcf,option)
+      end select
+    enddo
   else if (maxval(check_thermal_conductivity(:,:)) >= 0.d0) then
     ! use default tcc curve for legacy thermal conductivity input by material
     do i = 1, num_mat_prop
@@ -816,31 +821,44 @@ subroutine RealProcessMatPropAndSatFunc(realization)
           patch%material_property_array(i)%ptr%thermal_conductivity_dry = 5.d-1
         endif
       endif 
-      default_thermal_cc => CharCurvesThermalCreate()
-      default_thermal_cc%name = patch%material_property_array(i)%ptr% &
+      thermal_cc => CharCurvesThermalCreate()
+      thermal_cc%name = patch%material_property_array(i)%ptr% &
                                 thermal_conductivity_function_name
-      default_thermal_cc%thermal_conductivity_function => TCFDefaultCreate()    
-      call TCFAssignDefault(default_thermal_cc%thermal_conductivity_function, &
-        patch%material_property_array(i)%ptr%thermal_conductivity_wet, &
-        patch%material_property_array(i)%ptr%thermal_conductivity_dry, &      
-        option)      
-      if (associated(default_thermal_cc%thermal_conductivity_function)) then
+      if (option%iflowmode == TH_MODE .or. option%iflowmode == TH_TS_MODE) then
+        thermal_cc%thermal_conductivity_function => TCFFrozenCreate()    
+        call TCFAssignFrozen(thermal_cc%thermal_conductivity_function,&
+          patch%material_property_array(i)%ptr%thermal_conductivity_wet, &
+          patch%material_property_array(i)%ptr%thermal_conductivity_dry, &      
+          patch%material_property_array(i)%ptr%thermal_conductivity_frozen, &      
+          patch%material_property_array(i)%ptr%alpha, &      
+          patch%material_property_array(i)%ptr%alpha_fr, &      
+          th_ice_model, &      
+          option)
+      else
+        thermal_cc%thermal_conductivity_function => TCFDefaultCreate()    
+        call TCFAssignDefault(thermal_cc%thermal_conductivity_function,&
+          patch%material_property_array(i)%ptr%thermal_conductivity_wet, &
+          patch%material_property_array(i)%ptr%thermal_conductivity_dry, &      
+          patch%material_property_array(i)%ptr%alpha, &      
+          option)
+      endif
+      if (associated(thermal_cc%thermal_conductivity_function)) then
         write (mat_string,*) patch%material_property_array(i)%ptr%external_id
         verify_string = 'THERMAL_CHARACTERISTIC_CURVES(' // & 
-          trim(default_thermal_cc%name) // ') used for material ID #'// &
+          trim(thermal_cc%name) // ') used for material ID #'// &
           trim(adjustl(mat_string)) // '. '
-        call default_thermal_cc%thermal_conductivity_function% & 
+        call thermal_cc%thermal_conductivity_function% & 
           Verify(verify_string,option)
       else
         write (mat_string,*) patch%material_property_array(i)%ptr%external_id
         option%io_buffer = 'A thermal conductivity function has &
           &not been set under THERMAL_CHARACTERISTIC_CURVES "' // &
-          trim(default_thermal_cc%name) // '" intended for material ID #'// &
+          trim(thermal_cc%name) // '" intended for material ID #'// &
           trim(adjustl(mat_string)) // '. '
       endif
-      call CharCurvesThermalAddToList(default_thermal_cc, &
+      call CharCurvesThermalAddToList(thermal_cc, &
         realization%characteristic_curves_thermal)  
-      nullify(default_thermal_cc)
+      nullify(thermal_cc)
     enddo    
     ! afterwards, proceed with normal TCC procedure
     if (associated(realization%characteristic_curves_thermal)) then
@@ -849,6 +867,14 @@ subroutine RealProcessMatPropAndSatFunc(realization)
       call CharCurvesThermalConvertListToArray( &
          patch%characteristic_curves_thermal, &
          patch%char_curves_thermal_array, option)
+      do i = 1, size(patch%char_curves_thermal_array)
+         select type(tcf => patch%char_curves_thermal_array(i)%ptr% & 
+                     thermal_conductivity_function)
+         class is(kT_composite_type)
+           call CompositeTCCList(patch%characteristic_curves_thermal, &
+                                 tcf,option)
+         end select
+      enddo
     else
       option%io_buffer = 'Manual assignments of DEFAULT thermal '//&
                          'characteristic curve failed!'
@@ -884,11 +910,6 @@ subroutine RealProcessMatPropAndSatFunc(realization)
           trim(cur_material_property%saturation_function_name) // &
           '" not found.'
         call PrintErrMsg(option)
-      else
-        if (associated(patch%characteristic_curves_array)) then
-          call CharCurvesProcessTables(patch%characteristic_curves_array(  &
-                        cur_material_property%saturation_function_id)%ptr,option)
-        endif
       endif
     endif
 
@@ -1089,8 +1110,6 @@ subroutine RealProcessFluidProperties(realization)
   ! Date: 01/21/09
   ! 
 
-  use Grid_Grdecl_module, only : GetSatnumSet
-
   implicit none
 
   class(realization_subsurface_type) :: realization
@@ -1124,29 +1143,6 @@ subroutine RealProcessFluidProperties(realization)
                        ' for solute transport'
   endif
 
-  ! If saturation table numbers set,
-  ! check that matches characteristic curves count
-
-  satnum_set = GetSatnumSet(maxsatn)
-  if (satnum_set) then
-    ccset = associated(realization%patch%characteristic_curves_array)
-    if (ccset) then
-      ncc = size(realization%patch%characteristic_curves_array(:))
-      if (maxsatn > ncc) then
-        option%io_buffer = &
-         'SATNUM data does not match CHARACTERISTIC CURVES count'
-        call PrintErrMsg(option)
-      endif
-      do icc = 1, ncc
-        call CharCurvesProcessTables( &
-          realization%patch%characteristic_curves_array(icc)%ptr,option)
-      end do
-    else
-      option%io_buffer = 'SATNUM data but no CHARACTERISTIC CURVES'
-      call PrintErrMsg(option)
-    endif
-  endif
-  
 end subroutine RealProcessFluidProperties
 
 ! ************************************************************************** !
@@ -2895,7 +2891,6 @@ subroutine RealizationStrip(this)
   ! 
 
   use Dataset_module
-  use Output_Eclipse_module, only : ReleaseEwriterBuffers
 
   implicit none
   
@@ -2905,12 +2900,6 @@ subroutine RealizationStrip(this)
   call RegionDestroyList(this%region_list)
   
   call FlowConditionDestroyList(this%flow_conditions)
-
-  !  Destroy the list of wells held by well_data
-  call WellDataDestroyList(this%well_data, this%option)
-  !  Release output buffers held by Output_Eclipse_module
-  call ReleaseEwriterBuffers()
-
   call TranConditionDestroyList(this%transport_conditions)
   call TranConstraintListDestroy(this%transport_constraints)
 

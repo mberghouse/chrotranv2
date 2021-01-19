@@ -13,7 +13,6 @@ module TH_Aux_module
   PetscInt, public :: TH_ni_count
   PetscInt, public :: TH_ts_cut_count
   PetscInt, public :: TH_ts_count
-  PetscBool, public :: th_use_freezing
   PetscInt, public :: th_ice_model
 
   type, public :: TH_auxvar_type
@@ -54,8 +53,6 @@ module TH_Aux_module
     
     ! for ice
     type(th_ice_type), pointer :: ice
-    ! For surface-flow
-    type(th_surface_flow_type), pointer :: surface
 
 #if defined(CLM_PFLOTRAN) || defined(CLM_OFFLINE)
     PetscReal :: bc_alpha  ! Brooks Corey parameterization: alpha
@@ -91,17 +88,6 @@ module TH_Aux_module
     PetscReal :: dpres_fh2o_dT
   end type th_ice_type
   
-  type, public :: th_surface_flow_type
-    PetscBool :: surf_wat
-    PetscReal :: P_min
-    PetscReal :: P_max
-    PetscReal :: coeff_for_cubic_approx(4)
-    PetscReal :: coeff_for_deriv_cubic_approx(4)
-    PetscReal :: range_for_linear_approx(4)
-    PetscReal :: dlinear_slope_dT
-    PetscBool :: bcflux_default_scheme
- end type th_surface_flow_type
-
   type, public :: th_parameter_type
     PetscReal, pointer :: dencpr(:)
     PetscReal, pointer :: ckdry(:) ! Thermal conductivity (dry)
@@ -231,7 +217,7 @@ subroutine THAuxVarInit(auxvar,option)
   auxvar%Ke        = uninit_value
   auxvar%dKe_dp    = uninit_value
   auxvar%dKe_dT    = uninit_value
- if (th_use_freezing) then
+ if (option%flow%th_freezing) then
     allocate(auxvar%ice)
     auxvar%ice%Ke_fr     = uninit_value
     auxvar%ice%dKe_fr_dp = uninit_value
@@ -260,19 +246,6 @@ subroutine THAuxVarInit(auxvar,option)
     auxvar%ice%dpres_fh2o_dT = uninit_value
   else
     nullify(auxvar%ice)
-  endif
-  if (option%surf_flow_on) then
-    allocate(auxvar%surface)
-    auxvar%surface%surf_wat      = PETSC_FALSE
-    auxvar%surface%P_min         = uninit_value
-    auxvar%surface%P_max         = uninit_value
-    auxvar%surface%coeff_for_cubic_approx(:)       = uninit_value
-    auxvar%surface%coeff_for_deriv_cubic_approx(:) = uninit_value
-    auxvar%surface%range_for_linear_approx(:)      = uninit_value
-    auxvar%surface%dlinear_slope_dT                = uninit_value
-    auxvar%surface%bcflux_default_scheme           = PETSC_FALSE
-  else
-    nullify(auxvar%surface)
   endif
   
 #if defined(CLM_PFLOTRAN) || defined(CLM_OFFLINE)
@@ -353,21 +326,6 @@ subroutine THAuxVarCopy(auxvar,auxvar2,option)
     auxvar2%ice%dmol_gas_dT = auxvar%ice%dmol_gas_dT
   endif
 
-  if (associated(auxvar%surface)) then
-    auxvar2%surface%surf_wat = auxvar%surface%surf_wat
-    auxvar2%surface%P_min = auxvar%surface%P_min
-    auxvar2%surface%P_max = auxvar%surface%P_max
-    auxvar2%surface%coeff_for_cubic_approx(:) = &
-      auxvar%surface%coeff_for_cubic_approx(:)
-    auxvar2%surface%coeff_for_deriv_cubic_approx(:) = &
-      auxvar%surface%coeff_for_deriv_cubic_approx(:)
-    auxvar2%surface%range_for_linear_approx(:) = &
-      auxvar%surface%range_for_linear_approx(:)
-    auxvar2%surface%dlinear_slope_dT = auxvar%surface%dlinear_slope_dT
-    auxvar2%surface%bcflux_default_scheme = &
-      auxvar%surface%bcflux_default_scheme
-  endif
-
 #if defined(CLM_PFLOTRAN) || defined(CLM_OFFLINE)
   auxvar2%bc_alpha  = auxvar%bc_alpha
   auxvar2%bc_lambda = auxvar%bc_lambda
@@ -380,6 +338,7 @@ end subroutine THAuxVarCopy
 subroutine THAuxVarComputeNoFreezing(x,auxvar,global_auxvar, &
                                      material_auxvar, &
                                      iphase,characteristic_curves, &
+                                     thermal_cc, &
                                      th_parameter, icct, natural_id, &
                                      update_porosity,option)
   ! 
@@ -395,12 +354,14 @@ subroutine THAuxVarComputeNoFreezing(x,auxvar,global_auxvar, &
   use EOS_Water_module
   use Characteristic_Curves_module
   use Characteristic_Curves_Common_module  
+  use Characteristic_Curves_Thermal_module
   use Material_Aux_class
   
   implicit none
 
   type(option_type) :: option
   class(characteristic_curves_type) :: characteristic_curves
+  type(cc_thermal_type) :: thermal_cc
   PetscReal :: x(option%nflowdof)
   type(TH_auxvar_type) :: auxvar
   type(global_auxvar_type) :: global_auxvar
@@ -424,6 +385,7 @@ subroutine THAuxVarComputeNoFreezing(x,auxvar,global_auxvar, &
   PetscReal :: Dk_dry
   PetscReal :: aux(1)
   PetscReal :: dkr_dsat1
+  PetscReal :: dk_ds, dk_dT
   
 ! auxvar%den = 0.d0
 ! auxvar%den_kg = 0.d0
@@ -446,14 +408,13 @@ subroutine THAuxVarComputeNoFreezing(x,auxvar,global_auxvar, &
     call MaterialAuxVarCompute(material_auxvar,global_auxvar%pres(1))
   endif
 
-! auxvar%pc = option%reference_pressure - auxvar%pres
-  auxvar%pc = min(option%reference_pressure - global_auxvar%pres(1), &
+  auxvar%pc = min(option%flow%reference_pressure - global_auxvar%pres(1), &
                   characteristic_curves%saturation_function%pcmax)
 
 !***************  Liquid phase properties **************************
   auxvar%avgmw = FMWH2O
 
-  pw = option%reference_pressure
+  pw = option%flow%reference_pressure
   ds_dp = 0.d0
   dkr_dp = 0.d0
 
@@ -599,7 +560,8 @@ subroutine THAuxVarComputeNoFreezing(x,auxvar,global_auxvar, &
   auxvar%Ke = Ke
 
   ! Effective thermal conductivity
-  auxvar%Dk_eff = Dk_dry + (Dk - Dk_dry)*Ke
+  call thermal_cc%thermal_conductivity_function%CalculateTCond( &
+       global_auxvar%sat(1),global_auxvar%temp,auxvar%Dk_eff,dk_ds,dk_dT,option)
 
   ! Derivative of soil Kersten number
   auxvar%dKe_dp = alpha*(global_auxvar%sat(1) + epsilon)**(alpha - 1.d0)* &
@@ -614,6 +576,7 @@ subroutine THAuxVarComputeFreezing(x, auxvar, global_auxvar, &
                                    material_auxvar, &
                                    iphase, &
                                    saturation_function, &
+                                   thermal_cc, &
                                    th_parameter, icct, natural_id, &
                                    update_porosity,option)
   ! 
@@ -631,12 +594,14 @@ subroutine THAuxVarComputeFreezing(x, auxvar, global_auxvar, &
   
   use EOS_Water_module
   use Saturation_Function_module  
+  use Characteristic_Curves_Thermal_module
   use Material_Aux_class
   
   implicit none
 
   type(option_type) :: option
   type(saturation_function_type) :: saturation_function
+  type(cc_thermal_type) :: thermal_cc
   PetscReal :: x(option%nflowdof)
   type(TH_auxvar_type) :: auxvar
   type(global_auxvar_type) :: global_auxvar
@@ -678,6 +643,7 @@ subroutine THAuxVarComputeFreezing(x, auxvar, global_auxvar, &
   PetscReal :: Dk
   PetscReal :: Dk_dry
   PetscReal :: Dk_ice
+  PetscReal :: dk_ds, dK_di, dk_dT
 
   out_of_table_flag = PETSC_FALSE
  
@@ -695,20 +661,21 @@ subroutine THAuxVarComputeFreezing(x, auxvar, global_auxvar, &
   
   ! Check if the capillary pressure is less than -100MPa
   
-  if (global_auxvar%pres(1) - option%reference_pressure < -1.d8 + 1.d0) then
-    global_auxvar%pres(1) = -1.d8 + option%reference_pressure + 1.d0
+  if (global_auxvar%pres(1) - &
+      option%flow%reference_pressure < -1.d8 + 1.d0) then
+    global_auxvar%pres(1) = -1.d8 + option%flow%reference_pressure + 1.d0
   endif
 
   if (update_porosity) then
     call MaterialAuxVarCompute(material_auxvar,global_auxvar%pres(1))
   endif
  
-  auxvar%pc = option%reference_pressure - global_auxvar%pres(1)
+  auxvar%pc = option%flow%reference_pressure - global_auxvar%pres(1)
 
 !***************  Liquid phase properties **************************
   auxvar%avgmw = FMWH2O
 
-  pw = option%reference_pressure
+  pw = option%flow%reference_pressure
   ds_dp = 0.d0
   dkr_dp = 0.d0
   if (auxvar%pc > 1.d0) then
@@ -729,7 +696,20 @@ subroutine THAuxVarComputeFreezing(x, auxvar, global_auxvar, &
        saturation_function%lambda = auxvar%bc_lambda
     endif
 #endif
-
+  
+  ! Check if user specified ice model via thermal characteristic curves
+  select type(tcf => thermal_cc%thermal_conductivity_function)
+  class is (kT_frozen_type)
+    if (Initialized(tcf%ice_model)) then
+      th_ice_model = tcf%ice_model
+    endif
+  class default
+    option%io_buffer = 'Cannot use thermal characteristic curve "' &
+                       // trim(thermal_cc%name) // &
+                       '" when FREEZING is active in TH mode.'
+    call PrintErrMsg(option)
+  end select
+  
   select case (th_ice_model)
     case (PAINTER_EXPLICIT)
       ! Model from Painter, Comp. Geosci. (2011)
@@ -849,7 +829,7 @@ subroutine THAuxVarComputeFreezing(x, auxvar, global_auxvar, &
   ! Calculate the values and derivatives for density and internal energy
   call EOSWaterSaturationPressure(global_auxvar%temp, p_sat, ierr)
 
-  p_g            = option%reference_pressure
+  p_g            = option%flow%reference_pressure
   auxvar%ice%den_gas = p_g/(IDEAL_GAS_CONSTANT* &
                          (global_auxvar%temp + 273.15d0))*1.d-3 !in kmol/m3
   mol_g          = p_sat/p_g
@@ -878,7 +858,9 @@ subroutine THAuxVarComputeFreezing(x, auxvar, global_auxvar, &
   auxvar%ice%Ke_fr = Ke_fr
 
   ! Effective thermal conductivity
-  auxvar%Dk_eff = Dk*Ke + Dk_ice*Ke_fr + (1.d0 - Ke - Ke_fr)*Dk_dry
+  call thermal_cc%thermal_conductivity_function%CalculateFTCond( &
+       global_auxvar%sat(1),auxvar%ice%sat_ice,global_auxvar%temp, &
+       auxvar%Dk_eff,dk_ds,dK_di,dk_dT,option)
 
   ! Derivative of Kersten number
   auxvar%dKe_dp = alpha*(global_auxvar%sat(1) + epsilon)**(alpha - 1.d0)* &
@@ -917,6 +899,7 @@ end subroutine THAuxVarComputeFreezing
 subroutine THAuxVarCompute2ndOrderDeriv(TH_auxvar,global_auxvar, &
                                         material_auxvar,th_parameter, &
                                         icct,characteristic_curves,&
+                                        thermal_cc,&
                                         option)
 
   ! Computes 2nd order derivatives auxiliary variables for each grid cell
@@ -930,12 +913,14 @@ subroutine THAuxVarCompute2ndOrderDeriv(TH_auxvar,global_auxvar, &
   
   use EOS_Water_module
   use Characteristic_Curves_module
+  use Characteristic_Curves_Thermal_module
   use Material_Aux_class
   
   implicit none
 
   type(option_type) :: option
   class(characteristic_curves_type) :: characteristic_curves
+  class(cc_thermal_type) :: thermal_cc
   type(TH_auxvar_type) :: TH_auxvar
   type(global_auxvar_type) :: global_auxvar
   class(material_auxvar_type) :: material_auxvar  
@@ -982,9 +967,9 @@ subroutine THAuxVarCompute2ndOrderDeriv(TH_auxvar,global_auxvar, &
   do ideriv = 1,option%nflowdof
     pert = x(ideriv)*perturbation_tolerance
     x_pert = x
-    if (th_use_freezing) then
+    if (option%flow%th_freezing) then
        if (ideriv == 1) then
-          if (x_pert(ideriv) < option%reference_pressure) then
+          if (x_pert(ideriv) < option%flow%reference_pressure) then
              pert = - pert
           endif
           x_pert(ideriv) = x_pert(ideriv) + pert
@@ -1002,13 +987,14 @@ subroutine THAuxVarCompute2ndOrderDeriv(TH_auxvar,global_auxvar, &
        x_pert(ideriv) = x_pert(ideriv) + pert
     endif
 
-    if (th_use_freezing) then
+    if (option%flow%th_freezing) then
       option%io_buffer = 'ERROR: TH_TS MODE not implemented with freezing'
       call PrintErrMsg(option)
     else
       call THAuxVarComputeNoFreezing(x_pert,TH_auxvar_pert,&
                             global_auxvar_pert,material_auxvar_pert,&
                             iphase,characteristic_curves, &
+                            thermal_cc, &
                             th_parameter,icct, &
                             -999,PETSC_TRUE,option)
     endif
@@ -1100,8 +1086,6 @@ subroutine THAuxVarDestroy(auxvar)
   
   if (associated(auxvar%ice)) deallocate(auxvar%ice)
   nullify(auxvar%ice)
-  if (associated(auxvar%surface)) deallocate(auxvar%surface)
-  nullify(auxvar%surface)
   
 end subroutine THAuxVarDestroy
 
