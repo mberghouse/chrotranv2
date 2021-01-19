@@ -166,10 +166,7 @@ module Variables_module
   PetscInt, parameter, public :: SORB_EQ_CONC            = 137
   PetscInt, parameter, public :: TOTAL_BULK_CONC         = 138
   PetscInt, parameter, public :: MNRL_VOLUME_FRACTION    = 139
-
-  PetscInt, parameter, public :: K_ORTHOGONALITY_ERROR   = 140
   
-!  PetscInt, parameter, public :: LIQUID_PZ_HEAD          = 141
   
   PetscInt, parameter, public :: LIQUID_CONDUCTIVITY     = 142
   PetscInt, parameter, public :: LIQUID_CONDUCTIVITY_X   = 143
@@ -183,5 +180,10 @@ module Variables_module
   PetscInt, parameter, public :: FACE_AREA               = 150
   PetscInt, parameter, public :: FACE_NON_ORTHO_ANGLE    = 151
   PetscInt, parameter, public :: FACE_UPWIND_FRACTION    = 152
+  PetscInt, parameter, public :: FACE_DISTANCE_BETWEEN_CENTER = 153
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 313d46560 (clean non implemented face output variable and add FACE_DISTANCE_BETWEEN_CENTER)
 end module Variables_module
