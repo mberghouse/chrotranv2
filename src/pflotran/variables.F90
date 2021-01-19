@@ -173,7 +173,7 @@ module Variables_module
 
   PetscInt, parameter, public :: K_ORTHOGONALITY_ERROR   = 140
   
-  PetscInt, parameter, public :: LIQUID_PZ_HEAD          = 141
+  PetscInt, parameter, public :: SECONDARY_CONTINUUM_UPDATED_CONC = 141
   
   PetscInt, parameter, public :: LIQUID_CONDUCTIVITY     = 142
   PetscInt, parameter, public :: LIQUID_CONDUCTIVITY_X   = 143
@@ -187,7 +187,7 @@ module Variables_module
   PetscInt, parameter, public :: FACE_AREA               = 150
   PetscInt, parameter, public :: FACE_NON_ORTHO_ANGLE    = 151
   PetscInt, parameter, public :: FACE_UPWIND_FRACTION    = 152
+  PetscInt, parameter, public :: FACE_DISTANCE_BETWEEN_CENTER = 153
 
-  PetscInt, parameter, public :: SECONDARY_CONTINUUM_UPDATED_CONC = 141
 
 end module Variables_module

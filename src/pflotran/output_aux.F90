@@ -1282,21 +1282,16 @@ subroutine OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
       name = 'Face Upwind Fraction'
       category = OUTPUT_FACE
       id = FACE_UPWIND_FRACTION
+    case ('FACE_DISTANCE_BETWEEN_CENTER')
+      units = ''
+      name = 'Face Distance Between Cell Center'
+      category = OUTPUT_FACE
+      id = FACE_DISTANCE_BETWEEN_CENTER
     case ('FACE_NON_ORTHOGONALITY_ANGLE')
       units = ''
       name = 'Face Non Orthogonality Angle'
       category = OUTPUT_FACE
       id = FACE_NON_ORTHO_ANGLE
-    case ('FACE_NORMAL')
-      units = 'm'
-      name = 'Face Normal'
-      category = OUTPUT_FACE
-      id = -1
-    case ('FACE_VELOCITY_BY_CONNECTION_IDS')
-      units = 'm/s'
-      name = 'Face Velocity'
-      category = OUTPUT_FACE
-      id = -1
   end select
 
 end subroutine OutputVariableToID
