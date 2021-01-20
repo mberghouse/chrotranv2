@@ -43,9 +43,11 @@ module Richards_module
          RichardsDestroy, &
          RichardsResidualInternalConn, &
          RichardsResidualBoundaryConn, &
+         RichardsResidualAccumulation, &
          RichardsResidualSourceSink, &
          RichardsJacobianInternalConn, &
          RichardsJacobianBoundaryConn, &
+         RichardsJacobianAccumulation, &
          RichardsJacobianSourceSink
 
 contains

@@ -1,0 +1,111 @@
+
+#=========================== EOS ===================================
+EOS WATER
+  #simplified value for hydraulic conductivity computation
+  DENSITY CONSTANT 997.16d0 kg/m^3
+  VISCOSITY CONSTANT 8.904156d-4 Pa-s
+END
+
+
+#=========================== material properties ==============================
+DATASET permeability
+  FILENAME permeability.h5
+END
+
+MATERIAL_PROPERTY mater
+  ID 1
+  POROSITY 0.3
+  TORTUOSITY 0.1
+  SATURATION_FUNCTION default
+  PERMEABILITY
+    DATASET permeability
+  /
+END
+
+
+#=========================== characteristic curves ============================
+CHARACTERISTIC_CURVES default
+  DEFAULT
+END
+
+
+#=========================== output options ===================================
+OUTPUT
+  FORMAT HDF5
+  VARIABLES
+    LIQUID_PRESSURE
+    PERMEABILITY
+  /
+  NO_PRINT_INITIAL
+END
+
+
+#=========================== times ============================================
+TIME
+  FINAL_TIME 1e2 y
+  INITIAL_TIMESTEP_SIZE 100 y
+  MAXIMUM_TIMESTEP_SIZE 1e2 y
+END
+
+
+
+#=========================== regions ==========================================
+REGION all
+  COORDINATES
+    -1e6 -1e6 -1e6
+    1e6 1e6  1e6
+  /
+END
+
+
+
+#=========================== flow conditions ==================================
+FLOW_CONDITION initial
+  TYPE
+    PRESSURE hydrostatic
+  /
+  DATUM 0 0 10
+  GRADIENT 
+    PRESSURE -0.01 0. 0.
+  /
+  PRESSURE 101325.
+END
+
+
+
+#=========================== condition couplers ===============================
+# initial condition
+INITIAL_CONDITION
+  FLOW_CONDITION initial
+  REGION all
+END
+BOUNDARY_CONDITION west
+  FLOW_CONDITION initial
+  REGION ymin
+END
+BOUNDARY_CONDITION east
+  FLOW_CONDITION initial
+  REGION ymax
+END
+
+
+#=========================== stratigraphy couplers ============================
+STRATA
+  REGION all
+  MATERIAL mater
+END
+
+END_SUBSURFACE
+
+
+#=========================== sensitivity analysis =============================
+SENSITIVITY_FLOW
+  OUTPUT 
+    PERIODIC_TIMESTEP 1
+  /
+  VARIABLES
+    PRESSURE
+    PERMEABILITY
+  /
+  SENSITIVITY_OUTPUT_FORMAT HDF5
+END
