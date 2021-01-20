@@ -27,6 +27,7 @@ module Grid_Unstructured_Aux_module
     PetscInt :: nmax   ! Total number of nodes in global domain
     PetscInt :: nlmax  ! Total number of non-ghosted nodes in local domain.
     PetscInt :: ngmax  ! Number of ghosted & non-ghosted nodes in local domain.
+    PetscInt :: nmax_faces  ! Number of ghosted & non-ghosted faces in global domain.
     PetscInt, pointer :: hash(:,:,:)
     PetscInt :: num_hash
     PetscInt, pointer :: cell_ids_natural(:) ! natural 1d right-hand i,j,k ordering
@@ -75,6 +76,7 @@ module Grid_Unstructured_Aux_module
     type(point3d_type), pointer :: cell_centroids(:)
     PetscInt, pointer :: connections(:,:)
     PetscReal, pointer :: face_areas(:)
+    PetscReal, pointer :: face_locals(:)
     type(point3d_type), pointer :: face_centroids(:)
     PetscInt :: num_cells_global  ! Number of cells in the entire domain
     PetscInt :: num_elems
@@ -245,6 +247,7 @@ function UGridCreate()
   unstructured_grid%nmax = 0
   unstructured_grid%nlmax = 0
   unstructured_grid%ngmax = 0
+  unstructured_grid%nmax_faces = 0
   nullify(unstructured_grid%hash)
   unstructured_grid%num_hash = 100
   nullify(unstructured_grid%cell_ids_natural)
@@ -305,6 +308,7 @@ function UGridExplicitCreate()
   nullify(explicit_grid%cell_centroids)
   nullify(explicit_grid%connections)
   nullify(explicit_grid%face_areas)
+  nullify(explicit_grid%face_locals)
   nullify(explicit_grid%face_centroids)
   nullify(explicit_grid%cell_vertices)
   nullify(explicit_grid%vertex_coordinates)
@@ -2192,6 +2196,7 @@ subroutine UGridExplicitDestroy(explicit_grid)
   nullify(explicit_grid%cell_centroids)
   call DeallocateArray(explicit_grid%connections)
   call DeallocateArray(explicit_grid%face_areas)
+  call DeallocateArray(explicit_grid%face_locals)
   if (associated(explicit_grid%face_centroids)) &
     deallocate(explicit_grid%face_centroids)
   nullify(explicit_grid%face_centroids)

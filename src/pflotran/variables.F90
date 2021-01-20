@@ -172,7 +172,22 @@ module Variables_module
   PetscInt, parameter, public :: MNRL_VOLUME_FRACTION    = 139
 
   PetscInt, parameter, public :: K_ORTHOGONALITY_ERROR   = 140
-
+  
   PetscInt, parameter, public :: SECONDARY_CONTINUUM_UPDATED_CONC = 141
+  
+  PetscInt, parameter, public :: LIQUID_CONDUCTIVITY     = 142
+  PetscInt, parameter, public :: LIQUID_CONDUCTIVITY_X   = 143
+  PetscInt, parameter, public :: LIQUID_CONDUCTIVITY_Y   = 144
+  PetscInt, parameter, public :: LIQUID_CONDUCTIVITY_Z   = 145
+  PetscInt, parameter, public :: LIQUID_CONDUCTIVITY_XY  = 146
+  PetscInt, parameter, public :: LIQUID_CONDUCTIVITY_YZ  = 147
+  PetscInt, parameter, public :: LIQUID_CONDUCTIVITY_XZ  = 148
+  
+  PetscInt, parameter, public :: FACE_PERMEABILITY       = 149
+  PetscInt, parameter, public :: FACE_AREA               = 150
+  PetscInt, parameter, public :: FACE_NON_ORTHO_ANGLE    = 151
+  PetscInt, parameter, public :: FACE_UPWIND_FRACTION    = 152
+  PetscInt, parameter, public :: FACE_DISTANCE_BETWEEN_CENTER = 153
+
 
 end module Variables_module

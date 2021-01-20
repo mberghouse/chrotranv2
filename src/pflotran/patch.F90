@@ -5833,6 +5833,39 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
                                   vec_ptr(local_id),ivar)
           enddo
       end select
+    case(LIQUID_CONDUCTIVITY,LIQUID_CONDUCTIVITY_X, &
+         LIQUID_CONDUCTIVITY_Y,LIQUID_CONDUCTIVITY_Z, &
+         LIQUID_CONDUCTIVITY_XY,LIQUID_CONDUCTIVITY_XZ, &
+         LIQUID_CONDUCTIVITY_YZ)
+      select case(ivar)
+        case(LIQUID_CONDUCTIVITY, LIQUID_CONDUCTIVITY_X)
+          ivar_temp = PERMEABILITY_X
+        case(LIQUID_CONDUCTIVITY_Y)
+          ivar_temp = PERMEABILITY_Y
+        case(LIQUID_CONDUCTIVITY_Z)
+          ivar_temp = PERMEABILITY_Z
+        case(LIQUID_CONDUCTIVITY_XY)
+          ivar_temp = PERMEABILITY_XY
+        case(LIQUID_CONDUCTIVITY_XZ)
+          ivar_temp = PERMEABILITY_XZ
+        case(LIQUID_CONDUCTIVITY_YZ)
+          ivar_temp = PERMEABILITY_YZ
+      end select
+      select case(option%iflowmode)
+        case(RICHARDS_MODE)
+          do local_id=1,grid%nlmax
+            ghosted_id = grid%nL2G(local_id)
+            tempreal = patch%aux%Richards%auxvars(ghosted_id)%kr / &
+                       patch%aux%Richards%auxvars(ghosted_id)%kvr
+            vec_ptr(local_id) = EARTH_GRAVITY / tempreal * &
+               patch%aux%Global%auxvars(ghosted_id)%den_kg(1) * &
+               MaterialAuxVarGetValue(material_auxvars(ghosted_id), ivar_temp)
+          enddo
+        case default
+          option%io_buffer = 'Output of liquid conductivity &
+            &not supported for current flow mode.'
+          call PrintMsg(option)
+      end select
     case(LIQUID_RELATIVE_PERMEABILITY)
       select case(option%iflowmode)
         case(RICHARDS_MODE)
@@ -5941,6 +5974,10 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
         call PatchGetKOrthogonalityError(grid, material_auxvars, vec_ptr)
         !vec_ptr(:) = UNINITIALIZED_DOUBLE
       endif
+    case(FACE_PERMEABILITY,FACE_AREA,FACE_UPWIND_FRACTION, &
+         FACE_NON_ORTHO_ANGLE, FACE_DISTANCE_BETWEEN_CENTER) 
+        ! or all other connection indexed output
+        call PatchGetFaceVariable(patch, material_auxvars, ivar, vec_ptr,option)
     case default
       call PatchUnsupportedVariable(ivar,option)
   end select
@@ -6031,8 +6068,8 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
          GAS_VISCOSITY,AIR_PRESSURE,CAPILLARY_PRESSURE, &
          LIQUID_MOBILITY,GAS_MOBILITY,SC_FUGA_COEFF,ICE_DENSITY, &
          SECONDARY_TEMPERATURE,LIQUID_DENSITY_MOL, &
-         LIQUID_HEAD,VAPOR_PRESSURE,SATURATION_PRESSURE,MAXIMUM_PRESSURE, &
-         LIQUID_MASS_FRACTION,GAS_MASS_FRACTION, &
+         LIQUID_HEAD,VAPOR_PRESSURE,SATURATION_PRESSURE, &
+         MAXIMUM_PRESSURE,LIQUID_MASS_FRACTION,GAS_MASS_FRACTION, &
          OIL_PRESSURE,OIL_SATURATION,OIL_DENSITY,OIL_DENSITY_MOL,OIL_ENERGY, &
          OIL_MOBILITY,OIL_VISCOSITY,BUBBLE_POINT, &
          SOLVENT_PRESSURE,SOLVENT_SATURATION,SOLVENT_DENSITY, &
@@ -6821,6 +6858,36 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
                                                           ghosted_id), &
                                 material_auxvars(ghosted_id), &
                                 value,ivar)
+      end select
+    case(LIQUID_CONDUCTIVITY,LIQUID_CONDUCTIVITY_X, &
+         LIQUID_CONDUCTIVITY_Y,LIQUID_CONDUCTIVITY_Z, &
+         LIQUID_CONDUCTIVITY_XY,LIQUID_CONDUCTIVITY_XZ, &
+         LIQUID_CONDUCTIVITY_YZ)
+      select case(ivar)
+        case(LIQUID_CONDUCTIVITY, LIQUID_CONDUCTIVITY_X)
+          ivar_temp = PERMEABILITY_X
+        case(LIQUID_CONDUCTIVITY_Y)
+          ivar_temp = PERMEABILITY_Y
+        case(LIQUID_CONDUCTIVITY_Z)
+          ivar_temp = PERMEABILITY_Z
+        case(LIQUID_CONDUCTIVITY_XY)
+          ivar_temp = PERMEABILITY_XY
+        case(LIQUID_CONDUCTIVITY_XZ)
+          ivar_temp = PERMEABILITY_XZ
+        case(LIQUID_CONDUCTIVITY_YZ)
+          ivar_temp = PERMEABILITY_YZ
+      end select
+      select case(option%iflowmode)
+        case(RICHARDS_MODE)
+          value = patch%aux%Richards%auxvars(ghosted_id)%kr / &
+                     patch%aux%Richards%auxvars(ghosted_id)%kvr
+          value = EARTH_GRAVITY / value * &
+               patch%aux%Global%auxvars(ghosted_id)%den_kg(1) * &
+               MaterialAuxVarGetValue(material_auxvars(ghosted_id), ivar_temp)
+        case default
+          option%io_buffer = 'Output of liquid conductivity &
+            &not supported for current flow mode.'
+          call PrintMsg(option)
       end select
     case(LIQUID_RELATIVE_PERMEABILITY)
       select case(option%iflowmode)
@@ -8230,6 +8297,157 @@ subroutine PatchGetKOrthogonalityError(grid, material_auxvars, error)
   deallocate(array_error)
 
 end subroutine PatchGetKOrthogonalityError
+
+! ************************************************************************** !
+
+subroutine PatchGetFaceVariable(patch,material_auxvars,ivar,vec_ptr,option)
+  !
+  ! Populate the vec_ptr with face variable
+  !
+  ! Author: Moise Rousseau
+  ! Date: 06/28/20
+  
+  use Connection_module
+  use Coupler_module
+  use Variables_module
+  use Material_Aux_class
+  use Utility_module, only : DotProduct, CrossProduct
+  use Option_module
+  use Geometry_module  
+  
+  type(patch_type), pointer :: patch
+  class(material_auxvar_type), pointer :: material_auxvars(:)
+  type(option_type) :: option
+  PetscInt :: ivar
+  PetscReal, pointer :: vec_ptr(:)
+  
+  class (connection_set_type), pointer :: cur_connection_set
+  type(coupler_type), pointer :: boundary_condition
+  PetscInt :: iconn, icount
+  PetscInt :: local_id_up, local_id_dn, ghosted_id_up, ghosted_id_dn, face_id
+  PetscReal :: perm_up, perm_dn, dd_up, dd_dn, dist(-1:3)
+  PetscReal :: temp_real
+  type(point3d_type) :: point1, point2, point3
+  PetscReal :: v1(3), v2(3), v3(3)
+
+  nullify(boundary_condition)
+  nullify(cur_connection_set)
+  !internal connections
+  icount = 1
+  cur_connection_set => patch%grid%internal_connection_set_list%first
+  do
+    if (.not.associated(cur_connection_set)) exit
+    select case(ivar)
+      case(FACE_PERMEABILITY)
+        do iconn = 1, cur_connection_set%num_connections
+          if (cur_connection_set%local(iconn) == 0) cycle
+          !Cell ids from both side of the face
+          ghosted_id_up = cur_connection_set%id_up(iconn)
+          ghosted_id_dn = cur_connection_set%id_dn(iconn)
+          dist(:) = cur_connection_set%dist(:,iconn)
+          dd_up = dist(-1)
+          dd_dn = 1.d0-dd_up
+          perm_up = 0.
+          perm_dn = 0.
+          call material_auxvars(ghosted_id_up)%PermeabilityTensorToScalar( &
+                                    dist,perm_up)
+          call material_auxvars(ghosted_id_dn)%PermeabilityTensorToScalar( &
+                                    dist,perm_dn)
+          vec_ptr(icount) = (perm_up * perm_dn)/(dd_up*perm_dn + dd_dn*perm_up)
+          icount = icount + 1
+        enddo
+      case(FACE_AREA)
+        do iconn = 1, cur_connection_set%num_connections
+          if (cur_connection_set%local(iconn) == 0) cycle
+          vec_ptr(icount) = cur_connection_set%area(iconn)
+          icount = icount + 1
+        enddo
+      case(FACE_NON_ORTHO_ANGLE)
+        if (patch%grid%itype == STRUCTURED_GRID .or. &
+            patch%grid%itype == EXPLICIT_UNSTRUCTURED_GRID) then
+            vec_ptr = -1. !not defined
+            return
+        else
+          do iconn = 1, cur_connection_set%num_connections
+            if (cur_connection_set%local(iconn) == 0) cycle
+            ghosted_id_up = cur_connection_set%id_up(iconn)
+            ghosted_id_dn = cur_connection_set%id_dn(iconn)
+            face_id = cur_connection_set%face_id(iconn)
+            point1 = patch%grid%unstructured_grid%vertices( &
+                        patch%grid%unstructured_grid%face_to_vertex(1,face_id))
+            point2 = patch%grid%unstructured_grid%vertices( &
+                        patch%grid%unstructured_grid%face_to_vertex(2,face_id))
+            point3 = patch%grid%unstructured_grid%vertices( &
+                        patch%grid%unstructured_grid%face_to_vertex(3,face_id))
+            v1(1) = point3%x-point2%x
+            v1(2) = point3%y-point2%y
+            v1(3) = point3%z-point2%z
+            v2(1) = point1%x-point2%x
+            v2(2) = point1%y-point2%y
+            v2(3) = point1%z-point2%z
+            v3 = CrossProduct(v1,v2) !normal stored in v1
+            temp_real = abs(DotProduct(v3,cur_connection_set%dist(1:3,iconn)))
+            vec_ptr(icount) = 1.d0 - temp_real / sqrt(DotProduct(v3,v3))
+            icount = icount + 1
+          enddo
+        endif
+      case(FACE_UPWIND_FRACTION)
+        do iconn = 1, cur_connection_set%num_connections
+          if (cur_connection_set%local(iconn) == 0) cycle
+          vec_ptr(icount) = cur_connection_set%dist(-1,iconn)
+          icount = icount + 1
+        enddo
+      case(FACE_DISTANCE_BETWEEN_CENTER)
+        do iconn = 1, cur_connection_set%num_connections
+          if (cur_connection_set%local(iconn) == 0) cycle
+          vec_ptr(icount) = cur_connection_set%dist(0,iconn)
+          icount = icount + 1
+        enddo
+    end select
+    cur_connection_set => cur_connection_set%next
+  enddo
+  ! boundary connections
+  boundary_condition => patch%boundary_condition_list%first
+  do
+    if (.not.associated(boundary_condition)) exit
+    cur_connection_set => boundary_condition%connection_set
+    select case(ivar)
+      case(FACE_PERMEABILITY)
+        do iconn = 1, cur_connection_set%num_connections
+          !Cell ids from both side of the face
+          ghosted_id_dn = cur_connection_set%id_dn(iconn)
+          dist(:) = cur_connection_set%dist(:,iconn)
+          call material_auxvars(ghosted_id_dn)%PermeabilityTensorToScalar( &
+                                   dist, perm_dn)
+          vec_ptr(icount) = perm_dn
+          icount = icount + 1
+        enddo
+      case(FACE_AREA)
+        do iconn = 1, cur_connection_set%num_connections
+          vec_ptr(icount) = cur_connection_set%area(iconn)
+          icount = icount + 1
+        enddo
+      case(FACE_NON_ORTHO_ANGLE)
+        do iconn = 1, cur_connection_set%num_connections
+          vec_ptr(icount) = 0.
+          icount = icount + 1
+        enddo
+      case(FACE_UPWIND_FRACTION)
+        do iconn = 1, cur_connection_set%num_connections
+          vec_ptr(icount) = cur_connection_set%dist(-1,iconn)
+          icount = icount + 1
+        enddo
+      case(FACE_DISTANCE_BETWEEN_CENTER)
+        do iconn = 1, cur_connection_set%num_connections
+          if (cur_connection_set%local(iconn) == 0) cycle
+          vec_ptr(icount) = cur_connection_set%dist(0,iconn)
+          icount = icount + 1
+        enddo
+    end select
+    boundary_condition => boundary_condition%next
+  enddo
+    
+end subroutine PatchGetFaceVariable
 
 ! ************************************************************************** !
 

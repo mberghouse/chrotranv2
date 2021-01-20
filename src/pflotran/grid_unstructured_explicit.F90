@@ -238,6 +238,7 @@ subroutine UGridExplicitRead(unstructured_grid,filename,option)
   call MPI_Bcast(temp_int,ONE_INTEGER_MPI,MPI_INTEGER,option%io_rank, &
                   option%mycomm,ierr)
   num_connections = temp_int
+  !unstructured_grid%nmax_faces = temp_int
         
    ! divide cells across ranks
   num_connections_local = num_connections/option%mycommsize 
@@ -250,7 +251,7 @@ subroutine UGridExplicitRead(unstructured_grid,filename,option)
   allocate(explicit_grid%connections(2,num_connections_local))
   explicit_grid%connections = 0
   allocate(explicit_grid%face_areas(num_connections_local))
-  explicit_grid%face_areas = 0    
+  explicit_grid%face_areas = 0
   allocate(explicit_grid%face_centroids(num_connections_local))
   do iconn = 1, num_connections_local
     explicit_grid%face_centroids(iconn)%x = 0.d0
@@ -488,7 +489,7 @@ subroutine UGridExplicitDecompose(ugrid,option)
   PetscInt :: num_connections_local_old, num_connections_local
   PetscInt :: num_connections_total 
   PetscInt :: num_connections_global, global_connection_offset
-  PetscInt :: id_up, id_dn, iconn, icell, count, offset
+  PetscInt :: id_up, id_dn, iconn, icell, count, count2, offset
   PetscInt :: conn_id, dual_id
   PetscBool :: found
   PetscInt :: i, temp_int, idual
@@ -1065,6 +1066,22 @@ subroutine UGridExplicitDecompose(ugrid,option)
     ! all values should be negative at this point, unless uninitialized
     if (maxval(int_array2d(:,iconn)) >= 999) then
       ! connection is between two ghosted cells
+      ! Moise: we need to get the cell which is ghosted on the rank
+      ! to know which connection are ghosted
+      do i = 1, 2
+        if (int_array2d(i,iconn) >= 999) cycle
+        id_up = int(vec_ptr(offset+1)) ! this is the natural id
+        id_dn = int(vec_ptr(offset+2))
+        if (ugrid%cell_ids_natural(abs(int_array2d(i,iconn))) == id_up) then
+          int_array2d(i,iconn) = abs(int_array2d(i,iconn))
+        endif
+        if (ugrid%cell_ids_natural(abs(int_array2d(i,iconn))) == id_dn) then
+          int_array2d(i,iconn) = abs(int_array2d(i,iconn))
+        endif
+        id_up = int_array2d(i,iconn)
+        vec_ptr(offset+1) = 0 ! not read
+        vec_ptr(offset+2) = id_up
+      enddo
       vec_ptr(offset+7) = 0.d0
       cycle
     endif
@@ -1109,7 +1126,7 @@ subroutine UGridExplicitDecompose(ugrid,option)
     endif
     if (id_up > ugrid%nlmax .and. id_dn > ugrid%nlmax) then
       ! connection is between two ghosted cells
-      vec_ptr(offset+7) = 0.d0
+      vec_ptr(offset+7) = -1.d0
     endif
   enddo
   call VecRestoreArrayF90(connections_local,vec_ptr,ierr);CHKERRQ(ierr)
@@ -1181,7 +1198,9 @@ subroutine UGridExplicitDecompose(ugrid,option)
   allocate(explicit_grid%connections(2,count))
   explicit_grid%connections = 0
   allocate(explicit_grid%face_areas(count))
-  explicit_grid%face_areas = 0    
+  explicit_grid%face_areas = 0
+  allocate(explicit_grid%face_locals(count))
+  explicit_grid%face_locals = 1
   allocate(explicit_grid%face_centroids(count))
   do iconn = 1, count
     explicit_grid%face_centroids(iconn)%x = 0.d0
@@ -1202,6 +1221,35 @@ subroutine UGridExplicitDecompose(ugrid,option)
       explicit_grid%face_areas(count) = vec_ptr(offset+6)
     endif
   enddo
+  ! Added by Moise Rousseau 11-12-2020
+  do iconn = 1, num_connections_local
+    offset = connection_stride*(iconn-1)
+    if (vec_ptr(offset+7) < -0.1d0) then
+      ! explicit_grid%connections contains 2 ghosted cell
+      ! so we look at the connection which had one or the other cell id
+      ! this mean the connection is ghosted
+      do count2 = 1, count
+        if (explicit_grid%connections(1,count2) == int(vec_ptr(offset+1)) &
+           .or. explicit_grid%connections(2,count2) == int(vec_ptr(offset+1)) &
+           .or. explicit_grid%connections(1,count2) == int(vec_ptr(offset+2)) &
+           .or. explicit_grid%connections(2,count2) == & 
+                                                   int(vec_ptr(offset+2))) then
+           explicit_grid%face_locals(count2) = 0
+        endif
+      enddo
+    endif
+    if (vec_ptr(offset+7) == 0.) then
+      ! explicit_grid%connections contains 1 ghosted cell at offset+2
+      do count2 = 1, count
+        if (explicit_grid%connections(1,count2) == int(vec_ptr(offset+2)) &
+             .or. explicit_grid%connections(2,count2) == & 
+                                                     int(vec_ptr(offset+2))) then
+             explicit_grid%face_locals(count2) = 0
+      endif
+      enddo
+    endif
+  enddo
+  ! end of addition
   call VecRestoreArrayF90(connections_local,vec_ptr,ierr);CHKERRQ(ierr)
   num_connections_local = count
 
@@ -1306,6 +1354,7 @@ function UGridExplicitSetInternConnect(explicit_grid,upwind_fraction_method, &
     id_dn = explicit_grid%connections(2,iconn)
     connections%id_up(iconn) = id_up
     connections%id_dn(iconn) = id_dn
+    connections%local(iconn) = 0
     
     pt_up(1) = explicit_grid%cell_centroids(id_up)%x
     pt_up(2) = explicit_grid%cell_centroids(id_up)%y
@@ -1314,6 +1363,37 @@ function UGridExplicitSetInternConnect(explicit_grid,upwind_fraction_method, &
     pt_dn(1) = explicit_grid%cell_centroids(id_dn)%x
     pt_dn(2) = explicit_grid%cell_centroids(id_dn)%y
     pt_dn(3) = explicit_grid%cell_centroids(id_dn)%z
+    
+    !added by Moise Rousseau (01-14-21)
+    !uniquely identify the ghosted connection
+    if (explicit_grid%face_locals(iconn) < 0.1)  then
+      if (pt_up(1) > pt_dn(1)) then
+        connections%local(iconn) = -1
+        connections%num_connections_unique = &
+                           connections%num_connections_unique + 1
+      else
+        if (pt_up(1) == pt_dn(1)) then
+          if (pt_up(2) > pt_dn(2)) then
+            connections%local(iconn) = -1
+            connections%num_connections_unique = &
+                           connections%num_connections_unique + 1
+          else 
+            if (pt_up(2) == pt_dn(2)) then
+              if (pt_up(3) > pt_dn(3)) then
+                connections%local(iconn) = -1
+                connections%num_connections_unique = &
+                           connections%num_connections_unique + 1
+               endif
+            endif
+          endif
+        endif
+      endif
+    else 
+      connections%local(iconn) = 1
+      connections%num_connections_unique = &
+                           connections%num_connections_unique + 1
+    endif
+    !end of addition
 
     pt_center(1) = explicit_grid%face_centroids(iconn)%x
     pt_center(2) = explicit_grid%face_centroids(iconn)%y
@@ -1435,6 +1515,7 @@ function UGridExplicitSetBoundaryConnect(explicit_grid,cell_ids, &
     connections%dist(0,iconn) = distance
     connections%dist(1:3,iconn) = v/distance
     connections%area(iconn) = face_areas(iconn)
+    !connections%local(iconn) = 1 ! boundary always local
   enddo
   if (error) then
     option%io_buffer = 'Coincident cell and face centroids found in ' // &
