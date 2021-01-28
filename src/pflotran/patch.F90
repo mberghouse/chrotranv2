@@ -5971,13 +5971,13 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
       enddo
     case(K_ORTHOGONALITY_ERROR)
       if (grid%itype == IMPLICIT_UNSTRUCTURED_GRID) then
-        call PatchGetKOrthogonalityError(grid, material_auxvars, vec_ptr)
+        call PatchGetKOrthogonalityError(grid,material_auxvars,vec_ptr)
         !vec_ptr(:) = UNINITIALIZED_DOUBLE
       endif
     case(FACE_PERMEABILITY,FACE_AREA,FACE_UPWIND_FRACTION, &
          FACE_NON_ORTHO_ANGLE, FACE_DISTANCE_BETWEEN_CENTER) 
         ! or all other connection indexed output
-        call PatchGetFaceVariable(patch, material_auxvars, ivar, vec_ptr,option)
+        call PatchGetFaceVariable(patch,material_auxvars,ivar,vec_ptr,option)
     case default
       call PatchUnsupportedVariable(ivar,option)
   end select
@@ -8439,7 +8439,6 @@ subroutine PatchGetFaceVariable(patch,material_auxvars,ivar,vec_ptr,option)
         enddo
       case(FACE_DISTANCE_BETWEEN_CENTER)
         do iconn = 1, cur_connection_set%num_connections
-          if (cur_connection_set%local(iconn) == 0) cycle
           vec_ptr(icount) = cur_connection_set%dist(0,iconn)
           icount = icount + 1
         enddo
