@@ -2560,7 +2560,7 @@ subroutine WriteHDF5ConnectionIds(realization_base,option,file_id)
   total_num_connections = 0
   nlconnection = 0
   call OutputGetNumberOfFaceConnectionLocal(realization_base, nlconnection)
-  
+
   ! memory space which is a 1D vector
   rank_mpi = 1
   dims = 0
@@ -2639,6 +2639,7 @@ subroutine WriteHDF5ConnectionIds(realization_base,option,file_id)
   boundary_condition => & 
              realization_base%patch%boundary_condition_list%first
   do
+    if (.not.associated(boundary_condition)) exit
     ibound_con = - boundary_condition%id
     cur_connection_set => boundary_condition%connection_set
     do iconn = 1, cur_connection_set%num_connections
@@ -2649,7 +2650,6 @@ subroutine WriteHDF5ConnectionIds(realization_base,option,file_id)
       icount = icount + 2
     enddo
     boundary_condition => boundary_condition%next
-    if (.not.associated(boundary_condition)) exit
   enddo
   
   call PetscLogEventBegin(logging%event_h5dwrite_f,ierr);CHKERRQ(ierr)
