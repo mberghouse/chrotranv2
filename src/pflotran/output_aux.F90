@@ -1256,7 +1256,7 @@ subroutine OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
       id = FACE_UPWIND_FRACTION
     case ('FACE_DISTANCE_BETWEEN_CENTER')
       units = ''
-      name = 'Face Distance Between Cell Center'
+      name = 'Face Distance Between Center'
       category = OUTPUT_FACE
       id = FACE_DISTANCE_BETWEEN_CENTER
     case ('FACE_NON_ORTHOGONALITY_ANGLE')

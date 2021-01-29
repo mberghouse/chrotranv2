@@ -1514,22 +1514,6 @@ subroutine UGridExplicitDecompose(ugrid,option)
     ! all values should be negative at this point, unless uninitialized
     if (maxval(int_array2d(:,iconn)) >= 999) then
       ! connection is between two ghosted cells
-      ! Moise: we need to get the cell which is ghosted on the rank
-      ! to know which connection are ghosted
-      do i = 1, 2
-        if (int_array2d(i,iconn) >= 999) cycle
-        id_up = int(vec_ptr(offset+1)) ! this is the natural id
-        id_dn = int(vec_ptr(offset+2))
-        if (ugrid%cell_ids_natural(abs(int_array2d(i,iconn))) == id_up) then
-          int_array2d(i,iconn) = abs(int_array2d(i,iconn))
-        endif
-        if (ugrid%cell_ids_natural(abs(int_array2d(i,iconn))) == id_dn) then
-          int_array2d(i,iconn) = abs(int_array2d(i,iconn))
-        endif
-        id_up = int_array2d(i,iconn)
-        vec_ptr(offset+1) = 0 ! not read
-        vec_ptr(offset+2) = id_up
-      enddo
       vec_ptr(offset+7) = 0.d0
       cycle
     endif
@@ -1574,7 +1558,7 @@ subroutine UGridExplicitDecompose(ugrid,option)
     endif
     if (id_up > ugrid%nlmax .and. id_dn > ugrid%nlmax) then
       ! connection is between two ghosted cells
-      vec_ptr(offset+7) = -1.d0
+      vec_ptr(offset+7) = 0.d0
     endif
   enddo
   call VecRestoreArrayF90(connections_local,vec_ptr,ierr);CHKERRQ(ierr)
@@ -1667,37 +1651,11 @@ subroutine UGridExplicitDecompose(ugrid,option)
       explicit_grid%face_centroids(count)%y = vec_ptr(offset+4)
       explicit_grid%face_centroids(count)%z = vec_ptr(offset+5)
       explicit_grid%face_areas(count) = vec_ptr(offset+6)
+      if (int(vec_ptr(offset+1)) > ugrid%nlmax .or. &
+                          int(vec_ptr(offset+2)) > ugrid%nlmax) &
+        explicit_grid%face_locals(count) = 0
     endif
   enddo
-  ! Added by Moise Rousseau 11-12-2020
-  do iconn = 1, num_connections_local
-    offset = connection_stride*(iconn-1)
-    if (vec_ptr(offset+7) < -0.1d0) then
-      ! explicit_grid%connections contains 2 ghosted cell
-      ! so we look at the connection which had one or the other cell id
-      ! this mean the connection is ghosted
-      do count2 = 1, count
-        if (explicit_grid%connections(1,count2) == int(vec_ptr(offset+1)) &
-           .or. explicit_grid%connections(2,count2) == int(vec_ptr(offset+1)) &
-           .or. explicit_grid%connections(1,count2) == int(vec_ptr(offset+2)) &
-           .or. explicit_grid%connections(2,count2) == & 
-                                                   int(vec_ptr(offset+2))) then
-           explicit_grid%face_locals(count2) = 0
-        endif
-      enddo
-    endif
-    if (vec_ptr(offset+7) == 0.) then
-      ! explicit_grid%connections contains 1 ghosted cell at offset+2
-      do count2 = 1, count
-        if (explicit_grid%connections(1,count2) == int(vec_ptr(offset+2)) &
-             .or. explicit_grid%connections(2,count2) == & 
-                                                     int(vec_ptr(offset+2))) then
-             explicit_grid%face_locals(count2) = 0
-      endif
-      enddo
-    endif
-  enddo
-  ! end of addition
   call VecRestoreArrayF90(connections_local,vec_ptr,ierr);CHKERRQ(ierr)
   num_connections_local = count
 
