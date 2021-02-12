@@ -1,0 +1,11 @@
+ARG IMAGE
+FROM $IMAGE
+ENV PETSC_DIR=/scratch/petsc PETSC_ARCH=petsc-arch
+
+WORKDIR /scratch
+COPY . .
+RUN ./.gitlab/info.sh
+RUN ./.gitlab/build-pflotran.sh
+RUN ./.gitlab/build-pflotran-rxn.sh
+RUN ./.gitlab/test-pflotran.sh
+RUN ls -ltr ./regression_tests
