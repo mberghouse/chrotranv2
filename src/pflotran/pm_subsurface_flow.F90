@@ -386,6 +386,15 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
                                       ierr);CHKERRQ(ierr)
+          case('AUTO_SCALE_MAX')
+            call InputReadWord(input,option,word,PETSC_TRUE)
+            call InputErrorMsg(input,option, &
+                               'initial trust region size', &
+                               'NEWTON TRD options')
+            string = '-flow_snes_auto_scale_max'
+            call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
+                                      trim(string),trim(word), &
+                                      ierr);CHKERRQ(ierr)
           case default
             option%io_buffer  = 'NEWTON_TRUST_REGION option: ' // trim(word) // &
                               ' unknown.'
