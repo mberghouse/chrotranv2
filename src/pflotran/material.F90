@@ -105,10 +105,10 @@ module Material_module
 
     ! Illitization parameters
     PetscBool :: ilt ! include illitization
-    PetscReal :: smectite ! fraction of smectite in material
-    PetscReal :: illite   ! fraction of illite in material
-    PetscReal :: smectite_initial ! initial fraction of smectite in material
-    PetscReal :: illite_initial   ! initial fraction of illite in material
+    PetscReal :: ilt_fs ! fraction of smectite in material
+    PetscReal :: ilt_fi   ! fraction of illite in material
+    PetscReal :: ilt_fs0 ! initial fraction of smectite in material
+    PetscReal :: ilt_fi0   ! initial fraction of illite in material
     PetscReal :: ilt_rate ! temperature-dependent illitization rate in sec^-1
     PetscReal :: ilt_ea   ! activation energy in J/mol
     PetscReal :: ilt_freq ! frequency term in L/mol-sec
@@ -245,10 +245,10 @@ function MaterialPropertyCreate()
   material_property%secondary_continuum_area_scaling = 1.d0
 
   material_property%ilt = PETSC_FALSE
-  material_property%smectite = 0.0d0
-  material_property%illite = 1.0d0
-  material_property%smectite_initial = 1.0d0
-  material_property%illite_initial = 0.0d0
+  material_property%ilt_fs = 0.0d0
+  material_property%ilt_fi = 1.0d0
+  material_property%ilt_fs0 = 1.0d0
+  material_property%ilt_fi0 = 0.0d0
   material_property%ilt_rate = UNINITIALIZED_DOUBLE
   material_property%ilt_ea = UNINITIALIZED_DOUBLE
   material_property%ilt_freq = UNINITIALIZED_DOUBLE
@@ -533,8 +533,7 @@ subroutine MaterialPropertyRead(material_property,input,option)
                         'M','ILLITIZATION, potassium concentration',option)
             case('SMECTITE_INITIAL')
               ! Initial fraction of smectite in the smectite/illite mixture
-              call InputReadDouble(input,option, &
-                                   material_property%smectite_initial)
+              call InputReadDouble(input,option,material_property%ilt_fs0)
               call InputErrorMsg(input,option,'initial smectite fraction', &
                                  'MATERIAL_PROPERTY,ILLITIZATION')
             case('SHIFT_PERM')
@@ -549,16 +548,15 @@ subroutine MaterialPropertyRead(material_property,input,option)
                                             option)
           end select
         enddo
-        if (material_property%smectite_initial > 1.0d0 .or. &
-            material_property%smectite_initial < 0.0d0) then
+        if (material_property%ilt_fs0 > 1.0d0 .or. &
+            material_property%ilt_fs0 < 0.0d0) then
           option%io_buffer = 'Initial smectite fraction must be provided as ' &
                            //'a number from 0 to 1.'
           call PrintErrMsg(option)
         endif
-        material_property%illite_initial = 1.0d0 - &
-                                           material_property%smectite_initial
-        material_property%smectite = material_property%smectite_initial
-        material_property%illite = material_property%illite_initial
+        material_property%ilt_fi0 = 1.0d0 - material_property%ilt_fs0
+        material_property%ilt_fs = material_property%ilt_fs0
+        material_property%ilt_fi = material_property%ilt_fi0
         call InputPopBlock(input,option)
       case('PERMEABILITY')
         call InputPushBlock(input,option)
