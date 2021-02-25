@@ -537,10 +537,6 @@ subroutine MaterialPropertyRead(material_property,input,option)
                                    material_property%smectite_initial)
               call InputErrorMsg(input,option,'initial smectite fraction', &
                                  'MATERIAL_PROPERTY,ILLITIZATION')
-              material_property%illite_initial = 1.0d0 - &
-                                              material_property%smectite_initial
-              material_property%smectite = material_property%smectite_initial
-              material_property%illite = material_property%illite_initial
             case('SHIFT_PERM')
               ! Factor modifying permeability per fraction illitized
               call InputReadDouble(input,option, &
@@ -553,6 +549,16 @@ subroutine MaterialPropertyRead(material_property,input,option)
                                             option)
           end select
         enddo
+        if (material_property%smectite_initial > 1.0d0 .or. &
+            material_property%smectite_initial < 0.0d0) then
+          option%io_buffer = 'Initial smectite fraction must be provided as ' &
+                           //'a number from 0 to 1.'
+          call PrintErrMsg(option)
+        endif
+        material_property%illite_initial = 1.0d0 - &
+                                           material_property%smectite_initial
+        material_property%smectite = material_property%smectite_initial
+        material_property%illite = material_property%illite_initial
         call InputPopBlock(input,option)
       case('PERMEABILITY')
         call InputPushBlock(input,option)
@@ -1023,6 +1029,25 @@ subroutine MaterialPropertyRead(material_property,input,option)
       option%io_buffer = 'SOIL_REFERENCE_PRESSURE may not be defined by the &
         &initial pressure and a specified pressure in material "' // &
         trim(material_property%name) // '".'
+      call PrintErrMsg(option)
+    endif
+  endif
+
+  if (material_property%ilt) then
+    if (Uninitialized(material_property%ilt_ea)) then
+      option%io_buffer = 'Illitization activation energy must be specified in' &
+                       //' material "'//trim(material_property%name)//'".'
+      call PrintErrMsg(option)
+    endif
+    if (Uninitialized(material_property%ilt_freq)) then
+      option%io_buffer = 'Illitization frequency term must be specified in' &
+                       //' material "'//trim(material_property%name)//'".'
+      call PrintErrMsg(option)
+    endif
+    if (Uninitialized(material_property%ilt_K_conc)) then
+      option%io_buffer = 'Illitization potassium concentration must be ' &
+                       //'specified in material "' &
+                       //trim(material_property%name)//'".'
       call PrintErrMsg(option)
     endif
   endif
