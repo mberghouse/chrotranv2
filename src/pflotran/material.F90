@@ -243,6 +243,19 @@ function MaterialPropertyCreate()
   material_property%secondary_continuum_log_spacing = PETSC_FALSE
   material_property%secondary_continuum_outer_spacing = 1.d-3
   material_property%secondary_continuum_area_scaling = 1.d0
+
+  material_property%ilt = PETSC_FALSE
+  material_property%smectite = 0.0d0
+  material_property%illite = 1.0d0
+  material_property%smectite_initial = 1.0d0
+  material_property%illite_initial = 0.0d0
+  material_property%ilt_rate = UNINITIALIZED_DOUBLE
+  material_property%ilt_ea = UNINITIALIZED_DOUBLE
+  material_property%ilt_freq = UNINITIALIZED_DOUBLE
+  material_property%ilt_K_conc = UNINITIALIZED_DOUBLE
+  material_property%ilt_shift_perm = 1.0d0
+  material_property%ilt_threshold = 0.0d0
+
   nullify(material_property%next)
   MaterialPropertyCreate => material_property
 
@@ -484,6 +497,7 @@ subroutine MaterialPropertyRead(material_property,input,option)
           call InputReadCard(input,option,word)
           call InputErrorMsg(input,option,'keyword', &
                              'MATERIAL_PROPERTY,ILLITIZATION')
+          material_property%ilt = PETSC_TRUE
           select case(trim(word))
             case('THRESHOLD')
               ! Specifies the temperature threshold for activating illitization
@@ -523,12 +537,20 @@ subroutine MaterialPropertyRead(material_property,input,option)
                                    material_property%smectite_initial)
               call InputErrorMsg(input,option,'initial smectite fraction', &
                                  'MATERIAL_PROPERTY,ILLITIZATION')
+              material_property%illite_initial = 1.0d0 - &
+                                              material_property%smectite_initial
+              material_property%smectite = material_property%smectite_initial
+              material_property%illite = material_property%illite_initial
             case('SHIFT_PERM')
               ! Factor modifying permeability per fraction illitized
               call InputReadDouble(input,option, &
                                    material_property%ilt_shift_perm)
               call InputErrorMsg(input,option,'permeability shift factor', &
                                  'MATERIAL_PROPERTY,ILLITIZATION')
+            case default
+              call InputKeywordUnrecognized(input,word, &
+                                            'MATERIAL_PROPERTY,ILLITIZATION', &
+                                            option)
           end select
         enddo
         call InputPopBlock(input,option)
