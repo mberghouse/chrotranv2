@@ -102,21 +102,6 @@ module Material_module
     PetscBool :: secondary_continuum_log_spacing
     PetscReal :: secondary_continuum_outer_spacing
     PetscReal :: secondary_continuum_area_scaling
-
-    ! Illitization parameters
-    PetscBool :: ilt ! include illitization
-    PetscReal :: ilt_fs ! fraction of smectite in material
-    PetscReal :: ilt_fi ! fraction of illite in material
-    PetscReal :: ilt_fs0 ! initial fraction of smectite in material
-    PetscReal :: ilt_fi0 ! initial fraction of illite in material
-    PetscReal :: ilt_rate ! temperature-dependent illitization rate in sec^-1
-    PetscReal :: ilt_ds ! log accumulated change in smectite
-    PetscReal :: ilt_ea   ! activation energy in J/mol
-    PetscReal :: ilt_freq ! frequency term in L/mol-sec
-    PetscReal :: ilt_K_conc ! molar concentration of potassium
-    PetscReal :: ilt_shift_perm ! permeability shift factor for illite fraction
-    PetscReal :: ilt_threshold ! temperature threshold to begin illitization
-
     type(material_property_type), pointer :: next
   end type material_property_type
   
@@ -244,20 +229,6 @@ function MaterialPropertyCreate()
   material_property%secondary_continuum_log_spacing = PETSC_FALSE
   material_property%secondary_continuum_outer_spacing = 1.d-3
   material_property%secondary_continuum_area_scaling = 1.d0
-
-  material_property%ilt = PETSC_FALSE
-  material_property%ilt_fs = 1.0d0
-  material_property%ilt_fi = 0.0d0
-  material_property%ilt_fs0 = 1.0d0
-  material_property%ilt_fi0 = 0.0d0
-  material_property%ilt_ds = 0.0
-  material_property%ilt_rate = UNINITIALIZED_DOUBLE
-  material_property%ilt_ea = UNINITIALIZED_DOUBLE
-  material_property%ilt_freq = UNINITIALIZED_DOUBLE
-  material_property%ilt_K_conc = UNINITIALIZED_DOUBLE
-  material_property%ilt_shift_perm = 1.0d0
-  material_property%ilt_threshold = 0.0d0
-
   nullify(material_property%next)
   MaterialPropertyCreate => material_property
 
@@ -483,84 +454,6 @@ subroutine MaterialPropertyRead(material_property,input,option)
                            material_property%creep_closure_name)
         call InputErrorMsg(input,option,'creep closure table name', &
                            'MATERIAL_PROPERTY')
-      case('ILLITIZATION')
-        ! Apply illitization model by Huang et al., 1993 to material.
-        ! Calculates fraction of illitization which in turn is translated to
-        !   a change in permeability using a shift factor
-        call InputPushBlock(input,option)
-        do
-          call InputReadPflotranString(input,option)
-          call InputReadStringErrorMsg(input,option, &
-                                       'MATERIAL_PROPERTY,ILLITIZATION')
-
-          if (InputCheckExit(input,option)) exit
-
-          if (InputError(input)) exit
-          call InputReadCard(input,option,word)
-          call InputErrorMsg(input,option,'keyword', &
-                             'MATERIAL_PROPERTY,ILLITIZATION')
-          material_property%ilt = PETSC_TRUE
-          select case(trim(word))
-            case('THRESHOLD')
-              ! Specifies the temperature threshold for activating illitization
-              call InputReadDouble(input,option, &
-                                   material_property%ilt_threshold)
-              call InputErrorMsg(input,option,'temperature threshold', &
-                                 'MATERIAL_PROPERTY,ILLITIZATION')
-              call InputReadAndConvertUnits(input, &
-                               material_property%ilt_threshold, &
-                               'C','ILLITIZATION, temperature threshold',option)
-            case('EA')
-              ! Activation energy in Arrhenius term
-              call InputReadDouble(input,option, &
-                                   material_property%ilt_ea)
-              call InputErrorMsg(input,option,'activation energy', &
-                                 'MATERIAL_PROPERTY,ILLITIZATION')
-              call InputReadAndConvertUnits(input,material_property%ilt_ea, &
-                              'J/mol','ILLITIZATION, activation energy',option)
-            case('FREQ')
-              ! Frequency factor (scaling constant of Arrhenius term)
-              call InputReadDouble(input,option, &
-                                   material_property%ilt_freq)
-              call InputErrorMsg(input,option,'frequency term', &
-                                 'MATERIAL_PROPERTY,ILLITIZATION')
-              call InputReadAndConvertUnits(input,material_property%ilt_freq, &
-                              'L/s-mol','ILLITIZATION, frequency term',option)
-            case('K_CONC')
-              ! Concentration of Potassium cation
-              call InputReadDouble(input,option, &
-                                   material_property%ilt_K_conc)
-              call InputErrorMsg(input,option,'potassium concentration', &
-                                 'MATERIAL_PROPERTY,ILLITIZATION')
-              call InputReadAndConvertUnits(input,material_property%ilt_K_conc,&
-                        'M','ILLITIZATION, potassium concentration',option)
-            case('SMECTITE_INITIAL')
-              ! Initial fraction of smectite in the smectite/illite mixture
-              call InputReadDouble(input,option,material_property%ilt_fs0)
-              call InputErrorMsg(input,option,'initial smectite fraction', &
-                                 'MATERIAL_PROPERTY,ILLITIZATION')
-            case('SHIFT_PERM')
-              ! Factor modifying permeability per fraction illitized
-              call InputReadDouble(input,option, &
-                                   material_property%ilt_shift_perm)
-              call InputErrorMsg(input,option,'permeability shift factor', &
-                                 'MATERIAL_PROPERTY,ILLITIZATION')
-            case default
-              call InputKeywordUnrecognized(input,word, &
-                                            'MATERIAL_PROPERTY,ILLITIZATION', &
-                                            option)
-          end select
-        enddo
-        if (material_property%ilt_fs0 > 1.0d0 .or. &
-            material_property%ilt_fs0 < 0.0d0) then
-          option%io_buffer = 'Initial smectite fraction must be provided as ' &
-                           //'a number from 0 to 1.'
-          call PrintErrMsg(option)
-        endif
-        material_property%ilt_fi0 = 1.0d0 - material_property%ilt_fs0
-        material_property%ilt_fs = material_property%ilt_fs0
-        material_property%ilt_fi = material_property%ilt_fi0
-        call InputPopBlock(input,option)
       case('PERMEABILITY')
         call InputPushBlock(input,option)
         do
@@ -1030,25 +923,6 @@ subroutine MaterialPropertyRead(material_property,input,option)
       option%io_buffer = 'SOIL_REFERENCE_PRESSURE may not be defined by the &
         &initial pressure and a specified pressure in material "' // &
         trim(material_property%name) // '".'
-      call PrintErrMsg(option)
-    endif
-  endif
-
-  if (material_property%ilt) then
-    if (Uninitialized(material_property%ilt_ea)) then
-      option%io_buffer = 'Illitization activation energy must be specified in' &
-                       //' material "'//trim(material_property%name)//'".'
-      call PrintErrMsg(option)
-    endif
-    if (Uninitialized(material_property%ilt_freq)) then
-      option%io_buffer = 'Illitization frequency term must be specified in' &
-                       //' material "'//trim(material_property%name)//'".'
-      call PrintErrMsg(option)
-    endif
-    if (Uninitialized(material_property%ilt_K_conc)) then
-      option%io_buffer = 'Illitization potassium concentration must be ' &
-                       //'specified in material "' &
-                       //trim(material_property%name)//'".'
       call PrintErrMsg(option)
     endif
   endif
