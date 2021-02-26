@@ -250,6 +250,7 @@ module PFLOTRAN_Constants_module
   PetscInt, parameter, public :: MATERIAL_ID_ARRAY = 1
   PetscInt, parameter, public :: CC_ID_ARRAY = 2  ! characteristic curves
   PetscInt, parameter, public :: CCT_ID_ARRAY = 3 ! charact. curves thermal
+  PetscInt, parameter, public :: ILT_ID_ARRAY = 4 ! illitization
   
   ! interpolation methods
   PetscInt, parameter, public :: INTERPOLATION_NULL = 0

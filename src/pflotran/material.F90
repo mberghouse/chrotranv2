@@ -44,6 +44,9 @@ module Material_module
     character(len=MAXWORDLENGTH) :: saturation_function_name
     PetscInt :: thermal_conductivity_function_id
     character(len=MAXWORDLENGTH) :: thermal_conductivity_function_name
+    PetscInt :: illitization_function_id
+    character(len=MAXWORDLENGTH) :: illitization_function_name
+    PetscBool :: ilt ! model illitization in material
     PetscReal :: rock_density ! kg/m^3
     PetscReal :: specific_heat ! J/kg-K
     PetscReal :: thermal_conductivity_dry
@@ -182,6 +185,8 @@ function MaterialPropertyCreate()
   material_property%tortuosity_func_porosity_pwr = UNINITIALIZED_DOUBLE
   material_property%saturation_function_id = 0
   material_property%thermal_conductivity_function_id = UNINITIALIZED_INTEGER
+  material_property%ilt = PETSC_FALSE
+  material_property%illitization_function_id = UNINITIALIZED_INTEGER
   material_property%saturation_function_name = ''
   material_property%rock_density = UNINITIALIZED_DOUBLE
   material_property%specific_heat = UNINITIALIZED_DOUBLE
@@ -310,6 +315,10 @@ subroutine MaterialPropertyRead(material_property,input,option)
       case('THERMAL_CHARACTERISTIC_CURVES')
         call InputReadWord(input,option, &
              material_property%thermal_conductivity_function_name,PETSC_TRUE)
+      case('ILLITIZATION')
+        call InputReadWord(input,option, &
+             material_property%illitization_function_name,PETSC_TRUE)
+        material_property%ilt = PETSC_TRUE
       case('ROCK_DENSITY') 
         call InputReadDouble(input,option,material_property%rock_density)
         call InputErrorMsg(input,option,'rock density','MATERIAL_PROPERTY')
@@ -2235,6 +2244,11 @@ subroutine MaterialPropInputRecord(material_property_list)
       write(id,'(a29)',advance='no') 'thermal char. curve: '
       write(id,'(a)') adjustl(trim(cur_matprop%thermal_conductivity_function_name))
     end if
+
+    if (Initialized(cur_matprop%illitization_function_id)) then
+      write(id,'(a29)',advance='no') 'illitization function: '
+      write(id,'(a)') adjustl(trim(cur_matprop%illitization_function_name))
+    endif
   
     write(id,'(a29)') '---------------------------: '
     cur_matprop => cur_matprop%next

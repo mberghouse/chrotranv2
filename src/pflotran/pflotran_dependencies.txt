@@ -132,6 +132,7 @@ factory_subsurface.o : characteristic_curves.o characteristic_curves_thermal.o \
                        discretization.o eos.o eos_water.o field.o fluid.o \
                        general.o general_aux.o global.o grid.o \
                        grid_structured.o grid_unstructured_aux.o hdf5_aux.o \
+                       illitization.o \
                        init_common.o init_subsurface.o init_subsurface_flow.o \
                        init_subsurface_transport.o input_aux.o integral_flux.o \
                        logging.o material.o nw_transport.o nw_transport_aux.o \
@@ -285,6 +286,8 @@ hydrostatic.o : condition.o connection.o coupler.o dataset_ascii.o \
                 general_aux.o grid.o grid_structured.o hydrate_aux.o option.o \
                 pflotran_constants.o region.o string.o utility.o \
                 wipp_flow_aux.o
+illitization.o : input_aux.o option.o pflotran_constants.o \
+                                  string.o
 init_common.o : condition.o connection.o coupler.o discretization.o field.o \
                 grid.o hdf5.o hdf5_aux.o input_aux.o logging.o option.o \
                 output.o output_aux.o output_tecplot.o patch.o \
@@ -408,7 +411,8 @@ patch.o : auxiliary.o characteristic_curves.o characteristic_curves_thermal.o \
           dataset_base.o dataset_common_hdf5.o dataset_gridded_hdf5.o \
           dataset_map_hdf5.o eos_water.o field.o general_aux.o geometry.o \
           global_aux.o grid.o grid_unstructured_cell.o hydrate_aux.o \
-          hydrostatic.o integral_flux.o material.o material_aux.o mphase_aux.o \
+          hydrostatic.o illitization.o integral_flux.o material.o \
+          material_aux.o mphase_aux.o \
           nw_transport_aux.o nw_transport_equilibrium.o observation.o option.o \
           output_aux.o pflotran_constants.o reaction.o reaction_aux.o \
           reaction_base.o reaction_mineral.o reaction_mineral_aux.o \
@@ -714,7 +718,8 @@ realization_subsurface.o : characteristic_curves.o \
                            discretization.o dm_kludge.o field.o fluid.o grid.o \
                            grid_structured.o grid_unstructured.o \
                            grid_unstructured_aux.o grid_unstructured_cell.o \
-                           input_aux.o material.o material_aux.o \
+                           illitization.o input_aux.o material.o \
+                           material_aux.o \
                            nw_transport_aux.o option.o output_aux.o patch.o \
                            pflotran_constants.o reaction.o reaction_aux.o \
                            reactive_transport_aux.o realization_base.o \
@@ -769,7 +774,8 @@ simulation_geomechanics.o : geomechanics_realization.o \
                             waypoint.o
 simulation_subsurface.o : characteristic_curves.o \
                           characteristic_curves_thermal.o condition.o \
-                          discretization.o eos.o logging.o material.o option.o \
+                          discretization.o eos.o illitization.o logging.o \
+                          material.o option.o \
                           output.o output_aux.o patch.o pflotran_constants.o \
                           pmc_base.o pmc_subsurface.o pmc_third_party.o \
                           reaction_aux.o reaction_clm.o reaction_sandbox.o \

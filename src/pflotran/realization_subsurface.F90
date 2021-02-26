@@ -15,6 +15,7 @@ module Realization_Subsurface_class
   use Saturation_Function_module
   use Characteristic_Curves_module
   use Characteristic_Curves_Thermal_module
+  use Illitization_module
   use Dataset_Base_class
   use Fluid_module
   use Patch_module
@@ -40,6 +41,7 @@ private
     type(saturation_function_type), pointer :: saturation_functions
     class(characteristic_curves_type), pointer :: characteristic_curves
     class(cc_thermal_type), pointer :: characteristic_curves_thermal
+    class(illitization_type), pointer :: illitization_function
     class(dataset_base_type), pointer :: datasets
     
     class(dataset_base_type), pointer :: uniform_velocity_dataset
@@ -154,6 +156,7 @@ function RealizationCreate2(option)
   nullify(realization%saturation_functions)
   nullify(realization%characteristic_curves)
   nullify(realization%characteristic_curves_thermal)
+  nullify(realization%illitization_function)
   nullify(realization%datasets)
   nullify(realization%uniform_velocity_dataset)
   nullify(realization%sec_transport_constraint)
@@ -883,6 +886,14 @@ subroutine RealProcessMatPropAndSatFunc(realization)
   endif
   deallocate(check_thermal_conductivity)
   
+  ! set up mapping for illitization functions
+  if (associated(realization%illitization_function)) then
+    patch%illitization_function => &
+         realization%illitization_function
+    call IllitizationConvertListToArray(patch%illitization_function, &
+         patch%illitization_function_array, option)
+  endif
+  
   ! create mapping of internal to external material id
   call MaterialCreateIntToExtMapping(patch%material_property_array, &
                                      patch%imat_internal_to_external)
@@ -927,6 +938,25 @@ subroutine RealProcessMatPropAndSatFunc(realization)
       option%io_buffer = 'Thermal characteristic curve "' // &
         trim(cur_material_property%thermal_conductivity_function_name) // &
         '" not found.'
+        call PrintErrMsg(option)
+    endif
+    
+    ! illitization function id 
+    if (associated(patch%illitization_function_array)) then
+      if (cur_material_property%ilt) then
+        if (Uninitialized(cur_material_property%illitization_function_id)) then
+          cur_material_property%illitization_function_id = &
+             IllitizationGetID( &
+             patch%illitization_function_array, &
+             cur_material_property%illitization_function_name, &
+             cur_material_property%name,option)
+        endif
+      endif
+    endif
+    if (cur_material_property%illitization_function_id == 0) then
+      option%io_buffer = 'Illitization function "' // &
+        trim(cur_material_property%illitization_function_name) // &
+        '" not found in material "'//trim(cur_material_property%name)//'."'
         call PrintErrMsg(option)
     endif
 
@@ -2410,6 +2440,9 @@ subroutine RealLocalToLocalWithArray(realization,array_id)
     case(CCT_ID_ARRAY)
       call GridCopyIntegerArrayToVec(grid,patch%cct_id, &
                                      field%work_loc, grid%ngmax)
+    case(ILT_ID_ARRAY)
+      call GridCopyIntegerArrayToVec(grid,patch%ilt_id, &
+                                     field%work_loc, grid%ngmax)
   end select
 
   call DiscretizationLocalToLocal(realization%discretization,field%work_loc, &
@@ -2424,6 +2457,9 @@ subroutine RealLocalToLocalWithArray(realization,array_id)
                                       field%work_loc, grid%ngmax)
     case(CCT_ID_ARRAY)
       call GridCopyVecToIntegerArray(grid,patch%cct_id, &
+                                      field%work_loc, grid%ngmax)
+    case(ILT_ID_ARRAY)
+      call GridCopyVecToIntegerArray(grid,patch%ilt_id, &
                                       field%work_loc, grid%ngmax)
   end select
 
@@ -2915,6 +2951,10 @@ subroutine RealizationStrip(this)
 
   if (associated(this%characteristic_curves_thermal)) then
     call CharCurvesThermalDestroy(this%characteristic_curves_thermal)
+  endif
+  
+  if (associated(this%illitization_function)) then
+    call IllitizationDestroy(this%illitization_function)
   endif
   
   call DatasetDestroy(this%datasets)
