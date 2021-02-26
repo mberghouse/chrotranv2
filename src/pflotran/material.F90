@@ -106,10 +106,11 @@ module Material_module
     ! Illitization parameters
     PetscBool :: ilt ! include illitization
     PetscReal :: ilt_fs ! fraction of smectite in material
-    PetscReal :: ilt_fi   ! fraction of illite in material
+    PetscReal :: ilt_fi ! fraction of illite in material
     PetscReal :: ilt_fs0 ! initial fraction of smectite in material
-    PetscReal :: ilt_fi0   ! initial fraction of illite in material
+    PetscReal :: ilt_fi0 ! initial fraction of illite in material
     PetscReal :: ilt_rate ! temperature-dependent illitization rate in sec^-1
+    PetscReal :: ilt_ds ! log accumulated change in smectite
     PetscReal :: ilt_ea   ! activation energy in J/mol
     PetscReal :: ilt_freq ! frequency term in L/mol-sec
     PetscReal :: ilt_K_conc ! molar concentration of potassium
@@ -245,10 +246,11 @@ function MaterialPropertyCreate()
   material_property%secondary_continuum_area_scaling = 1.d0
 
   material_property%ilt = PETSC_FALSE
-  material_property%ilt_fs = 0.0d0
-  material_property%ilt_fi = 1.0d0
+  material_property%ilt_fs = 1.0d0
+  material_property%ilt_fi = 0.0d0
   material_property%ilt_fs0 = 1.0d0
   material_property%ilt_fi0 = 0.0d0
+  material_property%ilt_ds = 0.0
   material_property%ilt_rate = UNINITIALIZED_DOUBLE
   material_property%ilt_ea = UNINITIALIZED_DOUBLE
   material_property%ilt_freq = UNINITIALIZED_DOUBLE
@@ -505,8 +507,9 @@ subroutine MaterialPropertyRead(material_property,input,option)
                                    material_property%ilt_threshold)
               call InputErrorMsg(input,option,'temperature threshold', &
                                  'MATERIAL_PROPERTY,ILLITIZATION')
-              call InputReadAndConvertUnits(input,material_property%ilt_ea, &
-                              'C','ILLITIZATION, temperature threshold',option)
+              call InputReadAndConvertUnits(input, &
+                               material_property%ilt_threshold, &
+                               'C','ILLITIZATION, temperature threshold',option)
             case('EA')
               ! Activation energy in Arrhenius term
               call InputReadDouble(input,option, &
