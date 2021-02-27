@@ -345,36 +345,6 @@ end subroutine IllitizationRead
 
 ! ************************************************************************** !
 
-subroutine ILTAssignDefault(illitization_function,&
-                            fs,fi,fs0,fi0,ea,freq,Kc,shift,thresh,option)
-
-  use Option_module
-
-  implicit none
-
-  class(illitization_base_type) :: illitization_function
-  PetscReal :: fs,fi,fs0,fi0,ea,freq,Kc,shift,thresh
-  type(option_type) :: option
-
-  select type(ilf => illitization_function)
-      !------------------------------------------
-    class is(ILT_default_type)
-      ilf%ilt_fs = fs
-      ilf%ilt_fi = fi
-      ilf%ilt_fs0 = fs0
-      ilf%ilt_fi0 = fi0
-      ilf%ilt_ea = ea
-      ilf%ilt_ds = 0.0
-      ilf%ilt_freq = freq
-      ilf%ilt_K_conc = Kc
-      ilf%ilt_shift_perm = shift
-      ilf%ilt_threshold = thresh
-  end select
-
-end subroutine ILTAssignDefault
-
-! ************************************************************************** !
-
 subroutine ILTRead(illitization_function,input,option)
   !
   ! Reads in contents of a ILLITIZATION_FUNCTION block
