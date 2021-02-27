@@ -128,8 +128,8 @@ subroutine ILTBaseTest(this,ilt_name,option)
   ! Test with pertubrations to initial smectite and temperature over time
   character(len=MAXSTRINGLENGTH) :: string
   PetscInt, parameter :: ns = 10
-  PetscInt, parameter :: nt = 71
-  PetscInt, parameter :: np = 22
+  PetscInt, parameter :: nt = 61
+  PetscInt, parameter :: np = 27
   PetscReal, parameter :: perturbation = 1.0d-6
   PetscReal :: deltaSmec
   PetscReal :: deltaTemp
@@ -149,7 +149,7 @@ subroutine ILTBaseTest(this,ilt_name,option)
   smec_min = 1.0d-1 ! Minimum fraction smectite
   smec_max = 1.0d+0 ! Maximum fraction smectite
   temp_min = 2.0d+1 ! Celcius
-  temp_max = 2.5d+2 ! Celcius
+  temp_max = 2.6d+2 ! Celcius
   
   deltaSmec = (smec_max - smec_min)/(ns - 1)
   deltaTemp = (temp_max - temp_min)/(nt - 1)
@@ -157,20 +157,21 @@ subroutine ILTBaseTest(this,ilt_name,option)
   smec_vec = [(smec_min + i*deltaSmec, i=0,ns-1)]
   temp_vec = [(temp_min + i*deltaTemp, i=0,nt-1)]
   time_vec = (/0.,1.,2.5,5.,7.5,10.,25.,50.,75.,100.,250.,500.,750.,1000., &
-               2500.,5000.,7500.,10000.,25000.,50000.,75000.,100000./)
+               2500.,5000.,7500.,10000.,20000.,30000.,40000.,50000.,60000.,&
+               70000.,80000.,90000.,100000./)
   
   fs0_original = this%ilt_fs0
   fi0_original = this%ilt_fi0
   
   do j = 1,ns
     do i = 1,nt
+      ! reset base variables to initial
+      this%ilt_fs0 = smec_vec(j)
+      this%ilt_fs  = smec_vec(j)
+      this%ilt_fi0 = 1 - smec_vec(j)
+      this%ilt_fi  = 1 - smec_vec(j)
+      this%ilt_ds = 0.0
       do k = 2,np
-        ! reset base variables to initial
-        this%ilt_fs0 = smec_vec(j)
-        this%ilt_fs  = smec_vec(j)
-        this%ilt_fi0 = 1 - smec_vec(j)
-        this%ilt_fi  = 1 - smec_vec(j)
-        this%ilt_ds = 0.0
         
         ! get change in time
         dt = time_vec(k) - time_vec(k-1) ! years
