@@ -163,29 +163,29 @@ subroutine ILTBaseTest(this,ilt_name,option)
   fs0_original = this%ilt_fs0
   fi0_original = this%ilt_fi0
   
-  do j = 1,ns
-    do i = 1,nt
+  do i = 1,ns
+    do j = 1,nt
       ! reset base variables to initial
-      this%ilt_fs0 = smec_vec(j)
-      this%ilt_fs  = smec_vec(j)
-      this%ilt_fi0 = 1 - smec_vec(j)
-      this%ilt_fi  = 1 - smec_vec(j)
-      this%ilt_ds = 0.0
+      this%ilt_fs0 = smec_vec(i)
+      this%ilt_fs  = smec_vec(i)
+      this%ilt_fi0 = 1.0d0 - smec_vec(i)
+      this%ilt_fi  = 1.0d0 - smec_vec(i)
+      this%ilt_ds = 0.0d0
       do k = 2,np
         
         ! get change in time
         dt = time_vec(k) - time_vec(k-1) ! years
-        dt = dt*3.154e+07                ! convert to seconds
+        dt = dt*3.154d+07                ! convert to seconds
         
         ! base case with analytical derivatives
-        call this%CalculateILT(temp_vec(i),dt,ilt(i,j,k),shift,option)
+        call this%CalculateILT(temp_vec(j),dt,ilt(i,j,k),shift,option)
   
         ! calculate numerical derivatives via finite differences
-        perturbed_temp = temp_vec(i) * (1.d0 + perturbation)
+        perturbed_temp = temp_vec(j) * (1.d0 + perturbation)
         call this%CalculateILT(perturbed_temp,dt,ilt_temp_pert,shift,option)
   
         dilt_dtemp_numerical(i,j,k) = (ilt_temp_pert - ilt(i,j,k))/ & 
-                                      (temp_vec(i)*perturbation)
+                                      (temp_vec(j)*perturbation)
       enddo
     enddo
   enddo
@@ -195,10 +195,10 @@ subroutine ILTBaseTest(this,ilt_name,option)
   open(unit=86,file=string)
   write(86,*) '"initial smectite [-]", "temperature [C]", &
                "time [yr]", "illite", "dillite/dT"'
-  do j = 1,ns
-    do i = 1,nt
+  do i = 1,ns
+    do j = 1,nt
       do k = 2,np
-        write(86,'(5(ES14.6))') smec_vec(j), temp_vec(i), time_vec(k), &
+        write(86,'(5(ES14.6))') smec_vec(i), temp_vec(j), time_vec(k), &
              ilt(i,j,k),dilt_dtemp_numerical(i,j,k)
       enddo
     enddo
@@ -210,6 +210,7 @@ subroutine ILTBaseTest(this,ilt_name,option)
   this%ilt_fs  = fs0_original
   this%ilt_fi0 = fi0_original
   this%ilt_fi  = fi0_original
+  this%ilt_ds  = 0.0d0
 
 end subroutine ILTBaseTest
 
