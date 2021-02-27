@@ -60,8 +60,7 @@ module Illitization_module
             IllitizationConvertListToArray, &
             IllitizationInputRecord, &
             IllitizationDestroy, &
-            ILTDefaultCreate, &
-            ILTAssignDefault
+            ILTDefaultCreate
 
 contains
 
@@ -92,7 +91,8 @@ end subroutine ILTBaseVerify
 
 ! ************************************************************************** !
 
-subroutine ILTBaseIllitization(this,temperature,illitization,option)
+subroutine ILTBaseIllitization(this,temperature,dt, &
+                               illitization,shift,option)
 
   use Option_module
 
@@ -100,10 +100,13 @@ subroutine ILTBaseIllitization(this,temperature,illitization,option)
 
   class(illitization_base_type) :: this
   PetscReal, intent(in) :: temperature
+  PetscReal, intent(in) :: dt
   PetscReal, intent(out) :: illitization
+  PetscReal, intent(out) :: shift
   type(option_type), intent(inout) :: option
 
   illitization = 0.d0
+  shift = 1.0
 
   option%io_buffer = 'ILTBaseIllitization must be extended.'
   call PrintErrMsg(option)
@@ -121,6 +124,91 @@ subroutine ILTBaseTest(this,ilt_name,option)
   class(illitization_base_type) :: this
   character(len=MAXWORDLENGTH) :: ilt_name
   type(option_type), intent(inout) :: option
+  
+  ! Test with pertubrations to initial smectite and temperature over time
+  character(len=MAXSTRINGLENGTH) :: string
+  PetscInt, parameter :: ns = 10
+  PetscInt, parameter :: nt = 71
+  PetscInt, parameter :: np = 22
+  PetscReal, parameter :: perturbation = 1.0d-6
+  PetscReal :: deltaSmec
+  PetscReal :: deltaTemp
+  PetscReal :: smec_vec(ns)
+  PetscReal :: temp_vec(nt)
+  PetscReal :: time_vec(np)
+  PetscReal :: ilt(ns,nt,np)
+  PetscReal :: dilt_dtemp_numerical(ns,nt,np)
+  PetscReal :: perturbed_temp
+  PetscReal :: ilt_temp_pert
+  PetscReal :: smec_min, smec_max
+  PetscReal :: temp_min, temp_max
+  PetscReal :: dt,shift,fs0_original,fi0_original
+  PetscInt :: i,j,k
+  
+  ! thermal conductivity as a function of temp. and liq. sat.
+  smec_min = 1.0d-1 ! Minimum fraction smectite
+  smec_max = 1.0d+0 ! Maximum fraction smectite
+  temp_min = 2.0d+1 ! Celcius
+  temp_max = 2.5d+2 ! Celcius
+  
+  deltaSmec = (smec_max - smec_min)/(ns - 1)
+  deltaTemp = (temp_max - temp_min)/(nt - 1)
+  
+  smec_vec = [(smec_min + i*deltaSmec, i=0,ns-1)]
+  temp_vec = [(temp_min + i*deltaTemp, i=0,nt-1)]
+  time_vec = (/0.,1.,2.5,5.,7.5,10.,25.,50.,75.,100.,250.,500.,750.,1000., &
+               2500.,5000.,7500.,10000.,25000.,50000.,75000.,100000./)
+  
+  fs0_original = this%ilt_fs0
+  fi0_original = this%ilt_fi0
+  
+  do j = 1,ns
+    do i = 1,nt
+      do k = 2,np
+        ! reset base variables to initial
+        this%ilt_fs0 = smec_vec(j)
+        this%ilt_fs  = smec_vec(j)
+        this%ilt_fi0 = 1 - smec_vec(j)
+        this%ilt_fi  = 1 - smec_vec(j)
+        this%ilt_ds = 0.0
+        
+        ! get change in time
+        dt = time_vec(k) - time_vec(k-1) ! years
+        dt = dt*3.154e+07                ! convert to seconds
+        
+        ! base case with analytical derivatives
+        call this%CalculateILT(temp_vec(i),dt,ilt(i,j,k),shift,option)
+  
+        ! calculate numerical derivatives via finite differences
+        perturbed_temp = temp_vec(i) * (1.d0 + perturbation)
+        call this%CalculateILT(perturbed_temp,dt,ilt_temp_pert,shift,option)
+  
+        dilt_dtemp_numerical(i,j,k) = (ilt_temp_pert - ilt(i,j,k))/ & 
+                                      (temp_vec(i)*perturbation)
+      enddo
+    enddo
+  enddo
+
+  write(string,*) ilt_name
+  string = trim(ilt_name) // '_ilt_vs_time_and_temp.dat'
+  open(unit=86,file=string)
+  write(86,*) '"initial smectite [-]", "temperature [C]", &
+               "time [yr]", "illite", "dillite/dT"'
+  do j = 1,ns
+    do i = 1,nt
+      do k = 2,np
+        write(86,'(5(ES14.6))') smec_vec(j), temp_vec(i), time_vec(k), &
+             ilt(i,j,k),dilt_dtemp_numerical(i,j,k)
+      enddo
+    enddo
+  enddo
+  close(86)
+  
+  ! reset to original values
+  this%ilt_fs0 = fs0_original
+  this%ilt_fs  = fs0_original
+  this%ilt_fi0 = fi0_original
+  this%ilt_fi  = fi0_original
 
 end subroutine ILTBaseTest
 
@@ -202,7 +290,8 @@ end subroutine ILTDefaultVerify
 
 ! ************************************************************************** !
 
-subroutine ILTDefaultIllitization(this,temperature,illitization,option)
+subroutine ILTDefaultIllitization(this,temperature,dt, &
+                                  illitization,shift,option)
 
   use Option_module
 
@@ -210,29 +299,31 @@ subroutine ILTDefaultIllitization(this,temperature,illitization,option)
 
   class(ILT_default_type) :: this
   PetscReal, intent(in) :: temperature
+  PetscReal, intent(in) :: dt
   PetscReal, intent(out) :: illitization
+  PetscReal, intent(out) :: shift
   type(option_type), intent(inout) :: option
 
-  PetscReal :: tempreal
+  PetscReal :: T
 
   ! Model based on Huang et al., 1993
  
-  tempreal = temperature
-  ! Check if we are above the temperature threshold for acknowledging effect
-  if(tempreal >= this%ilt_threshold) then
+  T = temperature
+  ! Check if we are above the temperature threshold for illitization
+  if(T >= this%ilt_threshold) then
 
     ! Use Kelvin
-    tempreal = tempreal + 273.15d0
+    T = T + 273.15d0
 
     ! Illitization rate - Arrhenius-type model from Huang et al., 1993 [L/mol-s]
     this%ilt_rate = this%ilt_freq * &
-      exp(-1.0d0 * this%ilt_ea / (IDEAL_GAS_CONSTANT * tempreal))
+      exp(-1.0d0 * this%ilt_ea / (IDEAL_GAS_CONSTANT * T))
 
     ! Modify rate with potassium concentration and initial fraction [1/s]
     this%ilt_rate = this%ilt_rate * (this%ilt_fs0**2) * this%ilt_K_conc
 
     ! Log accumulated changes in smectite
-    this%ilt_ds = this%ilt_ds + this%ilt_rate * option%dt
+    this%ilt_ds = this%ilt_ds + this%ilt_rate * dt
 
     ! Change in smectite
     this%ilt_fs = this%ilt_fs / (1.0d0 + this%ilt_ds)
@@ -248,9 +339,11 @@ subroutine ILTDefaultIllitization(this,temperature,illitization,option)
     this%ilt_fi = 1 - this%ilt_fs
     
     illitization = this%ilt_fi
+    shift = this%ilt_fi * this%ilt_shift_perm
 
   else
     illitization = this%ilt_fi
+    shift = this%ilt_fi * this%ilt_shift_perm
   endif
 
 end subroutine ILTDefaultIllitization
@@ -523,8 +616,8 @@ subroutine IllitizationConvertListToArray(list,array,option)
       call OptionSetBlocking(option,PETSC_FALSE)
       if (option%myrank == option%io_rank) then
         if (associated(cur_ilf%illitization_function)) then
-          ! call cur_ilf%illitization_function%Test( &
-          !      cur_ilf%name,option)
+          call cur_ilf%illitization_function%Test( &
+               cur_ilf%name,option)
         endif
       endif
       call OptionSetBlocking(option,PETSC_TRUE)
