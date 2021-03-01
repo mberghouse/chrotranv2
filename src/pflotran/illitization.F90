@@ -194,7 +194,7 @@ subroutine ILTBaseTest(this,ilt_name,option)
   string = trim(ilt_name) // '_ilt_vs_time_and_temp.dat'
   open(unit=86,file=string)
   write(86,*) '"initial smectite [-]", "temperature [C]", &
-               "time [yr]", "illite", "dillite/dT"'
+               "time [yr]", "illite [-]", "dillite/dT [1/yr]"'
   do i = 1,ns
     do j = 1,nt
       do k = 2,np
@@ -328,7 +328,7 @@ subroutine ILTDefaultIllitization(this,temperature,dt, &
     this%ilt_ds = this%ilt_ds + this%ilt_rate * dt
 
     ! Change in smectite
-    this%ilt_fs = this%ilt_fs / (1.0d0 + this%ilt_ds)
+    this%ilt_fs = this%ilt_fs0 / (1.0d0 + this%ilt_ds)
                             ! (1.0d0 + this%ilt_rate * option%dt)
 
     if (this%ilt_fs > 1.0d0) then
