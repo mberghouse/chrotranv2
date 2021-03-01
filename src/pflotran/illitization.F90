@@ -124,7 +124,7 @@ subroutine ILTBaseTest(this,ilt_name,option)
   class(illitization_base_type) :: this
   character(len=MAXWORDLENGTH) :: ilt_name
   type(option_type), intent(inout) :: option
-  
+
   ! Test with pertubrations to initial smectite and temperature over time
   character(len=MAXSTRINGLENGTH) :: string
   PetscInt, parameter :: ns = 10
@@ -144,25 +144,25 @@ subroutine ILTBaseTest(this,ilt_name,option)
   PetscReal :: temp_min, temp_max
   PetscReal :: dt,shift,fs0_original,fi0_original
   PetscInt :: i,j,k
-  
+
   ! thermal conductivity as a function of temp. and liq. sat.
   smec_min = 1.0d-1 ! Minimum fraction smectite
   smec_max = 1.0d+0 ! Maximum fraction smectite
   temp_min = 2.0d+1 ! Celcius
   temp_max = 2.6d+2 ! Celcius
-  
+
   deltaSmec = (smec_max - smec_min)/(ns - 1)
   deltaTemp = (temp_max - temp_min)/(nt - 1)
-  
+
   smec_vec = [(smec_min + i*deltaSmec, i=0,ns-1)]
   temp_vec = [(temp_min + i*deltaTemp, i=0,nt-1)]
   time_vec = (/0.,1.,2.5,5.,7.5,10.,25.,50.,75.,100.,250.,500.,750.,1000., &
                2500.,5000.,7500.,10000.,20000.,30000.,40000.,50000.,60000.,&
                70000.,80000.,90000.,100000./)
-  
+
   fs0_original = this%ilt_fs0
   fi0_original = this%ilt_fi0
-  
+
   do i = 1,ns
     do j = 1,nt
       ! reset base variables to initial
@@ -172,19 +172,19 @@ subroutine ILTBaseTest(this,ilt_name,option)
       this%ilt_fi  = 1.0d0 - smec_vec(i)
       this%ilt_ds = 0.0d0
       do k = 2,np
-        
+
         ! get change in time
         dt = time_vec(k) - time_vec(k-1) ! years
-        dt = dt*3.154d+07                ! convert to seconds
-        
+        dt = dt*(365.25*24*60*60)        ! convert to seconds
+
         ! base case with analytical derivatives
         call this%CalculateILT(temp_vec(j),dt,ilt(i,j,k),shift,option)
-  
+
         ! calculate numerical derivatives via finite differences
         perturbed_temp = temp_vec(j) * (1.d0 + perturbation)
         call this%CalculateILT(perturbed_temp,dt,ilt_temp_pert,shift,option)
-  
-        dilt_dtemp_numerical(i,j,k) = (ilt_temp_pert - ilt(i,j,k))/ & 
+
+        dilt_dtemp_numerical(i,j,k) = (ilt_temp_pert - ilt(i,j,k))/ &
                                       (temp_vec(j)*perturbation)
       enddo
     enddo
@@ -204,7 +204,7 @@ subroutine ILTBaseTest(this,ilt_name,option)
     enddo
   enddo
   close(86)
-  
+
   ! reset to original values
   this%ilt_fs0 = fs0_original
   this%ilt_fs  = fs0_original
@@ -309,44 +309,42 @@ subroutine ILTDefaultIllitization(this,temperature,dt, &
   PetscReal :: T
 
   ! Model based on Huang et al., 1993
- 
+
+  ! Copy temperature
   T = temperature
-  ! Check if we are above the temperature threshold for illitization
+
+  ! Use Kelvin
+  T = T + 273.15d0
+
+  ! Illitization rate [L/mol-s]
+  ! Check if temperature is above threshold for illitization
   if(T >= this%ilt_threshold) then
-
-    ! Use Kelvin
-    T = T + 273.15d0
-
-    ! Illitization rate - Arrhenius-type model from Huang et al., 1993 [L/mol-s]
     this%ilt_rate = this%ilt_freq * &
       exp(-1.0d0 * this%ilt_ea / (IDEAL_GAS_CONSTANT * T))
-
-    ! Modify rate with potassium concentration and initial fraction [1/s]
-    this%ilt_rate = this%ilt_rate * (this%ilt_fs0**2) * this%ilt_K_conc
-
-    ! Log accumulated changes in smectite
-    this%ilt_ds = this%ilt_ds + this%ilt_rate * dt
-
-    ! Change in smectite
-    this%ilt_fs = this%ilt_fs0 / (1.0d0 + this%ilt_ds)
-                            ! (1.0d0 + this%ilt_rate * option%dt)
-
-    if (this%ilt_fs > 1.0d0) then
-      this%ilt_fs = 1.0d0
-    elseif (this%ilt_fs < 0.0d0) then
-      this%ilt_fs = 0.0d0
-    endif
-
-    ! Fraction illitized
-    this%ilt_fi = 1 - this%ilt_fs
-    
-    illitization = this%ilt_fi
-    shift = this%ilt_fi * this%ilt_shift_perm
-
   else
-    illitization = this%ilt_fi
-    shift = this%ilt_fi * this%ilt_shift_perm
+    this%ilt_rate = 0.0d0
   endif
+
+  ! Modify rate with potassium concentration and initial fraction [1/s]
+  this%ilt_rate = this%ilt_rate * (this%ilt_fs0**2) * this%ilt_K_conc
+
+  ! Log accumulated changes in smectite
+  this%ilt_ds = this%ilt_ds + (this%ilt_rate * dt)
+
+  ! Change in smectite
+  this%ilt_fs = this%ilt_fs0 / (1.0d0 + this%ilt_ds)
+
+  if (this%ilt_fs > 1.0d0) then
+    this%ilt_fs = 1.0d0
+  elseif (this%ilt_fs < 0.0d0) then
+    this%ilt_fs = 0.0d0
+  endif
+
+  ! Fraction illitized
+  this%ilt_fi = 1 - this%ilt_fs
+
+  illitization = this%ilt_fi
+  shift = ((this%ilt_fi-this%ilt_fi0)/this%ilt_fi0) * this%ilt_shift_perm
 
 end subroutine ILTDefaultIllitization
 
@@ -668,7 +666,7 @@ function IllitizationGetID(illitization_array, &
       return
     endif
   enddo
-  
+
   ! IllitizationGetID = UNINITIALIZED_INTEGER
   option%io_buffer = 'Illitization function "' // &
        trim(illitization_name) // &
