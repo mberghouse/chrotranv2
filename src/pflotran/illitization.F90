@@ -59,8 +59,7 @@ module Illitization_module
             IllitizationAddToList, &
             IllitizationConvertListToArray, &
             IllitizationInputRecord, &
-            IllitizationDestroy, &
-            ILTDefaultCreate
+            IllitizationDestroy
 
 contains
 
@@ -538,7 +537,7 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
   use Input_Aux_module
   use String_module
 
-  class(ILT_default_type) :: ilf
+  class(illitization_base_type) :: ilf
   type(input_type) :: input
   character(len=MAXWORDLENGTH)   :: keyword
   character(len=MAXSTRINGLENGTH) :: error_string
