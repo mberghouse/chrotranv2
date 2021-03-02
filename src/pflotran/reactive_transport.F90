@@ -4306,6 +4306,7 @@ subroutine RTMaxChange(realization,dcmax,dvfmax)
   PetscReal, pointer :: dxx_ptr(:), xx_ptr(:), yy_ptr(:)
   PetscInt :: local_id, ghosted_id, imnrl
   PetscReal :: delta_volfrac
+  PetscMPIInt :: mpi_int
   PetscErrorCode :: ierr
   
   option => realization%option
@@ -4323,7 +4324,6 @@ subroutine RTMaxChange(realization,dcmax,dvfmax)
   
   call VecStrideNormAll(field%tran_dxx,NORM_INFINITY,dcmax,ierr);CHKERRQ(ierr)
                      
-#if 1
   ! update mineral volume fractions
   if (reaction%mineral%nkinmnrl > 0) then
     do local_id = 1, grid%nlmax
@@ -4337,9 +4337,11 @@ subroutine RTMaxChange(realization,dcmax,dvfmax)
         dvfmax(imnrl) = max(dabs(delta_volfrac),dvfmax(imnrl))
       enddo
     enddo
+    mpi_int = reaction%mineral%nkinmnrl
+    call MPI_Allreduce(MPI_IN_PLACE,dvfmax,mpi_int,MPI_DOUBLE_PRECISION, &
+                       MPI_MAX,option%mycomm,ierr)
   endif 
-#endif
-      
+
 end subroutine RTMaxChange
 
 ! ************************************************************************** !
