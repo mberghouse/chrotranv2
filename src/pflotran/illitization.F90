@@ -85,6 +85,15 @@ subroutine ILTBaseVerify(this,name,option)
     option%io_buffer = 'Initial smectite fraction must be specified ' &
                      //'for function "'//trim(name)//'".'
     call PrintErrMsg(option)
+  else
+    if (this%ilt_fs0 < 0.0d0 .or. this%ilt_fs0 > 1.0d0) then
+      option%io_buffer = 'Initial smectite fraction for function "' &
+                         //trim(name)//'" must be number from 0 to 1.'
+      call PrintErrMsg(option)
+    endif
+    this%ilt_fs  = this%ilt_fs0
+    this%ilt_fi0 = 1.0d0 - this%ilt_fs0
+    this%ilt_fi  = this%ilt_fi0
   endif
 
 end subroutine ILTBaseVerify
@@ -238,13 +247,14 @@ function ILTDefaultCreate()
 
   allocate(ILTDefaultCreate)
 
+  ILTDefaultCreate%ilt_threshold  = 0.0d0
   ILTDefaultCreate%ilt_fs         = 1.0d0
   ILTDefaultCreate%ilt_fi         = 0.0d0
   ILTDefaultCreate%ilt_fs0        = 1.0d0
   ILTDefaultCreate%ilt_fi0        = 0.0d0
-  ILTDefaultCreate%ilt_shift_perm = 1.0d0
-  ILTDefaultCreate%ilt_threshold  = 0.0d0
   ILTDefaultCreate%ilt_ds         = 0.0d0
+  
+  ILTDefaultCreate%ilt_shift_perm = 1.0d0
   ILTDefaultCreate%ilt_rate   = UNINITIALIZED_DOUBLE
   ILTDefaultCreate%ilt_ea     = UNINITIALIZED_DOUBLE
   ILTDefaultCreate%ilt_freq   = UNINITIALIZED_DOUBLE
@@ -310,15 +320,12 @@ subroutine ILTDefaultIllitization(this,temperature,dt, &
 
   ! Model based on Huang et al., 1993
 
-  ! Copy temperature
-  T = temperature
-
   ! Use Kelvin
-  T = T + 273.15d0
+  T = temperature + 273.15d0
 
   ! Illitization rate [L/mol-s]
   ! Check if temperature is above threshold for illitization
-  if(T >= this%ilt_threshold) then
+  if(temperature >= this%ilt_threshold) then
     this%ilt_rate = this%ilt_freq * &
       exp(-1.0d0 * this%ilt_ea / (IDEAL_GAS_CONSTANT * T))
   else
