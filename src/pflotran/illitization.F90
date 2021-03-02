@@ -22,6 +22,7 @@ module Illitization_module
     PetscReal :: ilt_fs0 ! initial fraction of smectite in material
     PetscReal :: ilt_fi0 ! initial fraction of illite in material
     PetscReal :: ilt_ds  ! track accumulated changes in smectite
+    PetscReal :: ilt_tt  ! track time of last accumulation
   contains
     procedure, public :: Verify => ILTBaseVerify
     procedure, public :: Test => ILTBaseTest
@@ -99,7 +100,7 @@ end subroutine ILTBaseVerify
 
 ! ************************************************************************** !
 
-subroutine ILTBaseIllitization(this,temperature,dt, &
+subroutine ILTBaseIllitization(this,temperature,time,dt, &
                                illitization,shift,option)
 
   use Option_module
@@ -108,7 +109,7 @@ subroutine ILTBaseIllitization(this,temperature,dt, &
 
   class(illitization_base_type) :: this
   PetscReal, intent(in) :: temperature
-  PetscReal, intent(in) :: dt
+  PetscReal, intent(in) :: time, dt
   PetscReal, intent(out) :: illitization
   PetscReal, intent(out) :: shift
   type(option_type), intent(inout) :: option
@@ -179,6 +180,7 @@ subroutine ILTBaseTest(this,ilt_name,option)
       this%ilt_fi0 = 1.0d0 - smec_vec(i)
       this%ilt_fi  = 1.0d0 - smec_vec(i)
       this%ilt_ds = 0.0d0
+      this%ilt_tt = 0.0d0
       do k = 2,np
 
         ! get change in time
@@ -186,11 +188,13 @@ subroutine ILTBaseTest(this,ilt_name,option)
         dt = dt*(365.25*24*60*60)        ! convert to seconds
 
         ! base case with analytical derivatives
-        call this%CalculateILT(temp_vec(j),dt,ilt(i,j,k),shift,option)
+        call this%CalculateILT(temp_vec(j),time_vec(k),dt,ilt(i,j,k), &
+                               shift,option)
 
         ! calculate numerical derivatives via finite differences
         perturbed_temp = temp_vec(j) * (1.d0 + perturbation)
-        call this%CalculateILT(perturbed_temp,dt,ilt_temp_pert,shift,option)
+        call this%CalculateILT(perturbed_temp,time_vec(k),dt,ilt_temp_pert, &
+                               shift,option)
 
         dilt_dtemp_numerical(i,j,k) = (ilt_temp_pert - ilt(i,j,k))/ &
                                       (temp_vec(j)*perturbation)
@@ -219,6 +223,7 @@ subroutine ILTBaseTest(this,ilt_name,option)
   this%ilt_fi0 = fi0_original
   this%ilt_fi  = fi0_original
   this%ilt_ds  = 0.0d0
+  this%ilt_tt  = 0.0d0
 
 end subroutine ILTBaseTest
 
@@ -252,6 +257,7 @@ function ILTDefaultCreate()
   ILTDefaultCreate%ilt_fs0        = 1.0d0
   ILTDefaultCreate%ilt_fi0        = 0.0d0
   ILTDefaultCreate%ilt_ds         = 0.0d0
+  ILTDefaultCreate%ilt_tt         = 0.0d0
   
   ILTDefaultCreate%ilt_shift_perm = 1.0d0
   ILTDefaultCreate%ilt_rate   = UNINITIALIZED_DOUBLE
@@ -301,7 +307,7 @@ end subroutine ILTDefaultVerify
 
 ! ************************************************************************** !
 
-subroutine ILTDefaultIllitization(this,temperature,dt, &
+subroutine ILTDefaultIllitization(this,temperature,time,dt, &
                                   illitization,shift,option)
 
   use Option_module
@@ -310,7 +316,7 @@ subroutine ILTDefaultIllitization(this,temperature,dt, &
 
   class(ILT_default_type) :: this
   PetscReal, intent(in) :: temperature
-  PetscReal, intent(in) :: dt
+  PetscReal, intent(in) :: time, dt
   PetscReal, intent(out) :: illitization
   PetscReal, intent(out) :: shift
   type(option_type), intent(inout) :: option
@@ -322,9 +328,9 @@ subroutine ILTDefaultIllitization(this,temperature,dt, &
   ! Use Kelvin
   T = temperature + 273.15d0
 
-  ! Illitization rate [L/mol-s]
   ! Check if temperature is above threshold for illitization
-  if(temperature >= this%ilt_threshold) then
+  if (temperature >= this%ilt_threshold) then
+    ! Illitization rate [L/mol-s]
     this%ilt_rate = this%ilt_freq * &
       exp(-1.0d0 * this%ilt_ea / (IDEAL_GAS_CONSTANT * T))
   else
@@ -334,8 +340,10 @@ subroutine ILTDefaultIllitization(this,temperature,dt, &
   ! Modify rate with potassium concentration and initial fraction [1/s]
   this%ilt_rate = this%ilt_rate * (this%ilt_fs0**2) * this%ilt_K_conc
 
-  ! Log accumulated changes in smectite
-  this%ilt_ds = this%ilt_ds + (this%ilt_rate * dt)
+  ! Log accumulated changes in smectite as time proceeds
+  if (time > this%ilt_tt) then
+    this%ilt_ds = this%ilt_ds + (this%ilt_rate * dt)
+  endif
 
   ! Change in smectite
   this%ilt_fs = this%ilt_fs0 / (1.0d0 + this%ilt_ds)
@@ -347,10 +355,16 @@ subroutine ILTDefaultIllitization(this,temperature,dt, &
   endif
 
   ! Fraction illitized
-  this%ilt_fi = 1 - this%ilt_fs
-
-  illitization = this%ilt_fi
-  shift = ((this%ilt_fi-this%ilt_fi0)/this%ilt_fi0) * this%ilt_shift_perm
+  illitization = 1.0d0 - this%ilt_fs
+  this%ilt_fi = illitization
+  
+  ! Shift permeability
+  if (time > this%ilt_tt) then
+    shift = ((this%ilt_fi - this%ilt_fi0) / this%ilt_fi0) * this%ilt_shift_perm
+    this%ilt_tt = time ! save time of last pertubation
+  else
+    shift = 0.0d0 ! do not change permeability during same time step
+  endif
 
 end subroutine ILTDefaultIllitization
 
@@ -502,11 +516,6 @@ subroutine ILTRead(illitization_function,input,option)
                              'ILLITIZATION, DEFAULT')
           call InputReadAndConvertUnits(input,ilf%ilt_K_conc,&
                     'M','ILLITIZATION, DEFAULT, potassium concentration',option)
-        case('SMECTITE_INITIAL')
-          ! Initial fraction of smectite in the smectite/illite mixture
-          call InputReadDouble(input,option,ilf%ilt_fs0)
-          call InputErrorMsg(input,option,'initial smectite fraction', &
-                             'ILLITIZATION, DEFAULT')
         case('SHIFT_PERM')
           ! Factor modifying permeability per fraction illitized
           call InputReadDouble(input,option,ilf%ilt_shift_perm)
@@ -545,6 +554,11 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
   type(option_type) :: option
 
   select case(keyword)
+    case('SMECTITE_INITIAL')
+      ! Initial fraction of smectite in the smectite/illite mixture
+      call InputReadDouble(input,option,ilf%ilt_fs0)
+      call InputErrorMsg(input,option,'initial smectite fraction', &
+                         'ILLITIZATION, DEFAULT')
     case('THRESHOLD')
       ! Specifies the temperature threshold for activating illitization
       call InputReadDouble(input,option, &
