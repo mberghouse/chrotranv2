@@ -59,6 +59,7 @@ module Material_Aux_class
     PetscReal, pointer :: permeability(:)
     PetscReal, pointer :: sat_func_prop(:)
     PetscReal, pointer :: soil_properties(:) ! den, therm. cond., heat cap.
+    PetscReal, pointer :: electrical_conductivity(:) ! Geophysics -> electrical conductivity for ERT/SIP/EM
     type(fracture_auxvar_type), pointer :: fracture
     PetscReal, pointer :: geomechanics_subsurface_prop(:)
     PetscInt :: creep_closure_id
