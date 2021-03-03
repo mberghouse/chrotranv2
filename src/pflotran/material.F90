@@ -1582,6 +1582,11 @@ subroutine MaterialAssignPropertyToAux(material_auxvar,material_property, &
         material_property%soil_reference_pressure
     endif
   endif
+  
+  if (material_property%ilt) then
+    material_auxvar%ilt = material_property%ilt
+  endif
+    
 !  if (soil_heat_capacity_index > 0) then
 !    material_auxvar%soil_properties(soil_heat_capacity_index) = &
 !      material_property%specific_heat

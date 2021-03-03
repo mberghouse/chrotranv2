@@ -62,6 +62,7 @@ module Material_Aux_class
     type(fracture_auxvar_type), pointer :: fracture
     PetscReal, pointer :: geomechanics_subsurface_prop(:)
     PetscInt :: creep_closure_id
+    PetscBool :: ilt
 
 !    procedure(SaturationFunction), nopass, pointer :: SaturationFunction
   contains
@@ -116,7 +117,8 @@ module Material_Aux_class
             MaterialCompressSoilPoroExp, &
             MaterialCompressSoilLeijnse, &
             MaterialCompressSoilLinear, &
-            MaterialCompressSoilQuadratic
+            MaterialCompressSoilQuadratic, &
+            MaterialIllitizePermeability
   
   public :: MaterialAuxCreate, &
             MaterialAuxVarInit, &
@@ -188,6 +190,7 @@ subroutine MaterialAuxVarInit(auxvar,option)
   auxvar%porosity = UNINITIALIZED_DOUBLE
   auxvar%dporosity_dp = 0.d0
   auxvar%tortuosity = UNINITIALIZED_DOUBLE
+  auxvar%ilt = PETSC_FALSE
   auxvar%soil_particle_density = UNINITIALIZED_DOUBLE
   if (option%iflowmode /= NULL_MODE) then
     if (option%flow%full_perm_tensor) then
@@ -237,6 +240,7 @@ subroutine MaterialAuxVarCopy(auxvar,auxvar2,option)
   auxvar2%porosity_base = auxvar%porosity_base
   auxvar2%porosity = auxvar%porosity
   auxvar2%tortuosity = auxvar%tortuosity
+  auxvar2%ilt = auxvar%ilt
   auxvar2%soil_particle_density = auxvar%soil_particle_density
   if (associated(auxvar%permeability)) then
     auxvar2%permeability = auxvar%permeability
@@ -886,6 +890,55 @@ subroutine MaterialCompressSoilQuadratic(auxvar,pressure, &
           ( 1.0 + compress_factor) * compressibility  
   
 end subroutine MaterialCompressSoilQuadratic
+
+! ************************************************************************** !
+
+subroutine MaterialIllitizePermeability(auxvar,ilf,temperature,option)
+  !
+  ! Modifies permeability based on illitization model.
+  !
+  ! Author: Alex Salazar III
+  ! Date: 03/01/2021
+  !
+
+  use Option_module
+  use Illitization_module
+
+  implicit none
+
+  class(material_auxvar_type), intent(inout) :: auxvar
+  class(illitization_type), intent(inout) :: ilf
+  PetscReal, intent(in) :: temperature
+  class(option_type), intent(inout) :: option
+
+  PetscInt  :: ps, i
+  PetscReal :: ki
+  PetscReal :: fi
+  PetscReal :: shift
+
+  if (auxvar%ilt) then
+
+    ps = size(auxvar%permeability)
+
+    select type(il => ilf%illitization_function)
+      type is(ILT_default_type)
+        call il%CalculateILT(temperature,option%time,option%dt, &
+                             fi,shift,option)
+      class default
+      option%io_buffer = 'Cannot use illitization function "'// trim(ilf%name) &
+                       //'" to modify permeability.'
+      call PrintErrMsg(option)
+    end select
+
+    do i = 1, ps
+      ki = auxvar%permeability(i)
+      ki = ki * (1.0d0 + shift)
+      auxvar%permeability(i) = ki
+    enddo
+
+  endif
+
+end subroutine MaterialIllitizePermeability
 
 ! ************************************************************************** !
 

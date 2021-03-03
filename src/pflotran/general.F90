@@ -1184,6 +1184,7 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
   PetscInt :: local_id, ghosted_id
   PetscInt :: local_id_up, local_id_dn, ghosted_id_up, ghosted_id_dn
   PetscInt :: i, imat, imat_up, imat_dn
+  PetscInt :: iilt
   PetscInt, save :: iplot = 0
   PetscInt :: flow_src_sink_type
   
@@ -1286,6 +1287,13 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
     ghosted_id = grid%nL2G(local_id)
     !geh - Ignore inactive cells with inactive materials
     imat = patch%imat(ghosted_id)
+    iilt = patch%ilt_id(ghosted_id)
+    if (material_auxvars(ghosted_id)%ilt) then
+      call MaterialIllitizePermeability(material_auxvars(ghosted_id), &
+                                  patch%illitization_function_array(iilt)%ptr, &
+                                  gen_auxvars(ZERO_INTEGER,ghosted_id)%temp, &
+                                  option)
+    endif
     if (imat <= 0) cycle
     local_end = local_id * option%nflowdof
     local_start = local_end - option%nflowdof + 1
