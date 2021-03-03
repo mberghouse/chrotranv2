@@ -1141,6 +1141,7 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
   use Debug_module
   use Material_Aux_class
   use Upwind_Direction_module
+  use Illitization_module
   
 !#define DEBUG_WITH_TECPLOT
 #ifdef DEBUG_WITH_TECPLOT
@@ -1202,6 +1203,8 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
   PetscReal :: Jac_dummy(realization%option%nflowdof, &
                          realization%option%nflowdof)
   PetscReal :: v_darcy(realization%option%nphase)
+  
+  PetscReal :: fi, shift
   
 
   discretization => realization%discretization
@@ -1288,12 +1291,26 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
     !geh - Ignore inactive cells with inactive materials
     imat = patch%imat(ghosted_id)
     iilt = patch%ilt_id(ghosted_id)
+
     if (material_auxvars(ghosted_id)%ilt) then
+
+      select type(ilf => patch%illitization_function_array(iilt)%ptr% &
+                           illitization_function)
+        type is(ILT_default_type)
+          call ilf%CalculateILT(gen_auxvars(ZERO_INTEGER,ghosted_id)%temp, &
+                               option%time,option%dt, &
+                               fi,shift,option)
+        class default
+        option%io_buffer = 'Cannot use illitization function "' &
+          // trim(patch%illitization_function_array(iilt)%ptr%name) &
+          //'" to modify permeability.'
+        call PrintErrMsg(option)
+      end select
+
       call MaterialIllitizePermeability(material_auxvars(ghosted_id), &
-                                  patch%illitization_function_array(iilt)%ptr, &
-                                  gen_auxvars(ZERO_INTEGER,ghosted_id)%temp, &
-                                  option)
+                                        shift, option)
     endif
+    
     if (imat <= 0) cycle
     local_end = local_id * option%nflowdof
     local_start = local_end - option%nflowdof + 1

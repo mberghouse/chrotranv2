@@ -893,42 +893,29 @@ end subroutine MaterialCompressSoilQuadratic
 
 ! ************************************************************************** !
 
-subroutine MaterialIllitizePermeability(auxvar,ilf,temperature,option)
+subroutine MaterialIllitizePermeability(auxvar,shift,option)
   !
-  ! Modifies permeability based on illitization model.
+  ! Modifies permeability based on shift from illitization model.
   !
   ! Author: Alex Salazar III
   ! Date: 03/01/2021
   !
 
   use Option_module
-  use Illitization_module
+  ! use Illitization_module
 
   implicit none
 
   class(material_auxvar_type), intent(inout) :: auxvar
-  class(illitization_type), intent(inout) :: ilf
-  PetscReal, intent(in) :: temperature
+  PetscReal, intent(in) :: shift
   class(option_type), intent(inout) :: option
 
   PetscInt  :: ps, i
   PetscReal :: ki
-  PetscReal :: fi
-  PetscReal :: shift
 
   if (auxvar%ilt) then
 
     ps = size(auxvar%permeability)
-
-    select type(il => ilf%illitization_function)
-      type is(ILT_default_type)
-        call il%CalculateILT(temperature,option%time,option%dt, &
-                             fi,shift,option)
-      class default
-      option%io_buffer = 'Cannot use illitization function "'// trim(ilf%name) &
-                       //'" to modify permeability.'
-      call PrintErrMsg(option)
-    end select
 
     do i = 1, ps
       ki = auxvar%permeability(i)

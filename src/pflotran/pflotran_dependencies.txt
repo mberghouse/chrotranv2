@@ -163,6 +163,7 @@ gas_eos_mod.o : pflotran_constants.o
 gauss.o : grid_unstructured_cell.o pflotran_constants.o utility.o
 general.o : connection.o coupler.o debug.o discretization.o eos_water.o \
             field.o fluid.o general_aux.o general_common.o global_aux.o grid.o \
+            illitization.o \
             material.o material_aux.o matrix_zeroing.o option.o output_aux.o \
             output_tecplot.o patch.o pflotran_constants.o \
             realization_subsurface.o saturation_function.o srcsink_sandbox.o \
@@ -324,7 +325,7 @@ material.o : characteristic_curves.o communicator_base.o dataset.o \
              global_aux.o input_aux.o material_aux.o option.o \
              pflotran_constants.o string.o units.o utility.o variables.o \
              wipp.o
-material_aux.o : option.o illitization.o pflotran_constants.o utility.o variables.o
+material_aux.o : option.o pflotran_constants.o utility.o variables.o
 matrix_block_aux.o : option.o pflotran_constants.o utility.o
 matrix_buffer.o : grid.o grid_structured.o pflotran_constants.o
 matrix_zeroing.o : pflotran_constants.o utility.o
