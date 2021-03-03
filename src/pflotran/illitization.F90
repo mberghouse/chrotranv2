@@ -359,12 +359,8 @@ subroutine ILTDefaultIllitization(this,temperature,time,dt, &
   this%ilt_fi = illitization
   
   ! Shift permeability
-  if (time > this%ilt_tt) then
-    shift = ((this%ilt_fi - this%ilt_fi0) / this%ilt_fi0) * this%ilt_shift_perm
-    this%ilt_tt = time ! save time of last pertubation
-  else
-    shift = 0.0d0 ! do not change permeability during same time step
-  endif
+  shift = ((this%ilt_fi - this%ilt_fi0) / this%ilt_fi0) * this%ilt_shift_perm
+  this%ilt_tt = time ! save time of last shift
 
 end subroutine ILTDefaultIllitization
 
