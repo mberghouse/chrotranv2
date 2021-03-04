@@ -457,12 +457,6 @@ subroutine PMCSubsurfaceSetupSolvers_TimestepperBE(this)
       call SNESLineSearchSetType(linesearch, SNESLINESEARCHBASIC,  &
                                   ierr);CHKERRQ(ierr)
       
-      if (option%use_mc .and. (itransport == RT)) then
-        call SNESLineSearchSetPostCheck(linesearch, &
-                              SecondaryRTUpdateIterate, &
-                              realization,ierr);CHKERRQ(ierr)
-      endif
-      
       ! Have PETSc do a SNES_View() at the end of each solve if 
       ! verbosity > 0.
       if (option%verbosity >= 2) then
