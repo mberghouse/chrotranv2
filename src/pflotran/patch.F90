@@ -79,7 +79,7 @@ module Patch_module
     type(cc_thermal_ptr_type), pointer :: char_curves_thermal_array(:)
     class(illitization_type), pointer :: illitization_function
     type(illitization_ptr_type), pointer :: illitization_function_array(:)
-    
+
     type(strata_list_type), pointer :: strata_list
     type(observation_list_type), pointer :: observation_list
     type(integral_flux_list_type), pointer :: integral_flux_list

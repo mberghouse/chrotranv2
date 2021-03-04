@@ -138,9 +138,8 @@ factory_subsurface.o : characteristic_curves.o characteristic_curves_thermal.o \
                        discretization.o eos.o eos_water.o field.o fluid.o \
                        general.o general_aux.o global.o grid.o \
                        grid_structured.o grid_unstructured_aux.o hdf5_aux.o \
-                       illitization.o \
-                       init_common.o init_subsurface.o init_subsurface_flow.o \
-                       init_subsurface_geophysics.o \
+                       illitization.o init_common.o init_subsurface.o \
+                       init_subsurface_flow.o init_subsurface_geophysics.o \
                        init_subsurface_transport.o input_aux.o integral_flux.o \
                        logging.o material.o nw_transport.o nw_transport_aux.o \
                        observation.o option.o output.o output_aux.o \
@@ -170,9 +169,8 @@ gas_eos_mod.o : pflotran_constants.o
 gauss.o : grid_unstructured_cell.o pflotran_constants.o utility.o
 general.o : connection.o coupler.o debug.o discretization.o eos_water.o \
             field.o fluid.o general_aux.o general_common.o global_aux.o grid.o \
-            illitization.o \
-            material.o material_aux.o matrix_zeroing.o option.o output_aux.o \
-            output_tecplot.o patch.o pflotran_constants.o \
+            illitization.o material.o material_aux.o matrix_zeroing.o option.o \
+            output_aux.o output_tecplot.o patch.o pflotran_constants.o \
             realization_subsurface.o saturation_function.o srcsink_sandbox.o \
             srcsink_sandbox_base.o srcsink_sandbox_wipp_gas.o \
             srcsink_sandbox_wipp_well.o upwind_direction.o variables.o
@@ -294,8 +292,7 @@ hydrostatic.o : condition.o connection.o coupler.o dataset_ascii.o \
                 general_aux.o grid.o grid_structured.o hydrate_aux.o option.o \
                 pflotran_constants.o region.o string.o utility.o \
                 wipp_flow_aux.o
-illitization.o : input_aux.o option.o pflotran_constants.o \
-                                  string.o
+illitization.o : input_aux.o option.o pflotran_constants.o string.o
 init_common.o : condition.o connection.o coupler.o discretization.o field.o \
                 grid.o hdf5.o hdf5_aux.o input_aux.o logging.o option.o \
                 output.o output_aux.o output_tecplot.o patch.o \
@@ -424,10 +421,10 @@ patch.o : auxiliary.o characteristic_curves.o characteristic_curves_thermal.o \
           dataset_map_hdf5.o eos_water.o field.o general_aux.o geometry.o \
           global_aux.o grid.o grid_unstructured_cell.o hydrate_aux.o \
           hydrostatic.o illitization.o integral_flux.o material.o \
-          material_aux.o mphase_aux.o \
-          nw_transport_aux.o nw_transport_equilibrium.o observation.o option.o \
-          output_aux.o pflotran_constants.o reaction.o reaction_aux.o \
-          reaction_base.o reaction_mineral.o reaction_mineral_aux.o \
+          material_aux.o mphase_aux.o nw_transport_aux.o \
+          nw_transport_equilibrium.o observation.o option.o output_aux.o \
+          pflotran_constants.o reaction.o reaction_aux.o reaction_base.o \
+          reaction_mineral.o reaction_mineral_aux.o \
           reaction_surf_complex_aux.o reactive_transport_aux.o region.o \
           richards_aux.o saturation_function.o strata.o string.o th_aux.o \
           transport_constraint.o transport_constraint_base.o \
@@ -737,12 +734,11 @@ realization_subsurface.o : characteristic_curves.o \
                            grid_structured.o grid_unstructured.o \
                            grid_unstructured_aux.o grid_unstructured_cell.o \
                            illitization.o input_aux.o material.o \
-                           material_aux.o \
-                           nw_transport_aux.o option.o output_aux.o patch.o \
-                           pflotran_constants.o reaction.o reaction_aux.o \
-                           reactive_transport_aux.o realization_base.o \
-                           region.o saturation_function.o strata.o string.o \
-                           survey.o th_aux.o time_storage.o \
+                           material_aux.o nw_transport_aux.o option.o \
+                           output_aux.o patch.o pflotran_constants.o \
+                           reaction.o reaction_aux.o reactive_transport_aux.o \
+                           realization_base.o region.o saturation_function.o \
+                           strata.o string.o survey.o th_aux.o time_storage.o \
                            transport_constraint.o transport_constraint_base.o \
                            transport_constraint_nwt.o \
                            transport_constraint_rt.o variables.o waypoint.o
@@ -791,11 +787,11 @@ simulation_geomechanics.o : geomechanics_realization.o \
 simulation_subsurface.o : characteristic_curves.o \
                           characteristic_curves_thermal.o checkpoint.o \
                           condition.o discretization.o eos.o illitization.o \
-                          input_aux.o \
-                          logging.o material.o option.o output.o output_aux.o \
-                          output_ekg.o patch.o pflotran_constants.o pm_base.o \
-                          pmc_base.o pmc_geophysics.o pmc_subsurface.o \
-                          reaction_aux.o reaction_clm.o reaction_sandbox.o \
+                          input_aux.o logging.o material.o option.o output.o \
+                          output_aux.o output_ekg.o patch.o \
+                          pflotran_constants.o pm_base.o pmc_base.o \
+                          pmc_geophysics.o pmc_subsurface.o reaction_aux.o \
+                          reaction_clm.o reaction_sandbox.o \
                           realization_subsurface.o region.o regression.o \
                           simulation_aux.o simulation_base.o srcsink_sandbox.o \
                           strata.o string.o timestepper_base.o waypoint.o \

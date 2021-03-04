@@ -323,7 +323,7 @@ subroutine MaterialPropertyRead(material_property,input,option)
         call InputReadWord(input,option, &
              material_property%illitization_function_name,PETSC_TRUE)
         material_property%ilt = PETSC_TRUE
-      case('ROCK_DENSITY') 
+      case('ROCK_DENSITY')
         call InputReadDouble(input,option,material_property%rock_density)
         call InputErrorMsg(input,option,'rock density','MATERIAL_PROPERTY')
         call InputReadAndConvertUnits(input,material_property%rock_density, &

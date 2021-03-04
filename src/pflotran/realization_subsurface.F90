@@ -900,7 +900,7 @@ subroutine RealProcessMatPropAndSatFunc(realization)
     endif
   endif
   deallocate(check_thermal_conductivity)
-  
+
   ! set up mapping for illitization functions
   if (associated(realization%illitization_function)) then
     patch%illitization_function => &
@@ -3016,7 +3016,7 @@ subroutine RealizationStrip(this)
   if (associated(this%characteristic_curves_thermal)) then
     call CharCurvesThermalDestroy(this%characteristic_curves_thermal)
   endif
-  
+
   if (associated(this%illitization_function)) then
     call IllitizationDestroy(this%illitization_function)
   endif

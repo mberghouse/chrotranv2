@@ -120,7 +120,7 @@ module Material_Aux_class
             MaterialCompressSoilLinear, &
             MaterialCompressSoilQuadratic, &
             MaterialIllitizePermeability
-  
+
   public :: MaterialAuxCreate, &
             MaterialAuxVarInit, &
             MaterialAuxVarCopy, &

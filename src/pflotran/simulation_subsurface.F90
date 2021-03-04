@@ -335,10 +335,10 @@ subroutine SimSubsurfInputRecord(this)
   ! print thermal characteristic curve info
   call CharCurvesThermalInputRecord( &
        this%realization%patch%characteristic_curves_thermal)
-  
+
   ! print illitization function info
   call IllitizationInputRecord(this%realization%patch%illitization_function)
-  
+
   ! print chemistry and reactive transport information
   call ReactionInputRecord(this%realization%reaction)
 
