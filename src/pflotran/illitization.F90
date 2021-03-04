@@ -86,9 +86,9 @@ subroutine ILTBaseVerify(this,name,option)
                      //'for function "'//trim(name)//'".'
     call PrintErrMsg(option)
   else
-    if (this%ilt_fs0 < 0.0d0 .or. this%ilt_fs0 > 1.0d0) then
+    if (this%ilt_fs0 <= 0.0d0 .or. this%ilt_fs0 > 1.0d0) then
       option%io_buffer = 'Initial smectite fraction for function "' &
-                         //trim(name)//'" must be number from 0 to 1.'
+        //trim(name)//'" must be nonzero positive number up to 1.'
       call PrintErrMsg(option)
     endif
     this%ilt_fs  = this%ilt_fs0
@@ -359,7 +359,7 @@ subroutine ILTDefaultIllitization(this,temperature,time,dt, &
   this%ilt_fi = illitization
   
   ! Shift permeability
-  shift = ((this%ilt_fi - this%ilt_fi0) / this%ilt_fi0) * this%ilt_shift_perm
+  shift = ((this%ilt_fs0 - this%ilt_fs) / this%ilt_fs0) * this%ilt_shift_perm
   this%ilt_tt = time ! save time of last shift
 
 end subroutine ILTDefaultIllitization
