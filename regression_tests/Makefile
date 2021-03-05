@@ -72,6 +72,7 @@ STANDARD_CFG = \
 	default/numerical/numerical.cfg \
 	default/output/output.cfg \
 	default/output/compare/compare.cfg \
+	default/output/face_output/face_output.cfg \
 	default/restart/restart.cfg \
 	default/restart/skip/skip.cfg \
 	default/steady/steady.cfg \
