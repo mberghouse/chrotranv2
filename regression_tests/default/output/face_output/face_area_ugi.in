@@ -11,19 +11,10 @@ END
 SUBSURFACE
 
 
-#=========================== solver ========================================
-NUMERICAL_METHODS FLOW
-  NEWTON_SOLVER
-    #ANALYTICAL_JACOBIAN
-  /
-END
-
-
 #=========================== discretization ===================================
 
 GRID
   TYPE UNSTRUCTURED mesh.ugi
-  #IMPLICIT_GRID_AREA_CALCULATION TRUE_AREA
 END
 REGION BC1
   FILE BC1.ss
@@ -35,7 +26,6 @@ END
 
 #=========================== EOS ===================================
 EOS WATER
-  #simplified value for hydraulic conductivity computation
   DENSITY CONSTANT 997.16d0 kg/m^3
   VISCOSITY CONSTANT 8.904156d-4 Pa-s
 END
@@ -66,7 +56,6 @@ OUTPUT
   VARIABLES
     FACE_AREA
     FACE_NON_ORTHOGONALITY_ANGLE
-    PROCESS_ID
   /
   SNAPSHOT_FILE 
     PERIODIC TIMESTEP 1

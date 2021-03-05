@@ -80,6 +80,7 @@ STANDARD_CFG = \
 	default/multicontinuum/multicontinuum.cfg \
 	default/numerical/numerical.cfg \
 	default/output/compare/compare.cfg \
+	default/output/face_output/face_output.cfg \
 	default/output/output.cfg \
 	default/output/sensitivities/sensitivities.cfg \
 	default/restart/restart.cfg \
