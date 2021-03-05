@@ -275,8 +275,13 @@ subroutine DiscretizationReadRequiredCards(discretization,input,option)
           grid%unstructured_grid => un_str_grid
         case(EXPLICIT_UNSTRUCTURED_GRID)
           un_str_grid%explicit_grid => UGridExplicitCreate()
-          call UGridExplicitRead(un_str_grid, &
-                                 discretization%filename,option)
+          if (index(discretization%filename,'.h5') > 0) then
+            call UGridExplicitReadHDF5(un_str_grid, &
+                                       discretization%filename,option)
+          else
+            call UGridExplicitRead(un_str_grid, &
+                                   discretization%filename,option)
+          endif
           grid%unstructured_grid => un_str_grid
         case(POLYHEDRA_UNSTRUCTURED_GRID)
           un_str_grid%polyhedra_grid => UGridPolyhedraCreate()
@@ -509,10 +514,10 @@ subroutine DiscretizationRead(discretization,input,option)
       case('DOMAIN_FILENAME')
         select case(discretization%grid%itype)
           case(EXPLICIT_UNSTRUCTURED_GRID)
-            call InputReadWord(input,option,word,PETSC_TRUE)
+             call InputReadFilename(input,option,discretization%grid% &
+                                    unstructured_grid%explicit_grid% &
+                                    domain_filename)
             call InputErrorMsg(input,option,'DOMAIN_FILENAME','GRID')  
-            discretization%grid%unstructured_grid% &
-              explicit_grid%domain_filename = word
           case default
             option%io_buffer = 'DOMAIN_FILENAME only supported for explicit &
                                &unstructured grids.'
