@@ -555,7 +555,7 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
       call InputReadDouble(input,option,ilf%ilt_fs0)
       call InputErrorMsg(input,option,'initial smectite fraction', &
                          'ILLITIZATION, DEFAULT')
-    case('THRESHOLD')
+    case('TEMPERATURE_THRESHOLD')
       ! Specifies the temperature threshold for activating illitization
       call InputReadDouble(input,option, &
                            ilf%ilt_threshold)
