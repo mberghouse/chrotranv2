@@ -18,6 +18,7 @@ module Debug_module
     PetscBool :: vecview_solution
     PetscBool :: matview_Jacobian
     PetscBool :: matview_Jacobian_detailed
+    PetscBool :: matview_perm_sensitivity
     PetscBool :: norm_Jacobian
     PetscBool :: matview_Matrix
 

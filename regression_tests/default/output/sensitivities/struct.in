@@ -1,0 +1,24 @@
+#Output permeability and pressure sensitivities in hdf5 format using an 
+#structured grid
+
+EXTERNAL_FILE pm.txt
+
+#=========================== discretization ===================================
+GRID
+  TYPE STRUCTURED
+  BOUNDS
+    -50. -50. -1.
+    50. 50. 0.
+  /
+  NXYZ 8 8 1
+END
+REGION ymin
+  BLOCK 6 7 1 1 1 1
+  FACE SOUTH
+END
+REGION ymax
+ BLOCK 2 3 8 8 1 1
+ FACE NORTH
+END
+
+EXTERNAL_FILE subsurface_card.txt

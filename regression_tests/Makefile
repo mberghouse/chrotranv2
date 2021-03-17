@@ -72,6 +72,7 @@ STANDARD_CFG = \
 	default/numerical/numerical.cfg \
 	default/output/output.cfg \
 	default/output/compare/compare.cfg \
+	default/output/sensitivities/sensitivities.cfg \
 	default/restart/restart.cfg \
 	default/restart/skip/skip.cfg \
 	default/steady/steady.cfg \
@@ -366,6 +367,13 @@ clean-tests :
 	-rm -f default/output/output_vtk-np3-000.vtk
 	-rm -f default/output/output_xdmf_explicit-000.xmf
 	-rm -f default/output/output_xdmf_explicit_primal-000.xmf
+	-rm -f default/output/sensitivities/*.h5
+	-rm -f default/output/sensitivities/*.csv
+	-rm -f default/output/sensitivities/*.xml
+	-rm -f default/materials/full_tensor/*.h5
+	-rm -f default/materials/full_tensor/*.xml
+	-rm -f default/materials/full_tensor/*.dat
+	-rm -f default/materials/full_tensor/*.pft
 	-rm -f ufd/glass-0.wf
 	-rm -f ufd/fmdm_dummy-0.wf
 	-rm -f ufd/wf_doubles-0.wf
