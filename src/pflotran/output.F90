@@ -118,6 +118,7 @@ subroutine OutputFileRead(input,realization,output_option, &
   PetscBool :: added
   PetscBool :: vel_cent, vel_face
   PetscBool :: fluxes
+  PetscBool :: print_connection_ids
   PetscBool :: mass_flowrate, energy_flowrate
   PetscBool :: aveg_mass_flowrate, aveg_energy_flowrate,is_sum,is_rst
 
@@ -132,6 +133,7 @@ subroutine OutputFileRead(input,realization,output_option, &
   energy_flowrate = PETSC_FALSE
   aveg_mass_flowrate = PETSC_FALSE
   aveg_energy_flowrate = PETSC_FALSE
+  print_connection_ids = PETSC_FALSE
   k = 0
   nullify(temp_real_array)
 
@@ -479,10 +481,10 @@ subroutine OutputFileRead(input,realization,output_option, &
       case('VARIABLES')
         select case(trim(block_name))
           case('SNAPSHOT_FILE')
-            call OutputVariableRead(input,option, &
+            call OutputVariableRead(input,option,output_option, &
                  output_option%output_snap_variable_list)
           case('OBSERVATION_FILE')
-            call OutputVariableRead(input,option, &
+            call OutputVariableRead(input,option,output_option, &
                  output_option%output_obs_variable_list)
           case('MASS_BALANCE_FILE')
             option%io_buffer = 'A variable list cannot be specified within &
@@ -495,6 +497,20 @@ subroutine OutputFileRead(input,realization,output_option, &
       case('PRINT_COLUMN_IDS')
         output_option%print_column_ids = PETSC_TRUE
 
+!.............................
+      case('PRINT_CONNECTION_IDS')
+        select case(trim(block_name))
+          case('SNAPSHOT_FILE') 
+            print_connection_ids = PETSC_TRUE
+          case('OBSERVATION_FILE')
+            option%io_buffer = 'PRINT_CONNECTION_IDS cannot be specified for &
+                               &OUTPUT,OBSERVATION_FILE block.'
+            call PrintErrMsg(option)
+          case('MASS_BALANCE_FILE')
+            option%io_buffer = 'PRINT_CONNECTION_IDS cannot be specified for &
+                               &OUTPUT,MASS_BALANCE_FILE block.'
+        end select
+        
 !.............................
       case('DETAILED')
         select case(trim(block_name))
@@ -554,6 +570,16 @@ subroutine OutputFileRead(input,realization,output_option, &
   if (fluxes) then
     output_option%print_fluxes = PETSC_TRUE
   endif
+  
+  if (print_connection_ids) then
+    if (output_option%print_tecplot) then
+      option%io_buffer = 'Keyword: PRINT_CONNECTION_IDS only defined for &
+                         &FORMAT HDF5'
+      call PrintErrMsg(option)
+    endif
+    if (output_option%print_hdf5) &
+         output_option%print_hdf5_connection_ids = PETSC_TRUE
+  endif
 
   if(output_option%aveg_output_variable_list%nvars>0) then
     if(Equal(output_option%periodic_snap_output_time_incr,0.d0)) then
@@ -595,8 +621,8 @@ end subroutine OutputFileRead
 
 ! ************************************************************************** !
 
-subroutine OutputVariableRead(input,option,output_variable_list)
-  !
+subroutine OutputVariableRead(input,option,output_option,output_variable_list)
+  ! 
   ! This routine reads a variable from the input file.
   !
   ! Author: Gautam Bisht, LBNL; Glenn Hammond PNNL/SNL
@@ -611,6 +637,7 @@ subroutine OutputVariableRead(input,option,output_variable_list)
   implicit none
 
   type(option_type), pointer :: option
+  type(output_option_type), pointer :: output_option
   type(input_type), pointer :: input
   type(output_variable_list_type), pointer :: output_variable_list
 
@@ -925,6 +952,8 @@ subroutine OutputVariableRead(input,option,output_variable_list)
       case default
         call OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
                                 option)
+        if (category == OUTPUT_FACE) &
+                    output_option%print_face_variable = PETSC_TRUE
         if (Uninitialized(id)) &
           call InputKeywordUnrecognized(input,word,'VARIABLES',option)
 

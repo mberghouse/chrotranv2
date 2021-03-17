@@ -47,6 +47,8 @@ module Output_Aux_module
     PetscBool :: print_hdf5_aveg_mass_flowrate
     PetscBool :: print_hdf5_aveg_energy_flowrate
     PetscBool :: print_explicit_flowrate
+    PetscBool :: print_hdf5_connection_ids
+    PetscBool :: print_face_variable
 
     PetscBool :: print_tecplot
     PetscInt :: tecplot_format
@@ -156,6 +158,7 @@ module Output_Aux_module
   PetscInt, parameter, public :: OUTPUT_DISPLACEMENT = 7
   PetscInt, parameter, public :: OUTPUT_STRESS = 8
   PetscInt, parameter, public :: OUTPUT_STRAIN = 9
+  PetscInt, parameter, public :: OUTPUT_FACE = 10
 
   public :: OutputOptionCreate, &
             OutputOptionDuplicate, &
@@ -209,6 +212,8 @@ function OutputOptionCreate()
   output_option%print_hdf5_aveg_mass_flowrate = PETSC_FALSE
   output_option%print_hdf5_aveg_energy_flowrate = PETSC_FALSE
   output_option%print_explicit_flowrate = PETSC_FALSE
+  output_option%print_hdf5_connection_ids = PETSC_FALSE
+  output_option%print_face_variable = PETSC_FALSE
   output_option%print_tecplot = PETSC_FALSE
   output_option%tecplot_format = 0
   output_option%print_tecplot_vel_cent = PETSC_FALSE
@@ -315,6 +320,9 @@ function OutputOptionDuplicate(output_option)
     output_option%print_hdf5_aveg_energy_flowrate
   output_option2%print_explicit_flowrate = &
     output_option%print_explicit_flowrate
+  output_option2%print_hdf5_connection_ids = &
+    output_option%print_hdf5_connection_ids
+  output_option2%print_face_variable = output_option%print_face_variable
   output_option2%print_tecplot = output_option%print_tecplot
   output_option2%tecplot_format = output_option%tecplot_format
   output_option2%print_tecplot_vel_cent = output_option%print_tecplot_vel_cent
@@ -1186,6 +1194,46 @@ subroutine OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
       name = 'K Orthogonality Error'
       category = OUTPUT_GENERIC
       id = K_ORTHOGONALITY_ERROR
+    case ('FACE_PERMEABILITY')
+      units = 'm^2'
+      name = 'Face Permeability'
+      category = OUTPUT_FACE
+      id = FACE_PERMEABILITY
+    case ('FACE_AREA')
+      units = 'm^2'
+      name = 'Face Area'
+      category = OUTPUT_FACE
+      id = FACE_AREA
+    case ('FACE_UPWIND_FRACTION')
+      units = ''
+      name = 'Face Upwind Fraction'
+      category = OUTPUT_FACE
+      id = FACE_UPWIND_FRACTION
+    case ('FACE_DISTANCE_BETWEEN_CENTER')
+      units = ''
+      name = 'Face Distance Between Center'
+      category = OUTPUT_FACE
+      id = FACE_DISTANCE_BETWEEN_CENTER
+    case ('FACE_NON_ORTHOGONALITY_ANGLE')
+      units = ''
+      name = 'Face Non Orthogonality Angle'
+      category = OUTPUT_FACE
+      id = FACE_NON_ORTHO_ANGLE
+    case ('FACE_NORMAL_X')
+      units = ''
+      name = 'Face Normal X Component'
+      category = OUTPUT_FACE
+      id = FACE_NORMAL_X
+    case ('FACE_NORMAL_Y')
+      units = ''
+      name = 'Face Normal Y Component'
+      category = OUTPUT_FACE
+      id = FACE_NORMAL_Y
+    case ('FACE_NORMAL_Z')
+      units = ''
+      name = 'Face Normal Z Component'
+      category = OUTPUT_FACE
+      id = FACE_NORMAL_Z
     case ('ELECTRICAL_CONDUCTIVITY')
       if (option%ngeopdof <= 0) then
         option%io_buffer = 'ELECTRICAL_CONDUCTIVITY output only supported &
@@ -1354,6 +1402,8 @@ function OutputVariableToCategoryString(icategory)
       string = 'STRESS'
     case(OUTPUT_STRAIN)
       string = 'STRAIN'
+    case(OUTPUT_FACE)
+      string = 'FACE'
     case default
       string = 'GENERIC'
   end select

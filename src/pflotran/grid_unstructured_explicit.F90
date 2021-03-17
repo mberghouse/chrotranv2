@@ -936,7 +936,7 @@ subroutine UGridExplicitDecompose(ugrid,option)
   PetscInt :: num_connections_local_old, num_connections_local
   PetscInt :: num_connections_total
   PetscInt :: num_connections_global, global_connection_offset
-  PetscInt :: id_up, id_dn, iconn, icell, count, offset
+  PetscInt :: id_up, id_dn, iconn, icell, count, count2, offset
   PetscInt :: conn_id, dual_id
   PetscBool :: found
   PetscInt :: i, temp_int, idual
@@ -1630,6 +1630,8 @@ subroutine UGridExplicitDecompose(ugrid,option)
   explicit_grid%connections = 0
   allocate(explicit_grid%face_areas(count))
   explicit_grid%face_areas = 0
+  allocate(explicit_grid%face_locals(count))
+  explicit_grid%face_locals = 1
   allocate(explicit_grid%face_centroids(count))
   do iconn = 1, count
     explicit_grid%face_centroids(iconn)%x = 0.d0
@@ -1648,6 +1650,9 @@ subroutine UGridExplicitDecompose(ugrid,option)
       explicit_grid%face_centroids(count)%y = vec_ptr(offset+4)
       explicit_grid%face_centroids(count)%z = vec_ptr(offset+5)
       explicit_grid%face_areas(count) = vec_ptr(offset+6)
+      if (int(vec_ptr(offset+1)) > ugrid%nlmax .or. &
+                          int(vec_ptr(offset+2)) > ugrid%nlmax) &
+        explicit_grid%face_locals(count) = 0
     endif
   enddo
   call VecRestoreArrayF90(connections_local,vec_ptr,ierr);CHKERRQ(ierr)
@@ -1754,7 +1759,8 @@ function UGridExplicitSetInternConnect(explicit_grid,upwind_fraction_method, &
     id_dn = explicit_grid%connections(2,iconn)
     connections%id_up(iconn) = id_up
     connections%id_dn(iconn) = id_dn
-
+    connections%local(iconn) = 0
+    
     pt_up(1) = explicit_grid%cell_centroids(id_up)%x
     pt_up(2) = explicit_grid%cell_centroids(id_up)%y
     pt_up(3) = explicit_grid%cell_centroids(id_up)%z
@@ -1762,6 +1768,37 @@ function UGridExplicitSetInternConnect(explicit_grid,upwind_fraction_method, &
     pt_dn(1) = explicit_grid%cell_centroids(id_dn)%x
     pt_dn(2) = explicit_grid%cell_centroids(id_dn)%y
     pt_dn(3) = explicit_grid%cell_centroids(id_dn)%z
+    
+    !added by Moise Rousseau (01-14-21)
+    !uniquely identify the ghosted connection
+    if (explicit_grid%face_locals(iconn) < 0.1)  then
+      if (pt_up(1) > pt_dn(1)) then
+        connections%local(iconn) = -1
+        connections%num_connections_unique = &
+                           connections%num_connections_unique + 1
+      else
+        if (pt_up(1) == pt_dn(1)) then
+          if (pt_up(2) > pt_dn(2)) then
+            connections%local(iconn) = -1
+            connections%num_connections_unique = &
+                           connections%num_connections_unique + 1
+          else 
+            if (pt_up(2) == pt_dn(2)) then
+              if (pt_up(3) > pt_dn(3)) then
+                connections%local(iconn) = -1
+                connections%num_connections_unique = &
+                           connections%num_connections_unique + 1
+               endif
+            endif
+          endif
+        endif
+      endif
+    else 
+      connections%local(iconn) = 1
+      connections%num_connections_unique = &
+                           connections%num_connections_unique + 1
+    endif
+    !end of addition
 
     pt_center(1) = explicit_grid%face_centroids(iconn)%x
     pt_center(2) = explicit_grid%face_centroids(iconn)%y
@@ -1883,6 +1920,7 @@ function UGridExplicitSetBoundaryConnect(explicit_grid,cell_ids, &
     connections%dist(0,iconn) = distance
     connections%dist(1:3,iconn) = v/distance
     connections%area(iconn) = face_areas(iconn)
+    !connections%local(iconn) = 1 ! boundary always local
   enddo
   if (error) then
     option%io_buffer = 'Coincident cell and face centroids found in ' // &
