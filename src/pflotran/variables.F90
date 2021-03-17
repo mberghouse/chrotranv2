@@ -183,6 +183,9 @@ module Variables_module
   PetscInt, parameter, public :: FACE_NON_ORTHO_ANGLE    = 146
   PetscInt, parameter, public :: FACE_UPWIND_FRACTION    = 147
   PetscInt, parameter, public :: FACE_DISTANCE_BETWEEN_CENTER = 148
+  PetscInt, parameter, public :: FACE_NORMAL_X            = 149
+  PetscInt, parameter, public :: FACE_NORMAL_Y            = 150
+  PetscInt, parameter, public :: FACE_NORMAL_Z            = 151
 
 
 

@@ -2212,29 +2212,29 @@ function UGridComputeInternConnect(unstructured_grid,grid_x,grid_y,grid_z, &
         if (dual_local_id < 0) then
           if (point_up%x > point_dn%x) then
             connections%local(iconn) = -1
-		        connections%num_connections_unique = &
-		                           connections%num_connections_unique + 1
+            connections%num_connections_unique = &
+		               connections%num_connections_unique + 1
           else
             if (point_up%x == point_dn%x) then
               if (point_up%y > point_dn%y) then
                 connections%local(iconn) = -1
-		            connections%num_connections_unique = &
-		                           connections%num_connections_unique + 1
+                connections%num_connections_unique = &
+		               connections%num_connections_unique + 1
               else 
                 if (point_up%y == point_dn%y) then
                   if (point_up%z > point_dn%z) then
                     connections%local(iconn) = -1
-		                connections%num_connections_unique = &
-		                           connections%num_connections_unique + 1
-		               endif
+                    connections%num_connections_unique = &
+                               connections%num_connections_unique + 1
+                  endif
                 endif
               endif
             endif
           endif
         else 
           connections%local(iconn) = 1
-		      connections%num_connections_unique = &
-		                           connections%num_connections_unique + 1
+          connections%num_connections_unique = &
+                                 connections%num_connections_unique + 1
         endif
         !end of addition
         
