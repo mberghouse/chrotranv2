@@ -6214,7 +6214,8 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
         !vec_ptr(:) = UNINITIALIZED_DOUBLE
       endif
     case(FACE_PERMEABILITY,FACE_AREA,FACE_UPWIND_FRACTION, &
-         FACE_NON_ORTHO_ANGLE, FACE_DISTANCE_BETWEEN_CENTER) 
+         FACE_NON_ORTHO_ANGLE, FACE_DISTANCE_BETWEEN_CENTER,&
+         FACE_NORMAL_X, FACE_NORMAL_Y, FACE_NORMAL_Z) 
         ! or all other connection indexed output
         call PatchGetFaceVariable(patch,material_auxvars,ivar,vec_ptr,option)
     case default
@@ -8611,6 +8612,24 @@ subroutine PatchGetFaceVariable(patch,material_auxvars,ivar,vec_ptr,option)
           vec_ptr(icount) = cur_connection_set%dist(0,iconn)
           icount = icount + 1
         enddo
+      case(FACE_NORMAL_X)
+        do iconn = 1, cur_connection_set%num_connections
+          if (cur_connection_set%local(iconn) == 0) cycle
+          vec_ptr(icount) = cur_connection_set%dist(1,iconn)
+          icount = icount + 1
+        enddo
+      case(FACE_NORMAL_Y)
+        do iconn = 1, cur_connection_set%num_connections
+          if (cur_connection_set%local(iconn) == 0) cycle
+          vec_ptr(icount) = cur_connection_set%dist(2,iconn)
+          icount = icount + 1
+        enddo
+      case(FACE_NORMAL_Z)
+        do iconn = 1, cur_connection_set%num_connections
+          if (cur_connection_set%local(iconn) == 0) cycle
+          vec_ptr(icount) = cur_connection_set%dist(3,iconn)
+          icount = icount + 1
+        enddo
     end select
     cur_connection_set => cur_connection_set%next
   enddo
@@ -8648,6 +8667,21 @@ subroutine PatchGetFaceVariable(patch,material_auxvars,ivar,vec_ptr,option)
       case(FACE_DISTANCE_BETWEEN_CENTER)
         do iconn = 1, cur_connection_set%num_connections
           vec_ptr(icount) = cur_connection_set%dist(0,iconn)
+          icount = icount + 1
+        enddo
+      case(FACE_NORMAL_X)
+        do iconn = 1, cur_connection_set%num_connections
+          vec_ptr(icount) = cur_connection_set%dist(1,iconn)
+          icount = icount + 1
+        enddo
+      case(FACE_NORMAL_Y)
+        do iconn = 1, cur_connection_set%num_connections
+          vec_ptr(icount) = cur_connection_set%dist(2,iconn)
+          icount = icount + 1
+        enddo
+      case(FACE_NORMAL_Z)
+        do iconn = 1, cur_connection_set%num_connections
+          vec_ptr(icount) = cur_connection_set%dist(3,iconn)
           icount = icount + 1
         enddo
     end select

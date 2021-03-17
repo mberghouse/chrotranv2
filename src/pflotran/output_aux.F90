@@ -1248,6 +1248,21 @@ subroutine OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
       name = 'Face Non Orthogonality Angle'
       category = OUTPUT_FACE
       id = FACE_NON_ORTHO_ANGLE
+    case ('FACE_NORMAL_X')
+      units = ''
+      name = 'Face Normal X Component'
+      category = OUTPUT_FACE
+      id = FACE_NORMAL_X
+    case ('FACE_NORMAL_Y')
+      units = ''
+      name = 'Face Normal Y Component'
+      category = OUTPUT_FACE
+      id = FACE_NORMAL_Y
+    case ('FACE_NORMAL_Z')
+      units = ''
+      name = 'Face Normal Z Component'
+      category = OUTPUT_FACE
+      id = FACE_NORMAL_Z
   end select
 
 end subroutine OutputVariableToID
