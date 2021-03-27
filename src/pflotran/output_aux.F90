@@ -1219,6 +1219,21 @@ subroutine OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
       name = 'Face Non Orthogonality Angle'
       category = OUTPUT_FACE
       id = FACE_NON_ORTHO_ANGLE
+    case ('FACE_CELL_CENTER_VECTOR_X')
+      units = ''
+      name = 'Face Cell Center X Component'
+      category = OUTPUT_FACE
+      id = FACE_CELL_CENTER_VECTOR_X
+    case ('FACE_CELL_CENTER_VECTOR_Y')
+      units = ''
+      name = 'Face Cell Vector Y Component'
+      category = OUTPUT_FACE
+      id = FACE_CELL_CENTER_VECTOR_Y
+    case ('FACE_CELL_CENTER_VECTOR_Z')
+      units = ''
+      name = 'Face Cell Vector Z Component'
+      category = OUTPUT_FACE
+      id = FACE_CELL_CENTER_VECTOR_Z
     case ('FACE_NORMAL_X')
       units = ''
       name = 'Face Normal X Component'

@@ -5969,7 +5969,9 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
       endif
     case(FACE_PERMEABILITY,FACE_AREA,FACE_UPWIND_FRACTION, &
          FACE_NON_ORTHO_ANGLE, FACE_DISTANCE_BETWEEN_CENTER,&
-         FACE_NORMAL_X, FACE_NORMAL_Y, FACE_NORMAL_Z) 
+         FACE_NORMAL_X, FACE_NORMAL_Y, FACE_NORMAL_Z, &
+         FACE_CELL_CENTER_VECTOR_X, FACE_CELL_CENTER_VECTOR_Y, &
+         FACE_CELL_CENTER_VECTOR_Z) 
         ! or all other connection indexed output
         call PatchGetFaceVariable(patch,material_auxvars,ivar,vec_ptr,option)
     case default
@@ -8342,24 +8344,9 @@ subroutine PatchGetFaceVariable(patch,material_auxvars,ivar,vec_ptr,option)
         else
           do iconn = 1, cur_connection_set%num_connections
             if (cur_connection_set%local(iconn) == 0) cycle
-            ghosted_id_up = cur_connection_set%id_up(iconn)
-            ghosted_id_dn = cur_connection_set%id_dn(iconn)
-            face_id = cur_connection_set%face_id(iconn)
-            point1 = patch%grid%unstructured_grid%vertices( &
-                        patch%grid%unstructured_grid%face_to_vertex(1,face_id))
-            point2 = patch%grid%unstructured_grid%vertices( &
-                        patch%grid%unstructured_grid%face_to_vertex(2,face_id))
-            point3 = patch%grid%unstructured_grid%vertices( &
-                        patch%grid%unstructured_grid%face_to_vertex(3,face_id))
-            v1(1) = point3%x-point2%x
-            v1(2) = point3%y-point2%y
-            v1(3) = point3%z-point2%z
-            v2(1) = point1%x-point2%x
-            v2(2) = point1%y-point2%y
-            v2(3) = point1%z-point2%z
-            v3 = CrossProduct(v1,v2) !normal stored in v1
+            v3 = cur_connection_set%normal(1:3,iconn)
             temp_real = abs(DotProduct(v3,cur_connection_set%dist(1:3,iconn)))
-            vec_ptr(icount) = 1.d0 - temp_real / sqrt(DotProduct(v3,v3))
+            vec_ptr(icount) = 1.d0 - temp_real
             icount = icount + 1
           enddo
         endif
@@ -8375,24 +8362,57 @@ subroutine PatchGetFaceVariable(patch,material_auxvars,ivar,vec_ptr,option)
           vec_ptr(icount) = cur_connection_set%dist(0,iconn)
           icount = icount + 1
         enddo
-      case(FACE_NORMAL_X)
+      case(FACE_CELL_CENTER_VECTOR_X)
         do iconn = 1, cur_connection_set%num_connections
           if (cur_connection_set%local(iconn) == 0) cycle
           vec_ptr(icount) = cur_connection_set%dist(1,iconn)
           icount = icount + 1
         enddo
-      case(FACE_NORMAL_Y)
+      case(FACE_CELL_CENTER_VECTOR_Y)
         do iconn = 1, cur_connection_set%num_connections
           if (cur_connection_set%local(iconn) == 0) cycle
           vec_ptr(icount) = cur_connection_set%dist(2,iconn)
           icount = icount + 1
         enddo
-      case(FACE_NORMAL_Z)
+      case(FACE_CELL_CENTER_VECTOR_Z)
         do iconn = 1, cur_connection_set%num_connections
           if (cur_connection_set%local(iconn) == 0) cycle
           vec_ptr(icount) = cur_connection_set%dist(3,iconn)
           icount = icount + 1
         enddo
+      case(FACE_NORMAL_X)
+        if (patch%grid%itype == EXPLICIT_UNSTRUCTURED_GRID) then
+          vec_ptr = -1.!for explicit grid we do not know the point nor the face
+          return
+        else
+          do iconn = 1, cur_connection_set%num_connections
+            if (cur_connection_set%local(iconn) == 0) cycle
+            vec_ptr(icount) = cur_connection_set%normal(1,iconn)
+            icount = icount + 1
+          enddo
+        endif
+      case(FACE_NORMAL_Y)
+        if (patch%grid%itype == EXPLICIT_UNSTRUCTURED_GRID) then
+          vec_ptr = -1.!for explicit grid we do not know the point nor the face
+          return
+        else
+          do iconn = 1, cur_connection_set%num_connections
+            if (cur_connection_set%local(iconn) == 0) cycle
+            vec_ptr(icount) = cur_connection_set%normal(2,iconn)
+            icount = icount + 1
+          enddo
+        endif
+      case(FACE_NORMAL_Z)
+        if (patch%grid%itype == EXPLICIT_UNSTRUCTURED_GRID) then
+          vec_ptr = -1.!for explicit grid we do not know the point nor the face
+          return
+        else
+          do iconn = 1, cur_connection_set%num_connections
+            if (cur_connection_set%local(iconn) == 0) cycle
+            vec_ptr(icount) = cur_connection_set%normal(3,iconn)
+            icount = icount + 1
+          enddo
+        endif
     end select
     cur_connection_set => cur_connection_set%next
   enddo
@@ -8432,21 +8452,51 @@ subroutine PatchGetFaceVariable(patch,material_auxvars,ivar,vec_ptr,option)
           vec_ptr(icount) = cur_connection_set%dist(0,iconn)
           icount = icount + 1
         enddo
-      case(FACE_NORMAL_X)
+      case(FACE_CELL_CENTER_VECTOR_X)
         do iconn = 1, cur_connection_set%num_connections
           vec_ptr(icount) = cur_connection_set%dist(1,iconn)
           icount = icount + 1
         enddo
-      case(FACE_NORMAL_Y)
+      case(FACE_CELL_CENTER_VECTOR_Y)
         do iconn = 1, cur_connection_set%num_connections
           vec_ptr(icount) = cur_connection_set%dist(2,iconn)
           icount = icount + 1
         enddo
-      case(FACE_NORMAL_Z)
+      case(FACE_CELL_CENTER_VECTOR_Z)
         do iconn = 1, cur_connection_set%num_connections
           vec_ptr(icount) = cur_connection_set%dist(3,iconn)
           icount = icount + 1
         enddo
+      case(FACE_NORMAL_X)
+        if (patch%grid%itype == EXPLICIT_UNSTRUCTURED_GRID) then
+          vec_ptr = -1.!for explicit grid we do not know the point nor the face
+          return
+        else
+          do iconn = 1, cur_connection_set%num_connections
+            vec_ptr(icount) = cur_connection_set%normal(1,iconn)
+            icount = icount + 1
+          enddo
+        endif
+      case(FACE_NORMAL_Y)
+        if (patch%grid%itype == EXPLICIT_UNSTRUCTURED_GRID) then
+          vec_ptr = -1.!for explicit grid we do not know the point nor the face
+          return
+        else
+          do iconn = 1, cur_connection_set%num_connections
+            vec_ptr(icount) = cur_connection_set%normal(2,iconn)
+            icount = icount + 1
+          enddo
+        endif
+      case(FACE_NORMAL_Z)
+        if (patch%grid%itype == EXPLICIT_UNSTRUCTURED_GRID) then
+          vec_ptr = -1.!for explicit grid we do not know the point nor the face
+          return
+        else
+          do iconn = 1, cur_connection_set%num_connections
+            vec_ptr(icount) = cur_connection_set%normal(3,iconn)
+            icount = icount + 1
+          enddo
+        endif
     end select
     boundary_condition => boundary_condition%next
   enddo
