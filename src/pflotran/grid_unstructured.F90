@@ -2341,6 +2341,7 @@ function UGridComputeInternConnect(unstructured_grid,grid_x,grid_y,grid_z, &
         connections%dist(0,iconn) = dist_up + dist_dn
         v3 = v1 + v2
         connections%dist(1:3,iconn) = v3/sqrt(DotProduct(v3,v3))
+        connections%normal(1:3,iconn) = n1 !suppose the quad face is planar
         connections%area(iconn) = area1 + area2
         connections%intercp(1,iconn) = intercept%x
         connections%intercp(2,iconn) = intercept%y
