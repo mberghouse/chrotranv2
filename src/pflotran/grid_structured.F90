@@ -938,11 +938,13 @@ function StructGridComputeInternConnect(structured_grid, xc, yc, zc, option)
               endif
               
               connections%dist(-1:3,iconn) = 0.d0
+              connections%normal(1:3,iconn) = 0.d0
               dist_up = 0.5d0*structured_grid%dx(id_up)
               dist_dn = 0.5d0*structured_grid%dx(id_dn)
               connections%dist(-1,iconn) = dist_up/(dist_up+dist_dn)
               connections%dist(0,iconn) = dist_up+dist_dn
               connections%dist(1,iconn) = 1.d0  ! x component of unit vector
+              connections%normal(1,iconn) = 1.d0
               connections%area(iconn) = structured_grid%dy(id_up)* &
                                         structured_grid%dz(id_up)
             enddo
@@ -974,11 +976,13 @@ function StructGridComputeInternConnect(structured_grid, xc, yc, zc, option)
               endif
 		          
               connections%dist(-1:3,iconn) = 0.d0
+              connections%normal(1:3,iconn) = 0.d0
               dist_up = 0.5d0*structured_grid%dx(id_up)
               dist_dn = 0.5d0*structured_grid%dx(id_dn)
               connections%dist(-1,iconn) = dist_up/(dist_up+dist_dn)
               connections%dist(0,iconn) = dist_up+dist_dn
               connections%dist(1,iconn) = 1.d0  ! x component of unit vector
+              connections%normal(1,iconn) = 1.d0
               connections%area(iconn) = 2.d0 * pi * (radius(id_up)+0.5d0*structured_grid%dx(id_up))* &
                                         structured_grid%dz(id_up)
             enddo
@@ -1008,11 +1012,13 @@ function StructGridComputeInternConnect(structured_grid, xc, yc, zc, option)
               endif
 		          
               connections%dist(-1:3,iconn) = 0.d0
+              connections%normal(1:3,iconn) = 0.d0
               dist_up = 0.5d0*structured_grid%dx(id_up)
               dist_dn = 0.5d0*structured_grid%dx(id_dn)
               connections%dist(-1,iconn) = dist_up/(dist_up+dist_dn)
               connections%dist(0,iconn) = dist_up+dist_dn
               connections%dist(1,iconn) = 1.d0  ! x component of unit vector
+              connections%normal(1,iconn) = 0.d0
               connections%area(iconn) = 4.d0 * pi * (radius(id_up)+0.5d0*structured_grid%dx(id_up))**2
             enddo
           enddo
@@ -1069,11 +1075,13 @@ function StructGridComputeInternConnect(structured_grid, xc, yc, zc, option)
               endif
                             
               connections%dist(-1:3,iconn) = 0.d0
+              connections%normal(1:3,iconn) = 0.d0
               dist_up = 0.5d0*structured_grid%dy(id_up)
               dist_dn = 0.5d0*structured_grid%dy(id_dn)
               connections%dist(-1,iconn) = dist_up/(dist_up+dist_dn)
               connections%dist(0,iconn) = dist_up+dist_dn
               connections%dist(2,iconn) = 1.d0  ! y component of unit vector
+              connections%normal(2,iconn) = 1.d0
               connections%area(iconn) = structured_grid%dx(id_up)* &
                                     structured_grid%dz(id_up)
             enddo
@@ -1140,11 +1148,13 @@ function StructGridComputeInternConnect(structured_grid, xc, yc, zc, option)
               endif
                                  
               connections%dist(-1:3,iconn) = 0.d0
+              connections%normal(1:3,iconn) = 0.d0
               dist_up = 0.5d0*structured_grid%dz(id_up)
               dist_dn = 0.5d0*structured_grid%dz(id_dn)
               connections%dist(-1,iconn) = dist_up/(dist_up+dist_dn)
               connections%dist(0,iconn) = dist_up+dist_dn
               connections%dist(3,iconn) = 1.d0  ! z component of unit vector
+              connections%normal(3,iconn) = 1.d0
               connections%area(iconn) = structured_grid%dx(id_up) * &
                                         structured_grid%dy(id_up)
             enddo
@@ -1161,11 +1171,13 @@ function StructGridComputeInternConnect(structured_grid, xc, yc, zc, option)
               connections%id_up(iconn) = id_up
               connections%id_dn(iconn) = id_dn
               connections%dist(-1:3,iconn) = 0.d0
+              connections%normal(1:3,iconn) = 0.d0
               dist_up = 0.5d0*structured_grid%dz(id_up)
               dist_dn = 0.5d0*structured_grid%dz(id_dn)
               connections%dist(-1,iconn) = dist_up/(dist_up+dist_dn)
               connections%dist(0,iconn) = dist_up+dist_dn
               connections%dist(3,iconn) = 1.d0  ! z component of unit vector
+              connections%normal(3,iconn) = 1.d0
               ! pi*(r2^2-r1^2)
               r2 = xc(id_up) + 0.5d0*structured_grid%dx(id_up)
               r1 = xc(id_up) - 0.5d0*structured_grid%dx(id_up)

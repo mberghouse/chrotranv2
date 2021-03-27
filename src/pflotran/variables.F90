@@ -186,6 +186,9 @@ module Variables_module
   PetscInt, parameter, public :: FACE_NORMAL_X            = 149
   PetscInt, parameter, public :: FACE_NORMAL_Y            = 150
   PetscInt, parameter, public :: FACE_NORMAL_Z            = 151
+  PetscInt, parameter, public :: FACE_CELL_CENTER_VECTOR_X = 152
+  PetscInt, parameter, public :: FACE_CELL_CENTER_VECTOR_Y = 153
+  PetscInt, parameter, public :: FACE_CELL_CENTER_VECTOR_Z = 154
 
 
 

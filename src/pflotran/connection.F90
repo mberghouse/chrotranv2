@@ -24,6 +24,7 @@ module Connection_module
                                        !   -1 = fraction upwind
                                        !   0 = magnitude of distance 
                                        !   1-3 = components of unit vector
+    PetscReal, pointer :: normal(:,:)  ! list of unit normal vectors,
     PetscReal, pointer :: intercp(:,:) ! x,y,z location of intercept between the line connecting
                                        ! upwind and downwind cells with the face shared by the cells
     PetscReal, pointer :: area(:)      ! list of areas of faces normal to distance vectors
@@ -87,6 +88,7 @@ function ConnectionCreate(num_connections,connection_itype)
   nullify(connection%id_dn2)
   nullify(connection%face_id)
   nullify(connection%dist)
+  nullify(connection%normal)
   nullify(connection%intercp)
   nullify(connection%area)
   nullify(connection%cntr)
@@ -96,6 +98,7 @@ function ConnectionCreate(num_connections,connection_itype)
       allocate(connection%id_up(num_connections))
       allocate(connection%id_dn(num_connections))
       allocate(connection%dist(-1:3,num_connections))
+      allocate(connection%normal(1:3,num_connections))
       allocate(connection%intercp(1:3,num_connections))
       allocate(connection%area(num_connections))
       allocate(connection%face_id(num_connections))
@@ -103,16 +106,19 @@ function ConnectionCreate(num_connections,connection_itype)
       connection%id_dn = 0
       connection%face_id = 0
       connection%dist = 0.d0
+      connection%normal = 0.d0
       connection%intercp = 0.d0
       connection%area = 0.d0
     case(BOUNDARY_CONNECTION_TYPE)
       allocate(connection%id_dn(num_connections))
       allocate(connection%dist(-1:3,num_connections))
+      allocate(connection%normal(1:3,num_connections))
       allocate(connection%intercp(1:3,num_connections))
       allocate(connection%area(num_connections))
       allocate(connection%face_id(num_connections))
       connection%id_dn = 0
       connection%dist = 0.d0
+      connection%normal = 0.d0
       connection%intercp = 0.d0
       connection%area = 0.d0
     case(SRC_SINK_CONNECTION_TYPE,INITIAL_CONNECTION_TYPE)
@@ -288,6 +294,7 @@ subroutine ConnectionDestroy(connection)
   call DeallocateArray(connection%id_dn2)
   call DeallocateArray(connection%face_id)
   call DeallocateArray(connection%dist)
+  call DeallocateArray(connection%normal)
   call DeallocateArray(connection%intercp)
   call DeallocateArray(connection%area)
   call DeallocateArray(connection%cntr)
