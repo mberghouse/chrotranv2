@@ -17,12 +17,8 @@ module Illitization_module
   !---------------------------------------------------------------------------
   type, public :: illitization_base_type
     PetscReal :: ilt_threshold ! temperature threshold to begin illitization
-    PetscReal :: ilt_fs  ! fraction of smectite in material
-    PetscReal :: ilt_fi  ! fraction of illite in material
     PetscReal :: ilt_fs0 ! initial fraction of smectite in material
     PetscReal :: ilt_fi0 ! initial fraction of illite in material
-    PetscReal :: ilt_ds  ! track accumulated changes in smectite
-    PetscReal :: ilt_tt  ! track time of last accumulation
   contains
     procedure, public :: Verify => ILTBaseVerify
     procedure, public :: Test => ILTBaseTest
@@ -31,7 +27,6 @@ module Illitization_module
   !---------------------------------------------------------------------------
   type, public, extends(illitization_base_type) :: ILT_default_type
     ! Model by Huang et al., 1993
-    PetscReal :: ilt_rate ! temperature-dependent illitization rate in sec^-1
     PetscReal :: ilt_ea   ! activation energy in J/mol
     PetscReal :: ilt_freq ! frequency term in L/mol-sec
     PetscReal :: ilt_K_conc ! molar concentration of potassium
@@ -91,30 +86,29 @@ subroutine ILTBaseVerify(this,name,option)
         //trim(name)//'" must be nonzero positive number up to 1.'
       call PrintErrMsg(option)
     endif
-    this%ilt_fs  = this%ilt_fs0
     this%ilt_fi0 = 1.0d0 - this%ilt_fs0
-    this%ilt_fi  = this%ilt_fi0
   endif
 
 end subroutine ILTBaseVerify
 
 ! ************************************************************************** !
 
-subroutine ILTBaseIllitization(this,temperature,time,dt, &
-                               illitization,shift,option)
+subroutine ILTBaseIllitization(this,fs,temperature,dt, &
+                               fi,shift,option)
 
   use Option_module
 
   implicit none
 
   class(illitization_base_type) :: this
+  PetscReal, intent(inout) :: fs
   PetscReal, intent(in) :: temperature
-  PetscReal, intent(in) :: time, dt
-  PetscReal, intent(out) :: illitization
+  PetscReal, intent(in) :: dt
+  PetscReal, intent(out) :: fi
   PetscReal, intent(out) :: shift
   type(option_type), intent(inout) :: option
 
-  illitization = 0.d0
+  fi = 0.d0
   shift = 1.0
 
   option%io_buffer = 'ILTBaseIllitization must be extended.'
@@ -152,6 +146,7 @@ subroutine ILTBaseTest(this,ilt_name,option)
   PetscReal :: smec_min, smec_max
   PetscReal :: temp_min, temp_max
   PetscReal :: dt,shift,fs0_original,fi0_original
+  PetscReal :: fs, fsp
   PetscInt :: i,j,k
 
   ! thermal conductivity as a function of temp. and liq. sat.
@@ -176,11 +171,8 @@ subroutine ILTBaseTest(this,ilt_name,option)
     do j = 1,nt
       ! reset base variables to initial
       this%ilt_fs0 = smec_vec(i)
-      this%ilt_fs  = smec_vec(i)
       this%ilt_fi0 = 1.0d0 - smec_vec(i)
-      this%ilt_fi  = 1.0d0 - smec_vec(i)
-      this%ilt_ds = 0.0d0
-      this%ilt_tt = 0.0d0
+      fs  = smec_vec(i)
       do k = 2,np
 
         ! get change in time
@@ -188,12 +180,13 @@ subroutine ILTBaseTest(this,ilt_name,option)
         dt = dt*(365.25*24*60*60)        ! convert to seconds
 
         ! base case with analytical derivatives
-        call this%CalculateILT(temp_vec(j),time_vec(k),dt,ilt(i,j,k), &
+        fsp = fs
+        call this%CalculateILT(fs,temp_vec(j),dt,ilt(i,j,k), &
                                shift,option)
 
         ! calculate numerical derivatives via finite differences
         perturbed_temp = temp_vec(j) * (1.d0 + perturbation)
-        call this%CalculateILT(perturbed_temp,time_vec(k),dt,ilt_temp_pert, &
+        call this%CalculateILT(fsp,perturbed_temp,dt,ilt_temp_pert, &
                                shift,option)
 
         dilt_dtemp_numerical(i,j,k) = (ilt_temp_pert - ilt(i,j,k))/ &
@@ -219,11 +212,7 @@ subroutine ILTBaseTest(this,ilt_name,option)
 
   ! reset to original values
   this%ilt_fs0 = fs0_original
-  this%ilt_fs  = fs0_original
   this%ilt_fi0 = fi0_original
-  this%ilt_fi  = fi0_original
-  this%ilt_ds  = 0.0d0
-  this%ilt_tt  = 0.0d0
 
 end subroutine ILTBaseTest
 
@@ -252,15 +241,10 @@ function ILTDefaultCreate()
   allocate(ILTDefaultCreate)
 
   ILTDefaultCreate%ilt_threshold  = 0.0d0
-  ILTDefaultCreate%ilt_fs         = 1.0d0
-  ILTDefaultCreate%ilt_fi         = 0.0d0
   ILTDefaultCreate%ilt_fs0        = 1.0d0
   ILTDefaultCreate%ilt_fi0        = 0.0d0
-  ILTDefaultCreate%ilt_ds         = 0.0d0
-  ILTDefaultCreate%ilt_tt         = 0.0d0
   
   ILTDefaultCreate%ilt_shift_perm = 1.0d0
-  ILTDefaultCreate%ilt_rate   = UNINITIALIZED_DOUBLE
   ILTDefaultCreate%ilt_ea     = UNINITIALIZED_DOUBLE
   ILTDefaultCreate%ilt_freq   = UNINITIALIZED_DOUBLE
   ILTDefaultCreate%ilt_K_conc = UNINITIALIZED_DOUBLE
@@ -307,60 +291,59 @@ end subroutine ILTDefaultVerify
 
 ! ************************************************************************** !
 
-subroutine ILTDefaultIllitization(this,temperature,time,dt, &
-                                  illitization,shift,option)
+subroutine ILTDefaultIllitization(this,fs,temperature,dt, &
+                                  fi,shift,option)
 
   use Option_module
 
   implicit none
 
   class(ILT_default_type) :: this
+  PetscReal, intent(inout) :: fs
   PetscReal, intent(in) :: temperature
-  PetscReal, intent(in) :: time, dt
-  PetscReal, intent(out) :: illitization
+  PetscReal, intent(in) :: dt
+  PetscReal, intent(out) :: fi
   PetscReal, intent(out) :: shift
   type(option_type), intent(inout) :: option
 
-  PetscReal :: T
+  PetscReal :: ds   ! change in smectite
+  PetscReal :: T    ! temperature in Kelvin
+  PetscReal :: rate ! temperature-dependent illitization rate in sec^-1
 
   ! Model based on Huang et al., 1993
 
-  ! Use Kelvin
+  ! Use Kelvin to calculate rate
   T = temperature + 273.15d0
 
   ! Check if temperature is above threshold for illitization
   if (temperature >= this%ilt_threshold) then
     ! Illitization rate [L/mol-s]
-    this%ilt_rate = this%ilt_freq * &
+    rate = this%ilt_freq * &
       exp(-1.0d0 * this%ilt_ea / (IDEAL_GAS_CONSTANT * T))
   else
-    this%ilt_rate = 0.0d0
+    rate = 0.0d0
   endif
 
   ! Modify rate with potassium concentration and initial fraction [1/s]
-  this%ilt_rate = this%ilt_rate * (this%ilt_fs0**2) * this%ilt_K_conc
+  rate = rate * (this%ilt_fs0**2) * this%ilt_K_conc
 
-  ! Log accumulated changes in smectite as time proceeds
-  if (time > this%ilt_tt) then
-    this%ilt_ds = this%ilt_ds + (this%ilt_rate * dt)
-  endif
+  ! Log change in smectite as time proceeds
+  ds = rate * dt
 
   ! Change in smectite
-  this%ilt_fs = this%ilt_fs0 / (1.0d0 + this%ilt_ds)
+  fs = fs / (1.0d0 + ds)
 
-  if (this%ilt_fs > 1.0d0) then
-    this%ilt_fs = 1.0d0
-  elseif (this%ilt_fs < 0.0d0) then
-    this%ilt_fs = 0.0d0
+  if (fs > 1.0d0) then
+    fs = 1.0d0
+  elseif (fs < 0.0d0) then
+    fs = 0.0d0
   endif
 
   ! Fraction illitized
-  illitization = 1.0d0 - this%ilt_fs
-  this%ilt_fi = illitization
+  fi = 1.0d0 - fs
   
   ! Shift permeability
-  shift = ((this%ilt_fs0 - this%ilt_fs) / this%ilt_fs0) * this%ilt_shift_perm
-  this%ilt_tt = time ! save time of last shift
+  shift = ((this%ilt_fs0 - fs) / this%ilt_fs0) * this%ilt_shift_perm
 
 end subroutine ILTDefaultIllitization
 
@@ -724,6 +707,9 @@ subroutine IllitizationInputRecord(illitization_list)
         !---------------------------------
       class is (ILT_default_type)
         write(id,'(a)') 'Huang et al., 1993'
+        write(id,'(a29)',advance='no') 'initial smectite: '
+        write(word1,'(es12.5)') ilf%ilt_fs0
+        write(id,'(a)') adjustl(trim(word1))
         write(id,'(a29)',advance='no') 'frequency: '
         write(word1,'(es12.5)') ilf%ilt_freq
         write(id,'(a)') adjustl(trim(word1))//' L/mol-s'
@@ -733,9 +719,6 @@ subroutine IllitizationInputRecord(illitization_list)
         write(id,'(a29)',advance='no') 'K+ concentration: '
         write(word1,'(es12.5)') ilf%ilt_K_conc
         write(id,'(a)') adjustl(trim(word1))//' M'
-        write(id,'(a29)',advance='no') 'initial smectite: '
-        write(word1,'(es12.5)') ilf%ilt_fs0
-        write(id,'(a)') adjustl(trim(word1))
         write(id,'(a29)',advance='no') 'temperature threshold: '
         write(word1,'(es12.5)') ilf%ilt_threshold
         write(id,'(a)') adjustl(trim(word1))//' C'
