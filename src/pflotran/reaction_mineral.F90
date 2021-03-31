@@ -679,6 +679,10 @@ subroutine RKineticMineral(Res,Jac,compute_derivative,rt_auxvar, &
   PetscReal :: denominator
   PetscInt ::  icplx
   PetscReal :: ln_gam_m_beta
+  PetscReal :: rate_limiter_scale
+  PetscReal :: dIm_dRL
+  PetscReal :: dRL_dQK
+  PetscReal :: one_over_sigma_m
   
 #ifdef SOLID_SOLUTION
   PetscBool :: cycle_
@@ -711,7 +715,7 @@ subroutine RKineticMineral(Res,Jac,compute_derivative,rt_auxvar, &
       call RMineralRate(imnrl,ln_act,ln_sec_act,rt_auxvar,global_auxvar, &
                         QK,Im,Im_const,sum_prefactor_rate,affinity_factor, &
                         prefactor,ln_prefactor_spec,cycle_, &
-                        reaction,mineral,option)
+                        rate_limiter_scale,reaction,mineral,option)
     enddo
   
     cur_solid_soln => reaction%solid_solution_list
@@ -739,11 +743,12 @@ subroutine RKineticMineral(Res,Jac,compute_derivative,rt_auxvar, &
 
   do imnrl = 1, mineral%nkinmnrl ! for each mineral
 
+    rate_limiter_scale = 1.d0
 #ifdef SOLID_SOLUTION
     call RMineralRate(imnrl,ln_act,ln_sec_act,rt_auxvar,global_auxvar, &
                       QK,Im,Im_const,sum_prefactor_rate,affinity_factor, &
                       prefactor,ln_prefactor_spec,cycle_, &
-                      reaction,mineral,option)
+                      rate_limiter_scale,reaction,mineral,option)
     if (cycle_) cycle
     
     Im = rate_scale(imnrl)*Im
@@ -765,22 +770,20 @@ subroutine RKineticMineral(Res,Jac,compute_derivative,rt_auxvar, &
     enddo
     
     QK = exp(lnQK)
-    
+
+    one_over_sigma_m = 1.d0
     if (associated(mineral%kinmnrl_Temkin_const)) then
       if (associated(mineral%kinmnrl_min_scale_factor)) then
-        affinity_factor = 1.d0-QK**(1.d0/ &
-          (mineral%kinmnrl_min_scale_factor(imnrl)* &
-           mineral%kinmnrl_Temkin_const(imnrl)))
+        one_over_sigma_m = 1.d0/ &
+                           (mineral%kinmnrl_min_scale_factor(imnrl)* &
+                            mineral%kinmnrl_Temkin_const(imnrl))
       else
-        affinity_factor = 1.d0-QK**(1.d0/ &
-                                 mineral%kinmnrl_Temkin_const(imnrl))
+        one_over_sigma_m = 1.d0/mineral%kinmnrl_Temkin_const(imnrl)
       endif
     else if (associated(mineral%kinmnrl_min_scale_factor)) then
-        affinity_factor = 1.d0-QK**(1.d0/ &
-          mineral%kinmnrl_min_scale_factor(imnrl))
-    else
-      affinity_factor = 1.d0-QK
+      one_over_sigma_m = 1.d0/mineral%kinmnrl_min_scale_factor(imnrl)
     endif
+    affinity_factor = 1.d0-QK**one_over_sigma_m
     
     sign_ = sign(1.d0,affinity_factor)
 
@@ -799,8 +802,9 @@ subroutine RKineticMineral(Res,Jac,compute_derivative,rt_auxvar, &
     
 !     check for rate limiter for precipitation
       if (mineral%kinmnrl_rate_limiter(imnrl) > 0.d0) then
-        affinity_factor = affinity_factor/(1.d0+(1.d0-affinity_factor) &
-          /mineral%kinmnrl_rate_limiter(imnrl))
+        rate_limiter_scale = 1.d0/ &
+                             (1.d0+(1.d0-affinity_factor) &
+                                   /mineral%kinmnrl_rate_limiter(imnrl))
       endif
 
       ! compute prefactor
@@ -869,11 +873,14 @@ subroutine RKineticMineral(Res,Jac,compute_derivative,rt_auxvar, &
       if (associated(mineral%kinmnrl_affinity_power)) then
         ! Im_const: m^2 mnrl/m^3 bulk
         ! sum_prefactor_rate: mol/m^2 mnrl/sec
-        Im = Im_const*sign_* &
-             abs(affinity_factor)**mineral%kinmnrl_affinity_power(imnrl)* &
+        Im = Im_const*sign_ * &
+             abs(affinity_factor*rate_limiter_scale)** &
+               mineral%kinmnrl_affinity_power(imnrl)* &
              sum_prefactor_rate
       else
-        Im = Im_const*sign_*abs(affinity_factor)*sum_prefactor_rate
+        Im = Im_const*sign_* &
+             abs(affinity_factor*rate_limiter_scale) * &
+             sum_prefactor_rate
       endif
       ! store volumetric rate to be used in updating mineral volume fractions
       ! at end of time step
@@ -902,25 +909,25 @@ subroutine RKineticMineral(Res,Jac,compute_derivative,rt_auxvar, &
 
     ! calculate derivatives of rate with respect to free
     ! units = mol/sec
+
+    ! RL = rate_limiter_scale*affinity_factor
     if (associated(mineral%kinmnrl_affinity_power)) then
-      dIm_dQK = -Im*mineral%kinmnrl_affinity_power(imnrl)/abs(affinity_factor)
+      dIm_dRL = -Im*mineral%kinmnrl_affinity_power(imnrl) / &
+                abs(affinity_factor*rate_limiter_scale)
     else
-      dIm_dQK = -Im_const*sum_prefactor_rate
+      dIm_dRL = -Im_const*sum_prefactor_rate
     endif
-    
-    if (associated(mineral%kinmnrl_Temkin_const)) then
-      if (associated(mineral%kinmnrl_min_scale_factor)) then
-        dIm_dQK = dIm_dQK*(1.d0/(mineral%kinmnrl_min_scale_factor(imnrl)* &
-                  mineral%kinmnrl_Temkin_const(imnrl)))/QK*(1.d0-affinity_factor)
-      else
-        dIm_dQK = dIm_dQK*(1.d0/mineral%kinmnrl_Temkin_const(imnrl))/QK* &
-                  (1.d0-affinity_factor)
-      endif
-    else if (associated(mineral%kinmnrl_min_scale_factor)) then
-      dIm_dQK = dIm_dQK*(1.d0/mineral%kinmnrl_min_scale_factor(imnrl))/QK* &
-                (1.d0-affinity_factor)
+
+    ! no rate limiter
+    tempreal = one_over_sigma_m*QK**(one_over_sigma_m-1.d0)
+    dRL_dQK = tempreal
+    if (mineral%kinmnrl_rate_limiter(imnrl) > 0.d0) then
+      dRL_dQK = dRL_dQK*rate_limiter_scale - &
+                affinity_factor*rate_limiter_scale*rate_limiter_scale * &
+                tempreal/mineral%kinmnrl_rate_limiter(imnrl)
     endif
-    
+    dIm_dQK = dIm_dRL*dRL_dQK
+
     ! derivatives with respect to primary species in reaction quotient
     if (mineral%kinmnrl_rate_limiter(imnrl) <= 0.d0) then
       do j = 1, ncomp
@@ -1067,7 +1074,7 @@ end subroutine RKineticMineral
 
 subroutine RMineralRate(imnrl,ln_act,ln_sec_act,rt_auxvar,global_auxvar, &
                         QK,Im,Im_const,sum_prefactor_rate,affinity_factor, &
-                        prefactor,ln_prefactor_spec,cycle_, &
+                        prefactor,ln_prefactor_spec,rate_limiter,cycle_, &
                         reaction,mineral,option)
   ! 
   ! Calculates the mineral saturation index
@@ -1091,6 +1098,7 @@ subroutine RMineralRate(imnrl,ln_act,ln_sec_act,rt_auxvar,global_auxvar, &
   PetscReal :: sum_prefactor_rate
   PetscReal :: affinity_factor
   PetscReal :: prefactor(10), ln_prefactor_spec(5,10)
+  PetscReal :: rate_limiter
   PetscBool :: cycle_
   
   PetscReal :: lnQK
