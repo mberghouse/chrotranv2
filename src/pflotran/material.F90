@@ -47,6 +47,7 @@ module Material_module
     PetscInt :: illitization_function_id
     character(len=MAXWORDLENGTH) :: illitization_function_name
     PetscBool :: ilt ! model illitization in material
+    PetscReal :: ilt_fs0 ! initial smectite fraction
     PetscReal :: rock_density ! kg/m^3
     PetscReal :: specific_heat ! J/kg-K
     PetscReal :: thermal_conductivity_dry
@@ -1592,7 +1593,12 @@ subroutine MaterialAssignPropertyToAux(material_auxvar,material_property, &
   endif
   
   if (material_property%ilt) then
-    material_auxvar%ilt = material_property%ilt
+    material_auxvar%iltf => MaterialIlliteAuxCreate()
+    material_auxvar%iltf%ilt = material_property%ilt
+    material_auxvar%iltf%ilt_fn_id = material_property%illitization_function_id
+    material_auxvar%iltf%ilt_fs0 = material_property%ilt_fs0
+    material_auxvar%iltf%ilt_fs  = material_property%ilt_fs0
+    material_auxvar%iltf%ilt_fst = material_property%ilt_fs0
   endif
     
 !  if (soil_heat_capacity_index > 0) then

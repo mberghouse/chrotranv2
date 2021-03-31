@@ -63,13 +63,23 @@ module Material_Aux_class
     type(fracture_auxvar_type), pointer :: fracture
     PetscReal, pointer :: geomechanics_subsurface_prop(:)
     PetscInt :: creep_closure_id
-    PetscBool :: ilt
+    type(ilt_auxvar_type), pointer :: iltf
 
 !    procedure(SaturationFunction), nopass, pointer :: SaturationFunction
   contains
     procedure, public :: PermeabilityTensorToScalar
     procedure, public :: PermeabilityTensorToScalarSafe
   end type material_auxvar_type
+
+  type, public :: ilt_auxvar_type
+    PetscBool :: ilt       ! model illitization in material
+    PetscInt  :: ilt_fn_id ! illitization function id
+    PetscReal :: ilt_fs0   ! initial fraction of smectite in material
+    PetscReal :: ilt_fs    ! fraction of smectite in material (final)
+    PetscReal :: ilt_ts    ! track time of last change in smectite (final)
+    PetscReal :: ilt_fst   ! fraction of smectite in material (test)
+    PetscReal :: ilt_tst   ! track time of last change in smectite (test)
+  end type ilt_auxvar_type
 
   type, public :: fracture_auxvar_type
     PetscBool :: fracture_is_on
@@ -122,6 +132,7 @@ module Material_Aux_class
             MaterialIllitizePermeability
 
   public :: MaterialAuxCreate, &
+            MaterialIlliteAuxCreate, &
             MaterialAuxVarInit, &
             MaterialAuxVarCopy, &
             MaterialAuxVarStrip, &
@@ -169,6 +180,35 @@ end function MaterialAuxCreate
 
 ! ************************************************************************** !
 
+function MaterialIlliteAuxCreate()
+  !
+  ! Allocate and initialize illitization object
+  !
+  ! Author: Alex Salazar III
+  ! Date: 03/31/2021
+  !
+
+  implicit none
+
+  class(ilt_auxvar_type), pointer :: MaterialIlliteAuxCreate
+  class(ilt_auxvar_type), pointer :: ilt_aux
+
+  allocate(ilt_aux)
+  
+  ilt_aux%ilt       = PETSC_FALSE ! model illitization in material
+  ilt_aux%ilt_fn_id = UNINITIALIZED_INTEGER ! illitization function id
+  ilt_aux%ilt_fs0   = 1.0d+0 ! initial fraction of smectite in material
+  ilt_aux%ilt_fs    = 1.0d+0 ! fraction of smectite in material (final)
+  ilt_aux%ilt_ts    = UNINITIALIZED_DOUBLE ! time smectite last changed (final)
+  ilt_aux%ilt_fst   = 1.0d+0 ! fraction of smectite in material (test)
+  ilt_aux%ilt_tst   = UNINITIALIZED_DOUBLE ! time smectite last changed (test)
+
+  MaterialIlliteAuxCreate => ilt_aux
+
+end function MaterialIlliteAuxCreate
+
+! ************************************************************************** !
+
 subroutine MaterialAuxVarInit(auxvar,option)
   !
   ! Initialize auxiliary object
@@ -191,7 +231,6 @@ subroutine MaterialAuxVarInit(auxvar,option)
   auxvar%porosity = UNINITIALIZED_DOUBLE
   auxvar%dporosity_dp = 0.d0
   auxvar%tortuosity = UNINITIALIZED_DOUBLE
-  auxvar%ilt = PETSC_FALSE
   auxvar%soil_particle_density = UNINITIALIZED_DOUBLE
   if (option%iflowmode /= NULL_MODE) then
     if (option%flow%full_perm_tensor) then
@@ -205,6 +244,9 @@ subroutine MaterialAuxVarInit(auxvar,option)
   endif
   nullify(auxvar%sat_func_prop)
   nullify(auxvar%fracture)
+  if (associated(auxvar%iltf)) then
+    nullify(auxvar%iltf)
+  endif
   auxvar%creep_closure_id = 1
 
   if (max_material_index > 0) then
@@ -251,7 +293,6 @@ subroutine MaterialAuxVarCopy(auxvar,auxvar2,option)
   auxvar2%porosity_base = auxvar%porosity_base
   auxvar2%porosity = auxvar%porosity
   auxvar2%tortuosity = auxvar%tortuosity
-  auxvar2%ilt = auxvar%ilt
   auxvar2%soil_particle_density = auxvar%soil_particle_density
   if (associated(auxvar%permeability)) then
     auxvar2%permeability = auxvar%permeability
@@ -265,6 +306,9 @@ subroutine MaterialAuxVarCopy(auxvar,auxvar2,option)
   auxvar2%creep_closure_id = auxvar%creep_closure_id
   if (associated(auxvar%electrical_conductivity)) then
     auxvar2%electrical_conductivity = auxvar%electrical_conductivity
+  endif
+  if (associated(auxvar%iltf)) then
+    auxvar2%iltf = auxvar%iltf
   endif
 
 end subroutine MaterialAuxVarCopy
@@ -920,7 +964,6 @@ subroutine MaterialIllitizePermeability(auxvar,shift,option)
   !
 
   use Option_module
-  ! use Illitization_module
 
   implicit none
 
@@ -931,17 +974,13 @@ subroutine MaterialIllitizePermeability(auxvar,shift,option)
   PetscInt  :: ps, i
   PetscReal :: ki
 
-  if (auxvar%ilt) then
+  ps = size(auxvar%permeability)
 
-    ps = size(auxvar%permeability)
-
-    do i = 1, ps
-      ki = auxvar%permeability(i)
-      ki = ki * (1.0d0 + shift)
-      auxvar%permeability(i) = ki
-    enddo
-
-  endif
+  do i = 1, ps
+    ki = auxvar%permeability(i)
+    ki = ki * (1.0d0 + shift)
+    auxvar%permeability(i) = ki
+  enddo
 
 end subroutine MaterialIllitizePermeability
 
@@ -1000,6 +1039,27 @@ end subroutine MaterialAuxVarFractureStrip
 
 ! ************************************************************************** !
 
+subroutine MaterialAuxVarIlliteStrip(ilt)
+  !
+  ! Deallocates an illitization auxiliary object
+  !
+  ! Author: Alex Salazar III
+  ! Date: 03/31/2021
+  !
+
+  implicit none
+
+  type(ilt_auxvar_type), pointer :: ilt
+
+  if (.not.associated(ilt)) return
+
+  deallocate(ilt)
+  nullify(ilt)
+
+end subroutine MaterialAuxVarIlliteStrip
+
+! ************************************************************************** !
+
 subroutine MaterialAuxVarStrip(auxvar)
   !
   ! Deallocates a material auxiliary object
@@ -1017,6 +1077,7 @@ subroutine MaterialAuxVarStrip(auxvar)
   call DeallocateArray(auxvar%sat_func_prop)
   call DeallocateArray(auxvar%soil_properties)
   call MaterialAuxVarFractureStrip(auxvar%fracture)
+  call MaterialAuxVarIlliteStrip(auxvar%iltf)
   if (associated(auxvar%geomechanics_subsurface_prop)) then
     call DeallocateArray(auxvar%geomechanics_subsurface_prop)
   endif

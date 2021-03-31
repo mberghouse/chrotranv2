@@ -965,6 +965,12 @@ subroutine RealProcessMatPropAndSatFunc(realization)
              patch%illitization_function_array, &
              cur_material_property%illitization_function_name, &
              cur_material_property%name,option)
+          ! Pass other properties of illitization function to material property
+          if (cur_material_property%illitization_function_id > 0) then
+            cur_material_property%ilt_fs0 = patch% &
+              illitization_function_array(cur_material_property% &
+                illitization_function_id)%ptr%illitization_function%ilt_fs0
+          endif
         endif
       endif
     endif
