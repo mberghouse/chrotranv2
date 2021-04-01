@@ -84,6 +84,8 @@ module Material_Aux_class
     PetscReal :: ilt_fit   ! fraction of illite in material (test)
     PetscReal :: ilt_tst   ! track time of last change in smectite (test)
     PetscReal :: ilt_st    ! shift factor (test)
+    PetscBool :: set_perm0 ! save initial permeability
+    PetscReal, allocatable :: perm0(:) ! intiial permeability
   end type ilt_auxvar_type
 
   type, public :: fracture_auxvar_type
@@ -211,6 +213,7 @@ function MaterialIlliteAuxCreate()
   ilt_aux%ilt_fit   = 0.0d+0 ! fraction of smectite in material (test)
   ilt_aux%ilt_tst   = UNINITIALIZED_DOUBLE ! time smectite last changed (test)
   ilt_aux%ilt_st    = UNINITIALIZED_DOUBLE ! shift factor (test)
+  ilt_aux%set_perm0 = PETSC_FALSE ! one-time assignment of initial permeability
 
   MaterialIlliteAuxCreate => ilt_aux
 
@@ -982,10 +985,20 @@ subroutine MaterialIllitizePermeability(auxvar,shift,option)
   PetscReal :: ki
 
   ps = size(auxvar%permeability)
+  
+  if (.not. associated(auxvar%iltf)) return
+  
+  if (.not. auxvar%iltf%set_perm0) then
+    allocate(auxvar%iltf%perm0(ps))
+    do i = 1, ps
+      auxvar%iltf%perm0(i) = auxvar%permeability(i)
+      write(*,*) auxvar%iltf%perm0(i)
+    enddo
+    auxvar%iltf%set_perm0 = PETSC_TRUE
+  endif
 
   do i = 1, ps
-    ki = auxvar%permeability(i)
-    ki = ki * (1.0d0 + shift)
+    ki = auxvar%iltf%perm0(i) * (1.0d0 + shift)
     auxvar%permeability(i) = ki
   enddo
 
