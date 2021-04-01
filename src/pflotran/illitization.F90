@@ -111,7 +111,7 @@ subroutine ILTBaseIllitization(this,fs,temperature,dt, &
   type(option_type), intent(inout) :: option
 
   fi = 0.0d+0
-  shift = 1.0d+0
+  shift = 0.0d+0
 
 end subroutine ILTBaseIllitization
 
@@ -358,7 +358,7 @@ subroutine ILTDefaultIllitization(this,fs,temperature,dt, &
   fi = 1.0d0 - fs
   
   ! Shift permeability
-  shift = ((this%ilt_fs0 - fs) / this%ilt_fs0) * this%ilt_shift_perm
+  shift = ((fi - (1.0d+0 - this%ilt_fs0)) / this%ilt_fs0) * this%ilt_shift_perm
 
 end subroutine ILTDefaultIllitization
 

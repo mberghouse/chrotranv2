@@ -959,15 +959,18 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
     endif
     if (associated(material_auxvar%iltf)) then
       if (material_auxvar%iltf%ilt) then
-        call illitization%illitization_function% &
-               CalculateILT(material_auxvar%iltf%ilt_fst, &
-                            gen_auxvar%temp, &
-                            option%dt, &
-                            material_auxvar%iltf%ilt_fit, &
-                            material_auxvar%iltf%ilt_st, &
-                            option)
-        call MaterialIllitizePermeability(material_auxvar, &
-                                          material_auxvar%iltf%ilt_st, option)
+        if (option%time > material_auxvar%iltf%ilt_tst) then
+          call illitization%illitization_function% &
+                 CalculateILT(material_auxvar%iltf%ilt_fst, &
+                              gen_auxvar%temp, &
+                              option%flow_dt, &
+                              material_auxvar%iltf%ilt_fit, &
+                              material_auxvar%iltf%ilt_st, &
+                              option)
+          call MaterialIllitizePermeability(material_auxvar, &
+                                            material_auxvar%iltf%ilt_st, option)
+          material_auxvar%iltf%ilt_tst = option%time
+        endif
       endif
     endif
     
