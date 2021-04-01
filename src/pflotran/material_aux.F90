@@ -75,10 +75,15 @@ module Material_Aux_class
     PetscBool :: ilt       ! model illitization in material
     PetscInt  :: ilt_fn_id ! illitization function id
     PetscReal :: ilt_fs0   ! initial fraction of smectite in material
+    PetscReal :: ilt_fi0   ! initial fraction of illite in material
     PetscReal :: ilt_fs    ! fraction of smectite in material (final)
+    PetscReal :: ilt_fi    ! fraction of illite in material (final)
     PetscReal :: ilt_ts    ! track time of last change in smectite (final)
+    PetscReal :: ilt_s     ! shift factor (final)
     PetscReal :: ilt_fst   ! fraction of smectite in material (test)
+    PetscReal :: ilt_fit   ! fraction of illite in material (test)
     PetscReal :: ilt_tst   ! track time of last change in smectite (test)
+    PetscReal :: ilt_st    ! shift factor (test)
   end type ilt_auxvar_type
 
   type, public :: fracture_auxvar_type
@@ -199,9 +204,13 @@ function MaterialIlliteAuxCreate()
   ilt_aux%ilt_fn_id = UNINITIALIZED_INTEGER ! illitization function id
   ilt_aux%ilt_fs0   = 1.0d+0 ! initial fraction of smectite in material
   ilt_aux%ilt_fs    = 1.0d+0 ! fraction of smectite in material (final)
+  ilt_aux%ilt_fi    = 0.0d+0 ! fraction of smectite in material (final)
   ilt_aux%ilt_ts    = UNINITIALIZED_DOUBLE ! time smectite last changed (final)
+  ilt_aux%ilt_s     = UNINITIALIZED_DOUBLE ! shift factor (final)
   ilt_aux%ilt_fst   = 1.0d+0 ! fraction of smectite in material (test)
+  ilt_aux%ilt_fit   = 0.0d+0 ! fraction of smectite in material (test)
   ilt_aux%ilt_tst   = UNINITIALIZED_DOUBLE ! time smectite last changed (test)
+  ilt_aux%ilt_st    = UNINITIALIZED_DOUBLE ! shift factor (test)
 
   MaterialIlliteAuxCreate => ilt_aux
 
@@ -244,9 +253,7 @@ subroutine MaterialAuxVarInit(auxvar,option)
   endif
   nullify(auxvar%sat_func_prop)
   nullify(auxvar%fracture)
-  if (associated(auxvar%iltf)) then
-    nullify(auxvar%iltf)
-  endif
+  nullify(auxvar%iltf)
   auxvar%creep_closure_id = 1
 
   if (max_material_index > 0) then

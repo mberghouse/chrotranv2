@@ -26,6 +26,7 @@ subroutine GeneralDerivativeDriver(option)
           
   use Characteristic_Curves_module
   use Characteristic_Curves_Thermal_module
+  use Illitization_module
   use Coupler_module
 
   implicit none
@@ -65,6 +66,7 @@ subroutine GeneralDerivativeDriver(option)
   type(coupler_type), pointer :: source_sink  
   
   class(characteristic_curves_type), pointer :: characteristic_curves
+  class(illitization_type), pointer :: illitization
   class(cc_thermal_type), pointer :: characteristic_curves_thermal
   type(material_parameter_type), pointer :: material_parameter
   type(general_parameter_type), pointer :: general_parameter
@@ -72,6 +74,7 @@ subroutine GeneralDerivativeDriver(option)
   PetscInt :: natural_id = 1
 
   nullify(characteristic_curves)
+  nullify(illitization)
   nullify(characteristic_curves_thermal)
   nullify(material_parameter)
   nullify(general_parameter)
@@ -82,6 +85,7 @@ subroutine GeneralDerivativeDriver(option)
   call GeneralDerivativeSetup(general_parameter, &
                               characteristic_curves, &
                               characteristic_curves_thermal, &
+                              illitization, &
                               material_parameter,option)
   option%flow_dt = 1.d0
   itype = 0
@@ -118,6 +122,7 @@ subroutine GeneralDerivativeDriver(option)
   call GeneralDerivativeSetupAuxVar(istate,xx,pert,general_auxvar, &
                                     global_auxvar,material_auxvar, &
                                     characteristic_curves, &
+                                    illitization, &
                                     option)  
                                     
   global_auxvar_ss => global_auxvar
@@ -160,6 +165,7 @@ subroutine GeneralDerivativeDriver(option)
   call GeneralDerivativeSetupAuxVar(istate2,xx2,pert2,general_auxvar2, &
                                     global_auxvar2,material_auxvar2, &
                                     characteristic_curves, &
+                                    illitization, &
                                     option)  
   
   call GeneralDerivativeAuxVar(pert,general_auxvar,global_auxvar, &
@@ -212,7 +218,8 @@ subroutine GeneralDerivativeDriver(option)
                                     general_auxvar_ss, &
                                     general_auxvar,global_auxvar, &
                                     global_auxvar_ss, material_auxvar, &
-                                    characteristic_curves, natural_id, &
+                                    characteristic_curves, illitization, &
+                                    natural_id, &
                                     srcsink_scale,option)
     case default
       option%io_buffer = 'The user must specify a process to be tested.'
@@ -235,9 +242,11 @@ end subroutine GeneralDerivativeDriver
 subroutine GeneralDerivativeSetup(general_parameter, &
                                   characteristic_curves, &
                                   characteristic_curves_thermal, &
+                                  illitization, &
                                   material_parameter,option)
   use Characteristic_Curves_module
   use Characteristic_Curves_Thermal_module
+  use Illitization_module
   use Characteristic_Curves_Common_module
   use Material_Aux_class
   use Option_module
@@ -247,6 +256,7 @@ subroutine GeneralDerivativeSetup(general_parameter, &
   type(general_parameter_type), pointer :: general_parameter
   class(characteristic_curves_type), pointer :: characteristic_curves
   class(cc_thermal_type), pointer :: characteristic_curves_thermal
+  class(illitization_type), pointer :: illitization
   type(material_parameter_type), pointer :: material_parameter
   type(option_type), pointer :: option
   
@@ -255,6 +265,7 @@ subroutine GeneralDerivativeSetup(general_parameter, &
   class(rpf_Mualem_VG_gas_type), pointer :: rpf_gas  
 
   class(kT_power_type), pointer :: tcf
+  class(ILT_default_type), pointer :: iltf
   
   if (.not.associated(general_parameter)) then
     allocate(general_parameter)
@@ -296,6 +307,18 @@ subroutine GeneralDerivativeSetup(general_parameter, &
     tcf%gamma = -1.88d0
     characteristic_curves_thermal%thermal_conductivity_function => tcf
   end if
+  if (.not.associated(illitization)) then
+    illitization => IllitizationCreate()
+    iltf => ILTDefaultCreate()
+    iltf%ilt_threshold = 0.d0
+    iltf%ilt_fs0 = 1.0d0
+    iltf%ilt_fi0 = 0.0d0
+    iltf%ilt_ea = 1.2d5
+    iltf%ilt_freq = 8.0d4
+    iltf%ilt_K_conc = 2.2d-3
+    iltf%ilt_shift_perm = 1.0d0
+    illitization%illitization_function => iltf
+  end if
     
 end subroutine GeneralDerivativeSetup
 
@@ -304,9 +327,12 @@ end subroutine GeneralDerivativeSetup
 subroutine GeneralDerivativeSetupAuxVar(istate,xx,pert,general_auxvar, &
                                         global_auxvar, &
                                         material_auxvar, &
-                                        characteristic_curves, option)
+                                        characteristic_curves, &
+                                        illitization, &
+                                        option)
 
   use Characteristic_Curves_module
+  use Illitization_module
   use Option_module
   use EOS_Gas_module
   use EOS_Water_module
@@ -320,6 +346,7 @@ subroutine GeneralDerivativeSetupAuxVar(istate,xx,pert,general_auxvar, &
   type(global_auxvar_type), pointer :: global_auxvar(:)
   class(material_auxvar_type), pointer :: material_auxvar(:)
   class(characteristic_curves_type) :: characteristic_curves
+  class(illitization_type) :: illitization
   type(option_type), pointer :: option
 
   PetscReal :: xx_pert(3)
@@ -344,13 +371,14 @@ subroutine GeneralDerivativeSetupAuxVar(istate,xx,pert,general_auxvar, &
   option%iflag = GENERAL_UPDATE_FOR_ACCUM
   call GeneralAuxVarCompute(xx,general_auxvar(0),global_auxvar(0), &
                             material_auxvar(0),characteristic_curves, &
-                            natural_id,option)  
+                            illitization,natural_id,option)  
 
 ! default perturbation approach that does not consider global or material auxvar
 #if 0
   call GeneralAuxVarPerturb(general_auxvar,global_auxvar(0), &
                             material_auxvar(0), &
-                            characteristic_curves,natural_id, &
+                            characteristic_curves,illitization, &
+                            natural_id, &
                             option)
 #else
   do i = 1, 3
@@ -360,7 +388,7 @@ subroutine GeneralDerivativeSetupAuxVar(istate,xx,pert,general_auxvar, &
     xx_pert(i) = xx(i) + pert(i)
     call GeneralAuxVarCompute(xx_pert,general_auxvar(i),global_auxvar(i), &
                               material_auxvar(i),characteristic_curves, &
-                              natural_id,option)    
+                              illitization,natural_id,option)    
   enddo  
 #endif
 
@@ -756,11 +784,12 @@ subroutine GeneralDerivativeSrcSink(pert,source_sink, &
                                     general_auxvar,global_auxvar, &
                                     global_auxvar_ss, &
                                     material_auxvar,characteristic_curves, &
-                                    natural_id, scale,option)
+                                    illitization, natural_id, scale,option)
 
   use Option_module
   use Coupler_module
   use Characteristic_Curves_module
+  use Illitization_module
   use Material_Aux_class
   
   implicit none
@@ -773,6 +802,7 @@ subroutine GeneralDerivativeSrcSink(pert,source_sink, &
   type(global_auxvar_type) :: global_auxvar(0:), global_auxvar_ss(0:)
   type(material_auxvar_type) :: material_auxvar(0:)
   type(characteristic_curves_type) :: characteristic_curves
+  type(illitization_type) :: illitization
   PetscInt :: natural_id
   PetscReal :: scale
   
@@ -806,7 +836,7 @@ subroutine GeneralDerivativeSrcSink(pert,source_sink, &
                       global_auxvar(natural_id), &
                       global_auxvar_ss(natural_id), &
                       material_auxvar(natural_id), ss_flow_vol_flux, &
-                      characteristic_curves, natural_id, &
+                      characteristic_curves, illitization, natural_id, &
                       scale,res,jac_anal,PETSC_TRUE,PETSC_FALSE,PETSC_FALSE)                           
                            
   do idof = 1, option%nflowdof
@@ -818,7 +848,7 @@ subroutine GeneralDerivativeSrcSink(pert,source_sink, &
                         global_auxvar_ss(natural_id), &
                         material_auxvar(natural_id), &
                         ss_flow_vol_flux, &
-                        characteristic_curves, natural_id, &
+                        characteristic_curves, illitization, natural_id, &
                         scale,res_pert(:,idof),jac_dum,PETSC_FALSE, &
                         PETSC_FALSE,PETSC_FALSE)                          
     do irow = 1, option%nflowdof

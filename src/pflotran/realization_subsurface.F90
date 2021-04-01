@@ -754,6 +754,7 @@ subroutine RealProcessMatPropAndSatFunc(realization)
   use Dataset_Common_HDF5_class
   use Dataset_module
   use Characteristic_Curves_Thermal_module
+  use Illitization_module
   use TH_Aux_module, only : th_ice_model
 
 
@@ -770,6 +771,7 @@ subroutine RealProcessMatPropAndSatFunc(realization)
   character(len=MAXSTRINGLENGTH) :: string, verify_string, mat_string
   class(dataset_base_type), pointer :: dataset
   class(cc_thermal_type), pointer :: thermal_cc
+  class(illitization_type), pointer :: illitization
 
   option => realization%option
   patch => realization%patch
@@ -903,6 +905,15 @@ subroutine RealProcessMatPropAndSatFunc(realization)
 
   ! set up mapping for illitization functions
   if (associated(realization%illitization_function)) then
+    patch%illitization_function => &
+         realization%illitization_function
+    call IllitizationConvertListToArray(patch%illitization_function, &
+         patch%illitization_function_array, option)
+  else
+    ! Create a dummy illitization function (base type)
+    illitization => IllitizationCreate()
+    illitization%illitization_function => ILTBaseCreate()
+    realization%illitization_function => illitization
     patch%illitization_function => &
          realization%illitization_function
     call IllitizationConvertListToArray(patch%illitization_function, &

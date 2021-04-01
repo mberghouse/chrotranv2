@@ -753,6 +753,8 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
                        material_auxvars(ghosted_id), &
                        patch%characteristic_curves_array( &
                          patch%cc_id(ghosted_id))%ptr, &
+                       patch%illitization_function_array( &
+                          patch%ilt_id(ghosted_id))%ptr, &
                        natural_id, &
                        option)
     if (update_state) then
@@ -762,6 +764,8 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
                                     material_auxvars(ghosted_id), &
                                     patch%characteristic_curves_array( &
                                       patch%cc_id(ghosted_id))%ptr, &
+                                    patch%illitization_function_array( &
+                                       patch%ilt_id(ghosted_id))%ptr, &
                                     natural_id, &  ! for debugging
                                     option)
     endif
@@ -915,6 +919,8 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
                                 material_auxvars(ghosted_id), &
                                 patch%characteristic_curves_array( &
                                   patch%cc_id(ghosted_id))%ptr, &
+                                patch%illitization_function_array( &
+                                   patch%ilt_id(ghosted_id))%ptr, &
                                 natural_id, &
                                 option)
       if (update_state_bc) then
@@ -925,6 +931,8 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
                                       material_auxvars(ghosted_id), &
                                       patch%characteristic_curves_array( &
                                         patch%cc_id(ghosted_id))%ptr, &
+                                      patch%illitization_function_array( &
+                                         patch%ilt_id(ghosted_id))%ptr, &
                                       natural_id,option)
       endif
     enddo
@@ -1017,6 +1025,8 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
                           ss_flow_vol_flux, &
                           patch%characteristic_curves_array( &
                             patch%cc_id(ghosted_id))%ptr, &
+                          patch%illitization_function_array( &
+                            patch%ilt_id(ghosted_id))%ptr, &
                           grid%nG2A(ghosted_id), &
                           scale, Res_dummy, Jac_dummy, &
                           general_analytical_derivatives, &
@@ -1102,6 +1112,8 @@ subroutine GeneralUpdateFixedAccum(realization)
                               material_auxvars(ghosted_id), &
                               patch%characteristic_curves_array( &
                                 patch%cc_id(ghosted_id))%ptr, &
+                              patch%illitization_function_array( &
+                                 patch%ilt_id(ghosted_id))%ptr, &
                               natural_id, &
                               option)
     call GeneralAccumulation(gen_auxvars(ZERO_INTEGER,ghosted_id), &
@@ -1460,6 +1472,8 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
                           ss_flow_vol_flux, &
                           patch%characteristic_curves_array( &
                             patch%cc_id(ghosted_id))%ptr, &
+                          patch%illitization_function_array( &
+                            patch%ilt_id(ghosted_id))%ptr, &
                           grid%nG2A(ghosted_id), &
                           scale,Res,Jac_dummy, &
                           general_analytical_derivatives, &
@@ -1668,6 +1682,8 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
                                 material_auxvars(ghosted_id), &
                                 patch%characteristic_curves_array( &
                                   patch%cc_id(ghosted_id))%ptr, &
+                                patch%illitization_function_array( &
+                                  patch%ilt_id(ghosted_id))%ptr, &
                                 natural_id,option)
     enddo
   endif
@@ -1853,6 +1869,8 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
                         global_auxvars_ss(sum_connection), &
                         patch%characteristic_curves_array( &
                           patch%cc_id(ghosted_id))%ptr, &
+                        patch%illitization_function_array( &
+                          patch%ilt_id(ghosted_id))%ptr, &
                         grid%nG2A(ghosted_id),material_auxvars(ghosted_id), &
                         scale,Jup)
 

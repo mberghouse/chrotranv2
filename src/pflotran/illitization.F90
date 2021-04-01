@@ -55,7 +55,9 @@ module Illitization_module
             IllitizationAddToList, &
             IllitizationConvertListToArray, &
             IllitizationInputRecord, &
-            IllitizationDestroy
+            IllitizationDestroy, &
+            ILTBaseCreate, &
+            ILTDefaultCreate
 
 contains
 
@@ -108,11 +110,11 @@ subroutine ILTBaseIllitization(this,fs,temperature,dt, &
   PetscReal, intent(out) :: shift
   type(option_type), intent(inout) :: option
 
-  fi = 0.d0
-  shift = 1.0
+  fi = 0.0d+0
+  shift = 1.0d+0
 
-  option%io_buffer = 'ILTBaseIllitization must be extended.'
-  call PrintErrMsg(option)
+  ! option%io_buffer = 'ILTBaseIllitization must be extended.'
+  ! call PrintErrMsg(option)
 
 end subroutine ILTBaseIllitization
 
@@ -229,6 +231,22 @@ subroutine ILTDestroy(ilf)
   nullify(ilf)
 
 end subroutine ILTDestroy
+
+! ************************************************************************** !
+
+function ILTBaseCreate()
+
+  implicit none
+
+  class(illitization_base_type), pointer :: ILTBaseCreate
+
+  allocate(ILTBaseCreate)
+
+  ILTBaseCreate%ilt_threshold  = 0.0d0
+  ILTBaseCreate%ilt_fs0        = 0.0d0
+  ILTBaseCreate%ilt_fi0        = 0.0d0
+
+end function ILTBaseCreate
 
 ! ************************************************************************** !
 

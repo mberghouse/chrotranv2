@@ -3911,7 +3911,8 @@ subroutine GeneralAuxVarComputeAndSrcSink(option,qsrc,flow_src_sink_type, &
                           gen_auxvar_ss, &
                           gen_auxvar,global_auxvar, global_auxvar_ss, &
                           material_auxvar,ss_flow_vol_flux, &
-                          characteristic_curves, natural_id, scale,Res,J, &
+                          characteristic_curves, illitization, &
+                          natural_id, scale,Res,J, &
                           analytical_derivatives,aux_var_compute_only, &
                           debug_cell)
   ! 
@@ -3926,6 +3927,7 @@ subroutine GeneralAuxVarComputeAndSrcSink(option,qsrc,flow_src_sink_type, &
   use EOS_Gas_module
   use Material_Aux_class
   use Characteristic_Curves_module
+  use Illitization_module
 
   implicit none
 
@@ -3935,6 +3937,7 @@ subroutine GeneralAuxVarComputeAndSrcSink(option,qsrc,flow_src_sink_type, &
   class(material_auxvar_type) :: material_auxvar
   PetscReal :: ss_flow_vol_flux(option%nphase)
   type(characteristic_curves_type) :: characteristic_curves
+  type(illitization_type) :: illitization
   PetscInt :: natural_id
   PetscReal :: scale
   PetscReal :: Res(option%nflowdof)
@@ -4029,7 +4032,7 @@ subroutine GeneralAuxVarComputeAndSrcSink(option,qsrc,flow_src_sink_type, &
   ! Compute state variables
   call GeneralAuxVarCompute(xxss,gen_auxvar_ss, global_auxvar_ss, &
                             material_auxvar, characteristic_curves, &
-                            natural_id,option)
+                            illitization,natural_id,option)
 
   if (aux_var_compute_only) return
 
@@ -4623,7 +4626,8 @@ end subroutine GeneralBCFluxDerivative
 subroutine GeneralSrcSinkDerivative(option,source_sink,gen_auxvar_ss, &
                                     gen_auxvar,global_auxvar, & 
                                     global_auxvar_ss, &
-                                    characteristic_curves,natural_id, &
+                                    characteristic_curves, &
+                                    illitization, natural_id, &
                                     material_auxvar,scale,Jac)
   ! 
   ! Computes the source/sink terms for the residual
@@ -4636,6 +4640,7 @@ subroutine GeneralSrcSinkDerivative(option,source_sink,gen_auxvar_ss, &
   use Coupler_module
   use Material_Aux_class
   use Characteristic_Curves_module
+  use Illitization_module
 
   implicit none
 
@@ -4644,6 +4649,7 @@ subroutine GeneralSrcSinkDerivative(option,source_sink,gen_auxvar_ss, &
   type(general_auxvar_type) :: gen_auxvar(0:), gen_auxvar_ss(0:1)
   type(global_auxvar_type) :: global_auxvar, global_auxvar_ss
   type(characteristic_curves_type) :: characteristic_curves
+  type(illitization_type) :: illitization
   PetscInt :: natural_id
   class(material_auxvar_type) :: material_auxvar
   PetscReal :: scale
@@ -4667,6 +4673,7 @@ subroutine GeneralSrcSinkDerivative(option,source_sink,gen_auxvar_ss, &
                       gen_auxvar_ss(ZERO_INTEGER), gen_auxvar(ZERO_INTEGER),&
                       global_auxvar, global_auxvar_ss, &
                       material_auxvar, dummy_real, characteristic_curves, &
+                      illitization, &
                       natural_id, scale,res,Jdum, &
                       general_analytical_derivatives, PETSC_FALSE, PETSC_FALSE)
                       
@@ -4681,6 +4688,7 @@ subroutine GeneralSrcSinkDerivative(option,source_sink,gen_auxvar_ss, &
                           gen_auxvar_ss(ONE_INTEGER), gen_auxvar(idof), &
                           global_auxvar,global_auxvar_ss, &
                           material_auxvar, dummy_real,characteristic_curves, &
+                          illitization, &
                           natural_id, scale, res_pert,Jdum,PETSC_FALSE, &
                           PETSC_FALSE, PETSC_FALSE)
       
