@@ -904,16 +904,20 @@ subroutine RealProcessMatPropAndSatFunc(realization)
   deallocate(check_thermal_conductivity)
 
   ! set up mapping for illitization functions
+  do i = 1, num_mat_prop
+    if (associated(patch%material_property_array(i)%ptr)) then
+      if (.not. patch%material_property_array(i)%ptr%ilt) then
+        ! Create a base type function for materials with no illitization
+        illitization => IllitizationCreate()
+        illitization%illitization_function => ILTBaseCreate()
+        illitization%name = patch%material_property_array(i)%ptr% &
+                              illitization_function_name
+        call IllitizationAddToList(illitization, &
+                                   realization%illitization_function)
+      endif
+    endif
+  enddo
   if (associated(realization%illitization_function)) then
-    patch%illitization_function => &
-         realization%illitization_function
-    call IllitizationConvertListToArray(patch%illitization_function, &
-         patch%illitization_function_array, option)
-  else
-    ! Create a dummy illitization function (base type)
-    illitization => IllitizationCreate()
-    illitization%illitization_function => ILTBaseCreate()
-    realization%illitization_function => illitization
     patch%illitization_function => &
          realization%illitization_function
     call IllitizationConvertListToArray(patch%illitization_function, &
@@ -969,19 +973,17 @@ subroutine RealProcessMatPropAndSatFunc(realization)
     
     ! illitization function id 
     if (associated(patch%illitization_function_array)) then
-      if (cur_material_property%ilt) then
-        if (Uninitialized(cur_material_property%illitization_function_id)) then
-          cur_material_property%illitization_function_id = &
-             IllitizationGetID( &
-             patch%illitization_function_array, &
-             cur_material_property%illitization_function_name, &
-             cur_material_property%name,option)
-          ! Pass other properties of illitization function to material property
-          if (cur_material_property%illitization_function_id > 0) then
-            cur_material_property%ilt_fs0 = patch% &
-              illitization_function_array(cur_material_property% &
-                illitization_function_id)%ptr%illitization_function%ilt_fs0
-          endif
+      if (Uninitialized(cur_material_property%illitization_function_id)) then
+        cur_material_property%illitization_function_id = &
+           IllitizationGetID( &
+           patch%illitization_function_array, &
+           cur_material_property%illitization_function_name, &
+           cur_material_property%name,option)
+        ! Pass other properties of illitization function to material property
+        if (cur_material_property%illitization_function_id > 0) then
+          cur_material_property%ilt_fs0 = patch% &
+            illitization_function_array(cur_material_property% &
+              illitization_function_id)%ptr%illitization_function%ilt_fs0
         endif
       endif
     endif

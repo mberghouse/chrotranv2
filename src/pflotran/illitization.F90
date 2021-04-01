@@ -113,9 +113,6 @@ subroutine ILTBaseIllitization(this,fs,temperature,dt, &
   fi = 0.0d+0
   shift = 1.0d+0
 
-  ! option%io_buffer = 'ILTBaseIllitization must be extended.'
-  ! call PrintErrMsg(option)
-
 end subroutine ILTBaseIllitization
 
 ! ************************************************************************** !
@@ -715,6 +712,13 @@ subroutine IllitizationInputRecord(illitization_list)
   cur_ilf => illitization_list
   do
     if (.not.associated(cur_ilf)) exit
+    
+    if (associated(cur_ilf%illitization_function)) then
+      select type (ilf => cur_ilf%illitization_function)
+      type is (illitization_base_type)
+          exit
+      end select
+    endif
 
     write(id,'(a29)',advance='no') 'illitization function name: '
     write(id,'(a)') adjustl(trim(cur_ilf%name))

@@ -754,7 +754,7 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
                        patch%characteristic_curves_array( &
                          patch%cc_id(ghosted_id))%ptr, &
                        patch%illitization_function_array( &
-                          patch%ilt_id(ghosted_id))%ptr, &
+                         patch%ilt_id(ghosted_id))%ptr, &
                        natural_id, &
                        option)
     if (update_state) then
@@ -765,7 +765,7 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
                                     patch%characteristic_curves_array( &
                                       patch%cc_id(ghosted_id))%ptr, &
                                     patch%illitization_function_array( &
-                                       patch%ilt_id(ghosted_id))%ptr, &
+                                      patch%ilt_id(ghosted_id))%ptr, &
                                     natural_id, &  ! for debugging
                                     option)
     endif
@@ -920,7 +920,7 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
                                 patch%characteristic_curves_array( &
                                   patch%cc_id(ghosted_id))%ptr, &
                                 patch%illitization_function_array( &
-                                   patch%ilt_id(ghosted_id))%ptr, &
+                                  patch%ilt_id(ghosted_id))%ptr, &
                                 natural_id, &
                                 option)
       if (update_state_bc) then
@@ -932,7 +932,7 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
                                       patch%characteristic_curves_array( &
                                         patch%cc_id(ghosted_id))%ptr, &
                                       patch%illitization_function_array( &
-                                         patch%ilt_id(ghosted_id))%ptr, &
+                                        patch%ilt_id(ghosted_id))%ptr, &
                                       natural_id,option)
       endif
     enddo
@@ -1113,7 +1113,7 @@ subroutine GeneralUpdateFixedAccum(realization)
                               patch%characteristic_curves_array( &
                                 patch%cc_id(ghosted_id))%ptr, &
                               patch%illitization_function_array( &
-                                 patch%ilt_id(ghosted_id))%ptr, &
+                                patch%ilt_id(ghosted_id))%ptr, &
                               natural_id, &
                               option)
     call GeneralAccumulation(gen_auxvars(ZERO_INTEGER,ghosted_id), &

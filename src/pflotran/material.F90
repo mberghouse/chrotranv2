@@ -272,6 +272,7 @@ subroutine MaterialPropertyRead(material_property,input,option)
   character(len=MAXSTRINGLENGTH) :: string
   character(len=MAXSTRINGLENGTH) :: buffer_save
   character(len=MAXSTRINGLENGTH) :: tcc_name
+  character(len=MAXSTRINGLENGTH) :: ilt_name
 
   PetscInt :: length
   PetscReal :: tempreal
@@ -944,6 +945,12 @@ subroutine MaterialPropertyRead(material_property,input,option)
       call PrintErrMsg(option)
     endif
   endif
+  
+  if (.not. material_property%ilt) then
+    write(ilt_name,*)material_property%external_id
+    material_property%illitization_function_name = "_ILT_"// &
+      trim(adjustl(ilt_name))
+  endif
 
   ! material id must be > 0
   if (material_property%external_id <= 0) then
@@ -1602,6 +1609,8 @@ subroutine MaterialAssignPropertyToAux(material_auxvar,material_property, &
     material_auxvar%iltf%ilt_fi  = 1.0d+0 - material_property%ilt_fs0
     material_auxvar%iltf%ilt_fst = material_property%ilt_fs0
     material_auxvar%iltf%ilt_fit = 1.0d+0 - material_property%ilt_fs0
+    material_auxvar%iltf%ilt_ts  = 0.0d+0
+    material_auxvar%iltf%ilt_tst = 0.0d+0
   endif
     
 !  if (soil_heat_capacity_index > 0) then
@@ -2281,7 +2290,7 @@ subroutine MaterialPropInputRecord(material_property_list)
       write(id,'(a)') adjustl(trim(cur_matprop%thermal_conductivity_function_name))
     end if
 
-    if (Initialized(cur_matprop%illitization_function_id)) then
+    if (cur_matprop%ilt) then
       write(id,'(a29)',advance='no') 'illitization function: '
       write(id,'(a)') adjustl(trim(cur_matprop%illitization_function_name))
     endif
