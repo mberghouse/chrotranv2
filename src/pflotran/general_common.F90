@@ -3936,7 +3936,7 @@ subroutine GeneralAuxVarComputeAndSrcSink(option,qsrc,flow_src_sink_type, &
   type(global_auxvar_type) :: global_auxvar,global_auxvar_ss
   class(material_auxvar_type) :: material_auxvar
   PetscReal :: ss_flow_vol_flux(option%nphase)
-  type(characteristic_curves_type) :: characteristic_curves
+  class(characteristic_curves_type) :: characteristic_curves
   type(illitization_type) :: illitization
   PetscInt :: natural_id
   PetscReal :: scale
@@ -4648,7 +4648,7 @@ subroutine GeneralSrcSinkDerivative(option,source_sink,gen_auxvar_ss, &
   type(coupler_type), pointer :: source_sink
   type(general_auxvar_type) :: gen_auxvar(0:), gen_auxvar_ss(0:1)
   type(global_auxvar_type) :: global_auxvar, global_auxvar_ss
-  type(characteristic_curves_type) :: characteristic_curves
+  class(characteristic_curves_type) :: characteristic_curves
   type(illitization_type) :: illitization
   PetscInt :: natural_id
   class(material_auxvar_type) :: material_auxvar
