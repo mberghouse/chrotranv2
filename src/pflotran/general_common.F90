@@ -440,7 +440,7 @@ subroutine GeneralFlux(gen_auxvar_up,global_auxvar_up, &
   PetscReal :: dist(-1:3)
   PetscInt :: upwind_direction_(option%nphase)
   type(general_parameter_type) :: general_parameter
-  type(cc_thermal_type) :: thermal_cc_up, thermal_cc_dn
+  class(cc_thermal_type) :: thermal_cc_up, thermal_cc_dn
   PetscReal :: Res(option%nflowdof)
   PetscReal :: Jup(option%nflowdof,option%nflowdof)
   PetscReal :: Jdn(option%nflowdof,option%nflowdof)
@@ -2517,7 +2517,7 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
   type(general_parameter_type) :: general_parameter
   PetscReal :: v_darcy(option%nphase)
   PetscReal :: Res(1:option%nflowdof)
-  type(cc_thermal_type) :: thermal_cc_dn
+  class(cc_thermal_type) :: thermal_cc_dn
   PetscReal :: J(3,3)
   PetscBool :: analytical_derivatives
   PetscBool :: update_upwind_direction_
@@ -4423,7 +4423,7 @@ subroutine GeneralFluxDerivative(gen_auxvar_up,global_auxvar_up, &
   PetscReal :: dist(-1:3)
   PetscInt :: upwind_direction_(option%nphase)
   type(general_parameter_type) :: general_parameter
-  type(cc_thermal_type) :: thermal_cc_up, thermal_cc_dn
+  class(cc_thermal_type) :: thermal_cc_up, thermal_cc_dn
   PetscReal :: Jup(option%nflowdof,option%nflowdof)
   PetscReal :: Jdn(option%nflowdof,option%nflowdof)
   PetscReal :: Janal_up(option%nflowdof,option%nflowdof)
