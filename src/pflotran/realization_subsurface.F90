@@ -43,7 +43,7 @@ private
     type(saturation_function_type), pointer :: saturation_functions
     class(characteristic_curves_type), pointer :: characteristic_curves
     class(cc_thermal_type), pointer :: characteristic_curves_thermal
-    class(illitization_type), pointer :: illitization_function
+    class(illitization_type), pointer :: illitization
     class(dataset_base_type), pointer :: datasets
 
     class(dataset_base_type), pointer :: uniform_velocity_dataset
@@ -163,7 +163,7 @@ function RealizationCreate2(option)
   nullify(realization%saturation_functions)
   nullify(realization%characteristic_curves)
   nullify(realization%characteristic_curves_thermal)
-  nullify(realization%illitization_function)
+  nullify(realization%illitization)
   nullify(realization%datasets)
   nullify(realization%uniform_velocity_dataset)
   nullify(realization%sec_transport_constraint)
@@ -912,15 +912,13 @@ subroutine RealProcessMatPropAndSatFunc(realization)
         illitization%illitization_function => ILTBaseCreate()
         illitization%name = patch%material_property_array(i)%ptr% &
                               illitization_function_name
-        call IllitizationAddToList(illitization, &
-                                   realization%illitization_function)
+        call IllitizationAddToList(illitization,realization%illitization)
       endif
     endif
   enddo
-  if (associated(realization%illitization_function)) then
-    patch%illitization_function => &
-         realization%illitization_function
-    call IllitizationConvertListToArray(patch%illitization_function, &
+  if (associated(realization%illitization)) then
+    patch%illitization => realization%illitization
+    call IllitizationConvertListToArray(patch%illitization, &
          patch%illitization_function_array, option)
   endif
   
@@ -991,7 +989,7 @@ subroutine RealProcessMatPropAndSatFunc(realization)
       option%io_buffer = 'Illitization function "' // &
         trim(cur_material_property%illitization_function_name) // &
         '" not found in material "'//trim(cur_material_property%name)//'."'
-        call PrintErrMsg(option)
+      call PrintErrMsg(option)
     endif
 
     ! if named, link dataset to property
@@ -2967,8 +2965,8 @@ subroutine RealizationStrip(this)
     call CharCurvesThermalDestroy(this%characteristic_curves_thermal)
   endif
 
-  if (associated(this%illitization_function)) then
-    call IllitizationDestroy(this%illitization_function)
+  if (associated(this%illitization)) then
+    call IllitizationDestroy(this%illitization)
   endif
   
   call DatasetDestroy(this%datasets)

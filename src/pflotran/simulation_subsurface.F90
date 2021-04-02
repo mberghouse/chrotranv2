@@ -337,7 +337,7 @@ subroutine SimSubsurfInputRecord(this)
        this%realization%patch%characteristic_curves_thermal)
 
   ! print illitization function info
-  call IllitizationInputRecord(this%realization%patch%illitization_function)
+  call IllitizationInputRecord(this%realization%patch%illitization)
 
   ! print chemistry and reactive transport information
   call ReactionInputRecord(this%realization%reaction)

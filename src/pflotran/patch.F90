@@ -77,7 +77,7 @@ module Patch_module
     type(characteristic_curves_ptr_type), pointer :: characteristic_curves_array(:)
     class(cc_thermal_type), pointer :: characteristic_curves_thermal
     type(cc_thermal_ptr_type), pointer :: char_curves_thermal_array(:)
-    class(illitization_type), pointer :: illitization_function
+    class(illitization_type), pointer :: illitization
     type(illitization_ptr_type), pointer :: illitization_function_array(:)
 
     type(strata_list_type), pointer :: strata_list
@@ -202,7 +202,7 @@ function PatchCreate()
   nullify(patch%characteristic_curves_array)
   nullify(patch%characteristic_curves_thermal)
   nullify(patch%char_curves_thermal_array)
-  nullify(patch%illitization_function)
+  nullify(patch%illitization)
   nullify(patch%illitization_function_array)
 
   allocate(patch%observation_list)
@@ -9390,7 +9390,7 @@ subroutine PatchDestroy(patch)
   if (associated(patch%illitization_function_array)) &
     deallocate(patch%illitization_function_array)
   nullify(patch%illitization_function_array)
-  nullify(patch%illitization_function)
+  nullify(patch%illitization)
   
   ! solely nullify grid since destroyed in discretization
   nullify(patch%grid)

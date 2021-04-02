@@ -2227,7 +2227,7 @@ subroutine SubsurfaceReadInput(simulation,input)
   type(saturation_function_type), pointer :: saturation_function
   class(characteristic_curves_type), pointer :: characteristic_curves
   class(cc_thermal_type), pointer :: characteristic_curves_thermal
-  class(illitization_type), pointer :: illitization_function
+  class(illitization_type), pointer :: illitization
   class(creep_closure_type), pointer :: creep_closure
 
   class(realization_subsurface_type), pointer :: realization
@@ -2911,15 +2911,14 @@ subroutine SubsurfaceReadInput(simulation,input)
 !....................
 
       case ('ILLITIZATION')
-        illitization_function => IllitizationCreate()
-        call InputReadWord(input,option,illitization_function%name,PETSC_TRUE)
+        illitization => IllitizationCreate()
+        call InputReadWord(input,option,illitization%name,PETSC_TRUE)
         call InputErrorMsg(input,option,'name','ILLITIZATION')
-        option%io_buffer = '  Name :: ' // trim(illitization_function%name)
+        option%io_buffer = '  Name :: ' // trim(illitization%name)
         call PrintMsg(option)
-        call IllitizationRead(illitization_function,input,option)
-        call IllitizationAddToList(illitization_function, &
-                                   realization%illitization_function)
-        nullify(illitization_function)
+        call IllitizationRead(illitization,input,option)
+        call IllitizationAddToList(illitization,realization%illitization)
+        nullify(illitization)
 
 !....................
 
