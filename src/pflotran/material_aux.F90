@@ -202,17 +202,24 @@ function MaterialIlliteAuxCreate()
 
   allocate(ilt_aux)
   
+  ! Model values
   ilt_aux%ilt       = PETSC_FALSE ! model illitization in material
   ilt_aux%ilt_fn_id = UNINITIALIZED_INTEGER ! illitization function id
   ilt_aux%ilt_fs0   = 1.0d+0 ! initial fraction of smectite in material
+  
+  ! Solution values
   ilt_aux%ilt_fs    = 1.0d+0 ! fraction of smectite in material (final)
   ilt_aux%ilt_fi    = 0.0d+0 ! fraction of smectite in material (final)
   ilt_aux%ilt_ts    = UNINITIALIZED_DOUBLE ! time smectite last changed (final)
   ilt_aux%ilt_s     = UNINITIALIZED_DOUBLE ! shift factor (final)
+  
+  ! Preliminary values
   ilt_aux%ilt_fst   = 1.0d+0 ! fraction of smectite in material (test)
   ilt_aux%ilt_fit   = 0.0d+0 ! fraction of smectite in material (test)
   ilt_aux%ilt_tst   = UNINITIALIZED_DOUBLE ! time smectite last changed (test)
   ilt_aux%ilt_st    = UNINITIALIZED_DOUBLE ! shift factor (test)
+  
+  ! Save original permeability tensor
   ilt_aux%set_perm0 = PETSC_FALSE ! one-time assignment of initial permeability
 
   MaterialIlliteAuxCreate => ilt_aux

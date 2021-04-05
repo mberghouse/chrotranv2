@@ -276,6 +276,7 @@ subroutine GeneralUpdateSolution(realization)
   ! 
 
   use Realization_Subsurface_class
+  use Material_Aux_class
   use Field_module
   use Patch_module
   use Discretization_module
@@ -292,6 +293,7 @@ subroutine GeneralUpdateSolution(realization)
   type(field_type), pointer :: field
   type(general_auxvar_type), pointer :: gen_auxvars(:,:)
   type(global_auxvar_type), pointer :: global_auxvars(:)  
+  type(material_auxvar_type), pointer :: material_auxvars(:)  
   PetscInt :: local_id, ghosted_id
   PetscErrorCode :: ierr
   
@@ -301,6 +303,7 @@ subroutine GeneralUpdateSolution(realization)
   grid => patch%grid
   gen_auxvars => patch%aux%General%auxvars  
   global_auxvars => patch%aux%Global%auxvars
+  material_auxvars => patch%aux%Material%auxvars
   
   if (realization%option%compute_mass_balance_new) then
     call GeneralUpdateMassBalance(realization)
@@ -310,6 +313,12 @@ subroutine GeneralUpdateSolution(realization)
   do ghosted_id = 1, grid%ngmax
     gen_auxvars(ZERO_INTEGER,ghosted_id)%istate_store(PREV_TS) = &
       global_auxvars(ghosted_id)%istate
+    if (associated(material_auxvars(ghosted_id)%iltf)) then
+      material_auxvars(ghosted_id)%iltf%ilt_ts = & ! time of illitization
+        material_auxvars(ghosted_id)%iltf%ilt_tst
+      material_auxvars(ghosted_id)%iltf%ilt_fs = & ! smectite fraction
+        material_auxvars(ghosted_id)%iltf%ilt_fst
+    endif
   enddo
  
   general_ts_count = general_ts_count + 1
@@ -328,6 +337,7 @@ subroutine GeneralTimeCut(realization)
   ! Date: 03/10/11
   ! 
   use Realization_Subsurface_class
+  use Material_Aux_class
   use Option_module
   use Field_module
   use Patch_module
@@ -342,6 +352,7 @@ subroutine GeneralTimeCut(realization)
   type(grid_type), pointer :: grid
   type(global_auxvar_type), pointer :: global_auxvars(:)  
   type(general_auxvar_type), pointer :: gen_auxvars(:,:)
+  type(material_auxvar_type), pointer :: material_auxvars(:)
   
   PetscInt :: local_id, ghosted_id
   PetscErrorCode :: ierr
@@ -351,11 +362,18 @@ subroutine GeneralTimeCut(realization)
   grid => patch%grid
   global_auxvars => patch%aux%Global%auxvars
   gen_auxvars => patch%aux%General%auxvars
+  material_auxvars => patch%aux%Material%auxvars
 
   ! restore stored state
   do ghosted_id = 1, grid%ngmax
     global_auxvars(ghosted_id)%istate = &
       gen_auxvars(ZERO_INTEGER,ghosted_id)%istate_store(PREV_TS)
+    if (associated(material_auxvars(ghosted_id)%iltf)) then
+      material_auxvars(ghosted_id)%iltf%ilt_tst = & ! time of illitization
+        material_auxvars(ghosted_id)%iltf%ilt_ts
+      material_auxvars(ghosted_id)%iltf%ilt_fst = & ! smectite fraction
+        material_auxvars(ghosted_id)%iltf%ilt_fs
+    endif
   enddo
 
   general_ts_cut_count = general_ts_cut_count + 1
