@@ -1609,8 +1609,6 @@ subroutine MaterialAssignPropertyToAux(material_auxvar,material_property, &
     material_auxvar%iltf%ilt_fi  = 1.0d+0 - material_property%ilt_fs0
     material_auxvar%iltf%ilt_fst = material_property%ilt_fs0
     material_auxvar%iltf%ilt_fit = 1.0d+0 - material_property%ilt_fs0
-    material_auxvar%iltf%ilt_ts  = 0.0d+0
-    material_auxvar%iltf%ilt_tst = 0.0d+0
   endif
     
 !  if (soil_heat_capacity_index > 0) then

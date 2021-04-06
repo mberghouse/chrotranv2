@@ -997,9 +997,9 @@ subroutine MaterialIllitizePermeability(auxvar,shift,option)
   
   if (.not. auxvar%iltf%set_perm0) then
     allocate(auxvar%iltf%perm0(ps))
+    auxvar%iltf%perm0 = UNINITIALIZED_DOUBLE
     do i = 1, ps
       auxvar%iltf%perm0(i) = auxvar%permeability(i)
-      write(*,*) auxvar%iltf%perm0(i)
     enddo
     auxvar%iltf%set_perm0 = PETSC_TRUE
   endif

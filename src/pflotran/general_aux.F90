@@ -959,7 +959,8 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
     endif
     if (associated(material_auxvar%iltf)) then
       if (material_auxvar%iltf%ilt) then
-        if (option%time > material_auxvar%iltf%ilt_tst) then
+        if (option%time > material_auxvar%iltf%ilt_tst .and. &
+            option%dt > 0.d0) then
           call illitization%illitization_function% &
                  CalculateILT(material_auxvar%iltf%ilt_fst, &
                               gen_auxvar%temp, &
