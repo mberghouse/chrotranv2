@@ -62,7 +62,8 @@ subroutine OutputSensitivity(J,grid,option,output_option, &
       call OutputSensitivityOpenHDF5(option,sensitivity_output_option,&
                                      filename,file_id,first)
       if (first) then
-        call OutputSensitivityWriteMatrixIJ(J,grid,option,file_id)
+        call OutputSensitivityWriteMatrixIJ(J,grid,option,&
+                                            sensitivity_output_option,file_id)
         !call OutputHDF5Provenance(option, output_option, file_id)
       endif
       call OutputSensitivityWriteMatrixData(J,grid,option,output_option, &
@@ -142,10 +143,10 @@ subroutine OutputSensitivityOpenHDF5(option,sensitivity_output_option, &
     first = PETSC_FALSE
   endif
   if (.not. first) then
-		call h5eset_auto_f(OFF,hdf5_err)
-		call h5fopen_f(filename,H5F_ACC_RDWR_F,file_id,hdf5_err,prop_id)
-		if (hdf5_err /= 0) first = PETSC_TRUE
-		call h5eset_auto_f(ON,hdf5_err)
+    call h5eset_auto_f(OFF,hdf5_err)
+    call h5fopen_f(filename,H5F_ACC_RDWR_F,file_id,hdf5_err,prop_id)
+    if (hdf5_err /= 0) first = PETSC_TRUE
+    call h5eset_auto_f(ON,hdf5_err)
   endif
   if (first) then 
     call h5fcreate_f(filename,H5F_ACC_TRUNC_F,file_id,hdf5_err, &
@@ -256,7 +257,8 @@ end subroutine OutputHDF5CloseFile
 
 ! ************************************************************************** !
 
-subroutine OutputSensitivityWriteMatrixIJ(J,grid,option,file_id)
+subroutine OutputSensitivityWriteMatrixIJ(J,grid,option,&
+                                          sensitivity_output_option,file_id)
   ! 
   ! Write matrix IJ data
   ! 
@@ -275,6 +277,7 @@ subroutine OutputSensitivityWriteMatrixIJ(J,grid,option,file_id)
   type(grid_type), pointer :: grid
   type(option_type), pointer :: option
   type(connection_set_type), pointer :: cur_connection_set
+  type(sensitivity_output_option_type), pointer :: sensitivity_output_option
   integer(HID_T) :: file_id
   
   !get indices
@@ -288,8 +291,8 @@ subroutine OutputSensitivityWriteMatrixIJ(J,grid,option,file_id)
   character(len=MAXSTRINGLENGTH) :: string
   integer(HID_T) :: file_space_id,memory_space_id, data_set_id, prop_id
   PetscMPIInt :: rank_mpi
-  integer(HSIZE_T) :: dims(3)
-  integer(HSIZE_T) :: start(3), length(3), stride(3)
+  integer(HSIZE_T) :: dims(1)
+  integer(HSIZE_T) :: start(1), length(1), stride(1)
   integer(HID_T) :: grp_id
   PetscMPIInt :: hdf5_err
   PetscInt :: istart
@@ -366,6 +369,12 @@ subroutine OutputSensitivityWriteMatrixIJ(J,grid,option,file_id)
   ! file space which is a 2D block
   dims(1) = mat_non_zeros_global
   call h5pcreate_f(H5P_DATASET_CREATE_F,prop_id,hdf5_err)
+  call h5pset_chunk_f(prop_id,1,dims,hdf5_err)
+  !set the hdf5 filter (for compression)
+  if (sensitivity_output_option%hdf5_compress /= 0) then
+    call h5pset_deflate_f(prop_id,sensitivity_output_option%hdf5_compress,&
+                          hdf5_err)
+  endif
   
   string = "Row Indices" // CHAR(0)
   call h5eset_auto_f(OFF,hdf5_err)
@@ -395,7 +404,7 @@ subroutine OutputSensitivityWriteMatrixIJ(J,grid,option,file_id)
   ! write the data
   call h5pcreate_f(H5P_DATASET_XFER_F,prop_id,hdf5_err)
 #ifndef SERIAL_HDF5
-    call h5pset_dxpl_mpio_f(prop_id,H5FD_MPIO_INDEPENDENT_F, &
+    call h5pset_dxpl_mpio_f(prop_id,H5FD_MPIO_COLLECTIVE_F, &
                             hdf5_err)
 #endif
   !call PetscLogEventBegin(logging%event_h5dwrite_f,ierr);CHKERRQ(ierr)
@@ -416,6 +425,12 @@ subroutine OutputSensitivityWriteMatrixIJ(J,grid,option,file_id)
   ! file space which is a 2D block
   dims(1) = mat_non_zeros_global
   call h5pcreate_f(H5P_DATASET_CREATE_F,prop_id,hdf5_err)
+  call h5pset_chunk_f(prop_id,1,dims,hdf5_err)
+  !set the hdf5 filter (for compression)
+  if (sensitivity_output_option%hdf5_compress /= 0) then
+    call h5pset_deflate_f(prop_id,sensitivity_output_option%hdf5_compress,&
+                          hdf5_err)
+  endif
   
   string = "Column Indices" // CHAR(0)
   call h5eset_auto_f(OFF,hdf5_err)
@@ -445,7 +460,7 @@ subroutine OutputSensitivityWriteMatrixIJ(J,grid,option,file_id)
   ! write the data
   call h5pcreate_f(H5P_DATASET_XFER_F,prop_id,hdf5_err)
 #ifndef SERIAL_HDF5
-    call h5pset_dxpl_mpio_f(prop_id,H5FD_MPIO_INDEPENDENT_F, &
+    call h5pset_dxpl_mpio_f(prop_id,H5FD_MPIO_COLLECTIVE_F, &
                             hdf5_err)
 #endif
   !call PetscLogEventBegin(logging%event_h5dwrite_f,ierr);CHKERRQ(ierr)
@@ -507,8 +522,8 @@ subroutine OutputSensitivityWriteMatrixData(J,grid,option,output_option, &
   character(len=MAXSTRINGLENGTH) :: string
   integer(HID_T) :: file_space_id,memory_space_id, data_set_id, prop_id
   PetscMPIInt :: rank_mpi
-  integer(HSIZE_T) :: dims(3)
-  integer(HSIZE_T) :: start(3), length(3), stride(3)
+  integer(HSIZE_T) :: dims(1)
+  integer(HSIZE_T) :: start(1), length(1), stride(1)
   integer(HID_T) :: grp_id
   PetscMPIInt :: hdf5_err
   PetscInt :: istart
@@ -589,6 +604,13 @@ subroutine OutputSensitivityWriteMatrixData(J,grid,option,output_option, &
   ! file space which is a 2D block
   dims(1) = mat_non_zeros_global
   call h5pcreate_f(H5P_DATASET_CREATE_F,prop_id,hdf5_err)
+  call h5pset_chunk_f(prop_id,1,dims,hdf5_err)
+  
+  !set the hdf5 filter (for compression)
+  if (sensitivity_output_option%hdf5_compress /= 0) then
+    call h5pset_deflate_f(prop_id,sensitivity_output_option%hdf5_compress,&
+                          hdf5_err)
+  endif
   
   string = trim(variable%name) // " [" // trim(variable%units) // ']'
   call h5eset_auto_f(OFF,hdf5_err)
@@ -615,10 +637,11 @@ subroutine OutputSensitivityWriteMatrixData(J,grid,option,output_option, &
   stride = 1
   call h5sselect_hyperslab_f(file_space_id,H5S_SELECT_SET_F,start,length, &
                              hdf5_err,stride,stride)
+  
   ! write the data
   call h5pcreate_f(H5P_DATASET_XFER_F,prop_id,hdf5_err)
 #ifndef SERIAL_HDF5
-    call h5pset_dxpl_mpio_f(prop_id,H5FD_MPIO_INDEPENDENT_F, &
+    call h5pset_dxpl_mpio_f(prop_id,H5FD_MPIO_COLLECTIVE_F, &
                             hdf5_err)
 #endif
   !call PetscLogEventBegin(logging%event_h5dwrite_f,ierr);CHKERRQ(ierr)

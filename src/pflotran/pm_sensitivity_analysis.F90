@@ -231,6 +231,10 @@ END
                                           &FORMAT',option)
         end select
     !-----------------------------------------
+      case('HDF5_COMPRESSION_LEVEL')
+        call InputReadInt(input,option,&
+                          sensitivity_output_option%hdf5_compress)
+    !-----------------------------------------
       case('VARIABLES')
         call PMSensitivityReadOutputVariables(this, &
                                               sensitivity_output_option,input)
