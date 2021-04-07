@@ -30,6 +30,8 @@ module Field_module
     Vec :: compressibility0
 
     Vec :: electrical_conductivity
+    
+    Vec :: smectite
 
     !TODO(geh): move these Vecs into their respective pms
     ! residual vectors
@@ -120,6 +122,9 @@ function FieldCreate()
 
   ! Geophysics
   field%electrical_conductivity = PETSC_NULL_VEC
+  
+  ! Illitization
+  field%smectite = PETSC_NULL_VEC
 
   field%flow_r = PETSC_NULL_VEC
   field%flow_xx = PETSC_NULL_VEC
@@ -211,6 +216,10 @@ subroutine FieldDestroy(field)
 
   if (field%electrical_conductivity /= PETSC_NULL_VEC) then
     call VecDestroy(field%electrical_conductivity,ierr);CHKERRQ(ierr)
+  endif
+
+  if (field%smectite /= PETSC_NULL_VEC) then
+    call VecDestroy(field%smectite,ierr);CHKERRQ(ierr)
   endif
 
   if (field%perm0_xx /= PETSC_NULL_VEC) then

@@ -366,6 +366,10 @@ subroutine RealizationCreateDiscretization(realization)
                                        field%electrical_conductivity)
   endif
 
+  ! illitization
+  call DiscretizationDuplicateVector(discretization,field%work, &
+                                     field%smectite)
+
   grid => discretization%grid
   select case(discretization%itype)
     case(STRUCTURED_GRID)
@@ -1625,12 +1629,14 @@ subroutine RealizationRevertFlowParameters(realization)
 
   use Option_module
   use Field_module
+  use Grid_module
+  use Material_Aux_class
   use Discretization_module
   use Material_Aux_class, only : material_type, &
                               POROSITY_CURRENT, POROSITY_BASE, POROSITY_INITIAL
   use Variables_module, only : PERMEABILITY_X, PERMEABILITY_Y, PERMEABILITY_Z, &
                                PERMEABILITY_XY, PERMEABILITY_XZ, &
-                               PERMEABILITY_YZ, POROSITY
+                               PERMEABILITY_YZ, POROSITY, ILT_SMECTITE
 
   implicit none
 
@@ -1640,11 +1646,31 @@ subroutine RealizationRevertFlowParameters(realization)
   type(option_type), pointer :: option
   type(discretization_type), pointer :: discretization
   type(material_type), pointer :: Material
+  type(material_auxvar_type), pointer :: material_auxvars(:)
+  type(grid_type), pointer :: grid
+  
+  PetscInt :: local_id, ghosted_id, ps, i
 
   option => realization%option
   field => realization%field
   discretization => realization%discretization
   Material => realization%patch%aux%Material
+  material_auxvars => Material%auxvars
+  grid => realization%patch%grid
+  
+  ! Save original permeability for illitization
+  do local_id = 1, grid%nlmax
+    ghosted_id = grid%nL2G(local_id)
+    if (associated(material_auxvars(ghosted_id)%iltf)) then
+      ps = size(material_auxvars(ghosted_id)%permeability)
+      allocate(material_auxvars(ghosted_id)%iltf%perm0(ps))
+      do i = 1, ps
+        material_auxvars(ghosted_id)%iltf%perm0(i) = &
+          material_auxvars(ghosted_id)%permeability(i)
+      enddo
+      material_auxvars(ghosted_id)%iltf%set_perm0 = PETSC_TRUE
+    endif
+  enddo
 
   if (option%nflowdof > 0) then
     call DiscretizationGlobalToLocal(discretization,field%perm0_xx, &
@@ -1687,6 +1713,11 @@ subroutine RealizationRevertFlowParameters(realization)
 !                                   field%work_loc,ONEDOF)
 !  call MaterialSetAuxVarVecLoc(Material,field%work_loc,TORTUOSITY, &
 !                               ZERO_INTEGER)
+
+  call DiscretizationGlobalToLocal(discretization,field%smectite, &
+                                 field%work_loc,ONEDOF)
+  call MaterialSetAuxVarVecLoc(Material,field%work_loc,ILT_SMECTITE, &
+                               ZERO_INTEGER)
 
 end subroutine RealizationRevertFlowParameters
 
@@ -1749,6 +1780,10 @@ subroutine RealizStoreRestartFlowParams(realization)
                                        field%perm0_yz,ONEDOF)
     endif
   endif
+  call MaterialGetAuxVarVecLoc(Material,field%work_loc,ILT_SMECTITE, &
+                               ZERO_INTEGER)
+  call DiscretizationLocalToGlobal(discretization,field%work_loc, &
+                                   field%smectite,ONEDOF)                                     
   call MaterialGetAuxVarVecLoc(Material,field%work_loc,POROSITY, &
                                POROSITY_BASE)
   ! might as well update initial and base at the same time
@@ -2006,7 +2041,7 @@ subroutine RealizationUpdatePropertiesTS(realization)
   use Variables_module, only : POROSITY, TORTUOSITY, PERMEABILITY_X, &
                                PERMEABILITY_Y, PERMEABILITY_Z, &
                                PERMEABILITY_XY, PERMEABILITY_XZ, &
-                               PERMEABILITY_YZ
+                               PERMEABILITY_YZ, ILT_SMECTITE
 
   implicit none
 
@@ -2033,6 +2068,7 @@ subroutine RealizationUpdatePropertiesTS(realization)
   PetscReal, pointer :: perm0_xx_p(:), perm0_yy_p(:), perm0_zz_p(:)
   PetscReal, pointer :: perm0_xy_p(:), perm0_xz_p(:), perm0_yz_p(:)
   PetscReal, pointer :: perm_ptr(:)
+  PetscReal, pointer :: smec_ptr(:)
   PetscReal :: min_value
   PetscReal :: critical_porosity
   PetscReal :: porosity_base_
@@ -2108,6 +2144,7 @@ subroutine RealizationUpdatePropertiesTS(realization)
   endif
 
   if (reaction%update_permeability) then
+    call VecGetArrayReadF90(field%smectite,smec_ptr,ierr);CHKERRQ(ierr)
     call VecGetArrayReadF90(field%perm0_xx,perm0_xx_p,ierr);CHKERRQ(ierr)
     call VecGetArrayReadF90(field%perm0_zz,perm0_zz_p,ierr);CHKERRQ(ierr)
     call VecGetArrayReadF90(field%perm0_yy,perm0_yy_p,ierr);CHKERRQ(ierr)
@@ -2146,6 +2183,7 @@ subroutine RealizationUpdatePropertiesTS(realization)
         perm_ptr(perm_yz_index) = perm0_yz_p(local_id)*scale
       endif
 #else
+        material_auxvars(ghosted_id)%iltf%ilt_fs = smec_ptr(local_id)
         material_auxvars(ghosted_id)%permeability(perm_xx_index) = &
           perm0_xx_p(local_id)*scale
         material_auxvars(ghosted_id)%permeability(perm_yy_index) = &
@@ -2170,6 +2208,7 @@ subroutine RealizationUpdatePropertiesTS(realization)
       call VecRestoreArrayReadF90(field%perm0_xz,perm0_xz_p,ierr);CHKERRQ(ierr)
       call VecRestoreArrayReadF90(field%perm0_yz,perm0_yz_p,ierr);CHKERRQ(ierr)
     endif
+    call VecRestoreArrayReadF90(field%smectite,smec_ptr,ierr);CHKERRQ(ierr)
     call VecRestoreArrayReadF90(field%porosity0,porosity0_p,ierr);CHKERRQ(ierr)
 
     call MaterialGetAuxVarVecLoc(patch%aux%Material,field%work_loc, &
@@ -2711,7 +2750,7 @@ subroutine RealizUnInitializedVarsFlow(realization)
   use Variables_module, only : VOLUME, BASE_POROSITY, PERMEABILITY_X, &
                                PERMEABILITY_Y, PERMEABILITY_Z, &
                                PERMEABILITY_XY, PERMEABILITY_XZ, &
-                               PERMEABILITY_YZ
+                               PERMEABILITY_YZ, ILT_SMECTITE
 
   implicit none
 
@@ -2726,6 +2765,7 @@ subroutine RealizUnInitializedVarsFlow(realization)
   call RealizUnInitializedVar1(realization,PERMEABILITY_X,'permeability X')
   call RealizUnInitializedVar1(realization,PERMEABILITY_Y,'permeability Y')
   call RealizUnInitializedVar1(realization,PERMEABILITY_Z,'permeability Z')
+  call RealizUnInitializedVar1(realization,ILT_SMECTITE,'smectite')
   if (realization%option%flow%full_perm_tensor) then
     call RealizUnInitializedVar1(realization,PERMEABILITY_XY,'permeability XY')
     call RealizUnInitializedVar1(realization,PERMEABILITY_XZ,'permeability XZ')

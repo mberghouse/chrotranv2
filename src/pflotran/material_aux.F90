@@ -208,14 +208,14 @@ function MaterialIlliteAuxCreate()
   ilt_aux%ilt_fs0   = 1.0d+0 ! initial fraction of smectite in material
   
   ! Solution values
-  ilt_aux%ilt_fs    = 1.0d+0 ! fraction of smectite in material (final)
-  ilt_aux%ilt_fi    = 0.0d+0 ! fraction of smectite in material (final)
+  ilt_aux%ilt_fs    = UNINITIALIZED_DOUBLE ! fraction of smectite in material (final)
+  ilt_aux%ilt_fi    = UNINITIALIZED_DOUBLE ! fraction of smectite in material (final)
   ilt_aux%ilt_ts    = UNINITIALIZED_DOUBLE ! time smectite last changed (final)
   ilt_aux%ilt_s     = UNINITIALIZED_DOUBLE ! shift factor (final)
   
   ! Preliminary values
-  ilt_aux%ilt_fst   = 1.0d+0 ! fraction of smectite in material (test)
-  ilt_aux%ilt_fit   = 0.0d+0 ! fraction of smectite in material (test)
+  ilt_aux%ilt_fst   = UNINITIALIZED_DOUBLE ! fraction of smectite in material (test)
+  ilt_aux%ilt_fit   = UNINITIALIZED_DOUBLE ! fraction of smectite in material (test)
   ilt_aux%ilt_tst   = UNINITIALIZED_DOUBLE ! time smectite last changed (test)
   ilt_aux%ilt_st    = UNINITIALIZED_DOUBLE ! shift factor (test)
   
@@ -729,6 +729,11 @@ function MaterialAuxVarGetValue(material_auxvar,ivar)
                                  soil_properties(soil_reference_pressure_index)
     case(ELECTRICAL_CONDUCTIVITY)
       MaterialAuxVarGetValue = material_auxvar%electrical_conductivity(1)
+
+    case(ILT_SMECTITE)
+      if (associated(material_auxvar%iltf)) then
+        MaterialAuxVarGetValue = material_auxvar%iltf%ilt_fs
+      endif
   end select
 
 end function MaterialAuxVarGetValue
@@ -780,6 +785,11 @@ subroutine MaterialAuxVarSetValue(material_auxvar,ivar,value)
       material_auxvar%soil_properties(soil_reference_pressure_index) = value
     case(ELECTRICAL_CONDUCTIVITY)
       material_auxvar%electrical_conductivity(1) = value
+    case(ILT_SMECTITE)
+      if (associated(material_auxvar%iltf)) then
+        material_auxvar%iltf%ilt_fs = value
+        material_auxvar%iltf%ilt_fst = value
+      endif
   end select
 
 end subroutine MaterialAuxVarSetValue

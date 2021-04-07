@@ -1605,10 +1605,12 @@ subroutine MaterialAssignPropertyToAux(material_auxvar,material_property, &
     material_auxvar%iltf%ilt_fn_id = material_property%illitization_function_id
     material_auxvar%iltf%ilt_fs0 = material_property%ilt_fs0
     material_auxvar%iltf%ilt_fi0 = 1.0d+0 - material_property%ilt_fs0
-    material_auxvar%iltf%ilt_fs  = material_property%ilt_fs0
-    material_auxvar%iltf%ilt_fi  = 1.0d+0 - material_property%ilt_fs0
-    material_auxvar%iltf%ilt_fst = material_property%ilt_fs0
-    material_auxvar%iltf%ilt_fit = 1.0d+0 - material_property%ilt_fs0
+    if (Uninitialized(material_auxvar%iltf%ilt_fs)) then
+      material_auxvar%iltf%ilt_fs  = material_property%ilt_fs0
+    endif
+    material_auxvar%iltf%ilt_fi  = 1.0d+0 - material_auxvar%iltf%ilt_fs
+    material_auxvar%iltf%ilt_fst = material_auxvar%iltf%ilt_fs
+    material_auxvar%iltf%ilt_fit = 1.0d+0 - material_auxvar%iltf%ilt_fst
   endif
     
 !  if (soil_heat_capacity_index > 0) then
@@ -1699,6 +1701,13 @@ subroutine MaterialSetAuxVarScalar(Material,value,ivar,isubvar)
     case(ELECTRICAL_CONDUCTIVITY)
       do i=1, Material%num_aux
         Material%auxvars(i)%electrical_conductivity(1) = value
+      enddo
+    case(ILT_SMECTITE)
+      do i=1, Material%num_aux
+        if (associated(Material%auxvars(i)%iltf)) then
+          Material%auxvars(i)%iltf%ilt_fs = value
+          Material%auxvars(i)%iltf%ilt_fst = Material%auxvars(i)%iltf%ilt_fs
+        endif
       enddo
   end select
 
@@ -1804,6 +1813,14 @@ subroutine MaterialSetAuxVarVecLoc(Material,vec_loc,ivar,isubvar)
       do ghosted_id=1, Material%num_aux
         Material%auxvars(ghosted_id)%electrical_conductivity(1) = &
           vec_loc_p(ghosted_id)
+      enddo
+    case(ILT_SMECTITE)
+      do ghosted_id=1, Material%num_aux
+        if (associated(Material%auxvars(ghosted_id)%iltf)) then
+          Material%auxvars(ghosted_id)%iltf%ilt_fs = vec_loc_p(ghosted_id)
+          Material%auxvars(ghosted_id)%iltf%ilt_fst = &
+            Material%auxvars(ghosted_id)%iltf%ilt_fs
+        endif
       enddo
   end select
 
@@ -1919,6 +1936,12 @@ subroutine MaterialGetAuxVarVecLoc(Material,vec_loc,ivar,isubvar)
       do ghosted_id=1, Material%num_aux
         vec_loc_p(ghosted_id) = &
           Material%auxvars(ghosted_id)%electrical_conductivity(1)
+      enddo
+    case(ILT_SMECTITE)
+      do ghosted_id=1, Material%num_aux
+        if (associated(Material%auxvars(ghosted_id)%iltf)) then
+          vec_loc_p(ghosted_id) = Material%auxvars(ghosted_id)%iltf%ilt_fs
+        endif
       enddo
   end select
 
