@@ -51,6 +51,7 @@ module Sensitivity_Aux_module
     PetscInt :: timestep_per_hdf5_file !x timestep per output file
     PetscReal :: time !simulation time
     PetscInt :: steps !simulation steps
+    PetscInt :: hdf5_compress !compression level for hdf5 output (0-9)
     type(sensitivity_output_variable_list_type), pointer :: output_variables
   end type sensitivity_output_option_type
   
@@ -103,6 +104,7 @@ subroutine SensitivityOutputOptionInit(sensitivity_output_option)
   type(sensitivity_output_option_type), pointer :: sensitivity_output_option
   sensitivity_output_option%time = 0.d0
   sensitivity_output_option%steps = 0
+  sensitivity_output_option%hdf5_compress = 0 !no compression
   
   sensitivity_output_option%plot_number = 0
   sensitivity_output_option%first_plot_flag = PETSC_TRUE
