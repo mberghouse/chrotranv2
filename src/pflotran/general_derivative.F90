@@ -312,7 +312,6 @@ subroutine GeneralDerivativeSetup(general_parameter, &
     iltf => ILTDefaultCreate()
     iltf%ilt_threshold = 0.d0
     iltf%ilt_fs0 = 1.0d0
-    iltf%ilt_fi0 = 0.0d0
     iltf%ilt_ea = 1.2d5
     iltf%ilt_freq = 8.0d4
     iltf%ilt_K_conc = 2.2d-3

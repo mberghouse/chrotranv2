@@ -76,15 +76,12 @@ module Material_Aux_class
     PetscBool :: ilt       ! model illitization in material
     PetscInt  :: ilt_fn_id ! illitization function id
     PetscReal :: ilt_fs0   ! initial fraction of smectite in material
-    PetscReal :: ilt_fi0   ! initial fraction of illite in material
     PetscReal :: ilt_fs    ! fraction of smectite in material (final)
     PetscReal :: ilt_fi    ! fraction of illite in material (final)
     PetscReal :: ilt_ts    ! track time of last change in smectite (final)
-    PetscReal :: ilt_s     ! shift factor (final)
     PetscReal :: ilt_fst   ! fraction of smectite in material (test)
     PetscReal :: ilt_fit   ! fraction of illite in material (test)
     PetscReal :: ilt_tst   ! track time of last change in smectite (test)
-    PetscReal :: ilt_st    ! shift factor (test)
     PetscBool :: set_perm0 ! save initial permeability
     PetscReal, allocatable :: perm0(:) ! intiial permeability
   end type ilt_auxvar_type
@@ -209,16 +206,14 @@ function MaterialIlliteAuxCreate()
   ilt_aux%ilt_fs0   = 1.0d+0 ! initial fraction of smectite in material
   
   ! Solution values
-  ilt_aux%ilt_fs    = UNINITIALIZED_DOUBLE ! fraction of smectite in material (final)
-  ilt_aux%ilt_fi    = UNINITIALIZED_DOUBLE ! fraction of smectite in material (final)
+  ilt_aux%ilt_fs    = UNINITIALIZED_DOUBLE ! smectite fraction (final)
+  ilt_aux%ilt_fi    = UNINITIALIZED_DOUBLE ! illite fraction (final)
   ilt_aux%ilt_ts    = UNINITIALIZED_DOUBLE ! time smectite last changed (final)
-  ilt_aux%ilt_s     = UNINITIALIZED_DOUBLE ! shift factor (final)
   
   ! Preliminary values
-  ilt_aux%ilt_fst   = UNINITIALIZED_DOUBLE ! fraction of smectite in material (test)
-  ilt_aux%ilt_fit   = UNINITIALIZED_DOUBLE ! fraction of smectite in material (test)
+  ilt_aux%ilt_fst   = UNINITIALIZED_DOUBLE ! smectite fraction (test)
+  ilt_aux%ilt_fit   = UNINITIALIZED_DOUBLE ! illite fraction (test)
   ilt_aux%ilt_tst   = UNINITIALIZED_DOUBLE ! time smectite last changed (test)
-  ilt_aux%ilt_st    = UNINITIALIZED_DOUBLE ! shift factor (test)
   
   ! Save original permeability tensor
   ilt_aux%set_perm0 = PETSC_FALSE ! one-time assignment of initial permeability

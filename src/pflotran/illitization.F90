@@ -18,7 +18,6 @@ module Illitization_module
   type, public :: illitization_base_type
     PetscReal :: ilt_threshold ! temperature threshold to begin illitization
     PetscReal :: ilt_fs0 ! initial fraction of smectite in material
-    PetscReal :: ilt_fi0 ! initial fraction of illite in material
   contains
     procedure, public :: Verify => ILTBaseVerify
     procedure, public :: Test => ILTBaseTest
@@ -88,7 +87,6 @@ subroutine ILTBaseVerify(this,name,option)
         //trim(name)//'" must be nonzero positive number up to 1.'
       call PrintErrMsg(option)
     endif
-    this%ilt_fi0 = 1.0d0 - this%ilt_fs0
   endif
 
 end subroutine ILTBaseVerify
@@ -144,7 +142,7 @@ subroutine ILTBaseTest(this,ilt_name,option)
   PetscReal :: ilt_temp_pert
   PetscReal :: smec_min, smec_max
   PetscReal :: temp_min, temp_max
-  PetscReal :: dt,shift,fs0_original,fi0_original
+  PetscReal :: dt,shift,fs0_original
   PetscReal :: fs, fsp
   PetscInt :: i,j,k
 
@@ -164,13 +162,11 @@ subroutine ILTBaseTest(this,ilt_name,option)
                70000.,80000.,90000.,100000./)
 
   fs0_original = this%ilt_fs0
-  fi0_original = this%ilt_fi0
 
   do i = 1,ns
     do j = 1,nt
       ! reset base variables to initial
       this%ilt_fs0 = smec_vec(i)
-      this%ilt_fi0 = 1.0d0 - smec_vec(i)
       fs  = smec_vec(i)
       do k = 2,np
 
@@ -211,7 +207,6 @@ subroutine ILTBaseTest(this,ilt_name,option)
 
   ! reset to original values
   this%ilt_fs0 = fs0_original
-  this%ilt_fi0 = fi0_original
 
 end subroutine ILTBaseTest
 
@@ -241,7 +236,6 @@ function ILTBaseCreate()
 
   ILTBaseCreate%ilt_threshold  = 0.0d0
   ILTBaseCreate%ilt_fs0        = 0.0d0
-  ILTBaseCreate%ilt_fi0        = 0.0d0
 
 end function ILTBaseCreate
 
@@ -257,7 +251,6 @@ function ILTDefaultCreate()
 
   ILTDefaultCreate%ilt_threshold  = 0.0d0
   ILTDefaultCreate%ilt_fs0        = 1.0d0
-  ILTDefaultCreate%ilt_fi0        = 0.0d0
   
   ILTDefaultCreate%ilt_shift_perm = 1.0d0
   ILTDefaultCreate%ilt_ea     = UNINITIALIZED_DOUBLE

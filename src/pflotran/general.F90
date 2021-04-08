@@ -318,6 +318,8 @@ subroutine GeneralUpdateSolution(realization)
         material_auxvars(ghosted_id)%iltf%ilt_tst
       material_auxvars(ghosted_id)%iltf%ilt_fs = & ! smectite fraction
         material_auxvars(ghosted_id)%iltf%ilt_fst
+      material_auxvars(ghosted_id)%iltf%ilt_fi = & ! illite fraction
+        material_auxvars(ghosted_id)%iltf%ilt_fit
     endif
   enddo
  
@@ -373,6 +375,8 @@ subroutine GeneralTimeCut(realization)
         material_auxvars(ghosted_id)%iltf%ilt_ts
       material_auxvars(ghosted_id)%iltf%ilt_fst = & ! smectite fraction
         material_auxvars(ghosted_id)%iltf%ilt_fs
+      material_auxvars(ghosted_id)%iltf%ilt_fit = & ! illite fraction
+        1.0d+0 - material_auxvars(ghosted_id)%iltf%ilt_fs
     endif
   enddo
 
