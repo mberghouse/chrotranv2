@@ -1726,7 +1726,11 @@ subroutine MaterialSetAuxVarScalar(Material,value,ivar,isubvar)
       do i=1, Material%num_aux
         if (associated(Material%auxvars(i)%iltf)) then
           Material%auxvars(i)%iltf%ilt_fs = value
-          Material%auxvars(i)%iltf%ilt_fst = Material%auxvars(i)%iltf%ilt_fs
+          Material%auxvars(i)%iltf%ilt_fst = value
+          Material%auxvars(i)%iltf%ilt_fi = 1.0d+0 - &
+            Material%auxvars(i)%iltf%ilt_fs
+          Material%auxvars(i)%iltf%ilt_fit = 1.0d+0 - &
+            Material%auxvars(i)%iltf%ilt_fst
         endif
       enddo
   end select
@@ -1842,8 +1846,11 @@ subroutine MaterialSetAuxVarVecLoc(Material,vec_loc,ivar,isubvar)
       do ghosted_id=1, Material%num_aux
         if (associated(Material%auxvars(ghosted_id)%iltf)) then
           Material%auxvars(ghosted_id)%iltf%ilt_fs = vec_loc_p(ghosted_id)
-          Material%auxvars(ghosted_id)%iltf%ilt_fst = &
-            Material%auxvars(ghosted_id)%iltf%ilt_fs
+          Material%auxvars(ghosted_id)%iltf%ilt_fst = vec_loc_p(ghosted_id)
+          Material%auxvars(ghosted_id)%iltf%ilt_fi = &
+            1.0d+0 - Material%auxvars(ghosted_id)%iltf%ilt_fs
+          Material%auxvars(ghosted_id)%iltf%ilt_fit = &
+            1.0d+0 - Material%auxvars(ghosted_id)%iltf%ilt_fst
         endif
       enddo
   end select

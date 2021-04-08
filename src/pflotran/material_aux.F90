@@ -789,6 +789,8 @@ subroutine MaterialAuxVarSetValue(material_auxvar,ivar,value)
       if (associated(material_auxvar%iltf)) then
         material_auxvar%iltf%ilt_fs = value
         material_auxvar%iltf%ilt_fst = value
+        material_auxvar%iltf%ilt_fi = 1.0d+0 - material_auxvar%iltf%ilt_fs
+        material_auxvar%iltf%ilt_fit = 1.0d+0 - material_auxvar%iltf%ilt_fst
       endif
   end select
 
