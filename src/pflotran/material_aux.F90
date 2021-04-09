@@ -731,6 +731,8 @@ function MaterialAuxVarGetValue(material_auxvar,ivar)
     case(ILT_SMECTITE)
       if (associated(material_auxvar%iltf)) then
         MaterialAuxVarGetValue = material_auxvar%iltf%ilt_fs
+      else
+        MaterialAuxVarGetValue = 0.0d+0
       endif
   end select
 
