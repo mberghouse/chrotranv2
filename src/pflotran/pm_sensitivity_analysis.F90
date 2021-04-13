@@ -15,7 +15,7 @@ module PM_Sensitivity_Analysis_class
 
   type, public, extends(pm_base_type) :: pm_sensitivity_type
     class(realization_subsurface_type), pointer :: realization
-    class(sensitivity_output_option_type), pointer :: sensitivity_output_option
+    type(sensitivity_output_option_type), pointer :: sensitivity_output_option
     PetscBool :: sensitivity_flow !indicate to compute sensitivity for flow
     PetscBool :: sensitivity_transport
   contains
@@ -170,7 +170,7 @@ END
   class(pm_sensitivity_type) :: this
   type(input_type), pointer :: input
   
-  class(sensitivity_output_option_type), pointer :: sensitivity_output_option
+  type(sensitivity_output_option_type), pointer :: sensitivity_output_option
   
   type(option_type), pointer :: option
   character(len=MAXWORDLENGTH) :: word
