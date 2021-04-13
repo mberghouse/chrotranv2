@@ -4,6 +4,7 @@ module Grid_module
   use petscmat
   use Grid_Structured_module
   use Grid_Unstructured_module
+  use Grid_Unstructured_Explicit_module
   use Grid_Unstructured_Aux_module
   use Grid_Unstructured_Polyhedra_module
   use Connection_module
@@ -2221,11 +2222,14 @@ subroutine GridGetLocalIDFromCoordinate(grid,coordinate,option,local_id)
   type(grid_type) :: grid
   type(point3d_type) :: coordinate
   type(option_type) :: option
-  PetscInt :: local_id
+  PetscInt :: local_id, champion
+  PetscReal :: champion_distance, min_distance_global
   
   PetscReal, parameter :: pert = 1.d-8, tol = 1.d-20
   PetscReal :: x_shift, y_shift, z_shift
+  PetscReal :: dx, dy, dz, min_dx, min_dy, min_dz
   PetscInt :: i, j, k
+  PetscErrorCode :: ierr
 
   local_id = UNINITIALIZED_INTEGER
   if (coordinate%x >= grid%x_min_global .and. &
@@ -2269,11 +2273,40 @@ subroutine GridGetLocalIDFromCoordinate(grid,coordinate,option,local_id)
                                    coordinate%z, &
                                    grid%unstructured_grid,option,local_id)
       case(EXPLICIT_UNSTRUCTURED_GRID)
+        dx = 1.d20
+        dy = 1.d20
+        dz = 1.d20
+        champion = UNINITIALIZED_INTEGER
+        champion_distance = UNINITIALIZED_DOUBLE
         if (grid%itype == EXPLICIT_UNSTRUCTURED_GRID) then
-          option%io_buffer = 'Locating a grid cell through a specified &
-            &coordinate (GridGetLocalIDFromCoordinate)is not supported for &
-            &explicit (primal) unstructured grids.'
-          call PrintErrMsg(option)
+          call UGridExplicitGetClosestCellFromPoint( &
+                                   coordinate%x, &
+                                   coordinate%y, &
+                                   coordinate%z, &
+                                   grid%unstructured_grid%explicit_grid,&
+                                   option,champion,champion_distance)
+          call MPI_Allreduce(champion_distance,min_distance_global,&
+                     ONE_INTEGER_MPI,MPI_DOUBLE_PRECISION,MPI_MIN,&
+                     option%mycomm,ierr)
+          if (champion_distance == min_distance_global) then
+            dx = coordinate%x - &
+               grid%unstructured_grid%explicit_grid%cell_centroids(champion)%x
+          endif
+          call MPI_Allreduce(dx,min_dx,ONE_INTEGER_MPI,&
+                             MPI_DOUBLE_PRECISION,MPI_MIN,option%mycomm,ierr)
+          if (dx == min_dx) then
+            dy = coordinate%y - &
+               grid%unstructured_grid%explicit_grid%cell_centroids(champion)%y
+          endif
+          call MPI_Allreduce(dy,min_dy,ONE_INTEGER_MPI,&
+                             MPI_DOUBLE_PRECISION,MPI_MIN,option%mycomm,ierr)
+          if (dy == min_dy) then
+            dz = coordinate%z - &
+               grid%unstructured_grid%explicit_grid%cell_centroids(champion)%z
+          endif
+          call MPI_Allreduce(dz,min_dz,ONE_INTEGER_MPI,&
+                             MPI_DOUBLE_PRECISION,MPI_MIN,option%mycomm,ierr)
+          if (dz == min_dz) local_id = champion
         endif
       case(POLYHEDRA_UNSTRUCTURED_GRID)
           option%io_buffer = &
