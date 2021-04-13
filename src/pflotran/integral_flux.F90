@@ -3,6 +3,7 @@ module Integral_Flux_module
 #include "petsc/finclude/petscsys.h"
   use petscsys
   use Geometry_module
+  use Region_module
   
   use PFLOTRAN_Constants_module
 
@@ -31,6 +32,11 @@ module Integral_Flux_module
     PetscInt, pointer :: internal_connections(:)
     PetscInt, pointer :: boundary_connections(:)
     PetscReal, pointer :: integral_value(:)
+    PetscBool :: by_regions
+    character(len=MAXWORDLENGTH) :: reg_from_name
+    type(region_type), pointer :: reg_from
+    character(len=MAXWORDLENGTH) :: reg_to_name   
+    type(region_type), pointer :: reg_to
     type(integral_flux_type), pointer :: next
   end type integral_flux_type
   
@@ -76,6 +82,7 @@ function IntegralFluxCreate()
   integral_flux%id = 0
   integral_flux%invert_direction = PETSC_FALSE
   integral_flux%flux_calculation_option = SIGNED_FLUXES !signed
+  integral_flux%by_regions = PETSC_FALSE
   nullify(integral_flux%polygon)
   nullify(integral_flux%plane)
   nullify(integral_flux%coordinates_and_directions)
@@ -251,6 +258,34 @@ subroutine IntegralFluxRead(integral_flux,input,option)
         allocate(integral_flux%cell_ids(2,icount))
         integral_flux%cell_ids = int_array(:,1:icount)
         call DeallocateArray(int_array)
+      case('BETWEEN_REGIONS')
+        error_string = 'INTEGRAL_FLUX,BETWEEN_REGIONS'
+        call InputPushBlock(input,option)
+        do
+          call InputReadPflotranString(input,option)
+          call InputReadStringErrorMsg(input,option,error_string)
+
+          if (InputCheckExit(input,option)) exit
+
+          if (InputError(input)) exit
+          call InputReadCard(input,option,keyword)
+          call InputErrorMsg(input,option,'keyword',error_string)
+          select case(trim(keyword))
+            case('FROM')
+              call InputReadWord(input,option,integral_flux%reg_from_name, &
+                                 PETSC_TRUE)
+              call InputErrorMsg(input,option,'Region From',error_string)
+            case('TO')
+              call InputReadWord(input,option,integral_flux%reg_to_name, &
+                                 PETSC_TRUE)
+              call InputErrorMsg(input,option,'Region To',error_string)
+            case default
+              call InputKeywordUnrecognized(input,keyword,'INTEGRAL_FLUX,&
+                                            &BETWEEN_REGIONS',option)
+          end select
+        enddo
+        integral_flux%by_regions = PETSC_TRUE
+        call InputPopBlock(input,option)
       case default
         call InputKeywordUnrecognized(input,keyword,'INTEGRAL_FLUX',option)
     end select 

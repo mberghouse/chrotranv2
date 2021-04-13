@@ -8529,6 +8529,7 @@ subroutine PatchGetIntegralFluxConnections(patch,integral_flux,option)
   use Connection_module
   use Coupler_module
   use Grid_Unstructured_Cell_module, only : MAX_VERT_PER_FACE
+  use Region_module
 
 
   implicit none
@@ -8688,12 +8689,33 @@ subroutine PatchGetIntegralFluxConnections(patch,integral_flux,option)
   endif
 
   if (associated(by_cell_ids)) then
-    error_string = 'cell ids match the an actual face between these cells'
+    error_string = 'cell ids must match an actual face between these cells'
     num_to_be_found = size(by_cell_ids,2)
     allocate(yet_to_be_found(num_to_be_found))
     yet_to_be_found = PETSC_TRUE
   endif
-
+  
+  if(integral_flux%by_regions) then
+    integral_flux%reg_from => &
+                        RegionGetPtrFromList(integral_flux%reg_from_name, &
+                                             patch%region_list)
+    if (.not.associated(integral_flux%reg_from)) then
+      option%io_buffer = 'Region "' // trim(integral_flux%reg_from_name) // &
+               '" in INTEGRAL_FLUX/BETWEEN_REGIONS/FROM not found in region &
+                list'
+      call PrintErrMsg(option)
+    endif
+    integral_flux%reg_to => &
+                        RegionGetPtrFromList(integral_flux%reg_to_name, &
+                                             patch%region_list)
+    if (.not.associated(integral_flux%reg_to)) then
+      option%io_buffer = 'Region "' // trim(integral_flux%reg_to_name) // &
+               '" in INTEGRAL_FLUX/BETWEEN_REGIONS/TO not found in region &
+                list'
+      call PrintErrMsg(option)
+    endif
+  endif
+      
   array_size = 100
   allocate(connections(array_size))
 
@@ -8897,6 +8919,34 @@ subroutine PatchGetIntegralFluxConnections(patch,integral_flux,option)
                         natural_id_dn == by_cell_ids(2,i)) then
                   yet_to_be_found(i) = PETSC_FALSE
                   found = PETSC_TRUE
+                  exit
+                endif
+              enddo
+            case(2) ! boundary connections
+              ! not yet supported
+          end select
+        endif
+        if (.not. found .and. integral_flux%by_regions) then
+          select case(ipass)
+            case(1) ! internal connections
+              do i = 1, integral_flux%reg_from%num_cells
+                if (natural_id_dn == integral_flux%reg_from%cell_ids(i)) then
+                  do ii = 1, integral_flux%reg_to%num_cells
+                    if (natural_id_up == integral_flux%reg_to%cell_ids(ii)) then
+                      found = PETSC_TRUE
+                      same_direction = PETSC_FALSE
+                      exit
+                    endif
+                  enddo
+                  exit
+                endif
+                if (natural_id_up == integral_flux%reg_from%cell_ids(i)) then
+                  do ii = 1, integral_flux%reg_to%num_cells
+                    if (natural_id_dn == integral_flux%reg_to%cell_ids(ii)) then
+                      found = PETSC_TRUE
+                      exit
+                    endif
+                  enddo
                   exit
                 endif
               enddo
