@@ -335,7 +335,7 @@ inlinesurface.o : global_aux.o inlinesurface_aux.o material_aux.o option.o \
 inlinesurface_aux.o : global_aux.o option.o utility.o
 input_aux.o : option.o pflotran_constants.o string.o units.o
 integral_flux.o : geometry.o input_aux.o option.o pflotran_constants.o \
-                  string.o utility.o
+                  region.o string.o utility.o
 inversion_aux.o : option.o pflotran_constants.o utility.o
 inversion_base.o : driver.o input_aux.o option.o option_inversion.o \
                    pflotran_constants.o string.o timer.o
