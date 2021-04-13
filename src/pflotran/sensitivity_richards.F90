@@ -827,52 +827,49 @@ subroutine RichardsSensitivityAccumulation(A,realization,ivar,ierr)
   global_auxvars => patch%aux%Global%auxvars
   material_auxvars => patch%aux%Material%auxvars
 
-  if (.not.option%steady_state) then
-
-    ! Accumulation terms ------------------------------------
-    do local_id = 1, grid%nlmax  ! For each local node do...
-      ghosted_id = grid%nL2G(local_id)
-      !geh - Ignore inactive cells with inactive materials
-      if (patch%imat(ghosted_id) <= 0) cycle
-      call RichardsAccumSensitivity(rich_auxvars(ghosted_id), &
-           global_auxvars(ghosted_id), &
-           material_auxvars(ghosted_id), &
-           option, &
-           patch%characteristic_curves_array( &
-           patch%cc_id(ghosted_id))%ptr, &
-           Jup, ivar)
+  ! Accumulation terms ------------------------------------
+  do local_id = 1, grid%nlmax  ! For each local node do...
+    ghosted_id = grid%nL2G(local_id)
+    !geh - Ignore inactive cells with inactive materials
+    if (patch%imat(ghosted_id) <= 0) cycle
+    call RichardsAccumSensitivity(rich_auxvars(ghosted_id), &
+         global_auxvars(ghosted_id), &
+         material_auxvars(ghosted_id), &
+         option, &
+         patch%characteristic_curves_array( &
+         patch%cc_id(ghosted_id))%ptr, &
+         Jup, ivar)
 
 #ifdef BUFFER_MATRIX
-      if (option%use_matrix_buffer) then
-        call MatrixBufferAdd(patch%aux%Richards%matrix_buffer,ghosted_id, &
-             ghosted_id,Jup(1,1))
-      else
+    if (option%use_matrix_buffer) then
+      call MatrixBufferAdd(patch%aux%Richards%matrix_buffer,ghosted_id, &
+           ghosted_id,Jup(1,1))
+    else
 #endif
-        istart = (ghosted_id-1)*option%nflowdof + 1
+      istart = (ghosted_id-1)*option%nflowdof + 1
 
-        call MatSetValuesLocal(A,1,istart-1,1,istart-1,Jup, &
-             ADD_VALUES,ierr);CHKERRQ(ierr)
+      call MatSetValuesLocal(A,1,istart-1,1,istart-1,Jup, &
+           ADD_VALUES,ierr);CHKERRQ(ierr)
 #ifdef BUFFER_MATRIX
-      endif
-#endif
-    enddo
-
-#if 0
-    if (option%inline_surface_flow) then
-      do region_id = 1, region%num_cells
-        local_id = region%cell_ids(region_id)
-        ghosted_id = grid%nL2G(local_id)         
-        if (patch%imat(ghosted_id) <= 0) cycle
-        call InlineSurfaceAccumulationJac(inlinesurface_auxvars(region_id), &
-             material_auxvars(ghosted_id),option,Jup)
-        istart = (ghosted_id-1)*option%nflowdof + 1
-        call MatSetValuesLocal(A,1,istart-1,1,istart-1,Jup, &
-             ADD_VALUES,ierr);CHKERRQ(ierr)
-      enddo
     endif
 #endif
+  enddo
 
+#if 0
+  if (option%inline_surface_flow) then
+    do region_id = 1, region%num_cells
+      local_id = region%cell_ids(region_id)
+      ghosted_id = grid%nL2G(local_id)         
+      if (patch%imat(ghosted_id) <= 0) cycle
+      call InlineSurfaceAccumulationJac(inlinesurface_auxvars(region_id), &
+           material_auxvars(ghosted_id),option,Jup)
+      istart = (ghosted_id-1)*option%nflowdof + 1
+      call MatSetValuesLocal(A,1,istart-1,1,istart-1,Jup, &
+           ADD_VALUES,ierr);CHKERRQ(ierr)
+    enddo
   endif
+#endif
+
 
 end subroutine RichardsSensitivityAccumulation
 
