@@ -124,6 +124,7 @@ subroutine MphaseSetupPatch(realization)
   use Grid_module
   use Secondary_Continuum_Aux_module
   use Secondary_Continuum_module
+  use Material_Aux_class
  
   implicit none
   
@@ -215,7 +216,7 @@ subroutine MphaseSetupPatch(realization)
       mphase_sec_heat_vars(local_id)%aperture = &
         patch%material_property_array(1)%ptr%multicontinuum%aperture
       mphase_sec_heat_vars(local_id)%epsilon = &
-        patch%aux%Material%auxvars(ghosted_id)%epsilon
+        patch%aux%Material%auxvars(ghosted_id)%soil_properties(epsilon_index)
       mphase_sec_heat_vars(local_id)%log_spacing = &
         patch%material_property_array(1)%ptr%multicontinuum%log_spacing
       mphase_sec_heat_vars(local_id)%outer_spacing = &

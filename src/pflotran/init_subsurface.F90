@@ -325,10 +325,12 @@ subroutine InitSubsurfAssignMatProperties(realization)
   call VecGetArrayF90(field%porosity0,por0_p,ierr);CHKERRQ(ierr)
   call VecGetArrayF90(field%tortuosity0,tor0_p,ierr);CHKERRQ(ierr)
 
-  call DiscretizationDuplicateVector(discretization,field%tortuosity0,&
+  if (epsilon_index > 0) then
+    call DiscretizationDuplicateVector(discretization,field%tortuosity0,&
                                      epsilon0);
-  call VecGetArrayF90(epsilon0,eps0_p,ierr);CHKERRQ(ierr)
-
+    call VecGetArrayF90(epsilon0,eps0_p,ierr);CHKERRQ(ierr)
+  endif
+ 
   ! geophysics
   if (option%ngeopdof > 0) then
     call VecGetArrayF90(field%electrical_conductivity,cond_p, &
@@ -433,7 +435,7 @@ subroutine InitSubsurfAssignMatProperties(realization)
     endif
     por0_p(local_id) = material_property%porosity
     tor0_p(local_id) = material_property%tortuosity
-    if (associated(material_property%multicontinuum)) then
+    if (epsilon_index > 0) then
       eps0_p(local_id) = material_property%multicontinuum%epsilon
     endif
 
@@ -460,8 +462,10 @@ subroutine InitSubsurfAssignMatProperties(realization)
   endif
   call VecRestoreArrayF90(field%porosity0,por0_p,ierr);CHKERRQ(ierr)
   call VecRestoreArrayF90(field%tortuosity0,tor0_p,ierr);CHKERRQ(ierr)
-  call VecRestoreArrayF90(epsilon0,eps0_p,ierr);CHKERRQ(ierr)
-        
+  if (epsilon_index > 0) then
+    call VecRestoreArrayF90(epsilon0,eps0_p,ierr);CHKERRQ(ierr)
+  endif
+ 
   if (option%ngeopdof > 0) then
     call VecRestoreArrayF90(field%electrical_conductivity,cond_p, &
       ierr);CHKERRQ(ierr)
@@ -571,14 +575,14 @@ subroutine InitSubsurfAssignMatProperties(realization)
                                     field%work_loc,ONEDOF)
   call MaterialSetAuxVarVecLoc(patch%aux%Material,field%work_loc, &
                                TORTUOSITY,ZERO_INTEGER)
-  if (associated(material_property%multicontinuum)) then
+  if (epsilon_index > 0) then
     call DiscretizationGlobalToLocal(discretization,epsilon0, &
                                      field%work_loc,ONEDOF)
     call MaterialSetAuxVarVecLoc(patch%aux%Material,field%work_loc, &
                                  EPSILON,ZERO_INTEGER)
+    call VecDestroy(epsilon0,ierr);CHKERRQ(ierr);
   endif
-  call VecDestroy(epsilon0,ierr);CHKERRQ(ierr);
-
+ 
   if (option%ngeopdof > 0) then
      call DiscretizationGlobalToLocal(discretization, &
                      field%electrical_conductivity,field%work_loc,ONEDOF) 

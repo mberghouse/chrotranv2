@@ -365,7 +365,7 @@ subroutine THSetupPatch(realization)
       TH_sec_heat_vars(local_id)%aperture = &
         patch%material_property_array(1)%ptr%multicontinuum%aperture
       TH_sec_heat_vars(local_id)%epsilon = &
-        patch%aux%Material%auxvars(ghosted_id)%epsilon
+        patch%aux%Material%auxvars(ghosted_id)%soil_properties(epsilon_index)
       TH_sec_heat_vars(local_id)%log_spacing = &
         patch%material_property_array(1)%ptr%multicontinuum%log_spacing
       TH_sec_heat_vars(local_id)%outer_spacing = &

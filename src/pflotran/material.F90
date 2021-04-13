@@ -1449,6 +1449,7 @@ subroutine MaterialInitAuxIndices(material_property_ptrs,option)
   soil_compressibility_index = 0
   soil_reference_pressure_index = 0
   max_material_index = 0
+  epsilon_index = 0
 
   num_material_properties = size(material_property_ptrs)
   ! must be nullified here to avoid an error message on subsequent calls
@@ -1507,6 +1508,13 @@ subroutine MaterialInitAuxIndices(material_property_ptrs,option)
         soil_reference_pressure_index = icount
       endif
       num_soil_ref_press = num_soil_ref_press + 1
+    endif
+    if (associated(material_property_ptrs(i)%ptr%&
+                    multicontinuum)) then
+      if (epsilon_index == 0) then
+        icount = icount + 1
+        epsilon_index = icount
+      endif
     endif
 !    if (material_property_ptrs(i)%ptr%specific_heat > 0.d0 .and. &
 !        soil_heat_capacity_index == 0) then
@@ -1661,7 +1669,7 @@ subroutine MaterialSetAuxVarScalar(Material,value,ivar,isubvar)
       enddo
     case(EPSILON)
       do i=1, Material%num_aux
-        Material%auxvars(i)%epsilon = value
+        Material%auxvars(i)%soil_properties(epsilon_index) = value
       enddo
     case(PERMEABILITY_X)
       do i=1, Material%num_aux
@@ -1763,7 +1771,8 @@ subroutine MaterialSetAuxVarVecLoc(Material,vec_loc,ivar,isubvar)
       enddo
     case(EPSILON)
       do ghosted_id=1, Material%num_aux
-        Material%auxvars(ghosted_id)%epsilon = vec_loc_p(ghosted_id)
+        Material%auxvars(ghosted_id)%soil_properties(epsilon_index) = &
+          vec_loc_p(ghosted_id)
       enddo
     case(PERMEABILITY_X)
       do ghosted_id=1, Material%num_aux
