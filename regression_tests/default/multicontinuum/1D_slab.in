@@ -61,10 +61,17 @@ NUMERICAL_METHODS TRANSPORT
     TS_ACCELERATION 13
   /
 END
+
+#=========================== datasets =================================
+DATASET epsilon
+  FILENAME dataset.h5
+  HDF5_DATASET_NAME Epsilon
+END
+  
 #=========================== discretization ===================================
 GRID
   TYPE structured
-  NXYZ 1 1 1 
+  NXYZ 10 1 1 
   BOUNDS 
     0.d0   0.d0  0.d0
     1.d0 1.0d0 1.0d0 
@@ -89,7 +96,7 @@ MATERIAL_PROPERTY soil1
     LENGTH 1 #half distance between fractures - BC location in the matrix
     AREA 1.0 #fracture/matrix interfacial area per unit (bulk) volume (1/(b+L))
     NUM_CELLS 5 #in secondary continuum (matrix)
-    EPSILON 0.00005 #fracture volume fraction (b/(L+b))
+    EPSILON DATASET epsilon #0.00005 #fracture volume fraction (b/(L+b))
     DIFFUSION_COEFFICIENT 1.6d-10  #effective diffusion coefficient, includes tortuosity
     POROSITY 0.01 #diffusion coefficient and porosity are multiplied, no tortuosity in eqn
    /
@@ -100,7 +107,7 @@ END
 TIME
   FINAL_TIME 101.d0 d
   INITIAL_TIMESTEP_SIZE 0.006d0 d
-  MAXIMUM_TIMESTEP_SIZE 0.5d0 d 
+  MAXIMUM_TIMESTEP_SIZE 5.d0 d 
 END
 
 #=========================== regions ==========================================
