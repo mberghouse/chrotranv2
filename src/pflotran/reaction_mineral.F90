@@ -662,6 +662,8 @@ subroutine RKineticMineral(Res,Jac,compute_derivative,rt_auxvar, &
   PetscReal :: tempreal, tempreal2
   PetscReal :: affinity_factor, sign_
   PetscReal :: Im, Im_const, dIm_dQK
+  PetscReal :: dIm_dAF, dAF_dQK
+  PetscReal :: dIm_dRL, dRL_dQK, dRL_dAF
   PetscReal :: ln_conc(reaction%naqcomp)
   PetscReal :: ln_sec(reaction%neqcplx) 
   PetscReal :: ln_act(reaction%naqcomp)
@@ -680,8 +682,7 @@ subroutine RKineticMineral(Res,Jac,compute_derivative,rt_auxvar, &
   PetscInt ::  icplx
   PetscReal :: ln_gam_m_beta
   PetscReal :: rate_limiter_scale
-  PetscReal :: dIm_dRL
-  PetscReal :: dRL_dQK
+  PetscBool :: limit_rate
   PetscReal :: one_over_sigma_m
   
 #ifdef SOLID_SOLUTION
@@ -744,6 +745,8 @@ subroutine RKineticMineral(Res,Jac,compute_derivative,rt_auxvar, &
   do imnrl = 1, mineral%nkinmnrl ! for each mineral
 
     rate_limiter_scale = 1.d0
+    limit_rate = (mineral%kinmnrl_rate_limiter(imnrl) > 0.d0)
+!    limit_rate = PETSC_FALSE
 #ifdef SOLID_SOLUTION
     call RMineralRate(imnrl,ln_act,ln_sec_act,rt_auxvar,global_auxvar, &
                       QK,Im,Im_const,sum_prefactor_rate,affinity_factor, &
@@ -801,7 +804,7 @@ subroutine RKineticMineral(Res,Jac,compute_derivative,rt_auxvar, &
       endif
     
 !     check for rate limiter for precipitation
-      if (mineral%kinmnrl_rate_limiter(imnrl) > 0.d0) then
+      if (limit_rate) then
         rate_limiter_scale = 1.d0/ &
                              (1.d0+(1.d0-affinity_factor) &
                                    /mineral%kinmnrl_rate_limiter(imnrl))
@@ -909,62 +912,43 @@ subroutine RKineticMineral(Res,Jac,compute_derivative,rt_auxvar, &
 
     ! calculate derivatives of rate with respect to free
     ! units = mol/sec
-
-    ! RL = rate_limiter_scale*affinity_factor
     if (associated(mineral%kinmnrl_affinity_power)) then
-      dIm_dRL = -Im*mineral%kinmnrl_affinity_power(imnrl) / &
-                abs(affinity_factor*rate_limiter_scale)
+      dIm_dAF = -Im*mineral%kinmnrl_affinity_power(imnrl)/abs(affinity_factor)
     else
-      dIm_dRL = -Im_const*sum_prefactor_rate
+      dIm_dAF = -Im/abs(affinity_factor)    ! -A*RL*sign*dAF/dAF
     endif
+!    dAF_dQK = -one_over_sigma_m*QK**(one_over_sigma_m-1.d0)
+    dAF_dQK = (affinity_factor-1.d0)*one_over_sigma_m/QK
 
-    ! no rate limiter
-    tempreal = one_over_sigma_m*QK**(one_over_sigma_m-1.d0)
-    dRL_dQK = tempreal
-    if (mineral%kinmnrl_rate_limiter(imnrl) > 0.d0) then
-      dRL_dQK = dRL_dQK*rate_limiter_scale - &
-                affinity_factor*rate_limiter_scale*rate_limiter_scale * &
-                tempreal/mineral%kinmnrl_rate_limiter(imnrl)
+    ! rate limiter
+    if (limit_rate) then
+      if (associated(mineral%kinmnrl_affinity_power)) then
+        dIm_dRL = -Im*mineral%kinmnrl_affinity_power(imnrl) / &
+                  abs(rate_limiter_scale)
+      else
+        dIm_dRL = -Im/abs(rate_limiter_scale)  ! -A*AF*sign*dRL/dAF
+      endif
+      dRL_dAF = rate_limiter_scale*rate_limiter_scale/ &
+                mineral%kinmnrl_rate_limiter(imnrl)
     endif
-    dIm_dQK = dIm_dRL*dRL_dQK
+    dIm_dQK = (dIm_dAF-dIm_dRL*dRL_dAF)*dAF_dQK
 
     ! derivatives with respect to primary species in reaction quotient
-    if (mineral%kinmnrl_rate_limiter(imnrl) <= 0.d0) then
-      do j = 1, ncomp
-        jcomp = mineral%kinmnrlspecid(j,imnrl)
-        ! unit = L water/mol
-        dQK_dCj = mineral%kinmnrlstoich(j,imnrl)*QK*exp(-ln_conc(jcomp))
-        ! units = (L water/mol)*(kg water/m^3 water)*(m^3 water/1000 L water) = kg water/mol
-        dQK_dmj = dQK_dCj*global_auxvar%den_kg(iphase)*1.d-3 ! the multiplication by density could be moved
-                                     ! outside the loop
-        do i = 1, ncomp
-          icomp = mineral%kinmnrlspecid(i,imnrl)
-          ! units = (mol/sec)*(kg water/mol) = kg water/sec
-          Jac(icomp,jcomp) = Jac(icomp,jcomp) + &
-                             mineral%kinmnrlstoich(i,imnrl)*dIm_dQK*dQK_dmj
-        enddo
+    do j = 1, ncomp
+      jcomp = mineral%kinmnrlspecid(j,imnrl)
+      ! unit = L water/mol
+      dQK_dCj = mineral%kinmnrlstoich(j,imnrl)*QK*exp(-ln_conc(jcomp))
+      ! units = (L water/mol)*(kg water/m^3 water)*(m^3 water/1000 L water) = kg water/mol
+      dQK_dmj = dQK_dCj*global_auxvar%den_kg(iphase)*1.d-3 ! the multiplication by density could be moved
+                                   ! outside the loop
+      do i = 1, ncomp
+        icomp = mineral%kinmnrlspecid(i,imnrl)
+        ! units = (mol/sec)*(kg water/mol) = kg water/sec
+        Jac(icomp,jcomp) = Jac(icomp,jcomp) + &
+                           mineral%kinmnrlstoich(i,imnrl)*dIm_dQK*dQK_dmj
       enddo
+    enddo
       
-    else
-
-      den = 1.d0+(1.d0-affinity_factor)/mineral%kinmnrl_rate_limiter(imnrl)
-      do j = 1, ncomp
-        jcomp = mineral%kinmnrlspecid(j,imnrl)
-        ! unit = L water/mol
-        dQK_dCj = mineral%kinmnrlstoich(j,imnrl)*QK*exp(-ln_conc(jcomp))
-        ! units = (L water/mol)*(kg water/m^3 water)*(m^3 water/1000 L water) = kg water/mol
-        dQK_dmj = dQK_dCj*global_auxvar%den_kg(iphase)*1.d-3 ! the multiplication by density could be moved
-                                     ! outside the loop
-        do i = 1, ncomp
-          icomp = mineral%kinmnrlspecid(i,imnrl)
-          ! units = (mol/sec)*(kg water/mol) = kg water/sec
-          Jac(icomp,jcomp) = Jac(icomp,jcomp) + &
-            mineral%kinmnrlstoich(i,imnrl)*dIm_dQK  &
-            *(1.d0 + QK/mineral%kinmnrl_rate_limiter(imnrl)/den)*dQK_dmj/den
-        enddo
-      enddo
-    endif
-    
     if (mineral%kinmnrl_num_prefactors(imnrl) > 0) then ! add contribution of derivative in prefactor - messy
 #if 1      
       dIm_dsum_prefactor_rate = Im/sum_prefactor_rate
