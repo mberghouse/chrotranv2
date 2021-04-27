@@ -13,7 +13,7 @@ module PFLOTRAN_Constants_module
 
   PetscInt, parameter :: PFLOTRAN_VERSION_MAJOR = 3
   PetscInt, parameter :: PFLOTRAN_VERSION_MINOR = 0
-  PetscInt, parameter :: PFLOTRAN_VERSION_PATCH = 0 ! (alpha < -1; beta = -1)
+  PetscInt, parameter :: PFLOTRAN_VERSION_PATCH = 1 ! (alpha < -1; beta = -1)
 
 #define VMAJOR 3
 #define VMINOR 13
