@@ -541,7 +541,7 @@ subroutine FractureUnitTest(auxvars,grid)
 
     liq_press_init_hold = auxvar%fracture%initial_pressure
     
-    write(id,'(I2)') fracture%id
+    write(id,'(I1)') fracture%id
     filename_out = trim('./fracture_id') // trim(id) // trim('.out')
 
     if (input_file_given) then
