@@ -9,6 +9,9 @@ module Reactive_Transport_module
   use Reaction_Aux_module
   use Global_Aux_module
   use Material_Aux_class
+#ifdef CONSTRAINTS_WITH_DATASETS
+  use Dataset_Base_class
+#endif
   
   use PFLOTRAN_Constants_module
 
@@ -17,6 +20,14 @@ module Reactive_Transport_module
   private 
 
   PetscReal, parameter :: perturbation_tolerance = 1.d-5
+
+#ifdef CONSTRAINTS_WITH_DATASETS
+  type :: dataset_ptr
+    class(dataset_base_type), pointer :: dataset
+    PetscInt :: idof
+  end type dataset_ptr
+  type(dataset_ptr), allocatable :: bc_datasets(:)
+#endif
   
   public :: RTTimeCut, &
             RTSetup, &
@@ -112,6 +123,9 @@ subroutine RTSetup(realization)
   use Output_Aux_module
   use Generic_module
   use String_module
+#ifdef CONSTRAINTS_WITH_DATASETS
+  use Dataset_module
+#endif
  
   implicit none
 
@@ -132,6 +146,14 @@ subroutine RTSetup(realization)
   type(material_property_type), pointer :: cur_material_property
   type(reactive_transport_param_type), pointer :: rt_parameter
   type(generic_parameter_type), pointer :: cur_generic_parameter
+
+#ifdef CONSTRAINTS_WITH_DATASETS
+  class(tran_constraint_coupler_rt_type), pointer :: constraint_coupler
+  class(tran_constraint_rt_type), pointer :: constraint
+  character(len=MAXSTRINGLENGTH) :: string
+  PetscInt :: idataset
+  PetscInt :: idof
+#endif
 
   character(len=MAXWORDLENGTH) :: word
   PetscInt :: ghosted_id, iconn, sum_connection
@@ -413,6 +435,45 @@ subroutine RTSetup(realization)
     call RTSetPlotVariables(list,reaction,option, &
                             realization%output_option%tunit)
   endif
+
+#ifdef CONSTRAINTS_WITH_DATASETS
+  idataset = 0
+  boundary_condition => patch%boundary_condition_list%first
+  do 
+    if (.not.associated(boundary_condition)) exit
+    constraint_coupler => &
+      TranConstraintCouplerRTCast(boundary_condition%tran_condition% &
+                                    cur_constraint_coupler)
+    constraint => TranConstraintRTCast(constraint_coupler%constraint)
+    do idof = 1, reaction%naqcomp ! primary aqueous concentrations
+      if (constraint%aqueous_species%external_dataset(idof)) then
+        idataset = idataset+1
+      endif
+    enddo
+    boundary_condition => boundary_condition%next
+  enddo
+  allocate(bc_datasets(idataset))
+  boundary_condition => patch%boundary_condition_list%first
+  do 
+    if (.not.associated(boundary_condition)) exit
+    constraint_coupler => &
+      TranConstraintCouplerRTCast(boundary_condition%tran_condition% &
+                                    cur_constraint_coupler)
+    constraint => TranConstraintRTCast(constraint_coupler%constraint)
+    do idof = 1, reaction%naqcomp ! primary aqueous concentrations
+      if (constraint%aqueous_species%external_dataset(idof)) then
+        idataset = idataset+1
+        string = 'constraint ' // trim(constraint%name)
+        bc_datasets(idataset)%dataset => DatasetBaseGetPointer(realization%datasets, &
+                      constraint%aqueous_species%constraint_aux_string(idof), &
+                        string,option)
+        call DatasetLoad(bc_datasets(idataset)%dataset,option)
+        bc_datasets(idataset)%idof = idof
+      endif
+    enddo
+    boundary_condition => boundary_condition%next
+  enddo
+#endif      
   
 end subroutine RTSetup
 
@@ -3911,9 +3972,10 @@ subroutine RTUpdateAuxVars(realization,update_cells,update_bcs, &
   use Material_Aux_class
   use Transport_Constraint_RT_module
   
-#ifdef XINGYUAN_BC
+#ifdef CONSTRAINTS_WITH_DATASETS
   use Dataset_module
   use Dataset_Base_class
+  use Dataset_Gridded_HDF5_class
   use Output_Tecplot_module
 #endif
   
@@ -3957,10 +4019,10 @@ subroutine RTUpdateAuxVars(realization,update_cells,update_bcs, &
   class(tran_constraint_coupler_rt_type), pointer :: constraint_coupler
   class(tran_constraint_rt_type), pointer :: constraint
   
-#ifdef XINGYUAN_BC
+#ifdef CONSTRAINTS_WITH_DATASETS
+  PetscInt :: idataset
   character(len=MAXSTRINGLENGTH) :: string
   character(len=MAXWORDLENGTH) :: name
-  PetscInt :: idof_aq_dataset
   class(dataset_base_type), pointer :: dataset
   PetscReal :: temp_real
   PetscBool, save :: first = PETSC_TRUE
@@ -3978,7 +4040,8 @@ subroutine RTUpdateAuxVars(realization,update_cells,update_bcs, &
   global_auxvars_bc => patch%aux%Global%auxvars_bc
   material_auxvars => patch%aux%Material%auxvars
 
-#ifdef XINGYUAN_BC
+#ifdef CONSTRAINTS_WITH_DATASETS
+  idataset = -1
 !geh  call VecZeroEntries(field%work,ierr)
 !geh  call VecGetArrayReadF90(field%work,work_p,ierr)
 #endif  
@@ -4042,6 +4105,15 @@ subroutine RTUpdateAuxVars(realization,update_cells,update_bcs, &
 
   if (update_bcs) then
 
+#ifdef CONSTRAINTS_WITH_DATASETS
+    if (allocated(bc_datasets)) then
+      do idataset = 1, size(bc_datasets)
+        call DatasetUpdate(bc_datasets(idataset)%dataset,option)
+      enddo
+      idataset = 0
+    endif
+#endif      
+
     call PetscLogEventBegin(logging%event_rt_auxvars_bc,ierr);CHKERRQ(ierr)
 
     boundary_condition => patch%boundary_condition_list%first
@@ -4060,18 +4132,6 @@ subroutine RTUpdateAuxVars(realization,update_cells,update_bcs, &
       if (reaction%ncoll > 0) then
         basis_coll_conc_p => constraint%colloids%basis_conc_mob
       endif
-
-#ifdef XINGYUAN_BC
-      idof_aq_dataset = 0
-      do idof = 1, reaction%naqcomp ! primary aqueous concentrations
-        if (constraint%aqueous_species%external_dataset(idof)) then
-          idof_aq_dataset = idof
-          string = 'constraint ' // trim(constraint%name)
-          call DatasetLoad(dataset,option)
-          exit
-        endif
-      enddo
-#endif      
 
       do iconn = 1, cur_connection_set%num_connections
         sum_connection = sum_connection + 1
@@ -4093,27 +4153,33 @@ subroutine RTUpdateAuxVars(realization,update_cells,update_bcs, &
           iendcoll = offset + iendcoll_loc
         endif
 
-#ifdef XINGYUAN_BC
-  if (idof_aq_dataset > 0) then
-    call DatasetInterpolateReal(dataset, &
-            grid%x(ghosted_id)- &
-              boundary_condition%connection_set%dist(0,iconn)* &
-              boundary_condition%connection_set%dist(1,iconn), &
-            grid%y(ghosted_id)- &
-              boundary_condition%connection_set%dist(0,iconn)* &
-              boundary_condition%connection_set%dist(2,iconn), &
-            0.d0, &  ! z
-            option%tran_time,temp_real,option)
-    constraint%aqueous_species%constraint_conc(idof_aq_dataset) = temp_real
-    if (first) rt_auxvars_bc(sum_connection)%pri_molal = basis_molarity_p
-    call ReactionEquilibrateConstraint( &
-        rt_auxvars_bc(sum_connection), &
-        global_auxvars_bc(sum_connection), &
-        material_auxvars(ghosted_id),reaction, &
-        constraint,num_iterations, &
-        PETSC_TRUE,option)
-    basis_molarity_p => constraint%aqueous_species%basis_molarity 
-  endif
+#ifdef CONSTRAINTS_WITH_DATASETS
+        if (idataset >= 0) then
+          do
+            select type(d=>bc_datasets(idataset)%dataset)
+              class is(dataset_gridded_hdf5_type)
+                call DatasetGriddedHDF5InterpolateReal(d, &
+                    grid%x(ghosted_id)- &
+                      boundary_condition%connection_set%dist(0,iconn)* &
+                      boundary_condition%connection_set%dist(1,iconn), &
+                    grid%y(ghosted_id)- &
+                      boundary_condition%connection_set%dist(0,iconn)* &
+                      boundary_condition%connection_set%dist(2,iconn), &
+                    0.d0, &  ! z
+                    temp_real,option)
+            end select
+            constraint%aqueous_species% &
+              constraint_conc(bc_datasets(idataset)%idof) = temp_real
+          enddo
+          if (first) rt_auxvars_bc(sum_connection)%pri_molal = basis_molarity_p
+          call ReactionEquilibrateConstraint( &
+              rt_auxvars_bc(sum_connection), &
+              global_auxvars_bc(sum_connection), &
+              material_auxvars(ghosted_id),reaction, &
+              constraint,num_iterations, &
+              PETSC_TRUE,option)
+          basis_molarity_p => constraint%aqueous_species%basis_molarity 
+        endif
 #endif        
 
         equilibrate_constraint = constraint_coupler%equilibrate_at_each_cell
@@ -4244,7 +4310,7 @@ subroutine RTUpdateAuxVars(realization,update_cells,update_bcs, &
 
     call PetscLogEventEnd(logging%event_rt_auxvars_bc,ierr);CHKERRQ(ierr)
 
-#ifdef XINGYUAN_BC
+#ifdef CONSTRAINTS_WITH_DATASETS
     first = PETSC_FALSE
     !call VecRestoreArrayReadF90(field%work,work_p,ierr)
     !string = 'xingyuan_bc.tec'
