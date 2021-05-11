@@ -1039,6 +1039,7 @@ subroutine PMUFDDecaySolve(this,time,ierr)
   use Global_Aux_module
   use Material_Aux_class
   use Utility_module
+  use Secondary_Continuum_Aux_module
   
   implicit none
 
@@ -1130,6 +1131,7 @@ subroutine PMUFDDecaySolve(this,time,ierr)
   type(reactive_transport_auxvar_type), pointer :: rt_auxvars(:)
   type(global_auxvar_type), pointer :: global_auxvars(:)
   class(material_auxvar_type), pointer :: material_auxvars(:)
+  type(sec_transport_type) :: rt_sec_transport_vars
   PetscInt :: local_id
   PetscInt :: ghosted_id
   PetscInt :: iele, i, p, g, ip, ig, iiso, ipri, imnrl, imat
@@ -1159,7 +1161,7 @@ subroutine PMUFDDecaySolve(this,time,ierr)
   PetscReal :: rate, rate_constant, stoich, one_over_dt
   PetscReal, parameter :: tolerance = 1.d-6
   PetscInt :: idaughter
-  PetscInt :: it
+  PetscInt :: it, istart, iend, cell
 ! -----------------------------------------------------------------------
 
   ierr = 0
@@ -1175,6 +1177,7 @@ subroutine PMUFDDecaySolve(this,time,ierr)
   
   dt = option%tran_dt
   one_over_dt = 1.d0 / dt
+!  epsilon = 1.d0
   call VecGetArrayF90(field%tran_xx,xx_p,ierr);CHKERRQ(ierr)
 
   do local_id = 1, grid%nlmax
@@ -1184,25 +1187,40 @@ subroutine PMUFDDecaySolve(this,time,ierr)
     if (global_auxvars(ghosted_id)%sat(LIQUID_PHASE) < rt_min_saturation) then
       cycle
     endif
-    vol = material_auxvars(ghosted_id)%volume
+
+    if (option%use_mc) then
+      rt_sec_transport_vars =  patch%aux%SC_RT%sec_transport_vars(ghosted_id)     
+      por = patch%material_property_array(1)%ptr%multicontinuum%porosity      
+      do cell = 1, rt_sec_transport_vars%ncells
+        vol = rt_sec_transport_vars%vol(cell)
+        vps = vol * por * sat
+        call PMUFDDecaySolveISPDIAtCell(this,rt_sec_transport_vars%sec_rt_auxvar(cell),&
+                               reaction,vol,den_w_kg,por,sat,vps,dt,&
+                               rt_sec_transport_vars%sec_rt_auxvar(cell)%pri_molal(:),&
+                               local_id,imat)
+      enddo
+      vol = material_auxvars(ghosted_id)%volume * material_auxvars(ghosted_id)%epsilon
+    else
+      vol = material_auxvars(ghosted_id)%volume
+    endif
+    
     den_w_kg = global_auxvars(ghosted_id)%den_kg(1)
     por = material_auxvars(ghosted_id)%porosity
     sat = global_auxvars(ghosted_id)%sat(1)
-    vps = vol * por * sat !* material_auxvars(ghosted_id)%epsilon ! m^3 water
+    vps = vol * por * sat  ! m^3 water
+
+    istart = (local_id-1) * reaction%ncomp + 1
+    iend = istart + reaction%naqcomp - 1
     
     ! sum up mass of each isotope across phases and decay
     
        
-    call PMUFDDecaySumMass(this,rt_auxvars(ghosted_id),reaction, &
-                           vol,den_w_kg,por,sat,vps,dt,xx_p, &
+    call PMUFDDecaySolveISPDIAtCell(this,rt_auxvars(ghosted_id),reaction, &
+                           vol,den_w_kg,por,sat,vps,dt,xx_p(istart:iend), &
                            local_id,imat)
 
-!    if (option%use_mc) then
-!       vol = patch%aux%SC_RT%sec_transport_vars(ghosted_id)%vol
-!       por = patch%material_property_array(1)%ptr%multicontinuum%porosity
-!       vps = vol * por * sat
-!       call PMUFDDecaySumMass(this,patch%aux%SC_RT%sec_transport_vars(ghosted_id),reaction,vol,den_w_kg,por,sat,vps,dt,xx_p,local_id,imat)
-!    endif
+
+    
   enddo
 
   call VecRestoreArrayF90(field%tran_xx,xx_p,ierr);CHKERRQ(ierr)
@@ -1222,7 +1240,7 @@ end subroutine PMUFDDecaySolve
 
 ! ************************************************************************** !
 
-subroutine PMUFDDecaySumMass(this,rt_auxvars,reaction,vol,den_w_kg,por, &
+subroutine PMUFDDecaySolveISPDIAtCell(this,rt_auxvars,reaction,vol,den_w_kg,por, &
                              sat,vps,dt,xx_p,local_id,imat)
 
 
@@ -1260,7 +1278,7 @@ subroutine PMUFDDecaySumMass(this,rt_auxvars,reaction,vol,den_w_kg,por, &
   PetscReal :: mol_fraction_iso(this%num_isotopes)
   PetscReal :: kd_kgw_m3b
   PetscBool :: above_solubility
-  PetscReal, pointer :: xx_p(:)
+  PetscReal :: xx_p(:)
   ! implicit solution:
   PetscReal :: norm
   PetscReal :: residual(this%num_isotopes)
@@ -1283,8 +1301,7 @@ subroutine PMUFDDecaySumMass(this,rt_auxvars,reaction,vol,den_w_kg,por, &
       ipri = this%isotope_to_primary_species(iiso)
       imnrl = this%isotope_to_mineral(iiso)
       ! # indicated time level (0 = prev time level, 1 = new time level) 
-      conc_iso_aq0 = xx_p((local_id-1)*reaction%ncomp+ipri) * &
-                     den_w_kg / 1000.d0  ! mol/L
+      conc_iso_aq0 = xx_p(ipri) * den_w_kg / 1000.d0  ! mol/L
       !conc_iso_aq0 = rt_auxvars(ghosted_id)%total(ipri,1) ! mol/L
       conc_iso_sorb0 = rt_auxvars%total_sorb_eq(ipri) ! mol/m^3 bulk
       conc_iso_ppt0 = rt_auxvars%mnrl_volfrac(imnrl) ! m^3 mnrl/m^3 bulk
@@ -1476,12 +1493,11 @@ subroutine PMUFDDecaySumMass(this,rt_auxvars,reaction,vol,den_w_kg,por, &
       rt_auxvars%mnrl_volfrac(imnrl) = &
         conc_ele_ppt1 * mol_fraction_iso(i)
       ! need to copy primary molalities back into transport solution Vec
-      xx_p((local_id-1)*reaction%ncomp+ipri) = &
-        rt_auxvars%pri_molal(ipri)
+      xx_p(ipri) = rt_auxvars%pri_molal(ipri)
     enddo
   enddo      
 
-end subroutine PMUFDDecaySumMass
+end subroutine PMUFDDecaySolveISPDIAtCell
  
 ! ************************************************************************** !
 
