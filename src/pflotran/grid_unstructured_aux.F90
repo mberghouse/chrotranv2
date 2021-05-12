@@ -263,7 +263,8 @@ function UGridCreate()
   unstructured_grid%num_vertices_local = 0
   unstructured_grid%max_ndual_per_cell = 0
   unstructured_grid%max_nvert_per_cell = 0
-  unstructured_grid%max_cells_sharing_a_vertex = 24
+  !unstructured_grid%max_cells_sharing_a_vertex = 24
+  unstructured_grid%max_cells_sharing_a_vertex = 100
   nullify(unstructured_grid%cell_type)
   nullify(unstructured_grid%cell_vertices)
   nullify(unstructured_grid%face_to_cell_ghosted)
