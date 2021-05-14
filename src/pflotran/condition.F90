@@ -50,6 +50,7 @@ module Condition_module
     type(flow_sub_condition_type), pointer :: gas_pressure
     type(flow_sub_condition_type), pointer :: gas_saturation
     type(flow_sub_condition_type), pointer :: mole_fraction
+    type(flow_sub_condition_type), pointer :: mole2_fraction
     type(flow_sub_condition_type), pointer :: relative_humidity
     type(flow_sub_condition_type), pointer :: temperature
     type(flow_sub_condition_type), pointer :: rate
@@ -302,6 +303,7 @@ function FlowGeneralConditionCreate(option)
   nullify(general_condition%gas_saturation)
   nullify(general_condition%relative_humidity)
   nullify(general_condition%mole_fraction)
+  nullify(general_condition%mole2_fraction)
   nullify(general_condition%temperature)
   nullify(general_condition%liquid_flux)
   nullify(general_condition%gas_flux)
@@ -416,6 +418,13 @@ function FlowGeneralSubConditionPtr(input,sub_condition_name,general, &
       else
         sub_condition_ptr => FlowSubConditionCreate(ONE_INTEGER)
         general%mole_fraction => sub_condition_ptr
+      endif
+    case('MOLE2_FRACTION')
+      if (associated(general%mole2_fraction)) then
+        sub_condition_ptr => general%mole2_fraction
+      else
+        sub_condition_ptr => FlowSubConditionCreate(ONE_INTEGER)
+        general%mole2_fraction => sub_condition_ptr
       endif
     case('LIQUID_FLUX')
       if (associated(general%liquid_flux)) then
@@ -1734,7 +1743,8 @@ subroutine FlowConditionGeneralRead(condition,input,option)
         call InputErrorMsg(input,option,'LIQUID_CONDUCTANCE','CONDITION')
       case('LIQUID_PRESSURE','GAS_PRESSURE','LIQUID_SATURATION', &
            'GAS_SATURATION', 'TEMPERATURE','MOLE_FRACTION','RATE', &
-           'LIQUID_FLUX','GAS_FLUX','ENERGY_FLUX','RELATIVE_HUMIDITY')
+           'LIQUID_FLUX','GAS_FLUX','ENERGY_FLUX','RELATIVE_HUMIDITY', &
+           'MOLE2_FRACTION')
         select case(option%iflowmode)
           case(G_MODE,WF_MODE)
             sub_condition_ptr => &
@@ -1756,8 +1766,13 @@ subroutine FlowConditionGeneralRead(condition,input,option)
               case(WF_MODE)
                 internal_units = trim(rate_string) // ',' // trim(rate_string)
               case(G_MODE)
-                internal_units = trim(rate_string) // ',' // &
-                  trim(rate_string) // ',MJ/sec|MW'
+                if (option%nflowdof == 3) then
+                  internal_units = trim(rate_string) // ',' // &
+                    trim(rate_string) // ',MJ/sec|MW'
+                elseif (option%nflowdof == 4) then
+                   internal_units = trim(rate_string) // ',' // &
+                     trim(rate_string) // ',MJ/sec|MW'
+                endif
             end select
           case('LIQUID_FLUX','GAS_FLUX')
             internal_units = 'meter/sec'
@@ -1937,6 +1952,8 @@ subroutine FlowConditionGeneralRead(condition,input,option)
     i = i + 1
   if (associated(general%mole_fraction)) &
     i = i + 1
+  if (associated(general%mole2_fraction)) &
+    i = i + 1
   if (associated(general%temperature)) &
     i = i + 1
   if (associated(general%liquid_flux)) &
@@ -1972,6 +1989,10 @@ subroutine FlowConditionGeneralRead(condition,input,option)
   if (associated(general%mole_fraction)) then
     i = i + 1
     condition%sub_condition_ptr(i)%ptr => general%mole_fraction
+  endif
+  if (associated(general%mole2_fraction)) then
+    i = i + 1
+    condition%sub_condition_ptr(i)%ptr => general%mole2_fraction
   endif
   if (associated(general%temperature)) then
     i = i + 1

@@ -892,6 +892,7 @@ subroutine SubsurfaceSetFlowMode(pm_flow,option)
       option%water_id = 1
       option%air_id = 2
       option%energy_id = 3
+      option%salt_id = 4
 
       option%nflowdof = 3
       option%nflowspec = 2

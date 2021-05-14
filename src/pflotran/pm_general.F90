@@ -185,13 +185,14 @@ subroutine PMGeneralReadSimOptionsBlock(this,input)
   PetscReal :: tempreal
   character(len=MAXSTRINGLENGTH) :: error_string
   PetscBool :: found
-  PetscInt :: lid, gid, eid
+  PetscInt :: lid, gid, eid, sid
 
   option => this%option
 
   lid = 1 !option%liquid_phase
   gid = 2 !option%gas_phase
   eid = 3 !option%energy_id
+  sid = 4 !option%salt_id
 
   error_string = 'General Options'
   
@@ -270,6 +271,10 @@ subroutine PMGeneralReadSimOptionsBlock(this,input)
       case('WINDOW_EPSILON') 
         call InputReadDouble(input,option,window_epsilon)
         call InputErrorMsg(input,option,keyword,error_string)
+      case('NUMBER_OF_EQUATIONS')
+        call InputReadDouble(input,option,tempreal)
+        option%nflowdof = tempreal
+        call InputErrorMsg(input,option,keyword,error_string)
       case default
         call InputKeywordUnrecognized(input,keyword,'GENERAL Mode',option)
     end select
@@ -313,13 +318,14 @@ subroutine PMGeneralReadNewtonSelectCase(this,input,keyword,found, &
 
   PetscBool :: found
   PetscReal :: tempreal
-  PetscInt :: lid, gid, eid
+  PetscInt :: lid, gid, eid, sid
 
   option => this%option
 
   lid = 1 !option%liquid_phase
   gid = 2 !option%gas_phase
   eid = 3 !option%energy_id
+  sid = 4 !option%salt_id
 
   error_string = 'GENERAL Newton Solver'
   
@@ -356,6 +362,9 @@ subroutine PMGeneralReadNewtonSelectCase(this,input,keyword,found, &
     case('ENERGY_RESIDUAL_ABS_INF_TOL')
       call InputReadDouble(input,option,this%residual_abs_inf_tol(eid))
       call InputErrorMsg(input,option,keyword,error_string)
+    case('SALT_RESIDUAL_ABS_INF_TOL')
+      call InputReadDouble(input,option,this%residual_abs_inf_tol(sid))
+      call InputErrorMsg(input,option,keyword,error_string)
 
     ! Scaled Residual
     case('ITOL_SCALED_RESIDUAL')
@@ -373,6 +382,9 @@ subroutine PMGeneralReadNewtonSelectCase(this,input,keyword,found, &
       call InputErrorMsg(input,option,keyword,error_string)
     case('ENERGY_RESIDUAL_SCALED_INF_TOL')
       call InputReadDouble(input,option,this%residual_scaled_inf_tol(eid))
+      call InputErrorMsg(input,option,keyword,error_string)
+    case('SALT_RESIDUAL_SCALED_INF_TOL')
+      call InputReadDouble(input,option,this%residual_scaled_inf_tol(sid))
       call InputErrorMsg(input,option,keyword,error_string)
 
     ! All Updates

@@ -693,7 +693,7 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
   PetscInt :: iphasebc, iphase
   PetscInt :: offset
   PetscInt :: istate
-  PetscInt :: wat_comp_id, air_comp_id
+  PetscInt :: wat_comp_id, air_comp_id, salt_comp_id
   PetscReal :: gas_pressure, capillary_pressure, liquid_saturation
   PetscReal :: saturation_pressure, temperature
   PetscReal :: qsrc(3)
@@ -933,6 +933,7 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
   
   wat_comp_id = option%water_id
   air_comp_id = option%air_id
+  salt_comp_id = option%salt_id
 
   source_sink => patch%source_sink_list%first
   sum_connection = 0
