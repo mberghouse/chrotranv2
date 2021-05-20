@@ -748,8 +748,8 @@ subroutine RTUpdateEquilibriumState(realization)
 
 !geh: for debugging max/min concentrations
 #if 0
-  max_conc = -1.d20
-  min_conc = 1.d20
+  max_conc = -MAX_DOUBLE
+  min_conc = MAX_DOUBLE
   do local_id = 1, grid%nlmax
     ghosted_id = grid%nL2G(local_id)
     conc = rt_auxvars(ghosted_id)%total(1,1)
@@ -2733,7 +2733,7 @@ subroutine RTResidualNonFlux(snes,xx,r,realization,ierr)
   ! Get pointer to Vector data
   call VecGetArrayF90(r, r_p, ierr);CHKERRQ(ierr)
  
-  if (.not.option%steady_state) then
+  if (.not.option%transport%steady_state) then
 #if 1
     call VecGetArrayF90(field%tran_accum, accum_p, ierr);CHKERRQ(ierr)
     r_p = r_p - accum_p / option%tran_dt
@@ -3534,7 +3534,7 @@ subroutine RTJacobianNonFlux(snes,xx,A,B,realization,ierr)
   endif
   nphase = rt_parameter%nphase
 
-  if (.not.option%steady_state) then
+  if (.not.option%transport%steady_state) then
   call PetscLogEventBegin(logging%event_rt_jacobian_accum,ierr);CHKERRQ(ierr)
 #if 1  
     do local_id = 1, grid%nlmax  ! For each local node do...
