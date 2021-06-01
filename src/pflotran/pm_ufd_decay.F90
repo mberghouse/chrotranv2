@@ -75,7 +75,7 @@ module PM_UFD_Decay_class
     PetscInt, pointer :: isotope_parents(:,:)
     PetscReal, pointer :: isotope_tot_mass(:)
     PetscReal, pointer :: element_solubility(:)
-    PetscReal, pointer :: element_Kd(:,:)
+    PetscReal, pointer :: element_Kd(:,:,:)
     PetscInt :: num_elements
     PetscInt :: num_isotopes
     PetscBool :: implicit_solution
@@ -167,7 +167,7 @@ module PM_UFD_Decay_class
     character(len=MAXWORDLENGTH) :: name
     PetscInt :: ielement
     PetscReal :: solubility
-    PetscReal, pointer :: Kd(:)
+    PetscReal, pointer :: Kd(:,:)
     character(len=MAXWORDLENGTH), pointer :: Kd_material_name(:)
     type(element_type), pointer :: next
   end type
@@ -278,11 +278,14 @@ subroutine PMUFDDecayReadPMBlock(this,input)
   type(isotope_type), pointer :: isotope, prev_isotope
   type(daughter_type), pointer :: daughter, prev_daughter
   type(element_type), pointer :: element, prev_element
-  PetscInt :: i
+  PetscInt :: i,j
   PetscInt, parameter :: MAX_KD_SIZE = 100
+  PetscInt, parameter :: MAX_CONTINUUM_SIZE = 3
   character(len=MAXWORDLENGTH) :: Kd_material_name(MAX_KD_SIZE)
-  PetscReal :: Kd(MAX_KD_SIZE)
+  PetscReal :: Kd(MAX_KD_SIZE,MAX_CONTINUUM_SIZE)
   PetscReal :: tempreal
+  PetscReal, pointer :: temp_real_array(:)
+  character(len=MAXSTRINGLENGTH) :: kd_string
 ! -------------------------------------------------------------
 
   option => this%option
@@ -325,8 +328,9 @@ subroutine PMUFDDecayReadPMBlock(this,input)
               call InputErrorMsg(input,option,'solubility',error_string)
             case('KD')
               i = 0
-              Kd(:) = UNINITIALIZED_DOUBLE
+              Kd(:,:) = UNINITIALIZED_DOUBLE
               Kd_material_name(:) = ''
+              kd_string = 'Kd'
               do
                 call InputReadPflotranString(input,option)
                 if (InputError(input)) exit
@@ -342,16 +346,27 @@ subroutine PMUFDDecayReadPMBlock(this,input)
                 call InputErrorMsg(input,option,'Kd material name', &
                                    error_string)
                 Kd_material_name(i) = word
-                call InputReadDouble(input,option,Kd(i))
-                call InputErrorMsg(input,option,'Kd',error_string)
+                nullify(temp_real_array)
+                
+                call UtilityReadArray(temp_real_array,NEG_ONE_INTEGER,kd_string,input,option)
+                if (i == 1) then
+                  j = size(temp_real_array)
+                else
+                  if (j /= size(temp_real_array)) then
+                    option%io_buffer = 'must be same size'
+                    call PrintErrMsg(option)
+                  endif
+                endif
+                Kd(i,:) = temp_real_array(1:j)
               enddo
               if (i == 0) then
                 option%io_buffer = 'No KD/material combinations specified &
                   &under ' // trim(error_string) // '.'
                 call PrintErrMsg(option)
               endif
-              allocate(element%Kd(i))
-              element%Kd = Kd(1:i)
+
+              allocate(element%Kd(i,j))
+              element%Kd = Kd(1:i,1:j)
               allocate(element%Kd_material_name(i))
               element%Kd_material_name = Kd_material_name(1:i)
             case default
@@ -537,6 +552,7 @@ subroutine PMUFDDecayInit(this)
   use Reaction_Mineral_Aux_module
   use Reactive_Transport_Aux_module
   use Material_module
+  use Secondary_Continuum_Aux_module
   
   implicit none
   
@@ -583,13 +599,14 @@ subroutine PMUFDDecayInit(this)
   character(len=MAXWORDLENGTH) :: word
   type(material_property_ptr_type), pointer :: material_property_array(:)
   type(material_property_type), pointer :: material_property
-  PetscInt :: icount
+  type(sec_transport_type), pointer :: rt_sec_transport_vars(:)
+  PetscInt :: icount, jcount, num_continuum
   PetscInt :: ghosted_id
   PetscInt :: max_daughters_per_isotope
   PetscInt :: max_parents_per_isotope
   PetscBool :: found
   PetscInt :: iisotope, ielement
-  PetscInt :: g, ig, p, ip, d, id
+  PetscInt :: g, ig, p, ip, d, id,cell
 ! -----------------------------------------------------------------------
   
   option => this%realization%option
@@ -601,6 +618,13 @@ subroutine PMUFDDecayInit(this)
   do ghosted_id = 1, grid%ngmax
     allocate(rt_auxvars(ghosted_id)%total_sorb_eq(reaction%naqcomp))
     rt_auxvars(ghosted_id)%total_sorb_eq = 0.d0
+    if (option%use_mc) then
+       rt_sec_transport_vars =>  this%realization%patch%aux%SC_RT%sec_transport_vars
+      do cell = 1, rt_sec_transport_vars(ghosted_id)%ncells
+         allocate(rt_sec_transport_vars(ghosted_id)%sec_rt_auxvar(cell)%total_sorb_eq(reaction%naqcomp))
+         rt_sec_transport_vars(ghosted_id)%sec_rt_auxvar(cell)%total_sorb_eq = 0.d0
+      enddo
+    endif
   enddo
   
   max_daughters_per_isotope = 0
@@ -623,7 +647,13 @@ subroutine PMUFDDecayInit(this)
   this%element_solubility = 0.d0
   allocate(this%element_name(this%num_elements))
   this%element_name = ''
-  allocate(this%element_Kd(this%num_elements,size(material_property_array)))
+  if (option%use_mc) then
+     allocate(this%element_Kd(this%num_elements,size(material_property_array),2))
+     num_continuum = 2
+  else
+     allocate(this%element_Kd(this%num_elements,size(material_property_array),1))
+     num_continuum = 1
+  endif
   this%element_Kd = UNINITIALIZED_DOUBLE
   element => this%element_list
   do
@@ -643,8 +673,8 @@ subroutine PMUFDDecayInit(this)
         &MATERIAL_PROPERTY in the format "<string> <double>".'
       call PrintErrMsg(option)
     endif
-    if (size(element%Kd) /= size(material_property_array)) then
-      write(word,*) size(element%Kd)
+    if (size(element%Kd(:,1)) /= size(material_property_array)) then
+      write(word,*) size(element%Kd(:,1))
       option%io_buffer = 'Incorrect number of Kds (' // &
         trim(adjustl(word)) // ') specified for number of materials ('
       write(word,*) size(material_property_array)
@@ -653,20 +683,28 @@ subroutine PMUFDDecayInit(this)
         trim(element%name) // '".'
       call PrintErrMsg(option)
     endif
+    if (size(element%Kd(1,:)) /= num_continuum) then
+       option%io_buffer = 'Incorrect number of Kds'
+       call PrintErrMsg(option)
+    endif
     do icount = 1, size(element%Kd_material_name)
+       do jcount = 1, num_continuum
       material_property => &
         MaterialPropGetPtrFromArray(element%Kd_material_name(icount), &
                                     material_property_array)
-      this%element_Kd(element%ielement,material_property%internal_id) = &
-        element%Kd(icount)
+      this%element_Kd(element%ielement,material_property%internal_id,jcount) = &
+           element%Kd(icount,jcount)
+      enddo
     enddo
     do icount = 1, size(material_property_array)
-      if (UnInitialized(this%element_Kd(element%ielement,icount))) then
-        option%io_buffer = 'Uninitialized KD in UFD Decay element "' // &
+      do jcount = 1, num_continuum
+        if (UnInitialized(this%element_Kd(element%ielement,icount,jcount))) then
+          option%io_buffer = 'Uninitialized KD in UFD Decay element "' // &
           trim(element%name) // '" for material "' // &
           trim(material_property_array(icount)%ptr%name) // '".'
-        call PrintErrMsg(option)
-      endif
+          call PrintErrMsg(option)
+        endif
+      enddo
     enddo
     element => element%next
   enddo  
@@ -899,7 +937,7 @@ recursive subroutine PMUFDDecayInitializeRun(this)
   use Patch_module
   use Grid_module
   use Reactive_Transport_Aux_module
-  
+  use Secondary_Continuum_Aux_module
   implicit none
 
 ! INPUT ARGUMENTS:
@@ -929,14 +967,16 @@ recursive subroutine PMUFDDecayInitializeRun(this)
   type(patch_type), pointer :: patch
   type(grid_type), pointer :: grid
   type(reactive_transport_auxvar_type), pointer :: rt_auxvars(:)
+  type(sec_transport_type), pointer :: rt_sec_transport_vars(:)
   PetscReal :: kd_kgw_m3b
   PetscInt :: local_id, ghosted_id
-  PetscInt :: iele, iiso, ipri, i, imat
+  PetscInt :: iele, iiso, ipri, i, imat, cell
 ! --------------------------------------------------------------
   
   patch => this%realization%patch
   grid => patch%grid
   rt_auxvars => patch%aux%RT%auxvars
+  
   
   ! set initial sorbed concentration in equilibrium with aqueous phase
   do local_id = 1, grid%nlmax
@@ -944,13 +984,21 @@ recursive subroutine PMUFDDecayInitializeRun(this)
     imat = patch%imat(ghosted_id) 
     if (imat <= 0) cycle
     do iele = 1, this%num_elements
-      kd_kgw_m3b = this%element_Kd(iele,imat)
+      kd_kgw_m3b = this%element_Kd(iele,imat,1)
       do i = 1, this%element_isotopes(0,iele)
         iiso = this%element_isotopes(i,iele)
         ipri = this%isotope_to_primary_species(iiso)
         rt_auxvars(ghosted_id)%total_sorb_eq(ipri) = &   ! [mol/m3-bulk]
             rt_auxvars(ghosted_id)%pri_molal(ipri) * &   ! [mol/kg-water]
             kd_kgw_m3b                                   ! [kg-water/m3-bulk]
+        if (this%option%use_mc) then
+          rt_sec_transport_vars => patch%aux%SC_RT%sec_transport_vars
+          kd_kgw_m3b = this%element_Kd(iele,imat,2)
+          do cell = 1, rt_sec_transport_vars(ghosted_id)%ncells
+             rt_sec_transport_vars(ghosted_id)%sec_rt_auxvar(cell)%total_sorb_eq(ipri) = &
+                  rt_sec_transport_vars(ghosted_id)%sec_rt_auxvar(cell)%pri_molal(ipri) *  kd_kgw_m3b
+          enddo
+        endif
       enddo
     enddo      
   enddo
@@ -1189,7 +1237,8 @@ subroutine PMUFDDecaySolve(this,time,ierr)
     endif
 
     if (option%use_mc) then
-      rt_sec_transport_vars =  patch%aux%SC_RT%sec_transport_vars(ghosted_id)     
+      rt_sec_transport_vars =  patch%aux%SC_RT%sec_transport_vars(ghosted_id)
+      sat = global_auxvars(ghosted_id)%sat(1)
       por = patch%material_property_array(1)%ptr%multicontinuum%porosity      
       do cell = 1, rt_sec_transport_vars%ncells
         vol = rt_sec_transport_vars%vol(cell)
@@ -1197,7 +1246,7 @@ subroutine PMUFDDecaySolve(this,time,ierr)
         call PMUFDDecaySolveISPDIAtCell(this,rt_sec_transport_vars%sec_rt_auxvar(cell),&
                                reaction,vol,den_w_kg,por,sat,vps,dt,&
                                rt_sec_transport_vars%sec_rt_auxvar(cell)%pri_molal(:),&
-                               local_id,imat)
+                               local_id,imat,this%element_Kd(:,:,2))
       enddo
       vol = material_auxvars(ghosted_id)%volume * material_auxvars(ghosted_id)%epsilon
     else
@@ -1217,7 +1266,7 @@ subroutine PMUFDDecaySolve(this,time,ierr)
        
     call PMUFDDecaySolveISPDIAtCell(this,rt_auxvars(ghosted_id),reaction, &
                            vol,den_w_kg,por,sat,vps,dt,xx_p(istart:iend), &
-                           local_id,imat)
+                           local_id,imat,this%element_Kd(:,:,1))
 
 
     
@@ -1241,7 +1290,7 @@ end subroutine PMUFDDecaySolve
 ! ************************************************************************** !
 
 subroutine PMUFDDecaySolveISPDIAtCell(this,rt_auxvars,reaction,vol,den_w_kg,por, &
-                             sat,vps,dt,xx_p,local_id,imat)
+                             sat,vps,dt,xx_p,local_id,imat,element_Kd)
 
 
   use petscvec
@@ -1279,6 +1328,7 @@ subroutine PMUFDDecaySolveISPDIAtCell(this,rt_auxvars,reaction,vol,den_w_kg,por,
   PetscReal :: kd_kgw_m3b
   PetscBool :: above_solubility
   PetscReal :: xx_p(:)
+  PetscReal :: element_Kd(:,:)
   ! implicit solution:
   PetscReal :: norm
   PetscReal :: residual(this%num_isotopes)
@@ -1459,7 +1509,7 @@ subroutine PMUFDDecaySolveISPDIAtCell(this,rt_auxvars,reaction,vol,den_w_kg,por,
     enddo
 
     ! split mass between phases
-    kd_kgw_m3b = this%element_Kd(iele,imat)
+    kd_kgw_m3b = element_Kd(iele,imat)
     conc_ele_aq1 = mass_ele_tot1 / (1.d0+kd_kgw_m3b/(den_w_kg*por*sat)) / &
                        (vps*1.d3)
     above_solubility = conc_ele_aq1 > this%element_solubility(iele)
@@ -1892,7 +1942,7 @@ subroutine PMUFDDecayInputRecord(this)
     write(id,'(4x,"KDs")')
     do i = 1, size(this%element_Kd,2)
       write(id,'(6x,a32,es13.5)') material_property_array(i)%ptr%name, &
-        this%element_Kd(iele,i)
+        this%element_Kd(iele,i,1)
     enddo 
     write(id,'(4x,"Isotopes")')
     do i = 1, this%element_isotopes(0,iele)
