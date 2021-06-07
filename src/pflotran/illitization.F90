@@ -339,7 +339,7 @@ subroutine ILTDefaultIllitization(this,fs,temperature,dt, &
   ds = rate * dt
 
   ! Change in smectite
-  fs = fs / (1.0d0 + ds)
+  fs = fs / (1.0d0 + (fs * ds))
 
   if (fs > 1.0d0) then
     fs = 1.0d0
