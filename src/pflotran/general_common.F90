@@ -72,7 +72,7 @@ subroutine GeneralAccumulation(gen_auxvar,global_auxvar,material_auxvar, &
   PetscBool :: analytical_derivatives
   PetscBool :: debug_cell
   
-  PetscInt :: wat_comp_id, air_comp_id, energy_id
+  PetscInt :: wat_comp_id, air_comp_id, energy_id, solute_id
   PetscInt :: icomp, iphase
   
   PetscReal :: porosity
@@ -81,6 +81,7 @@ subroutine GeneralAccumulation(gen_auxvar,global_auxvar,material_auxvar, &
   wat_comp_id = option%water_id
   air_comp_id = option%air_id
   energy_id = option%energy_id
+  solute_id = option%solute_id
   
   ! v_over_t[m^3 bulk/sec] = vol[m^3 bulk] / dt[sec]
   volume_over_dt = material_auxvar%volume / option%flow_dt
@@ -2518,13 +2519,13 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
   PetscReal :: v_darcy(option%nphase)
   PetscReal :: Res(1:option%nflowdof)
   class(cc_thermal_type) :: thermal_cc_dn
-  PetscReal :: J(3,3)
+  PetscReal :: J(option%nflowdof,option%nflowdof)
   PetscBool :: analytical_derivatives
   PetscBool :: update_upwind_direction_
   PetscBool :: count_upwind_direction_flip_
   PetscBool :: debug_connection
   
-  PetscInt :: wat_comp_id, air_comp_id, energy_id
+  PetscInt :: wat_comp_id, air_comp_id, energy_id, solute_comp_id
   PetscInt :: icomp, iphase
   PetscInt :: bc_type
   PetscReal :: xmol(option%nflowspec)  
@@ -2545,7 +2546,7 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
   PetscReal :: xmol_air_up, xmol_air_dn
   PetscReal :: tempreal
   PetscReal :: delta_X_whatever
-  PetscReal :: wat_mole_flux, air_mole_flux
+  PetscReal :: wat_mole_flux, air_mole_flux, solute_mole_flux
   PetscBool :: upwind
 
   ! Darcy flux
@@ -2604,6 +2605,7 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
   wat_comp_id = option%water_id
   air_comp_id = option%air_id
   energy_id = option%energy_id
+  solute_comp_id = option%solute_id
 
   Res = 0.d0
   J = 0.d0
@@ -2793,10 +2795,13 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
     !                                 xmol[kmol comp/kmol phase]
     wat_mole_flux = tot_mole_flux * xmol(wat_comp_id)
     air_mole_flux = tot_mole_flux * xmol(air_comp_id)
+    solute_mole_flux = tot_mole_flux * xmol(solute_comp_id)
     Res(wat_comp_id) = Res(wat_comp_id) + wat_mole_flux
     Res(air_comp_id) = Res(air_comp_id) + air_mole_flux
     Res(energy_id) = Res(energy_id) + tot_mole_flux * uH
-      
+    if (option%nflowdof == 4) then
+      Res(solute_comp_id) = Res(solute_comp_id) + solute_mole_flux
+    endif
     if (analytical_derivatives) then
       Jl = 0.d0
       select case(global_auxvar_dn%istate)
@@ -3943,11 +3948,11 @@ subroutine GeneralAuxVarComputeAndSrcSink(option,qsrc,flow_src_sink_type, &
   PetscBool :: aux_var_compute_only  
   PetscBool :: debug_cell
   
-  PetscReal :: qsrc(THREE_INTEGER)
+  PetscReal :: qsrc(option%nflowdof)
   PetscInt :: flow_src_sink_type
   PetscReal :: qsrc_mol
   PetscReal :: enthalpy, internal_energy
-  PetscInt :: wat_comp_id, air_comp_id, energy_id
+  PetscInt :: wat_comp_id, air_comp_id, energy_id, solute_comp_id
   PetscReal :: Jl(option%nflowdof,option%nflowdof)  
   PetscReal :: Jg(option%nflowdof,option%nflowdof)  
   PetscReal :: Je(option%nflowdof,option%nflowdof)  
@@ -3956,15 +3961,17 @@ subroutine GeneralAuxVarComputeAndSrcSink(option,qsrc,flow_src_sink_type, &
   PetscErrorCode :: ierr
   PetscReal :: mob_tot
   PetscReal :: cell_pressure
-  PetscReal :: xxss(THREE_INTEGER) 
-  PetscInt :: lid, gid, apid
+  PetscReal :: xxss(option%nflowdof) 
+  PetscInt :: lid, gid, pid, apid
 
   lid = option%liquid_phase
   gid = option%gas_phase
+  pid = option%precipitate_phase
   apid = option%air_pressure_id
   wat_comp_id = option%water_id
   air_comp_id = option%air_id
   energy_id = option%energy_id
+  solute_comp_id = option%solute_id
   
   Res = 0.d0
   J = 0.d0
@@ -3974,6 +3981,9 @@ subroutine GeneralAuxVarComputeAndSrcSink(option,qsrc,flow_src_sink_type, &
                      liquid_phase:option%gas_phase))
   xxss(2) = gen_auxvar_ss%sat(gid)
   xxss(3) = gen_auxvar_ss%temp
+  if (option%nflowdof == 4) then
+    xxss(4) = gen_auxvar_ss%sat(pid) !DF: unsure
+  endif
 
   cell_pressure = maxval(gen_auxvar%pres(option%liquid_phase: &
                          option%gas_phase))
@@ -4007,6 +4017,9 @@ subroutine GeneralAuxVarComputeAndSrcSink(option,qsrc,flow_src_sink_type, &
       case(LIQUID_STATE)
         xxss(TWO_INTEGER) = gen_auxvar_ss%xmol(air_comp_id, wat_comp_id)
         xxss(THREE_INTEGER) = gen_auxvar_ss%temp
+        if (option%nflowdof == 4) then
+          xxss(FOUR_INTEGER) = gen_auxvar_ss%xmol(solute_comp_id, wat_comp_id)
+        endif
       case(GAS_STATE)
         if (general_gas_air_mass_dof == GENERAL_AIR_PRESSURE_INDEX) then
           xxss(TWO_INTEGER) = gen_auxvar_ss%pres(apid)
@@ -4020,6 +4033,9 @@ subroutine GeneralAuxVarComputeAndSrcSink(option,qsrc,flow_src_sink_type, &
           xxss(THREE_INTEGER) = gen_auxvar_ss%temp
         else
           xxss(THREE_INTEGER) = gen_auxvar_ss%pres(apid)
+        endif
+        if (option%nflowdof == 4) then
+          xxss(FOUR_INTEGER) = gen_auxvar_ss%xmol(solute_comp_id,wat_comp_id)
         endif
     end select
   endif
@@ -4121,6 +4137,11 @@ subroutine GeneralAuxVarComputeAndSrcSink(option,qsrc,flow_src_sink_type, &
                          gen_auxvar_ss%den(gid) / &
                          gen_auxvar_ss%den_kg(gid) * &
                          gen_auxvar_ss%h(gid)
+      endif
+
+      if (option%nflowdof == 4) then
+        Res(solute_comp_id) = qsrc_mol
+        !if (gen_auxvar_ss%sat(gid) )
       endif
   else
   
@@ -4649,7 +4670,7 @@ subroutine GeneralSrcSinkDerivative(option,source_sink,gen_auxvar_ss, &
   PetscReal :: scale
   PetscReal :: Jac(option%nflowdof,option%nflowdof)
   
-  PetscReal :: qsrc(3)
+  PetscReal :: qsrc(option%nflowdof)
   PetscInt :: flow_src_sink_type
   PetscReal :: res(option%nflowdof), res_pert(option%nflowdof)
   PetscReal :: dummy_real(option%nphase)
@@ -4779,7 +4800,7 @@ subroutine GeneralAuxVarDiff(idof,general_auxvar,global_auxvar, &
 
   
   PetscInt :: apid, cpid, vpid, spid
-  PetscInt :: gid, lid, acid, wid, eid
+  PetscInt :: gid, lid, pid, acid, wid, eid, sid
   PetscReal :: liquid_mass, gas_mass
   PetscReal :: liquid_density, gas_density
   PetscReal :: liquid_energy, gas_energy

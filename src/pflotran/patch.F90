@@ -919,7 +919,7 @@ subroutine PatchInitCouplerAuxVars(coupler_list,patch,option)
 
               case(G_MODE)
                 allocate(coupler%flow_aux_mapping(GENERAL_MAX_INDEX))
-                allocate(coupler%flow_bc_type(THREE_INTEGER))
+                allocate(coupler%flow_bc_type(option%nflowdof))
                 allocate(coupler%flow_aux_real_var(FIVE_INTEGER, &
                                                    num_connections))
                 allocate(coupler%flow_aux_int_var(ONE_INTEGER,num_connections))
@@ -1411,7 +1411,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
   type(tran_condition_type), pointer :: tran_condition
   type(flow_general_condition_type), pointer :: general
   PetscBool :: update
-  PetscBool :: dof1, dof2, dof3
+  PetscBool :: dof1, dof2, dof3, dof4
   PetscReal :: temperature, p_sat, p_cap, s_liq, xmol
   PetscReal :: relative_humidity
   PetscReal :: gas_sat, hyd_sat, air_pressure, gas_pressure, liq_pressure
@@ -1423,8 +1423,8 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
   PetscInt :: idof, num_connections,sum_connection
   PetscInt :: iconn, local_id, ghosted_id
   PetscInt :: real_count
-  PetscInt :: dof_count_local(3)
-  PetscInt :: dof_count_global(3)
+  PetscInt :: dof_count_local(option%nflowdof)
+  PetscInt :: dof_count_global(option%nflowdof)
   PetscReal, parameter :: min_two_phase_gas_pressure = 3.d3
 
   num_connections = coupler%connection_set%num_connections
@@ -1435,6 +1435,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
   dof1 = PETSC_FALSE
   dof2 = PETSC_FALSE
   dof3 = PETSC_FALSE
+  dof4 = PETSC_FALSE
   real_count = 0
 
   ! mapping of flow_aux_mapping to the flow_aux_real_var array:
@@ -1455,7 +1456,12 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
     coupler%flow_aux_mapping(GENERAL_AIR_PRESSURE_INDEX) = 3
     coupler%flow_aux_mapping(GENERAL_GAS_FLUX_INDEX) = 3
     coupler%flow_aux_mapping(GENERAL_GAS_WATER_MOL_FRAC_INDEX) = 3
-  endif
+    ! solute mole fraction, precipitate sat. are set to 4th dof index
+    if (option%nflowdof == 4) then
+      coupler%flow_aux_mapping(GENERAL_SOLUTE_INDEX) = 4
+      coupler%flow_aux_mapping(GENERAL_PRECIPITATE_SAT_INDEX) = 4
+    endif
+ endif
 
   select case(flow_condition%iphase)
     case(MULTI_STATE)
@@ -1548,6 +1554,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
           endif
         enddo
         dof1 = PETSC_TRUE; dof2 = PETSC_TRUE; dof3 = PETSC_TRUE;
+        if (option%nflowdof == 4) dof4 = PETSC_TRUE
       endif
     case(GAS_STATE)
       coupler%flow_aux_int_var(GENERAL_STATE_INDEX,1:num_connections) = &
@@ -1694,6 +1701,26 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                   FlowConditionUnknownItype(coupler%flow_condition, &
                   'GENERAL_MODE liquid state mole fraction ',string)
                 call PrintErrMsg(option)
+            if (option%nflowdof == 4) then
+              ! mole fraction; 4th dof ----------------------- !
+              select case(general%solute_fraction%itype)
+                case(DIRICHLET_BC)
+                  call PatchGetCouplerValueFromDataset(coupler,option, &
+                         patch%grid,general%solute_fraction%dataset,iconn,xmol)
+                    if (general_immiscible) then
+                      xmol = GENERAL_IMMISCIBLE_VALUE
+                    endif
+                    coupler%flow_aux_real_var(FOUR_INTEGER,iconn) = xmol
+                    dof4 = PETSC_TRUE
+                    coupler%flow_bc_type(GENERAL_SOLUTE_EQUATION_INDEX) = DIRICHLET_BC
+                 case default
+                   string = GetSubConditionName(general%solute_fraction%itype)
+                   option%io_buffer = &
+                       FlowConditionUnknownItype(coupler%flow_condition, &
+                       'GENERAL_MODE liquid state mole fraction ',string)
+                 call PrintErrMsg(option)
+               end select
+            endif
             end select
           endif
       ! ---------------------------------------------------------------------- !
@@ -1896,7 +1923,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
           endif
         enddo
         coupler%flow_bc_type(1) = HYDROSTATIC_BC
-        coupler%flow_bc_type(2:3) = DIRICHLET_BC
+        coupler%flow_bc_type(2:option%nflowdof) = DIRICHLET_BC
       else
       endif
     case(GAS_STATE)
@@ -4516,7 +4543,7 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
          LIQUID_DENSITY,GAS_DENSITY,GAS_DENSITY_MOL,LIQUID_VISCOSITY, &
          GAS_VISCOSITY,CAPILLARY_PRESSURE,LIQUID_DENSITY_MOL, &
          LIQUID_MOBILITY,GAS_MOBILITY,SC_FUGA_COEFF,ICE_DENSITY, &
-         LIQUID_HEAD,VAPOR_PRESSURE,SATURATION_PRESSURE, &
+         LIQUID_HEAD,VAPOR_PRESSURE,SATURATION_PRESSURE,PRECIPITATE_SATURATION,&
          MAXIMUM_PRESSURE,LIQUID_MASS_FRACTION,GAS_MASS_FRACTION)
 
       if (associated(patch%aux%TH)) then
@@ -4936,6 +4963,11 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
                   ghosted_id)%kr(option%liquid_phase) / &
                 patch%aux%General%auxvars(ZERO_INTEGER, &
                   ghosted_id)%mobility(option%liquid_phase)
+            enddo
+          case(PRECIPITATE_SATURATION)
+            do local_id=1,grid%nlmax
+              vec_ptr(local_id) = patch%aux%General%auxvars(ZERO_INTEGER, &
+                grid%nL2G(local_id))%sat(option%precipitate_phase)
             enddo
           case(GAS_SATURATION)
             do local_id=1,grid%nlmax
@@ -6251,6 +6283,9 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
           case(SATURATION_PRESSURE)
             value = patch%aux%General%auxvars(ZERO_INTEGER,ghosted_id)% &
                       pres(option%saturation_pressure_id)
+          case(PRECIPITATE_SATURATION)
+            value = patch%aux%General%auxvars(ZERO_INTEGER,ghosted_id)% &
+                      sat(option%precipitate_phase)
           case(LIQUID_SATURATION)
             value = patch%aux%General%auxvars(ZERO_INTEGER,ghosted_id)% &
                       sat(option%liquid_phase)

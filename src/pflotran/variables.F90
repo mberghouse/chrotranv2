@@ -158,4 +158,6 @@ module Variables_module
 
   PetscInt, parameter, public :: EPSILON = 129
 
+  PetscInt, parameter, public :: PRECIPITATE_SATURATION = 130
+
 end module Variables_module

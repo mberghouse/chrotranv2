@@ -693,15 +693,15 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
   PetscInt :: iphasebc, iphase
   PetscInt :: offset
   PetscInt :: istate
-  PetscInt :: wat_comp_id, air_comp_id, salt_comp_id
+  PetscInt :: wat_comp_id, air_comp_id, solute_comp_id
   PetscReal :: gas_pressure, capillary_pressure, liquid_saturation
   PetscReal :: saturation_pressure, temperature
-  PetscReal :: qsrc(3)
+  PetscReal :: qsrc(realization%option%nflowdof)
   PetscInt :: real_index, variable, flow_src_sink_type
   PetscReal, pointer :: xx_loc_p(:)
   PetscReal :: xxbc(realization%option%nflowdof), & 
                xxss(realization%option%nflowdof)
-  PetscReal :: cell_pressure,qsrc_vol(2),scale
+  PetscReal :: cell_pressure,qsrc_vol(realization%option%nflowdof-1),scale
   PetscReal :: Res_dummy(realization%option%nflowdof)
   PetscReal :: Jac_dummy(realization%option%nflowdof, &
                          realization%option%nflowdof)
@@ -933,7 +933,7 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
   
   wat_comp_id = option%water_id
   air_comp_id = option%air_id
-  salt_comp_id = option%salt_id
+  solute_comp_id = option%solute_id
 
   source_sink => patch%source_sink_list%first
   sum_connection = 0
@@ -1192,7 +1192,7 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
   PetscReal, pointer :: accum_p(:), accum_p2(:)
   PetscReal, pointer :: vec_p(:)
   
-  PetscReal :: qsrc(3)
+  PetscReal :: qsrc(realization%option%nflowdof)
   
   character(len=MAXSTRINGLENGTH) :: string
   character(len=MAXWORDLENGTH) :: word
@@ -1477,9 +1477,15 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
       endif      
       if (option%compute_mass_balance_new) then
         ! contribution to boundary
-        global_auxvars_ss(sum_connection)%mass_balance_delta(1:2,1) = &
-          global_auxvars_ss(sum_connection)%mass_balance_delta(1:2,1) - &
-          Res(1:2)
+        if (option%nflowdof == 4) then
+          global_auxvars_ss(sum_connection)%mass_balance_delta(1:3,1) = &
+            global_auxvars_ss(sum_connection)%mass_balance_delta(1:3,1) - &
+            (/Res(1:2),Res(4)/)
+        elseif (option%nflowdof == 3) then
+          global_auxvars_ss(sum_connection)%mass_balance_delta(1:2,1) = &
+            global_auxvars_ss(sum_connection)%mass_balance_delta(1:2,1) - &
+            Res(1:2)
+        endif
       endif
 
     enddo
@@ -1664,12 +1670,21 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
     do ghosted_id = 1, grid%ngmax  ! For each local node do...
       if (patch%imat(ghosted_id) <= 0) cycle
       natural_id = grid%nG2A(ghosted_id)
-      call GeneralAuxVarPerturb(gen_auxvars(:,ghosted_id), &
-                                global_auxvars(ghosted_id), &
-                                material_auxvars(ghosted_id), &
-                                patch%characteristic_curves_array( &
+      if (option%nflowdof == 4) then
+        call GeneralAuxVarPerturb4(gen_auxvars(:,ghosted_id), &
+                                   global_auxvars(ghosted_id), &
+                                   material_auxvars(ghosted_id), &
+                                   patch%characteristic_curves_array( &
+                                   patch%cc_id(ghosted_id))%ptr, &
+                                   natural_id,option)
+      else
+        call GeneralAuxVarPerturb(gen_auxvars(:,ghosted_id), &
+                                  global_auxvars(ghosted_id), &
+                                  material_auxvars(ghosted_id), &
+                                  patch%characteristic_curves_array( &
                                   patch%cc_id(ghosted_id))%ptr, &
-                                natural_id,option)
+                                  natural_id,option)
+      endif
     enddo
   endif
   
@@ -2148,7 +2163,12 @@ subroutine GeneralSetPlotVariables(realization,list)
     call OutputVariableAddToList(list,name,OUTPUT_GENERIC,units, &
                                 LIQUID_MOLE_FRACTION, &
                                 realization%option%water_id)
-    
+    name = 'X_s^l'
+    units = ''
+    call OutputVariableAddToList(list,name,OUTPUT_GENERIC,units, &
+                                 LIQUID_MOLE_FRACTION, &
+                                 realization%option%solute_id)
+
     name = 'X_g^g'
     units = ''
     call OutputVariableAddToList(list,name,OUTPUT_GENERIC,units, &
