@@ -17,6 +17,7 @@ module PM_General_class
   PetscInt, parameter :: SCALED_RESIDUAL_INDEX = 4
   PetscInt, parameter :: MAX_INDEX = SCALED_RESIDUAL_INDEX
   PetscInt, pointer :: general_max_states
+  PetscInt, pointer :: max_change_index
 
   type, public, extends(pm_subsurface_flow_type) :: pm_general_type
     PetscInt, pointer :: max_change_ivar(:)
@@ -249,6 +250,7 @@ subroutine PMGeneralSetFlowMode(pm,option)
 
   option%iflowmode = G_MODE
   allocate(general_max_states)
+  allocate(max_change_index)
 
   option%use_isothermal = PETSC_FALSE
   
@@ -269,12 +271,14 @@ subroutine PMGeneralSetFlowMode(pm,option)
     option%nflowdof = 3
     option%nflowspec = 2
     general_max_states = 3
+    max_change_index = 6
   elseif (option%nflowdof == 4) then
     option%nphase = 3
     option%nflowspec = 3
     option%solute_id = 4
     option%precipitate_phase = 3
     general_max_states = 7
+    max_change_index = 7
   else
     write(option%io_buffer,*) option%nflowdof
     option%io_buffer = trim(adjustl(option%io_buffer)) // &
@@ -740,30 +744,16 @@ recursive subroutine PMGeneralInitializeRun(this)
   PetscErrorCode :: ierr
 
   ! need to allocate vectors for max change
-  if (general_max_states == 6) then
-    call VecDuplicateVecsF90(this%realization%field%work,SIX_INTEGER, &
-                             this%realization%field%max_change_vecs, &
-                             ierr);CHKERRQ(ierr)
-    ! set initial values
-    do i = 1, 6
-      call RealizationGetVariable(this%realization, &
-                                  this%realization%field%max_change_vecs(i), &
-                                  this%max_change_ivar(i), &
-                                  this%max_change_isubvar(i))
-    enddo
-  elseif (general_max_states == 7) then
-     call VecDuplicateVecsF90(this%realization%field%work,SEVEN_INTEGER, &
-          this%realization%field%max_change_vecs, &
-          ierr);CHKERRQ(ierr)
-     ! set initial values
-     do i = 1, 7
-        call RealizationGetVariable(this%realization, &
-             this%realization%field%max_change_vecs(i), &
-             this%max_change_ivar(i), &
-             this%max_change_isubvar(i))
-     enddo
-  endif
-
+  call VecDuplicateVecsF90(this%realization%field%work,max_change_index, &
+                           this%realization%field%max_change_vecs, &
+                           ierr);CHKERRQ(ierr)
+  ! set initial values
+  do i = 1, max_change_index
+     call RealizationGetVariable(this%realization, &
+          this%realization%field%max_change_vecs(i), &
+          this%max_change_ivar(i), &
+          this%max_change_isubvar(i))
+  enddo
   ! call parent implementation
   call PMSubsurfaceFlowInitializeRun(this)
 
@@ -1462,11 +1452,31 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
   if (option%nflowdof == 3) then
     state_string = &
       ['Liquid State','Gas State   ','2Phase State']
+    dof_string = &
+    reshape(['Liquid Pressure  ','Air Mole Fraction','Temperature      ',&
+             'Gas Pressure     ','Air Mole Fraction','Temperature      ',&
+             'Gas Pressure     ','Gas Saturation   ','Temperature      '],&
+            shape(dof_string))
   elseif (option%nflowdof == 4) then
     state_string = &
       ['Liquid State','Gas State   ','LG State    ',&
        'Precip State','LP State    ','GP State    ',&
        'LGP State   ']
+    dof_string = &
+    reshape(['Liquid Pressure  ','Air Mole Fraction','Temperature      ',&
+             'Solute Fraction  ',&
+             'Gas Pressure     ','Air Mole Fraction','Temperature      ',&
+             'Solute Fraction  ',&
+             'Gas Pressure     ','Gas Saturation   ','Temperature      ',&
+             'Solute Fraction  ',&
+             'Liquid Pressure  ','Air Mole Fraction','Temperature      ',&
+             'Solute Fraction  ',&
+             'Liquid Pressure  ','Air Mole Fraction','Temperature      ',&
+             'Solute Fraction  ',&
+             'Gas Pressure     ','Air Pressure     ','Temperature      ',&
+             'Precipitate Sat. ',&
+             'Gas Pressure     ','Gas Saturation   ','Temperature      ',&
+             'Precipitate Sat. '],shape(dof_string))
   endif
 
   if (this%check_post_convergence) then
@@ -1756,7 +1766,7 @@ subroutine PMGeneralMaxChange(this)
   PetscReal, pointer :: max_change_local(:)
   PetscReal, pointer :: max_change_global(:)
   PetscReal :: max_change
-  PetscInt :: i, j
+  PetscInt :: i, j, max_change_index
   PetscInt :: local_id, ghosted_id
 
   
@@ -1770,18 +1780,18 @@ subroutine PMGeneralMaxChange(this)
   global_auxvars => realization%patch%aux%global%auxvars
 
   if (option%nflowdof == 3) then
-    allocate(max_change_local(SIX_INTEGER))
-    allocate(max_change_global(SIX_INTEGER))
+    max_change_index = SIX_INTEGER
   elseif (option%nflowdof == 4) then
-    allocate(max_change_local(SEVEN_INTEGER))
-    allocate(max_change_global(SEVEN_INTEGER))
+    max_change_index = SEVEN_INTEGER
   endif
+  allocate(max_change_local(max_change_index))
+  allocate(max_change_global(max_change_index))
   max_change_global = 0.d0
   max_change_local = 0.d0
   
   ! max change variables: [LIQUID_PRESSURE, GAS_PRESSURE, AIR_PRESSURE, &
   !                        LIQUID_MOLE_FRACTION, TEMPERATURE, GAS_SATURATION]
-  do i = 1, 6
+  do i = 1, max_change_index
     call RealizationGetVariable(realization,field%work, &
                                 this%max_change_ivar(i), &
                                 this%max_change_isubvar(i))
@@ -1812,20 +1822,20 @@ subroutine PMGeneralMaxChange(this)
                             ierr);CHKERRQ(ierr)
     call VecCopy(field%work,field%max_change_vecs(i),ierr);CHKERRQ(ierr)
   enddo
-  call MPI_Allreduce(max_change_local,max_change_global,SIX_INTEGER, &
+  call MPI_Allreduce(max_change_local,max_change_global,max_change_index, &
                       MPI_DOUBLE_PRECISION,MPI_MAX,option%mycomm,ierr)
   ! print them out
   if (OptionPrintToScreen(option)) then
     write(*,'("  --> max chng: dpl= ",1pe12.4, " dpg= ",1pe12.4,&
       & " dpa= ",1pe12.4,/,15x," dxa= ",1pe12.4,"  dt= ",1pe12.4,&
       & " dsg= ",1pe12.4)') &
-      max_change_global(1:6)
+      max_change_global(1:max_change_index)
   endif
   if (OptionPrintToFile(option)) then
     write(option%fid_out,'("  --> max chng: dpl= ",1pe12.4, " dpg= ",1pe12.4,&
       & " dpa= ",1pe12.4,/,15x," dxa= ",1pe12.4,"  dt= ",1pe12.4, &
       & " dsg= ",1pe12.4)') &
-      max_change_global(1:6)
+      max_change_global(1:max_change_index)
   endif
 
   ! max change variables: [LIQUID_PRESSURE, GAS_PRESSURE, AIR_PRESSURE, &
@@ -1834,7 +1844,11 @@ subroutine PMGeneralMaxChange(this)
   this%max_pressure_change = maxval(max_change_global(1:2))
   this%max_xmol_change = max_change_global(4)
   this%max_temperature_change = max_change_global(5)
-  this%max_saturation_change = max_change_global(6)
+  if (option%nflowdof == 3) then
+    this%max_saturation_change = max_change_global(6)
+  elseif (option%nflowdof == 4) then
+    this%max_saturation_change = maxval(max_change_global(6:7))
+  endif
   
 end subroutine PMGeneralMaxChange
 

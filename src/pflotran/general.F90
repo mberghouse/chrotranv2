@@ -747,23 +747,45 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
     !hdp - Debugging purposes
     !write(option%io_buffer,'("cell id: ",i7)') natural_id
     !call PrintMsg(option)
-      call GeneralAuxVarCompute(xx_loc_p(ghosted_start:ghosted_end), &
-                       gen_auxvars(ZERO_INTEGER,ghosted_id), &
-                       global_auxvars(ghosted_id), &
-                       material_auxvars(ghosted_id), &
-                       patch%characteristic_curves_array( &
-                         patch%cc_id(ghosted_id))%ptr, &
-                       natural_id, &
-                       option)
+      if (option%nflowdof == 3) then
+        call GeneralAuxVarCompute(xx_loc_p(ghosted_start:ghosted_end), &
+                                  gen_auxvars(ZERO_INTEGER,ghosted_id), &
+                                  global_auxvars(ghosted_id), &
+                                  material_auxvars(ghosted_id), &
+                                  patch%characteristic_curves_array( &
+                                    patch%cc_id(ghosted_id))%ptr, &
+                                  natural_id, &
+                                  option)
+      elseif (option%nflowdof == 4) then
+        call GeneralAuxVarCompute4(xx_loc_p(ghosted_start:ghosted_end), &
+                                  gen_auxvars(ZERO_INTEGER,ghosted_id), &
+                                  global_auxvars(ghosted_id), &
+                                  material_auxvars(ghosted_id), &
+                                  patch%characteristic_curves_array( &
+                                    patch%cc_id(ghosted_id))%ptr, &
+                                  natural_id, &
+                                  option)
+      endif
     if (update_state) then
-      call GeneralAuxVarUpdateState(xx_loc_p(ghosted_start:ghosted_end), &
-                                    gen_auxvars(ZERO_INTEGER,ghosted_id), &
-                                    global_auxvars(ghosted_id), &
-                                    material_auxvars(ghosted_id), &
-                                    patch%characteristic_curves_array( &
-                                      patch%cc_id(ghosted_id))%ptr, &
-                                    natural_id, &  ! for debugging
-                                    option)
+      if (option%nflowdof == 3) then
+        call GeneralAuxVarUpdateState(xx_loc_p(ghosted_start:ghosted_end), &
+                                      gen_auxvars(ZERO_INTEGER,ghosted_id), &
+                                      global_auxvars(ghosted_id), &
+                                      material_auxvars(ghosted_id), &
+                                      patch%characteristic_curves_array( &
+                                        patch%cc_id(ghosted_id))%ptr, &
+                                      natural_id, &  ! for debugging
+                                      option)
+      elseif (option%nflowdof == 4) then
+         call GeneralAuxVarUpdateState4(xx_loc_p(ghosted_start:ghosted_end), &
+                                        gen_auxvars(ZERO_INTEGER,ghosted_id), &
+                                        global_auxvars(ghosted_id), &
+                                        material_auxvars(ghosted_id), &
+                                        patch%characteristic_curves_array( &
+                                          patch%cc_id(ghosted_id))%ptr, &
+                                        natural_id, &  ! for debugging
+                                        option)
+      endif
     endif
 #ifdef DEBUG_AUXVARS
 !geh: for debugging
@@ -909,23 +931,41 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
       endif
       ! GENERAL_UPDATE_FOR_BOUNDARY indicates call from non-perturbation
       option%iflag = GENERAL_UPDATE_FOR_BOUNDARY
-
-      call GeneralAuxVarCompute(xxbc,gen_auxvars_bc(sum_connection), &
-                                global_auxvars_bc(sum_connection), &
-                                material_auxvars(ghosted_id), &
-                                patch%characteristic_curves_array( &
-                                  patch%cc_id(ghosted_id))%ptr, &
-                                natural_id, &
-                                option)
+      if (option%nflowdof == 3) then
+        call GeneralAuxVarCompute(xxbc,gen_auxvars_bc(sum_connection), &
+                                  global_auxvars_bc(sum_connection), &
+                                  material_auxvars(ghosted_id), &
+                                  patch%characteristic_curves_array( &
+                                    patch%cc_id(ghosted_id))%ptr, &
+                                  natural_id, &
+                                  option)
+      elseif (option%nflowdof == 4) then
+        call GeneralAuxVarCompute4(xxbc,gen_auxvars_bc(sum_connection), &
+                                  global_auxvars_bc(sum_connection), &
+                                  material_auxvars(ghosted_id), &
+                                  patch%characteristic_curves_array( &
+                                    patch%cc_id(ghosted_id))%ptr, &
+                                  natural_id, &
+                                  option)
+      endif
       if (update_state_bc) then
         ! update state and update aux var; this could result in two update to 
         ! the aux var as update state updates if the state changes
-         call GeneralAuxVarUpdateState(xxbc,gen_auxvars_bc(sum_connection), &
-                                      global_auxvars_bc(sum_connection), &
-                                      material_auxvars(ghosted_id), &
-                                      patch%characteristic_curves_array( &
-                                        patch%cc_id(ghosted_id))%ptr, &
-                                      natural_id,option)
+        if (option%nflowdof == 3) then
+          call GeneralAuxVarUpdateState(xxbc,gen_auxvars_bc(sum_connection), &
+                                       global_auxvars_bc(sum_connection), &
+                                       material_auxvars(ghosted_id), &
+                                       patch%characteristic_curves_array( &
+                                         patch%cc_id(ghosted_id))%ptr, &
+                                       natural_id,option)
+        elseif (option%nflowdof == 4) then
+           call GeneralAuxVarUpdateState(xxbc,gen_auxvars_bc(sum_connection), &
+                                        global_auxvars_bc(sum_connection), &
+                                        material_auxvars(ghosted_id), &
+                                        patch%characteristic_curves_array( &
+                                          patch%cc_id(ghosted_id))%ptr, &
+                                        natural_id,option)
+        endif
       endif
     enddo
     boundary_condition => boundary_condition%next
@@ -1561,7 +1601,7 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
   endif
 
   update_upwind_direction = PETSC_FALSE
-
+  write(*,*) 'Res: ',Res(:)
 end subroutine GeneralResidual
 
 ! ************************************************************************** !
@@ -1664,7 +1704,7 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
   endif
 
   call MatZeroEntries(J,ierr);CHKERRQ(ierr)
-
+  
   if (.not.general_analytical_derivatives) then
     ! Perturb aux vars
     do ghosted_id = 1, grid%ngmax  ! For each local node do...
