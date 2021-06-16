@@ -1317,20 +1317,20 @@ subroutine EOSWaterSatPressSparrow(T,aux,calculate_derivatives, &
   ws = aux(sid)*FMWNACL/avg_molar_mass
 
   if (T >= 0.d0 .and. T <= 150) then
-    A = (0.9083-0.569*ws+0.1945*ws**2-3.736*ws**3+2.82*ws**4)*1.d-3
-    B = (-0.0669+0.0582*ws+0.1668*ws**2-0.6761*ws**3+2.091*ws**4)*1.d-3
-    C = (7.541-5.143*ws+6.482*ws**2-52.62*ws**3+115.7*ws**4)*1.d-6
-    D = (-0.0922+0.0649*ws-0.1313*ws**2+0.8024*ws**3-1.986*ws**4)*1.d-6
-    E = (1.237-0.753*ws+0.1448*ws**2-6.964*ws**3+14.61*ws**4)*1.d-9
+    A = (0.9083+ws*(-0.569+ws*(0.1945+ws*(-3.736+ws*2.82))))*1.d-3
+    B = (-0.0669+ws*(0.0582+ws*(0.1668+ws*(-0.6761+ws*2.091))))*1.d-3
+    C = (7.541+ws*(-5.143+ws*(6.482+ws*(-52.62+ws*115.7))))*1.d-6
+    D = (-0.0922+ws*(0.0649+ws*(-0.1313+ws*(0.8024-ws*1.986))))*1.d-6
+    E = (1.237+ws*(-0.753+ws*(0.1448+ws*(-6.964+ws*14.61))))*1.d-9
   elseif (T > 150 .and. T <= 300) then
-    A = -3.248+7.081*ws-49.93*ws**2+219.6*ws**3-308.5*ws**4
-    B = 0.0610-0.1185*ws+0.7916*ws**2-3.474*ws**3+4.882*ws**4
-    C = (-0.4109+0.6789*ws-4.155*ws**2+18.34*ws**3-25.89*ws**4)*1.d-3
-    D = (1.13-1.432*ws+7.169*ws**2-33.17*ws**3+47.45*ws**4)*1.d-6
+    A = -3.248+ws*(7.081+ws*(-49.93+ws*(219.6+ws*-308.5)))
+    B = 0.0610+ws*(-0.1185+ws*(0.7916+ws*(-3.474+ws*4.882)))
+    C = (-0.4109+ws*(0.6789+ws*(-4.155+ws*(18.34+ws*-25.89))))*1.d-3
+    D = (1.13+ws*(-1.432+ws*(7.169+ws*(-33.17+ws*47.45))))*1.d-6
     E = 0
   endif
 
-  PS = A+B*T+C*T**2+D*T**3+E*T**4 !MPa
+  PS = A+T*(B+T*(C+T*(D+T*E)))
   PS = PS*MPa_to_Pa
 
 end subroutine EOSWaterSatPressSparrow
@@ -3865,12 +3865,14 @@ subroutine EOSWaterDensitySparrow(T,P, aux, &
   avg_molar_mass = aux(acid)*FMWAIR+aux(wid)*FMWH2O+aux(sid)*FMWNACL
   ws = aux(sid)*FMWNACL/avg_molar_mass
 
-  A = (1.001+0.7666*ws-0.0149*ws**2+0.2663*ws**3+0.8845*ws**4)*1.d3
-  B = -0.0214-3.496*ws+10.02*ws**2-6.56*ws**3-31.37*ws**4
-  C = (-5.263+39.87*ws-176.2*ws**2+363.5*ws**3-7.784*ws**4)*1.d-3
-  D = (15.42-167*ws+980.7*ws**2-2573*ws**3+876.6*ws**4)*1.d-6
-  E = (-0.0276+0.2978*ws-2.017*ws**2+6.345*ws**3-3.914*ws**4)*1.d-6
-  dw = A+B*T+C*T**2+D*T**3+E*T**4 !kg/m^3
+  A = (1.001+ws*(0.7666+ws*(-0.0149+ws*(0.2663+ws*0.8845))))*1.d3
+  B = -0.0214+ws*(-3.496+ws*(10.02+ws*(-6.56+ws*-31.37)))
+  C = (-5.263+ws*(39.87+ws*(-176.2+ws*(363.5-ws*7.784))))*1.d-3
+  D = (15.42+ws*(-167+ws*(980.7+ws*(-2573+ws*876.6))))*1.d-6
+  E = (-0.0276+ws*(0.2978+ws*(-2.017+ws*(6.345+ws*-3.914)*1.d-6
+
+  dw = A+T*(B+T*(C+T*(D+E*T))) !kg/m^3
+
 
 end subroutine EOSWaterDensitySparrow
 
@@ -3951,12 +3953,12 @@ subroutine EOSWaterEnthalpySparrow(T,P,aux,calculate_derivatives,hw,hwp,&
   avg_molar_mass = aux(acid)*FMWAIR+aux(wid)*FMWH2O+aux(sid)*FMWNACL
   ws = aux(sid)*FMWNACL/avg_molar_mass ! mass fraction
 
-  A = (0.0005+0.0378*ws-0.3682*ws**2-0.6529*ws**3+2.89*ws**4)*1.d3
-  B = 4.145-4.973*ws+4.482*ws**2+18.31*ws**3-46.41*ws**4
-  C = 0.0007-0.0059*ws+0.0854*ws**2-0.4951*ws**3+0.8255*ws**4
-  D = (-0.0048+0.0639*ws-0.714*ws**2+3.273*ws**3-4.85*ws**4)*1.d-3
-  E = (0.0202-0.2432*ws+2.054*ws**2-8.211*ws**3+11.43*ws**4)*1.d-6
-  hw = A+B*T+C*T**2+D*T**3+E*T**4 !kJ/kg
+  A = (0.0005+ws*(0.0378+ws*(-0.3682+ws*(-0.6529+ws*2.89))))*1.d3
+  B = 4.145+ws*(-4.973+ws*(4.482+ws*(18.31+ws*-46.41)))
+  C = 0.0007+ws*(-0.0059+ws*(0.0854+ws*(-0.4951+ws*0.8255)))
+  D = (-0.0048+ws*(0.0639+ws*(-0.714+ws*(3.273+ws*-4.85))))*1.d-3
+  E = (0.0202+ws*(-0.2432+ws*(2.054+ws*(-8.211+ws*11.43))))*1.d-6
+  hw = A+T*(B+T*(C+T*(D+T*E)))
   hw = hw*kJ_to_J*(avg_molar_mass*(mol_to_kmol/g_to_kg)) !J/kmol
 
 end subroutine EOSWaterEnthalpySparrow

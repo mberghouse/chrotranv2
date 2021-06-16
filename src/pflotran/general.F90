@@ -1601,7 +1601,6 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
   endif
 
   update_upwind_direction = PETSC_FALSE
-  write(*,*) 'Res: ',Res(:)
 end subroutine GeneralResidual
 
 ! ************************************************************************** !
