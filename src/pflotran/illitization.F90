@@ -25,7 +25,7 @@ module Illitization_module
   end type illitization_base_type
   !---------------------------------------------------------------------------
   type, public, extends(illitization_base_type) :: ILT_default_type
-    ! Model by Huang et al., 1993
+    ! Model by W-L Huang, J.M. Longo, & D.R. Pevear, 1993
     PetscReal :: ilt_ea   ! activation energy in J/mol
     PetscReal :: ilt_freq ! frequency term in L/mol-sec
     PetscReal :: ilt_K_conc ! molar concentration of potassium
@@ -34,6 +34,15 @@ module Illitization_module
     procedure, public :: Verify => ILTDefaultVerify
     procedure, public :: CalculateILT => ILTDefaultIllitization
   end type ILT_default_type
+  !---------------------------------------------------------------------------
+  type, public, extends(ILT_default_type) :: ILT_general_type
+    ! Generalized model by J. Cuadros and J. Linares, 1996
+    PetscReal :: ilt_K_exp ! exponent of potassium concentration
+    PetscReal :: ilt_exp   ! exponent of smectite fraction
+  contains
+    procedure, public :: Verify => ILTGeneralVerify
+    procedure, public :: CalculateILT => ILTGeneralIllitization
+  end type ILT_general_type
   !---------------------------------------------------------------------------
   type, public :: illitization_type
     character(len=MAXWORDLENGTH) :: name
@@ -56,7 +65,8 @@ module Illitization_module
             IllitizationInputRecord, &
             IllitizationDestroy, &
             ILTBaseCreate, &
-            ILTDefaultCreate
+            ILTDefaultCreate, &
+            ILTGeneralCreate
 
 contains
 
@@ -261,6 +271,28 @@ end function ILTDefaultCreate
 
 ! ************************************************************************** !
 
+function ILTGeneralCreate()
+
+  implicit none
+
+  class(ILT_general_type), pointer :: ILTGeneralCreate
+
+  allocate(ILTGeneralCreate)
+
+  ILTGeneralCreate%ilt_threshold  = 0.0d0
+  ILTGeneralCreate%ilt_fs0        = 1.0d0
+  
+  ILTGeneralCreate%ilt_shift_perm = 1.0d0
+  ILTGeneralCreate%ilt_freq       = 1.0d0 ! Default of 1.0 in general model
+  ILTGeneralCreate%ilt_ea     = UNINITIALIZED_DOUBLE
+  ILTGeneralCreate%ilt_K_conc = UNINITIALIZED_DOUBLE
+  ILTGeneralCreate%ilt_K_exp  = UNINITIALIZED_DOUBLE
+  ILTGeneralCreate%ilt_exp    = UNINITIALIZED_DOUBLE
+
+end function ILTGeneralCreate
+
+! ************************************************************************** !
+
 subroutine ILTDefaultVerify(this,name,option)
 
   use Option_module
@@ -299,6 +331,40 @@ end subroutine ILTDefaultVerify
 
 ! ************************************************************************** !
 
+subroutine ILTGeneralVerify(this,name,option)
+
+  use Option_module
+
+  implicit none
+
+  class(ILT_general_type) :: this
+  character(len=MAXSTRINGLENGTH) :: name
+  type(option_type) :: option
+
+  character(len=MAXSTRINGLENGTH) :: string
+
+  if (index(name,'ILLITIZATION_FUNCTION') > 0) then
+    string = name
+  else
+    string = trim(name) // 'ILLITIZATION_FUNCTION, GENERAL'
+  endif
+  call ILTBaseVerify(this,string,option)
+  call ILTDefaultVerify(this,string,option)
+  if (Uninitialized(this%ilt_exp)) then
+    option%io_buffer = 'Illitization smectite exponent must be specified in' &
+                     //' function "'//trim(string)//'".'
+    call PrintErrMsg(option)
+  endif
+  if (Uninitialized(this%ilt_K_exp)) then
+    option%io_buffer = 'Illitization postassium exponent must be specified in' &
+                     //' function "'//trim(string)//'".'
+    call PrintErrMsg(option)
+  endif
+
+end subroutine ILTGeneralVerify
+
+! ************************************************************************** !
+
 subroutine ILTDefaultIllitization(this,fs,temperature,dt, &
                                   fi,shift,option)
 
@@ -318,7 +384,10 @@ subroutine ILTDefaultIllitization(this,fs,temperature,dt, &
   PetscReal :: T    ! temperature in Kelvin
   PetscReal :: rate ! temperature-dependent illitization rate in sec^-1
 
-  ! Model based on Huang et al., 1993
+  ! Model based on W-L Huang, J.M. Longo, & D.R. Pevear,
+  !  "An Experimentally Derived Kinetic Model for Smectite-to-Illite Conversion
+  !  and its Use as a Geothermometer," Clay and Clay Minerals, vol. 41, no 2., 
+  !  pp. 162-177, 1993
 
   ! Use Kelvin to calculate rate
   T = temperature + 273.15d0
@@ -338,7 +407,7 @@ subroutine ILTDefaultIllitization(this,fs,temperature,dt, &
   ! Log change in smectite as time proceeds
   ds = rate * dt
 
-  ! Change in smectite
+  ! Fraction smectite
   fs = fs / (1.0d0 + (fs * ds))
 
   if (fs > 1.0d0) then
@@ -347,13 +416,74 @@ subroutine ILTDefaultIllitization(this,fs,temperature,dt, &
     fs = 0.0d0
   endif
 
-  ! Fraction illitized
+  ! Fraction illite
   fi = 1.0d0 - fs
   
   ! Shift permeability
   shift = ((fi - (1.0d+0 - this%ilt_fs0)) / this%ilt_fs0) * this%ilt_shift_perm
 
 end subroutine ILTDefaultIllitization
+
+! ************************************************************************** !
+
+subroutine ILTGeneralIllitization(this,fs,temperature,dt, &
+                                  fi,shift,option)
+
+  use Option_module
+
+  implicit none
+
+  class(ILT_general_type) :: this
+  PetscReal, intent(inout) :: fs
+  PetscReal, intent(in) :: temperature
+  PetscReal, intent(in) :: dt
+  PetscReal, intent(out) :: fi
+  PetscReal, intent(out) :: shift
+  type(option_type), intent(inout) :: option
+
+  PetscReal :: T    ! temperature in Kelvin
+  PetscReal :: rate ! temperature-dependent illitization rate in sec^-1
+
+  ! Model based on J. Cuadros & J. Linares, "Experimental Kinetic Study of the
+  !   Smectite-to-Illite Transformation," Geochimica et Cosmochimica Acta, 
+  !   vol. 60, no. 3, pp. 439-453, 1996
+
+  ! Use Kelvin to calculate rate
+  T = temperature + 273.15d0
+
+  ! Check if temperature is above threshold for illitization
+  if (temperature >= this%ilt_threshold) then
+    ! Negative of illitization rate [L/mol-s]
+    rate = this%ilt_freq * &
+      exp(-1.0d0 * this%ilt_ea / (IDEAL_GAS_CONSTANT * T))
+  else
+    rate = 0.0d0
+  endif
+
+  ! Fraction smectite - pivot solution based on choice of exponent
+  if (this%ilt_exp == 1.0d0) then
+    ! n = 1
+    fs = fs * exp(-1.0d0 * rate * (this%ilt_K_conc**this%ilt_K_exp) * dt)
+  else
+    ! n != 1
+    fs = (rate * (this%ilt_K_conc**this%ilt_K_exp) * &
+         (this%ilt_exp - 1.0d0) * dt + &
+         fs**(1.0d0 - this%ilt_exp))**(1.0d0/(1.0d0 - this%ilt_exp))
+  endif
+
+  if (fs > 1.0d0) then
+    fs = 1.0d0
+  elseif (fs < 0.0d0) then
+    fs = 0.0d0
+  endif
+
+  ! Fraction illite
+  fi = 1.0d0 - fs
+  
+  ! Shift permeability
+  shift = ((fi - (1.0d+0 - this%ilt_fs0)) / this%ilt_fs0) * this%ilt_shift_perm
+
+end subroutine ILTGeneralIllitization
 
 ! ************************************************************************** !
 
@@ -409,21 +539,29 @@ subroutine IllitizationRead(this,input,option)
     call StringToUpper(keyword)
 
     select case(trim(keyword))
+    !------------------------------------------
     case('ILLITIZATION_FUNCTION')
       call InputReadCard(input,option,word)
       call InputErrorMsg(input,option, &
            'ILLITIZATION_FUNCTION',error_string)
       call StringToUpper(word)
       select case(word)
-        case('DEFAULT')
+        !-------------------------------------
+        case('DEFAULT','HUANG')
           this%illitization_function => ILTDefaultCreate()
+        !-------------------------------------
+        case('GENERAL','CUADROS_AND_LINARES')
+          this%illitization_function => ILTGeneralCreate()
+        !-------------------------------------
         case default
           call InputKeywordUnrecognized(input,word, &
                'ILLITIZATION_FUNCTION',option)
       end select
       call ILTRead(this%illitization_function,input,option)
+    !------------------------------------------
     case('TEST')
       this%test = PETSC_TRUE
+    !------------------------------------------
     case default
       call InputKeywordUnrecognized(input,keyword,'ILLITIZATION',option)
     end select
@@ -467,6 +605,8 @@ subroutine ILTRead(illitization_function,input,option)
   select type(ilf => illitization_function)
   class is(ILT_default_type)
     error_string = trim(error_string) // 'DEFAULT'
+  class is(ILT_general_type)
+    error_string = trim(error_string) // 'GENERAL'
   end select
 
   call InputPushBlock(input,option)
@@ -497,7 +637,7 @@ subroutine ILTRead(illitization_function,input,option)
           call InputReadAndConvertUnits(input,ilf%ilt_freq, &
                        'L/s-mol','ILLITIZATION, DEFAULT, frequency term',option)
         case('K_CONC')
-          ! Concentration of Potassium cation
+          ! Concentration of potassium cation
           call InputReadDouble(input,option,ilf%ilt_K_conc)
           call InputErrorMsg(input,option,'potassium concentration', &
                              'ILLITIZATION, DEFAULT')
@@ -510,6 +650,48 @@ subroutine ILTRead(illitization_function,input,option)
                              'ILLITIZATION, DEFAULT')
         case default
           call ILTBaseRead(ilf,input,keyword,error_string,'default',option)
+      end select
+    !------------------------------------------
+    class is(ILT_general_type)
+      select case(trim(keyword))
+        case('EA')
+          ! Activation energy in Arrhenius term
+          call InputReadDouble(input,option,ilf%ilt_ea)
+          call InputErrorMsg(input,option,'activation energy', &
+                             'ILLITIZATION, GENERAL')
+          call InputReadAndConvertUnits(input,ilf%ilt_ea, &
+                 'J/mol','ILLITIZATION, GENERAL, activation energy',option)
+        case('FREQ')
+          ! Frequency factor (scaling constant of Arrhenius term)
+          call InputReadDouble(input,option,ilf%ilt_freq)
+          call InputErrorMsg(input,option,'frequency term', &
+                             'ILLITIZATION, GENERAL')
+          call InputReadAndConvertUnits(input,ilf%ilt_freq, &
+                 'L/s-mol','ILLITIZATION, GENERAL, frequency term',option)
+        case('K_CONC')
+          ! Concentration of potassium cation
+          call InputReadDouble(input,option,ilf%ilt_K_conc)
+          call InputErrorMsg(input,option,'potassium concentration', &
+                             'ILLITIZATION, GENERAL')
+          call InputReadAndConvertUnits(input,ilf%ilt_K_conc,&
+                 'M','ILLITIZATION, GENERAL, potassium concentration',option)
+        case('K_EXP')
+          ! Exponent of potassium cation concentration
+          call InputReadDouble(input,option,ilf%ilt_K_exp)
+          call InputErrorMsg(input,option,'potassium concentration exponent', &
+                             'ILLITIZATION, GENERAL')
+        case('SMECTITE_EXP')
+          ! Exponent of smectite fraction
+          call InputReadDouble(input,option,ilf%ilt_exp)
+          call InputErrorMsg(input,option,'smectite exponent', &
+                             'ILLITIZATION, GENERAL')
+        case('SHIFT_PERM')
+          ! Factor modifying permeability per fraction illitized
+          call InputReadDouble(input,option,ilf%ilt_shift_perm)
+          call InputErrorMsg(input,option,'permeability shift factor', &
+                             'ILLITIZATION, GENERAL')
+        case default
+          call ILTBaseRead(ilf,input,keyword,error_string,'general',option)
       end select
     !------------------------------------------
     class default
@@ -719,7 +901,7 @@ subroutine IllitizationInputRecord(illitization_list)
     if (associated(cur_ilf%illitization_function)) then
       write(id,'(a29)',advance='no') 'model: '
       select type (ilf => cur_ilf%illitization_function)
-        !---------------------------------
+      !---------------------------------
       class is (ILT_default_type)
         write(id,'(a)') 'Huang et al., 1993'
         write(id,'(a29)',advance='no') 'initial smectite: '
@@ -734,6 +916,33 @@ subroutine IllitizationInputRecord(illitization_list)
         write(id,'(a29)',advance='no') 'K+ concentration: '
         write(word1,'(es12.5)') ilf%ilt_K_conc
         write(id,'(a)') adjustl(trim(word1))//' M'
+        write(id,'(a29)',advance='no') 'temperature threshold: '
+        write(word1,'(es12.5)') ilf%ilt_threshold
+        write(id,'(a)') adjustl(trim(word1))//' C'
+        write(id,'(a29)',advance='no') 'shift (permeability): '
+        write(word1,'(es12.5)') ilf%ilt_shift_perm
+        write(id,'(a)') adjustl(trim(word1))
+      !---------------------------------
+      class is (ILT_general_type)
+        write(id,'(a)') 'Cuadros and Linares, 1996'
+        write(id,'(a29)',advance='no') 'initial smectite: '
+        write(word1,'(es12.5)') ilf%ilt_fs0
+        write(id,'(a)') adjustl(trim(word1))
+        write(id,'(a29)',advance='no') 'smectite exponent: '
+        write(word1,'(es12.5)') ilf%ilt_exp
+        write(id,'(a)') adjustl(trim(word1))
+        write(id,'(a29)',advance='no') 'frequency: '
+        write(word1,'(es12.5)') ilf%ilt_freq
+        write(id,'(a)') adjustl(trim(word1))//' L/mol-s'
+        write(id,'(a29)',advance='no') 'activation energy: '
+        write(word1,'(es12.5)') ilf%ilt_ea
+        write(id,'(a)') adjustl(trim(word1))//' J/mol'
+        write(id,'(a29)',advance='no') 'K+ concentration: '
+        write(word1,'(es12.5)') ilf%ilt_K_conc
+        write(id,'(a)') adjustl(trim(word1))//' M'
+        write(id,'(a29)',advance='no') 'K+ conc. exponent: '
+        write(word1,'(es12.5)') ilf%ilt_K_exp
+        write(id,'(a)') adjustl(trim(word1))
         write(id,'(a29)',advance='no') 'temperature threshold: '
         write(word1,'(es12.5)') ilf%ilt_threshold
         write(id,'(a)') adjustl(trim(word1))//' C'
