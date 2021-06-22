@@ -913,6 +913,12 @@ subroutine OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
       category = OUTPUT_GENERIC
       id = LIQUID_MASS_FRACTION
       subvar = option%water_id
+    case ('WSL')
+      name = 'w_s^l'
+      units = ''
+      category = OUTPUT_GENERIC
+      id = LIQUID_MASS_FRACTION
+      subvar = option%solute_id
     case ('WGG')
       name = 'w_g^g'
       units = ''

@@ -551,7 +551,6 @@ subroutine GeneralComputeMassBalance(realization,mass_balance)
       enddo
     enddo
   enddo
-
 end subroutine GeneralComputeMassBalance
 
 ! ************************************************************************** !
@@ -777,14 +776,14 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
                                       natural_id, &  ! for debugging
                                       option)
       elseif (option%nflowdof == 4) then
-         call GeneralAuxVarUpdateState4(xx_loc_p(ghosted_start:ghosted_end), &
-                                        gen_auxvars(ZERO_INTEGER,ghosted_id), &
-                                        global_auxvars(ghosted_id), &
-                                        material_auxvars(ghosted_id), &
-                                        patch%characteristic_curves_array( &
-                                          patch%cc_id(ghosted_id))%ptr, &
-                                        natural_id, &  ! for debugging
-                                        option)
+        call GeneralAuxVarUpdateState4(xx_loc_p(ghosted_start:ghosted_end), &
+                                       gen_auxvars(ZERO_INTEGER,ghosted_id), &
+                                       global_auxvars(ghosted_id), &
+                                       material_auxvars(ghosted_id), &
+                                       patch%characteristic_curves_array( &
+                                         patch%cc_id(ghosted_id))%ptr, &
+                                       natural_id, &  ! for debugging
+                                       option)
       endif
     endif
 #ifdef DEBUG_AUXVARS
@@ -959,7 +958,7 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
                                          patch%cc_id(ghosted_id))%ptr, &
                                        natural_id,option)
         elseif (option%nflowdof == 4) then
-           call GeneralAuxVarUpdateState(xxbc,gen_auxvars_bc(sum_connection), &
+           call GeneralAuxVarUpdateState4(xxbc,gen_auxvars_bc(sum_connection), &
                                         global_auxvars_bc(sum_connection), &
                                         material_auxvars(ghosted_id), &
                                         patch%characteristic_curves_array( &
@@ -1137,14 +1136,25 @@ subroutine GeneralUpdateFixedAccum(realization)
     ! GENERAL_UPDATE_FOR_FIXED_ACCUM indicates call from non-perturbation
     option%iflag = GENERAL_UPDATE_FOR_FIXED_ACCUM
 
-    call GeneralAuxVarCompute(xx_p(local_start:local_end), &
-                              gen_auxvars(ZERO_INTEGER,ghosted_id), &
-                              global_auxvars(ghosted_id), &
-                              material_auxvars(ghosted_id), &
-                              patch%characteristic_curves_array( &
+    if (option%nflowdof == 3) then
+      call GeneralAuxVarCompute(xx_p(local_start:local_end), &
+                                gen_auxvars(ZERO_INTEGER,ghosted_id), &
+                                global_auxvars(ghosted_id), &
+                                material_auxvars(ghosted_id), &
+                                patch%characteristic_curves_array( &
+                                  patch%cc_id(ghosted_id))%ptr, &
+                                natural_id, &
+                                option)
+    elseif (option%nflowdof == 4) then
+      call GeneralAuxVarCompute4(xx_p(local_start:local_end), &
+                                gen_auxvars(ZERO_INTEGER,ghosted_id), &
+                                global_auxvars(ghosted_id), &
+                                material_auxvars(ghosted_id), &
+                                patch%characteristic_curves_array( &
                                 patch%cc_id(ghosted_id))%ptr, &
-                              natural_id, &
-                              option)
+                                natural_id, &
+                                option)
+    endif
     call GeneralAccumulation(gen_auxvars(ZERO_INTEGER,ghosted_id), &
                              global_auxvars(ghosted_id), &
                              material_auxvars(ghosted_id), &
@@ -1287,9 +1297,9 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
                             general_allow_state_change)
 
 ! for debugging a single grid cell
-!  i = 6
-!  call GeneralOutputAuxVars(gen_auxvars(0,i),global_auxvars(i),i,'genaux', &
-!                            PETSC_TRUE,option)
+! i = 6
+! call GeneralOutputAuxVars(gen_auxvars(0,i),global_auxvars(i),i,'genaux', &
+!                           PETSC_TRUE,option)
 #ifdef DEBUG_WITH_TECPLOT
 ! for debugging entire solution over a single SNES solve
   write(word,*) iplot
@@ -1452,9 +1462,15 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
       endif
       if (option%compute_mass_balance_new) then
         ! contribution to boundary
-        global_auxvars_bc(sum_connection)%mass_balance_delta(1:2,1) = &
-          global_auxvars_bc(sum_connection)%mass_balance_delta(1:2,1) - &
-          Res(1:2)
+        if (option%nflowdof == 3) then
+          global_auxvars_bc(sum_connection)%mass_balance_delta(1:2,1) = &
+            global_auxvars_bc(sum_connection)%mass_balance_delta(1:2,1) - &
+            Res(1:2)
+        elseif (option%nflowdof == 4) then
+           global_auxvars_bc(sum_connection)%mass_balance_delta(1:3,1) = &
+             global_auxvars_bc(sum_connection)%mass_balance_delta(1:3,1) - &
+             (/Res(1:2),Res(4)/)
+        endif
       endif
 
       local_end = local_id * option%nflowdof
@@ -1701,7 +1717,7 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
   else
     J = A
   endif
-
+  
   call MatZeroEntries(J,ierr);CHKERRQ(ierr)
   
   if (.not.general_analytical_derivatives) then

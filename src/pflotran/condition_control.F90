@@ -323,6 +323,8 @@ subroutine CondControlAssignFlowInitCond(realization)
                     general%mole_fraction%dataset%rarray(1)
                   xx_p(ibegin+GENERAL_ENERGY_DOF) = &
                     general%temperature%dataset%rarray(1)
+                  xx_p(ibegin+GENERAL_LIQUID_STATE_S_MOLE_DOF) = &
+                    general%mole_fraction%dataset%rarray(2)
                 case(GAS_STATE)
                   xx_p(ibegin+GENERAL_GAS_PRESSURE_DOF) = &
                     general%gas_pressure%dataset%rarray(1)

@@ -1485,14 +1485,12 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
     endif
   endif
 #endif
-  
   select case(global_auxvar%istate)
     case(LIQUID_STATE)
       gen_auxvar%pres(lid) = x(GENERAL_LIQUID_PRESSURE_DOF)
       gen_auxvar%xmol(acid,lid) = x(GENERAL_LIQUID_STATE_X_MOLE_DOF)
       gen_auxvar%temp = x(GENERAL_ENERGY_DOF)
       gen_auxvar%xmol(sid,lid) = x(GENERAL_LIQUID_STATE_S_MOLE_DOF)
-
       gen_auxvar%xmol(wid,lid) = 1.d0 - gen_auxvar%xmol(acid,lid) - gen_auxvar%xmol(sid,lid)
       ! with the gas state, we must calculate the mole fraction of air in 
       ! in the liquid phase, even though the liquid phase does not exist
@@ -1504,7 +1502,6 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
       gen_auxvar%sat(lid) = 1.d0
       gen_auxvar%sat(gid) = 0.d0
       gen_auxvar%sat(pid) = 0.d0
-
       if (associated(gen_auxvar%d)) then
         call EOSWaterSaturationPressure(gen_auxvar%temp, &
                                         gen_auxvar%pres(spid), &
@@ -2498,12 +2495,12 @@ subroutine GeneralAuxVarUpdateState(x,gen_auxvar,global_auxvar, &
   gas_epsilon = 0.d0
   liq_epsilon = 0.d0
   two_phase_epsilon = 0.d0
-
+  call GeneralPrintAuxVars(gen_auxvar,global_auxvar,material_auxvar, &
+       natural_id,'Before Update',option)
   ! Change state
   select case(global_auxvar%istate)
 
    case(LIQUID_STATE)
-
       !if (gen_auxvar%pres(vpid) <= gen_auxvar%pres(spid)*(1.d0+ &
       !    window_epsilon) .or. gen_auxvar%pres(apid) >= gen_auxvar% &
       !    pres(lid)*(1.d0-window_epsilon)) then
@@ -2741,6 +2738,8 @@ subroutine GeneralAuxVarUpdateState4(x,gen_auxvar,global_auxvar, &
 
   call GeneralAuxNaClSolubility(gen_auxvar%Temp,NaClSolubility,&
                                 solubility_function)
+  call GeneralPrintAuxVars(gen_auxvar,global_auxvar,material_auxvar, &
+       natural_id,'Before Update',option)
   ! Change state
   select case(global_auxvar%istate)
 
@@ -3280,12 +3279,12 @@ subroutine GeneralAuxVarPerturb(gen_auxvar,global_auxvar, &
     x_pert = x
     x_pert(idof) = x(idof) + pert(idof)
     x_pert_save = x_pert
-    if (option%nflowdof == 4) then
-       call GeneralAuxVarCompute4(x_pert,gen_auxvar(idof),global_auxvar, &
-                                  material_auxvar, &
-                                  characteristic_curves,natural_id,option)
-    else
+    if (option%nflowdof == 3) then
       call GeneralAuxVarCompute(x_pert,gen_auxvar(idof),global_auxvar, &
+                                material_auxvar, &
+                                characteristic_curves,natural_id,option)
+    elseif (option%nflowdof == 4) then
+      call GeneralAuxVarCompute4(x_pert,gen_auxvar(idof),global_auxvar, &
                                 material_auxvar, &
                                 characteristic_curves,natural_id,option)
     endif
@@ -3787,7 +3786,7 @@ subroutine GeneralPrintAuxVars(general_auxvar,global_auxvar,material_auxvar, &
   type(option_type) :: option
 
   PetscInt :: apid, cpid, vpid, spid
-  PetscInt :: gid, lid, pid, acid, wid, eid
+  PetscInt :: gid, lid, pid, acid, wid, eid, sid
   PetscReal :: liquid_mass, gas_mass
   PetscReal :: liquid_density, gas_density
   PetscReal :: liquid_energy, gas_energy
@@ -3804,6 +3803,7 @@ subroutine GeneralPrintAuxVars(general_auxvar,global_auxvar,material_auxvar, &
   acid = option%air_id ! air component id
   wid = option%water_id
   eid = option%energy_id
+  sid = option%solute_id
 
   liquid_density = 0.d0
   gas_density = 0.d0
@@ -3868,6 +3868,9 @@ subroutine GeneralPrintAuxVars(general_auxvar,global_auxvar,material_auxvar, &
   print *, '         gas U [MJ/kmol]: ', general_auxvar%U(gid)
   print *, '     X (water in liquid): ', general_auxvar%xmol(lid,lid)
   print *, '       X (air in liquid): ', general_auxvar%xmol(gid,lid)
+  if (option%nflowdof ==4) then
+    print *,'    X (solute in liquid): ', general_auxvar%xmol(sid,lid)
+  endif
   print *, '        X (water in gas): ', general_auxvar%xmol(lid,gid)
   print *, '          X (air in gas): ', general_auxvar%xmol(gid,gid)
   print *, '         liquid mobility: ', general_auxvar%mobility(lid)

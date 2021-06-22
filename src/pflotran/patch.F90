@@ -1461,8 +1461,8 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
       coupler%flow_aux_mapping(GENERAL_SOLUTE_INDEX) = 4
       coupler%flow_aux_mapping(GENERAL_PRECIPITATE_SAT_INDEX) = 4
     endif
- endif
-
+  endif
+  
   select case(flow_condition%iphase)
     case(MULTI_STATE)
       select type(dataset => general%gas_saturation%dataset)
@@ -1650,7 +1650,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
             endif
             ! ---> see code that just prints error
             coupler%flow_bc_type(1) = HYDROSTATIC_BC
-            coupler%flow_bc_type(2:3) = DIRICHLET_BC
+            coupler%flow_bc_type(2:option%nflowdof) = DIRICHLET_BC
           else
           ! liquid pressure; 1st dof --------------------- !
             select case(general%liquid_pressure%itype)
@@ -1701,6 +1701,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                   FlowConditionUnknownItype(coupler%flow_condition, &
                   'GENERAL_MODE liquid state mole fraction ',string)
                 call PrintErrMsg(option)
+            end select
             if (option%nflowdof == 4) then
               ! mole fraction; 4th dof ----------------------- !
               select case(general%solute_fraction%itype)
@@ -1721,7 +1722,6 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                  call PrintErrMsg(option)
                end select
             endif
-            end select
           endif
       ! ---------------------------------------------------------------------- !
         case(GAS_STATE)
@@ -1997,16 +1997,33 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
   if (dof1) dof_count_local(1) = 1
   if (dof2) dof_count_local(2) = 1
   if (dof3) dof_count_local(3) = 1
-  call MPI_Allreduce(dof_count_local,dof_count_global,THREE_INTEGER_MPI, &
-                     MPI_INTEGER,MPI_SUM,option%mycomm,ierr)
+  if (option%nflowdof == 4) then
+    if (dof4) dof_count_local(4) = 1
+    call MPI_Allreduce(dof_count_local,dof_count_global,FOUR_INTEGER_MPI, &
+         MPI_INTEGER,MPI_SUM,option%mycomm,ierr)
+  else
+    call MPI_Allreduce(dof_count_local,dof_count_global,THREE_INTEGER_MPI, &
+                       MPI_INTEGER,MPI_SUM,option%mycomm,ierr)
+  endif
   if (dof_count_global(1) > 0) dof1 = PETSC_TRUE
   if (dof_count_global(2) > 0) dof2 = PETSC_TRUE
   if (dof_count_global(3) > 0) dof3 = PETSC_TRUE
+  if (option%nflowdof == 4) then
+    if (dof_count_global(4) > 0) dof4 = PETSC_TRUE
+  endif
   ! need to check if these dofs are true on any process, because the
   ! boundary condition might be split up on 2 or more processes
   if (.not.dof1 .or. .not.dof2 .or. .not.dof3) then
+    if (option%nflowdof == 4) then
+      if (.not.dof4) then
+        if (coupler%itype .ne. SRC_SINK_COUPLER_TYPE) then
+            option%io_buffer = 'Error with GENERAL_MODE phase boundary condition: &
+                 &Missing dof.'
+        endif
+      endif
+    endif
     if (coupler%itype .ne. SRC_SINK_COUPLER_TYPE) then
-      option%io_buffer = 'Error with GENERAL_MODE phase boundary condition: &
+        option%io_buffer = 'Error with GENERAL_MODE phase boundary condition: &
                           &Missing dof.'
       call PrintErrMsg(option)
     endif

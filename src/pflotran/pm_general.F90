@@ -265,7 +265,6 @@ subroutine PMGeneralSetFlowMode(pm,option)
   option%water_id = 1
   option%air_id = 2
   option%energy_id = 3
-  option%nflowspec = 2
   if (option%nflowdof == 0 .or. option%nflowdof == 3) then
     option%nphase = 2
     option%nflowdof = 3
@@ -480,6 +479,7 @@ subroutine PMGeneralReadSimOptionsBlock(this,input)
         call InputReadInt(input,option,tempint)
         option%nflowdof = tempint
         call InputErrorMsg(input,option,keyword,error_string)
+      ! This belongs somewhere else
       ! case('SOLUBILITY_FUNCTION')
       !   call InputReadWord(input,option,word,PETSC_TRUE)
       !   call InputErrorMsg(input,option,'solubility_function',error_string)
@@ -1586,9 +1586,12 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
                 elseif (idof == 2) then
                   string = '   ' // trim(tol_string(itol)) // ', ' // &
                    trim(state_string(istate)) // ', Air Mass'
-                else
+                elseif (idof == 3) then
                   string = '   ' // trim(tol_string(itol)) // ', ' // &
                    trim(state_string(istate)) // ', Energy'
+                else
+                  string = '   ' // trim(tol_string(itol)) // ', ' // &
+                   trim(state_string(istate)) // ', Solute Mass'
                 endif
               else
                 string = '   ' // trim(tol_string(itol)) // ', ' // &
