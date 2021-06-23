@@ -806,7 +806,6 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
                                gen_auxvar%pres(cpid),dpc_dsatl,option)                             
       gen_auxvar%pres(lid) = gen_auxvar%pres(gid) - &
                              gen_auxvar%pres(cpid)
-                             
       if (associated(gen_auxvar%d)) then
         option%io_buffer = 'Analytical derivatives for gas state cells in &
           &GENERAL mode have a bug. Please use numerical derivatives until &
@@ -946,6 +945,8 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
 
   if (eos_henry_ierr /= 0) then
      call GeneralEOSGasError(natural_id,eos_henry_ierr,gen_auxvar,option)
+     call GeneralPrintAuxVars(gen_auxvar,global_auxvar,material_auxvar, &
+          natural_id,'EOSGSASERRORAUXVARS',option)
   endif
 
   
@@ -3279,15 +3280,10 @@ subroutine GeneralAuxVarPerturb(gen_auxvar,global_auxvar, &
     x_pert = x
     x_pert(idof) = x(idof) + pert(idof)
     x_pert_save = x_pert
-    if (option%nflowdof == 3) then
-      call GeneralAuxVarCompute(x_pert,gen_auxvar(idof),global_auxvar, &
-                                material_auxvar, &
-                                characteristic_curves,natural_id,option)
-    elseif (option%nflowdof == 4) then
-      call GeneralAuxVarCompute4(x_pert,gen_auxvar(idof),global_auxvar, &
-                                material_auxvar, &
-                                characteristic_curves,natural_id,option)
-    endif
+    call GeneralAuxVarCompute(x_pert,gen_auxvar(idof),global_auxvar, &
+                              material_auxvar, &
+                              characteristic_curves,natural_id,option)
+
 #ifdef DEBUG_GENERAL
     call GlobalAuxVarCopy(global_auxvar,global_auxvar_debug,option)
     call GeneralAuxVarCopy(gen_auxvar(idof),general_auxvar_debug,option)

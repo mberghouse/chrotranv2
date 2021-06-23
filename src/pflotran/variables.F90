@@ -159,5 +159,6 @@ module Variables_module
   PetscInt, parameter, public :: EPSILON = 129
 
   PetscInt, parameter, public :: PRECIPITATE_SATURATION = 130
+  PetscInt, parameter, public :: DARCY_VELOCITY = 141
 
 end module Variables_module

@@ -2218,11 +2218,13 @@ subroutine GeneralSetPlotVariables(realization,list)
     call OutputVariableAddToList(list,name,OUTPUT_GENERIC,units, &
                                 LIQUID_MOLE_FRACTION, &
                                 realization%option%water_id)
-    name = 'X_s^l'
-    units = ''
-    call OutputVariableAddToList(list,name,OUTPUT_GENERIC,units, &
-                                 LIQUID_MOLE_FRACTION, &
-                                 realization%option%solute_id)
+    if (realization%option%nflowdof == 4) then
+      name = 'X_s^l'
+      units = ''
+      call OutputVariableAddToList(list,name,OUTPUT_GENERIC,units, &
+                                   LIQUID_MOLE_FRACTION, &
+                                   realization%option%solute_id)
+    endif
 
     name = 'X_g^g'
     units = ''

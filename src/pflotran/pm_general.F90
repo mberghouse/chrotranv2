@@ -18,6 +18,7 @@ module PM_General_class
   PetscInt, parameter :: MAX_INDEX = SCALED_RESIDUAL_INDEX
   PetscInt, pointer :: general_max_states
   PetscInt, pointer :: max_change_index
+  PetscBool, public :: general_g_state_air_mass_dof = PETSC_FALSE
 
   type, public, extends(pm_subsurface_flow_type) :: pm_general_type
     PetscInt, pointer :: max_change_ivar(:)
@@ -361,10 +362,14 @@ subroutine PMGeneralSetFlowMode(pm,option)
   pm%converged_real(:,:,:) = 0.d0
   pm%converged_cell(:,:,:) = 0
 
+  if (general_g_state_air_mass_dof) then
+    pm%abs_update_inf_tol(2,2)=pm%abs_update_inf_tol(2,1)
+    pm%rel_update_inf_tol(2,2)=pm%rel_update_inf_tol(2,1)
+  endif
+
 end subroutine PMGeneralSetFlowMode
 
 ! ************************************************************************** !
-
 subroutine PMGeneralReadSimOptionsBlock(this,input)
   ! 
   ! Read simulation options for GENERAL mode
@@ -390,6 +395,7 @@ subroutine PMGeneralReadSimOptionsBlock(this,input)
   character(len=MAXSTRINGLENGTH) :: error_string
   PetscBool :: found
   PetscInt :: lid, gid, eid, sid
+  PetscInt :: flag
 
   option => this%option
 
@@ -435,14 +441,17 @@ subroutine PMGeneralReadSimOptionsBlock(this,input)
         call InputReadCard(input,option,word)
         call InputErrorMsg(input,option,keyword,error_string)
         call GeneralAuxSetAirMassDOF(word,option)
-        this%abs_update_inf_tol(2,2)=this%abs_update_inf_tol(2,1)
-        this%rel_update_inf_tol(2,2)=this%rel_update_inf_tol(2,1)
+        !DF:Set a flag attached to pm general
+        general_g_state_air_mass_dof = PETSC_TRUE
+        ! move this to PMGeneralSetFlowMode
+        ! this%abs_update_inf_tol(2,2)=this%abs_update_inf_tol(2,1)
+        ! this%rel_update_inf_tol(2,2)=this%rel_update_inf_tol(2,1)
       case('HARMONIC_GAS_DIFFUSIVE_DENSITY')
         general_harmonic_diff_density = PETSC_TRUE
       case('IMMISCIBLE')
         general_immiscible = PETSC_TRUE
       case('ISOTHERMAL')
-         general_isothermal = PETSC_TRUE
+        general_isothermal = PETSC_TRUE
       case('NON_DARCY_FLOW')
         general_non_darcy_flow = PETSC_TRUE
       case('NON_DARCY_FLOW_B')
@@ -583,9 +592,6 @@ subroutine PMGeneralReadNewtonSelectCase(this,input,keyword,found, &
     case('ENERGY_RESIDUAL_ABS_INF_TOL')
       call InputReadDouble(input,option,this%residual_abs_inf_tol(eid))
       call InputErrorMsg(input,option,keyword,error_string)
-    case('SOLUTE_RESIDUAL_ABS_INF_TOL')
-      call InputReadDouble(input,option,this%residual_abs_inf_tol(sid))
-      call InputErrorMsg(input,option,keyword,error_string)
 
     ! Scaled Residual
     case('ITOL_SCALED_RESIDUAL')
@@ -603,9 +609,6 @@ subroutine PMGeneralReadNewtonSelectCase(this,input,keyword,found, &
       call InputErrorMsg(input,option,keyword,error_string)
     case('ENERGY_RESIDUAL_SCALED_INF_TOL')
       call InputReadDouble(input,option,this%residual_scaled_inf_tol(eid))
-      call InputErrorMsg(input,option,keyword,error_string)
-    case('SOLUTE_RESIDUAL_SCALED_INF_TOL')
-      call InputReadDouble(input,option,this%residual_scaled_inf_tol(sid))
       call InputErrorMsg(input,option,keyword,error_string)
 
     ! All Updates
@@ -749,11 +752,12 @@ recursive subroutine PMGeneralInitializeRun(this)
                            ierr);CHKERRQ(ierr)
   ! set initial values
   do i = 1, max_change_index
-     call RealizationGetVariable(this%realization, &
-          this%realization%field%max_change_vecs(i), &
-          this%max_change_ivar(i), &
-          this%max_change_isubvar(i))
+    call RealizationGetVariable(this%realization, &
+                                this%realization%field%max_change_vecs(i), &
+                                this%max_change_ivar(i), &
+                                this%max_change_isubvar(i))
   enddo
+
   ! call parent implementation
   call PMSubsurfaceFlowInitializeRun(this)
 
@@ -1172,7 +1176,7 @@ subroutine PMGeneralCheckUpdatePre(this,snes,X,dX,changed,ierr)
           liquid_pressure_index  = offset + GENERAL_LIQUID_PRESSURE_DOF
           temperature_index  = offset + GENERAL_ENERGY_DOF
           dX_p(liquid_pressure_index) = dX_p(liquid_pressure_index) * &
-                                        GENERAL_PRESSURE_SCALE
+g                                        GENERAL_PRESSURE_SCALE
           temp_scale = 1.d0
           del_liquid_pressure = dX_p(liquid_pressure_index)
           liquid_pressure0 = X_p(liquid_pressure_index)
@@ -1304,6 +1308,13 @@ subroutine PMGeneralCheckUpdatePost(this,snes,X0,dX,X1,dX_changed, &
   field => this%realization%field
   patch => this%realization%patch
   global_auxvars => patch%aux%Global%auxvars
+
+  allocate(converged_abs_update_flag(option%nflowdof,general_max_states))
+  allocate(converged_rel_update_flag(option%nflowdof,general_max_states))
+  allocate(converged_abs_update_cell(option%nflowdof,general_max_states))
+  allocate(converged_rel_update_cell(option%nflowdof,general_max_states))
+  allocate(converged_abs_update_real(option%nflowdof,general_max_states))
+  allocate(converged_rel_update_real(option%nflowdof,general_max_states))
   
   dX_changed = PETSC_FALSE
   X1_changed = PETSC_FALSE
@@ -1416,7 +1427,7 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
   PetscReal :: R, A, R_A
   PetscReal, parameter :: A_zero = 1.d-15
   PetscBool, pointer :: converged_abs_residual_flag(:,:)
-  PetscReal, pointer :: converged_abs_residual_real(:,:)
+  PetscReal, pointer:: converged_abs_residual_real(:,:)
   PetscInt, pointer :: converged_abs_residual_cell(:,:)
   PetscBool, pointer :: converged_scaled_residual_flag(:,:)
   PetscReal, pointer :: converged_scaled_residual_real(:,:)
@@ -1427,7 +1438,7 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
   PetscMPIInt :: mpi_int
   PetscBool, pointer :: flags(:)
   character(len=MAXSTRINGLENGTH) :: string
-  character(len=14), pointer :: state_string(:)
+  character(len=12), pointer :: state_string(:)
   character(len=17), pointer :: dof_string(:,:)
   character(len=15), parameter :: tol_string(MAX_INDEX) = &
     ['Absolute Update','Relative Update','Residual       ','Scaled Residual']
@@ -1451,12 +1462,12 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
 
   if (option%nflowdof == 3) then
     state_string = &
-      ['Liquid State','Gas State   ','2Phase State']
+       ['Liquid State','Gas State   ','2Phase State']
     dof_string = &
-    reshape(['Liquid Pressure  ','Air Mole Fraction','Temperature      ',&
-             'Gas Pressure     ','Air Mole Fraction','Temperature      ',&
-             'Gas Pressure     ','Gas Saturation   ','Temperature      '],&
-            shape(dof_string))
+      reshape(['Liquid Pressure  ','Air Mole Fraction','Temperature      ', &
+               'Gas Pressure     ','Air Pressure     ','Temperature      ', &
+               'Gas Pressure     ','Gas Saturation   ','Temperature      '], &
+               shape(dof_string))
   elseif (option%nflowdof == 4) then
     state_string = &
       ['Liquid State','Gas State   ','LG State    ',&
@@ -1554,17 +1565,18 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
     ! geh: since we need to pack other flags into this global reduction,
     !      convert to 1D array
     flags(1:option%nflowdof*general_max_states*MAX_INDEX) = &
-         reshape(this%converged_flag,(/option%nflowdof*general_max_states*MAX_INDEX/))
+      reshape(this%converged_flag,(/option%nflowdof*general_max_states*MAX_INDEX/))
     ! due to the 'and' operation, must invert the boolean using .not.
     flags(option%nflowdof*general_max_states*MAX_INDEX+1) =&
-         .not.general_high_temp_ts_cut
+      .not.general_high_temp_ts_cut
     mpi_int = option%nflowdof*general_max_states*MAX_INDEX+1
     call MPI_Allreduce(MPI_IN_PLACE,flags,mpi_int, &
                        MPI_LOGICAL,MPI_LAND,option%mycomm,ierr)
-    this%converged_flag = reshape(flags(1:option%nflowdof*general_max_index*MAX_INDEX),&
-                          (/option%nflowdof,general_max_index,MAX_INDEX/))
+
+    this%converged_flag = reshape(flags(1:option%nflowdof*general_max_states*MAX_INDEX),&
+                            (/option%nflowdof,general_max_states,MAX_INDEX/))
     ! due to the 'and' operation, must invert the boolean using .not.
-    general_high_temp_ts_cut = .not.flags(option%nflowdof*general_max_index*MAX_INDEX)
+    general_high_temp_ts_cut = .not.flags(option%nflowdof*general_max_states*MAX_INDEX+1)
 
     mpi_int = option%nflowdof*general_max_index*MAX_INDEX
     call MPI_Allreduce(MPI_IN_PLACE,this%converged_real,mpi_int, &
@@ -1573,7 +1585,7 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
     option%convergence = CONVERGENCE_CONVERGED
     
     do itol = 1, MAX_INDEX
-      do istate = 1, general_max_index
+      do istate = 1, general_max_states
         do idof = 1, option%nflowdof
           if (.not.this%converged_flag(idof,istate,itol)) then
             option%convergence = CONVERGENCE_KEEP_ITERATING
@@ -1589,7 +1601,7 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
                 elseif (idof == 3) then
                   string = '   ' // trim(tol_string(itol)) // ', ' // &
                    trim(state_string(istate)) // ', Energy'
-                else
+                elseif (idof == 4) then
                   string = '   ' // trim(tol_string(itol)) // ', ' // &
                    trim(state_string(istate)) // ', Solute Mass'
                 endif
@@ -1854,7 +1866,6 @@ subroutine PMGeneralMaxChange(this)
   endif
   
 end subroutine PMGeneralMaxChange
-
 ! ************************************************************************** !
 
 subroutine PMGeneralComputeMassBalance(this,mass_balance_array)
