@@ -395,14 +395,11 @@ subroutine ILTDefaultIllitization(this,fs,temperature,dt, &
   ! Check if temperature is above threshold for illitization
   if (temperature >= this%ilt_threshold) then
     ! Negative of illitization rate [L/mol-s]
-    rate = this%ilt_freq * &
+    rate = this%ilt_K_conc * this%ilt_freq * &
       exp(-1.0d0 * this%ilt_ea / (IDEAL_GAS_CONSTANT * T))
   else
     rate = 0.0d0
   endif
-
-  ! Modify rate with potassium concentration and initial fraction [1/s]
-  rate = rate * (fs**2) * this%ilt_K_conc
 
   ! Log change in smectite as time proceeds
   ds = rate * dt
