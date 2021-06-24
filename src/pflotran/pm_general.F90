@@ -1176,7 +1176,7 @@ subroutine PMGeneralCheckUpdatePre(this,snes,X,dX,changed,ierr)
           liquid_pressure_index  = offset + GENERAL_LIQUID_PRESSURE_DOF
           temperature_index  = offset + GENERAL_ENERGY_DOF
           dX_p(liquid_pressure_index) = dX_p(liquid_pressure_index) * &
-g                                        GENERAL_PRESSURE_SCALE
+                                        GENERAL_PRESSURE_SCALE
           temp_scale = 1.d0
           del_liquid_pressure = dX_p(liquid_pressure_index)
           liquid_pressure0 = X_p(liquid_pressure_index)
