@@ -770,13 +770,13 @@ subroutine OutputVariableRead(input,option,output_variable_list)
                                 option)
         call OutputVariableAddToList(output_variable_list,name, &
                                      category,units,id,subvar)
-        ! if (option%nflowdof == 4) then
-        !   word = 'XSL'
-        !   call OutVariableIdToID(word,name,units,category,id,subvar,&
-        !                          subsubvar,option)
-        !   call OutputVariableAddToList(output_variable_list,name,&
-        !                                category,units,id,subvar)
-        ! endif
+        if (option%nflowdof == 4) then
+          word = 'XSL'
+          call OutputVariableToID(word,name,units,category,id,subvar,&
+                                 subsubvar,option)
+          call OutputVariableAddToList(output_variable_list,name,&
+                                       category,units,id,subvar)
+        endif
       case ('GAS_MOLE_FRACTIONS')
         word = 'XGG'
         call OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
@@ -799,13 +799,13 @@ subroutine OutputVariableRead(input,option,output_variable_list)
                                 option)
         call OutputVariableAddToList(output_variable_list,name, &
                                      category,units,id,subvar)
-        ! if (option%nflowdof == 4) then
-        !   word = 'WSL'
-        !   call OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
-        !                           option)
-        !   call OutputVariableAddToList(output_variable_list,name, &
-        !                                category,units,id,subvar)
-        ! endif
+        if (option%iflowmode == G_MODE .and. option%nflowdof == 4) then
+          word = 'WSL'
+          call OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
+                                  option)
+          call OutputVariableAddToList(output_variable_list,name, &
+                                       category,units,id,subvar)
+        endif
       case ('GAS_MASS_FRACTIONS')
         word = 'WGG'
         call OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &

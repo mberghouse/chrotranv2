@@ -1412,7 +1412,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
   type(flow_general_condition_type), pointer :: general
   PetscBool :: update
   PetscBool :: dof1, dof2, dof3, dof4
-  PetscReal :: temperature, p_sat, p_cap, s_liq, xmol
+  PetscReal :: temperature, p_sat, p_cap, s_liq, xmol, xmol2
   PetscReal :: relative_humidity
   PetscReal :: gas_sat, hyd_sat, air_pressure, gas_pressure, liq_pressure
   PetscReal :: dummy_real
@@ -1707,11 +1707,11 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
               select case(general%solute_fraction%itype)
                 case(DIRICHLET_BC)
                   call PatchGetCouplerValueFromDataset(coupler,option, &
-                         patch%grid,general%solute_fraction%dataset,iconn,xmol)
+                         patch%grid,general%solute_fraction%dataset,iconn,xmol2)
                     if (general_immiscible) then
-                      xmol = GENERAL_IMMISCIBLE_VALUE
+                      xmol2 = GENERAL_IMMISCIBLE_VALUE
                     endif
-                    coupler%flow_aux_real_var(FOUR_INTEGER,iconn) = xmol
+                    coupler%flow_aux_real_var(FOUR_INTEGER,iconn) = xmol2
                     dof4 = PETSC_TRUE
                     coupler%flow_bc_type(GENERAL_SOLUTE_EQUATION_INDEX) = DIRICHLET_BC
                  case default
@@ -1998,12 +1998,14 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
   if (dof2) dof_count_local(2) = 1
   if (dof3) dof_count_local(3) = 1
   if (option%nflowdof == 4) then
-    if (dof4) dof_count_local(4) = 1
-    call MPI_Allreduce(dof_count_local,dof_count_global,FOUR_INTEGER_MPI, &
-         MPI_INTEGER,MPI_SUM,option%mycomm,ierr)
+    if (dof4) then
+      dof_count_local(4) = 1
+      call MPI_Allreduce(dof_count_local,dof_count_global,FOUR_INTEGER_MPI, &
+           MPI_INTEGER,MPI_SUM,option%mycomm,ierr)
+    endif
   else
-    call MPI_Allreduce(dof_count_local,dof_count_global,THREE_INTEGER_MPI, &
-                       MPI_INTEGER,MPI_SUM,option%mycomm,ierr)
+      call MPI_Allreduce(dof_count_local,dof_count_global,THREE_INTEGER_MPI, &
+                         MPI_INTEGER,MPI_SUM,option%mycomm,ierr)
   endif
   if (dof_count_global(1) > 0) dof1 = PETSC_TRUE
   if (dof_count_global(2) > 0) dof2 = PETSC_TRUE
@@ -2013,19 +2015,21 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
   endif
   ! need to check if these dofs are true on any process, because the
   ! boundary condition might be split up on 2 or more processes
-  if (.not.dof1 .or. .not.dof2 .or. .not.dof3) then
-    if (option%nflowdof == 4) then
-      if (.not.dof4) then
-        if (coupler%itype .ne. SRC_SINK_COUPLER_TYPE) then
-            option%io_buffer = 'Error with GENERAL_MODE phase boundary condition: &
-                 &Missing dof.'
-        endif
+  if (option%nflowdof == 4) then
+    if (.not.dof1 .or. .not.dof2 .or. .not.dof3 .or. .not.dof4) then
+      if (coupler%itype .ne. SRC_SINK_COUPLER_TYPE) then
+          option%io_buffer = 'Error with GENERAL_MODE phase boundary condition: &
+                              &Missing dof.'
+          call PrintErrMsg(option)
       endif
     endif
-    if (coupler%itype .ne. SRC_SINK_COUPLER_TYPE) then
-        option%io_buffer = 'Error with GENERAL_MODE phase boundary condition: &
-                          &Missing dof.'
-      call PrintErrMsg(option)
+  elseif (option%nflowdof == 3) then
+    if (.not.dof1 .or. .not.dof2 .or. .not.dof3) then
+      if (coupler%itype .ne. SRC_SINK_COUPLER_TYPE) then
+          option%io_buffer = 'Error with GENERAL_MODE phase boundary condition: &
+                              &Missing dof.'
+          call PrintErrMsg(option)
+      endif
     endif
   endif
 

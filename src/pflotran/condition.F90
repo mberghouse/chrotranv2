@@ -1757,7 +1757,7 @@ subroutine FlowConditionGeneralRead(condition,input,option)
           case('LIQUID_PRESSURE','GAS_PRESSURE')
             internal_units = 'Pa'
           case('LIQUID_SATURATION','GAS_SATURATION','MOLE_FRACTION', &
-                'RELATIVE_HUMIDITY')
+                'RELATIVE_HUMIDITY','SOLUTE_FRACTION')
             internal_units = 'unitless'
           case('TEMPERATURE')
             internal_units = 'C'
@@ -1924,6 +1924,11 @@ subroutine FlowConditionGeneralRead(condition,input,option)
   call FlowSubConditionVerify(option,condition,word,general%mole_fraction, &
                               default_time_storage, &
                               PETSC_TRUE)
+  word = 'solute fraction'
+  call FlowSubConditionVerify(option,condition,word,general%solute_fraction, &
+                              default_time_storage, &
+                              PETSC_TRUE)
+
   word = 'temperature'
   call FlowSubConditionVerify(option,condition,word,general%temperature, &
                               default_time_storage, &

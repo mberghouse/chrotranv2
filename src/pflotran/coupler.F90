@@ -599,7 +599,7 @@ subroutine CouplerDestroy(coupler)
   nullify(coupler%flow_condition)     ! since these are simply pointers to
   nullify(coupler%tran_condition)     ! since these are simply pointers to
   nullify(coupler%geop_condition)
-  nullify(coupler%region)             ! conditoins in list, nullify
+  nullify(coupler%region)             ! conditions in list, nullify
 
   call DeallocateArray(coupler%flow_aux_mapping)
   call DeallocateArray(coupler%flow_bc_type)

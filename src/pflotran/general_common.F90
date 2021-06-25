@@ -4085,10 +4085,15 @@ subroutine GeneralAuxVarComputeAndSrcSink(option,qsrc,flow_src_sink_type, &
   option%iflag = GENERAL_UPDATE_FOR_SS
 
   ! Compute state variables
-  call GeneralAuxVarCompute(xxss,gen_auxvar_ss, global_auxvar_ss, &
-                            material_auxvar, characteristic_curves, &
-                            natural_id,option)
-
+  if (option%nflowdof == 3) then
+    call GeneralAuxVarCompute(xxss,gen_auxvar_ss, global_auxvar_ss, &
+                              material_auxvar, characteristic_curves, &
+                              natural_id,option)
+  elseif (option%nflowdof == 4) then
+    call GeneralAuxVarCompute(xxss,gen_auxvar_ss, global_auxvar_ss, &
+                              material_auxvar, characteristic_curves, &
+                              natural_id,option)
+  endif
   if (aux_var_compute_only) return
 
   qsrc_mol = 0.d0 

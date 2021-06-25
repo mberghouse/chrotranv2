@@ -676,7 +676,7 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
   if (option%iflag >= GENERAL_UPDATE_FOR_ACCUM) then
     if (option%iflag == GENERAL_UPDATE_FOR_ACCUM) then
       write(*,'(a,i3,3es17.8,a3)') 'before: ', &
-        natural_id, x(1:3), trim(state_char)
+        natural_id, x(1:option%nflowdof), trim(state_char)
     else
 !      write(*,'(a,i3,3es17.8,a3)') 'before: ', &
 !        -1*natural_id, x(1:3), trim(state_char)
@@ -2320,7 +2320,8 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
     endif
   endif
 #endif
-
+ call GeneralPrintAuxVars(gen_auxvar,global_auxvar,material_auxvar, &
+                          natural_id,'End of AuxVarCompute',option)
 end subroutine GeneralAuxVarCompute4
 
 ! ************************************************************************** !
@@ -2496,8 +2497,8 @@ subroutine GeneralAuxVarUpdateState(x,gen_auxvar,global_auxvar, &
   gas_epsilon = 0.d0
   liq_epsilon = 0.d0
   two_phase_epsilon = 0.d0
-  call GeneralPrintAuxVars(gen_auxvar,global_auxvar,material_auxvar, &
-       natural_id,'Before Update',option)
+  ! call GeneralPrintAuxVars(gen_auxvar,global_auxvar,material_auxvar, &
+  !      natural_id,'Before Update',option)
   ! Change state
   select case(global_auxvar%istate)
 

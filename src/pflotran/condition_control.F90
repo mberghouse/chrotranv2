@@ -266,6 +266,14 @@ subroutine CondControlAssignFlowInitCond(realization)
                   option%io_buffer = 'Mole fraction ' // trim(string)
                   call PrintErrMsg(option)
                 endif
+                if (option%nflowdof == 4) then
+                  if (.not. &
+                       (general%solute_fraction%itype == DIRICHLET_BC .or. &
+                         general%solute_fraction%itype == HYDROSTATIC_BC)) then
+                    option%io_buffer = 'Solute fraction ' // trim(string)
+                    call PrintErrMsg(option)
+                  endif
+                endif
               case(GAS_STATE)
                 if (.not. &
                     (general%gas_pressure%itype == DIRICHLET_BC .or. &
@@ -323,8 +331,10 @@ subroutine CondControlAssignFlowInitCond(realization)
                     general%mole_fraction%dataset%rarray(1)
                   xx_p(ibegin+GENERAL_ENERGY_DOF) = &
                     general%temperature%dataset%rarray(1)
-                  xx_p(ibegin+GENERAL_LIQUID_STATE_S_MOLE_DOF) = &
-                    general%mole_fraction%dataset%rarray(2)
+                  if (option%nflowdof == 4) then
+                    xx_p(ibegin+GENERAL_LIQUID_STATE_S_MOLE_DOF) = &
+                      general%solute_fraction%dataset%rarray(1)
+                  endif
                 case(GAS_STATE)
                   xx_p(ibegin+GENERAL_GAS_PRESSURE_DOF) = &
                     general%gas_pressure%dataset%rarray(1)
