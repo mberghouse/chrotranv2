@@ -978,6 +978,13 @@ subroutine RTUpdateFixedAccumulation(realization)
                              material_auxvars(ghosted_id), &
                              reaction,option,accum_p(istart:iendall))
     endif
+
+    if (reaction%ngaseqsorb > 0) then
+      call RAccumulationSorbGas(rt_auxvars(ghosted_id), &
+                                global_auxvars(ghosted_id), &
+                                material_auxvars(ghosted_id), &
+                                reaction,option,accum_p(istart:iendall))
+    endif
         
     if (option%use_mc) then
       accum_p(istart:iendall) = accum_p(istart:iendall)* &
@@ -2758,6 +2765,15 @@ subroutine RTResidualNonFlux(snes,xx,r,realization,ierr)
                                material_auxvars(ghosted_id), &
                                reaction,option,Res)
       endif
+
+      if (reaction%ngaseqsorb > 0) then
+        call RAccumulationSorbGas(rt_auxvars(ghosted_id), &
+                               global_auxvars(ghosted_id), &
+                               material_auxvars(ghosted_id), &
+                               reaction,option,Res)
+      endif
+
+
       Res = Res / option%tran_dt
 
       if (option%use_mc) then

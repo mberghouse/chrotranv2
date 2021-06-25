@@ -17,6 +17,7 @@ module Reaction_Gas_module
   
   public :: RGasRead, &
             RTotalGas, &
+            RTotalSorbGas, &
             RTotalCO2
 
 contains
@@ -166,6 +167,137 @@ subroutine RTotalGas(rt_auxvar,global_auxvar,reaction,option)
   enddo
 
 end subroutine RTotalGas
+
+! ************************************************************************** !
+
+subroutine RTotalSorbGas(rt_auxvar,global_auxvar,material_auxvar,reaction, &
+                         isotherm_rxn,option)
+  !
+  ! Computes the total sorbed component partial pressures in the gas phase
+  ! 
+  ! Author: Michael Nole
+  ! Date: 06/23/21
+  !
+
+  use Option_module
+  use Material_Aux_class
+  use Reaction_Isotherm_Aux_module
+
+  implicit none
+
+  type(reactive_transport_auxvar_type) :: rt_auxvar
+  type(global_auxvar_type) :: global_auxvar
+  class(material_auxvar_type) :: material_auxvar
+  class(reaction_rt_type) :: reaction
+  type(isotherm_rxn_type) :: isotherm_rxn
+  type(option_type) :: option
+  type(gas_type), pointer :: gas
+
+  gas => reaction%gas
+
+  if (gas%isotherm%neqkdrxn > 0) then
+      call RTotalSorbGasKD(rt_auxvar,global_auxvar,material_auxvar,gas, &
+                           gas%isotherm%isotherm_rxn,option)
+  endif
+
+end subroutine RTotalSorbGas
+
+! ************************************************************************** !
+
+subroutine RTotalSorbGasKD(rt_auxvar,global_auxvar,material_auxvar,gas, &
+                        isotherm_rxn,option)
+  ! 
+  ! Computes the total sorbed component concentrations
+  ! for the K_D model
+  ! 
+  ! Author: Michael Nole
+  ! Date: 06/23/21
+  ! 
+
+  use Option_module
+
+  use Global_Aux_module
+  use Material_Aux_class
+  use Reaction_Isotherm_module
+
+  implicit none
+
+  type(reactive_transport_auxvar_type) :: rt_auxvar
+  type(global_auxvar_type) :: global_auxvar
+  class(material_auxvar_type) :: material_auxvar
+  type(gas_type) :: gas
+  type(isotherm_rxn_type) :: isotherm_rxn
+  type(option_type) :: option
+
+  type(isotherm_type), pointer :: isotherm
+  PetscInt :: irxn,i
+  PetscInt :: icomp
+  PetscReal :: res
+  PetscReal :: dres_dc
+  PetscReal :: molality
+  PetscReal :: tempreal
+  PetscReal :: one_over_n
+  PetscReal :: molality_one_over_n
+  PetscReal :: kd_kgw_m3b
+  PetscReal :: partial_pres,pp_one_over_n
+  PetscInt :: ncomp
+
+  PetscInt, parameter :: iphase = 2
+
+  isotherm => gas%isotherm
+
+  do irxn = 1, isotherm%neqkdrxn
+    partial_pres =  rt_auxvar%gas_pp(irxn)
+    ncomp = gas%acteqspecid(0,irxn)
+    if (isotherm%ikd_units == KD_UNIT_MLW_GSOIL) then
+                   !KD units [mL water/g soil]
+      kd_kgw_m3b = isotherm_rxn%eqisothermcoeff(irxn) * &
+                   global_auxvar%den_kg(iphase) * &
+                   (1.d0-material_auxvar%porosity) * &
+                   material_auxvar%soil_particle_density * &
+                   1.d-3 ! convert mL water/g soil to m^3 water/kg soil
+
+    else
+      ! kd_unit = KD_UNIT_KG_M3_BULK
+      kd_kgw_m3b = isotherm_rxn%eqisothermcoeff(irxn)
+    endif
+    if (isotherm%eqkdmineral(irxn) > 0) then
+      ! NOTE: mineral volume fraction here is solely a scaling factor.  It has 
+      ! nothing to do with the soil volume; that is calculated through as a 
+      ! function of porosity.
+      kd_kgw_m3b = isotherm_rxn%eqisothermcoeff(irxn) * &
+                   (rt_auxvar%mnrl_volfrac(isotherm%eqkdmineral(irxn)))
+    endif
+    select case(isotherm%eqisothermtype(irxn))
+      case(SORPTION_LINEAR)
+        ! Csorb = Kd*Pg
+        res = kd_kgw_m3b*partial_pres
+        dres_dc = kd_kgw_m3b
+      case(SORPTION_LANGMUIR)
+        ! Csorb = K*Caq*b/(1+K*Pg)
+        tempreal = kd_kgw_m3b*partial_pres
+        res = tempreal*isotherm_rxn%eqisothermlangmuirb(irxn) / &
+              (1.d0 + tempreal)
+        dres_dc = res/partial_pres - &
+                  res / (1.d0 + tempreal) * tempreal / partial_pres
+      case(SORPTION_FREUNDLICH)
+        ! Csorb = Kd*Pg**(1/n)
+        one_over_n = 1.d0/isotherm_rxn%eqisothermfreundlichn(irxn)
+        pp_one_over_n = partial_pres**one_over_n
+        res = kd_kgw_m3b*partial_pres**one_over_n
+        dres_dc = res/partial_pres*one_over_n
+      case default
+        res = 0.d0
+        dres_dc = 0.d0
+    end select
+
+    rt_auxvar%total_sorb_eq_gas(irxn) = rt_auxvar%total_sorb_eq_gas(irxn) + res
+    rt_auxvar%dtotal_sorb_eq_gas(irxn,irxn) = &
+    rt_auxvar%dtotal_sorb_eq_gas(irxn,irxn) + dres_dc
+
+  enddo
+
+end subroutine RTotalSorbGasKD
 
 ! ************************************************************************** !
 

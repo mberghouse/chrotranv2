@@ -2,10 +2,9 @@ module Reaction_Gas_Aux_module
   
 #include "petsc/finclude/petscsys.h"
   use petscsys
-
   use Reaction_Database_Aux_module
-
   use PFLOTRAN_Constants_module
+  use Reaction_Isotherm_Aux_module
 
   implicit none
   
@@ -55,6 +54,8 @@ module Reaction_Gas_Aux_module
     PetscReal, pointer :: paseqh2ostoich(:)  ! stoichiometry of water, if present
     PetscReal, pointer :: paseqlogK(:)
     PetscReal, pointer :: paseqlogKcoef(:,:)
+
+    type(isotherm_type), pointer :: isotherm
 
   end type gas_type
   
@@ -110,6 +111,8 @@ function GasCreate()
   nullify(gas%paseqh2ostoich)
   nullify(gas%paseqlogK)
   nullify(gas%paseqlogKcoef)
+
+  gas%isotherm => IsothermCreate()
   
   GasCreate => gas
   

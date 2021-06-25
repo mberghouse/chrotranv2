@@ -4172,8 +4172,14 @@ subroutine ReactionDatabaseSetupGases(reaction,num_logKs,option,h2o_id, &
   ! Date: 08/10/16
   ! 
   use Option_module
+  use String_module
   use Reaction_Gas_Aux_module
   use Utility_module
+
+  use Reaction_Mineral_Aux_module
+  use Reaction_Immobile_Aux_module
+  use Reaction_Isotherm_Aux_module
+
   
   implicit none
   
@@ -4194,14 +4200,19 @@ subroutine ReactionDatabaseSetupGases(reaction,num_logKs,option,h2o_id, &
   PetscReal, pointer :: eqh2ostoich(:)
   PetscReal, pointer :: eqlogK(:)
   PetscReal, pointer :: eqlogKcoef(:,:)
-  
+  type(aq_species_type), pointer :: cur_aq_spec
+  type(mineral_rxn_type), pointer :: cur_mineral
+  type(isotherm_link_type), pointer :: cur_isotherm_rxn, &
+                                       sec_cont_cur_isotherm_rxn
+  type(ion_exchange_rxn_type), pointer :: cur_ionx_rxn
   type(gas_species_type), pointer :: cur_gas_spec
   PetscInt :: max_aq_species
   PetscInt :: igas_spec
-  PetscInt :: ispec
+  PetscInt :: ispec, irxn
   PetscInt :: i
   PetscInt :: spec_id
-    
+  PetscBool :: found 
+ 
   ngas = GasGetCount(gas,gas_itype)
   if (ngas > 0) then
   
@@ -4305,6 +4316,89 @@ subroutine ReactionDatabaseSetupGases(reaction,num_logKs,option,h2o_id, &
       endif
       cur_gas_spec => cur_gas_spec%next
     enddo
+
+  ! Kd reactions
+
+    if (gas%isotherm%neqkdrxn > 0) then
+
+      call IsothermRxnCreate(gas%isotherm%isotherm_rxn,gas%isotherm)
+      ! allocate arrays
+      allocate(gas%isotherm%eqkdspecid(gas%isotherm%neqkdrxn))
+      gas%isotherm%eqkdspecid = 0
+      allocate(gas%isotherm%eqisothermtype(gas%isotherm%neqkdrxn))
+      gas%isotherm%eqisothermtype = 0
+      allocate(gas%isotherm%eqkdmineral(gas%isotherm%neqkdrxn))
+      gas%isotherm%eqkdmineral = 0
+
+      cur_isotherm_rxn => gas%isotherm%isotherm_list
+
+      !MAN: no idea if this will work with mc
+      if (option%use_mc) then
+        call IsothermRxnCreate(gas%isotherm%multicontinuum_isotherm_rxn, &
+                               gas%isotherm)
+        sec_cont_cur_isotherm_rxn => &
+          gas%isotherm%multicontinuum_isotherm_list
+      endif
+
+      irxn = 0
+      do
+        if (.not.associated(cur_isotherm_rxn)) exit
+
+        irxn = irxn + 1
+
+        found = PETSC_FALSE
+        cur_gas_spec => gas%list
+        do
+          if (.not. associated(cur_gas_spec)) exit
+          if (StringCompare(cur_isotherm_rxn%species_name, &
+                            cur_gas_spec%name, MAXWORDLENGTH) .and. &
+                            (cur_gas_spec%itype==ACTIVE_GAS .or. &
+                             cur_gas_spec%itype==ACTIVE_AND_PASSIVE_GAS)) then
+            gas%isotherm%eqkdspecid(irxn) = i
+            found = PETSC_TRUE
+            exit
+          endif
+        enddo
+        if (.not.found) then
+          option%io_buffer = 'Species ' // trim(cur_isotherm_rxn%species_name) // &
+                   ' in kd reaction &
+                   & not found among gas species list.'
+          call PrintErrMsg(option)
+        endif
+        gas%isotherm%eqisothermtype(irxn) = cur_isotherm_rxn%itype
+        ! associate mineral id
+        if (len_trim(cur_isotherm_rxn%kd_mineral_name) > 1) then
+          gas%isotherm%eqkdmineral(irxn) = &
+            GetKineticMineralIDFromName(cur_isotherm_rxn%kd_mineral_name, &
+                                        reaction%mineral,option)
+          if (gas%isotherm%eqkdmineral(irxn) < 0) then
+            option%io_buffer = 'Mineral ' // trim(cur_ionx_rxn%mineral_name) // &
+                               ' listed in gas kd (linear sorption) &
+                               &reaction not found in mineral list'
+            call PrintErrMsg(option)
+          endif
+        endif
+        gas%isotherm%isotherm_rxn%eqisothermcoeff(irxn) = cur_isotherm_rxn%Kd
+        gas%isotherm%isotherm_rxn%eqisothermlangmuirb(irxn) = &
+                                                      cur_isotherm_rxn%Langmuir_b
+        gas%isotherm%isotherm_rxn%eqisothermfreundlichn(irxn) = &
+                                                  cur_isotherm_rxn%Freundlich_n
+
+        cur_isotherm_rxn => cur_isotherm_rxn%next
+
+        !MAN: same as above, haven't tested for mc
+        if (option%use_mc) then
+          gas%isotherm%multicontinuum_isotherm_rxn%eqisothermcoeff(irxn) = &
+            sec_cont_cur_isotherm_rxn%Kd
+          gas%isotherm%multicontinuum_isotherm_rxn%eqisothermlangmuirb(irxn) = &
+            sec_cont_cur_isotherm_rxn%Langmuir_b
+          gas%isotherm%multicontinuum_isotherm_rxn%eqisothermfreundlichn(irxn) = &
+            sec_cont_cur_isotherm_rxn%Freundlich_n
+          sec_cont_cur_isotherm_rxn => sec_cont_cur_isotherm_rxn%next
+        endif
+
+      enddo
+    endif
   endif
 
 end subroutine ReactionDatabaseSetupGases

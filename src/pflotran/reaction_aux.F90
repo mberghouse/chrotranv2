@@ -251,6 +251,7 @@ module Reaction_Aux_module
 
     PetscInt :: nsorb
     PetscInt :: neqsorb
+    PetscInt :: ngaseqsorb
     PetscBool, pointer :: kd_print(:)
     PetscBool, pointer :: total_sorb_print(:)
 
@@ -522,6 +523,7 @@ function ReactionCreate()
 
   reaction%nsorb = 0
   reaction%neqsorb = 0
+  reaction%ngaseqsorb = 0
 
   reaction%neqionxrxn = 0
   reaction%neqionxcation = 0

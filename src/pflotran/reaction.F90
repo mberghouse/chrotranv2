@@ -57,6 +57,7 @@ module Reaction_module
             ReactionInitializeLogK, &
             ReactionComputeKd, &
             RAccumulationSorb, &
+            RAccumulationSorbGas, &
             RAccumulationSorbDerivative, &
             RJumpStartKineticSorption, &
             RAge, &
@@ -781,6 +782,23 @@ subroutine ReactionReadPass1(reaction,input,option)
           end select
         enddo
         call InputPopBlock(input,option)
+      case('GAS_SORPTION')
+        call InputPushBlock(input,option)
+        do
+          call InputReadPflotranString(input,option)
+          if (InputError(input)) exit
+          if (InputCheckExit(input,option)) exit
+
+          call InputReadCard(input,option,word)
+          call InputErrorMsg(input,option,'keyword','CHEMISTRY,GAS SORPTION')
+          call StringToUpper(word)
+
+          select case(trim(word))
+            case('ISOTHERM_REACTIONS')
+              call IsothermRead(reaction%gas%isotherm,input,option)
+          end select
+        enddo
+        call InputPopBlock(input,option)
       case('DATABASE')
         call InputReadFilename(input,option,reaction%database_filename)
         call InputErrorMsg(input,option,'keyword', &
@@ -903,9 +921,13 @@ subroutine ReactionReadPass1(reaction,input,option)
                      reaction%neqdynamickdrxn + &
                      reaction%isotherm%neqkdrxn + &
                      reaction%surface_complexation%neqsrfcplxrxn
-  reaction%nsorb = reaction%neqsorb + &
+
+  reaction%ngaseqsorb = reaction%gas%isotherm%neqkdrxn
+
+  reaction%nsorb = reaction%neqsorb + reaction%ngaseqsorb +&
                    reaction%surface_complexation%nkinmrsrfcplxrxn + &
                    reaction%surface_complexation%nkinsrfcplxrxn
+
     
   if (reaction%print_free_conc_type == 0) then
     if (reaction%initialize_with_molality) then
@@ -1067,6 +1089,27 @@ subroutine ReactionReadPass2(reaction,input,option)
             case('NO_CHECKPOINT_KINETIC_SORPTION')
             case('NO_RESTART_KINETIC_SORPTION')
               ! dummy placeholder
+          end select
+        enddo
+      case('GAS_SORPTION')
+        do
+          call InputReadPflotranString(input,option)
+          call InputReadStringErrorMsg(input,option,card)
+          if (InputCheckExit(input,option)) exit
+          call InputReadWord(input,option,word,PETSC_TRUE)
+          call InputErrorMsg(input,option,'GAS_SORPTION','CHEMISTRY')
+          select case(trim(word))
+            case('ISOTHERM_REACTIONS')
+              do
+                call InputReadPflotranString(input,option)
+                call InputReadStringErrorMsg(input,option,card)
+                if (InputCheckExit(input,option)) exit
+                call InputReadWord(input,option,word,PETSC_TRUE)
+                call InputErrorMsg(input,option,word, &
+                                    'CHEMISTRY,GAS_SORPTION,ISOTHERM_REACTIONS')
+                ! skip over remaining cards to end of each kd entry
+                call InputSkipToEnd(input,option,word)
+              enddo
           end select
         enddo
       case('MICROBIAL_REACTION')
@@ -2040,6 +2083,11 @@ subroutine ReactionEquilibrateConstraint(rt_auxvar,global_auxvar, &
                                    reaction,option)
     endif
   endif
+
+  if (reaction%ngaseqsorb > 0) then
+    call RTotalSorbGas(rt_auxvar,global_auxvar,material_auxvar, &
+                       reaction,reaction%isotherm%isotherm_rxn,option)
+  endif
   
   ! WARNING: below assumes site concentration multiplicative factor
   if (surface_complexation%nsrfcplxrxn > 0) then
@@ -2682,6 +2730,10 @@ subroutine ReactionPrintConstraint(constraint_coupler,reaction,option)
    1128 format(/,2x,'primary species         total(aq+sorbed)    total retardation', &
                /,29x,'[mol/L]',15x,'1+Kd')
     129 format(2x,a24,1pe12.4,8x,1pe12.4)
+  endif
+
+  if (reaction%ngaseqsorb > 0) then
+    !MAN: This needs to be filled out
   endif
   
   if (mineral_reaction%nmnrl > 0) then
@@ -3514,6 +3566,11 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
                            option,fixed_accum)  
   endif
 
+  if (reaction%ngaseqsorb > 0) then
+    call RAccumulationSorbGas(rt_auxvar,global_auxvar,material_auxvar,reaction,&
+                              option,fixed_accum)
+  endif
+
 !TODO(geh): activity coefficient will be updated earlier. otherwise, they
 !           will be repeatedly updated due to time step cut
 !  ! now update activity coefficients
@@ -3551,6 +3608,15 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
       call RAccumulationSorbDerivative(rt_auxvar,global_auxvar, &
                                        material_auxvar,reaction,option,J)
     endif
+
+    if (reaction%ngaseqsorb > 0) then
+      call RAccumulationSorbGas(rt_auxvar,global_auxvar,material_auxvar, &
+                                reaction,option,fixed_accum)
+      !call RAccumulationSorbGasDerivative(rt_auxvar,global_auxvar, &
+      !                                 material_auxvar,reaction,option,J)
+    endif
+
+
     ! must come after sorbed accumulation
     residual = (residual-fixed_accum) / option%tran_dt
 
@@ -4215,9 +4281,11 @@ subroutine RTotal(rt_auxvar,global_auxvar,material_auxvar,reaction,option)
     call RTotalCO2(rt_auxvar,global_auxvar,reaction,option)
   else if (reaction%gas%nactive_gas > 0) then
     call RTotalGas(rt_auxvar,global_auxvar,reaction,option)
+    if (reaction%ngaseqsorb > 0) then
+      call RTotalSorbGas(rt_auxvar,global_auxvar,material_auxvar, &
+                         reaction,reaction%isotherm%isotherm_rxn,option)
+    endif
   endif
-
-
 
 end subroutine RTotal
 
@@ -4337,7 +4405,12 @@ subroutine RZeroSorb(rt_auxvar)
   if (associated(rt_auxvar%total_sorb_eq)) rt_auxvar%total_sorb_eq = 0.d0
   if (associated(rt_auxvar%dtotal_sorb_eq)) rt_auxvar%dtotal_sorb_eq = 0.d0
   if (associated(rt_auxvar%eqsrfcplx_conc)) rt_auxvar%eqsrfcplx_conc = 0.d0
-  
+
+  ! Gas
+  if (associated(rt_auxvar%total_sorb_eq_gas)) rt_auxvar%total_sorb_eq_gas =0.d0
+  if (associated(rt_auxvar%dtotal_sorb_eq_gas)) &
+      rt_auxvar%dtotal_sorb_eq_gas =0.d0
+ 
 end subroutine RZeroSorb
 
 ! ************************************************************************** !
@@ -4724,6 +4797,41 @@ subroutine RAccumulationSorb(rt_auxvar,global_auxvar,material_auxvar, &
     rt_auxvar%total_sorb_eq(:)*material_auxvar%volume
 
 end subroutine RAccumulationSorb
+
+! ************************************************************************** !
+
+subroutine RAccumulationSorbGas(rt_auxvar,global_auxvar,material_auxvar, &
+                             reaction,option,Res)
+  ! 
+  ! Computes sorbed portion of the accumulation term in
+  ! residual function, from the gas phase
+  ! 
+  ! Author: Michael Nole
+  ! Date: 06/23/21
+  ! 
+
+  use Option_module
+
+  implicit none
+
+  type(reactive_transport_auxvar_type) :: rt_auxvar
+  type(global_auxvar_type) :: global_auxvar
+  class(material_auxvar_type) :: material_auxvar
+  type(option_type) :: option
+  class(reaction_rt_type) :: reaction
+  PetscReal :: Res(reaction%ncomp)
+  PetscInt :: irxn, icomp
+
+  ! units = (mol solute/m^3 bulk)*(m^3 bulk)/(sec) = mol/sec
+  ! all residual entries should be in mol/sec
+!  v_t = material_auxvar%volume/option%tran_dt
+  do irxn = 1, reaction%gas%isotherm%neqkdrxn
+    icomp = reaction%gas%isotherm%eqkdspecid(irxn)
+    Res(icomp) = Res(icomp) + rt_auxvar%total_sorb_eq_gas(irxn)* &
+                              material_auxvar%volume
+  enddo
+
+end subroutine RAccumulationSorbGas
 
 ! ************************************************************************** !
 
@@ -5317,6 +5425,7 @@ subroutine RTAccumulation(rt_auxvar,global_auxvar,material_auxvar, &
     istart = 1
     iend = reaction%naqcomp
     Res(istart:iend) = Res(istart:iend) + psv_t*rt_auxvar%total(:,iphase)     
+    
   endif
 
 end subroutine RTAccumulation
