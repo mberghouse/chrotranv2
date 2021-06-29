@@ -2320,8 +2320,7 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
     endif
   endif
 #endif
- call GeneralPrintAuxVars(gen_auxvar,global_auxvar,material_auxvar, &
-                          natural_id,'End of AuxVarCompute',option)
+
 end subroutine GeneralAuxVarCompute4
 
 ! ************************************************************************** !
@@ -2740,8 +2739,6 @@ subroutine GeneralAuxVarUpdateState4(x,gen_auxvar,global_auxvar, &
 
   call GeneralAuxNaClSolubility(gen_auxvar%Temp,NaClSolubility,&
                                 solubility_function)
-  call GeneralPrintAuxVars(gen_auxvar,global_auxvar,material_auxvar, &
-       natural_id,'Before Update',option)
   ! Change state
   select case(global_auxvar%istate)
 

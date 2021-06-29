@@ -23,7 +23,8 @@ module General_Common_module
 #define WATER_SRCSINK
 #define AIR_SRCSINK
 #define ENERGY_SRCSINK
-  
+#define SOLUTE_SRCSINK
+
 !#define DEBUG_FLUXES  
 
 ! Cutoff parameters
@@ -4187,6 +4188,8 @@ subroutine GeneralAuxVarComputeAndSrcSink(option,qsrc,flow_src_sink_type, &
       endif
 
       if (option%nflowdof == 4) then
+        ss_flow_vol_flux(solute_comp_id) = qsrc_mol / gen_auxvar_ss% &
+             den(air_comp_id)
         Res(solute_comp_id) = qsrc_mol
         !if (gen_auxvar_ss%sat(gid) )
       endif
@@ -4345,9 +4348,112 @@ subroutine GeneralAuxVarComputeAndSrcSink(option,qsrc,flow_src_sink_type, &
       J = J + Jg
     endif
   endif
-  
+
+  if (option%nflowdof == 4) then
+#ifdef SOLUTE_SRCSINK
+    qsrc_mol = 0.d0
+    dden_bool = 0.d0
+    select case(flow_src_sink_type)
+      case(MASS_RATE_SS)
+        qsrc_mol = qsrc(solute_comp_id)/fmw_comp(solute_comp_id) ! kg/sec -> kmol/sec
+      case(SCALED_MASS_RATE_SS)                       ! kg/sec -> kmol/sec
+        qsrc_mol = qsrc(solute_comp_id)/fmw_comp(solute_comp_id)*scale 
+      case(VOLUMETRIC_RATE_SS)  ! assume local density for now
+        ! qsrc1 = m^3/sec
+        ! den = kmol/m^3
+        qsrc_mol = qsrc(solute_comp_id)*gen_auxvar_ss%den(solute_comp_id) 
+        dden_bool = 1.d0
+      case(SCALED_VOLUMETRIC_RATE_SS)  ! assume local density for now
+        ! qsrc1 = m^3/sec             ! den = kmol/m^3
+        qsrc_mol = qsrc(solute_comp_id)* &
+                   gen_auxvar_ss%den(solute_comp_id)*scale
+        dden_bool = 1.d0
+    end select
+    ss_flow_vol_flux(solute_comp_id) = qsrc_mol / &
+                                    gen_auxvar_ss%den(solute_comp_id)
+    Res(solute_comp_id) = qsrc_mol
+    ! DF: no analytical derivative for the solute phase
+    ! if (analytical_derivatives) then
+    !   Jg = 0.d0
+    !   select case(global_auxvar%istate)
+    !     case(LIQUID_STATE)
+    !       if (dabs(Res(solute_comp_id)) > 1.d-40 .and. dden_bool > 0.d0) then      
+    !         option%io_buffer = 'Volumetric air injection not set up for &
+    !           &liquid state in GeneralAuxVarComputeAndSrcSink as there is &
+    !           &no air density.'
+    !         call PrintErrMsg(option)
+    !       endif
+    !       ! derivative wrt liquid pressure
+    !       ! derivative wrt air mole fraction
+    !       ! derivative wrt temperature
+    !     case(GAS_STATE)
+    !       ! derivative wrt gas pressure
+    !       Jg(2,1) = dden_bool * qsrc(air_comp_id) * &
+    !                 gen_auxvar_ss%d%deng_pg
+    !       ! derivative wrt air pressure
+    !       Jg(2,2) = dden_bool * qsrc(air_comp_id) * &
+    !                 gen_auxvar_ss%d%deng_pa
+    !       ! derivative wrt temperature
+    !       Jg(2,3) = dden_bool * qsrc(air_comp_id) * &
+    !                 gen_auxvar_ss%d%deng_T
+    !     case(TWO_PHASE_STATE)
+    !       ! derivative wrt gas pressure
+    !       Jg(2,1) = dden_bool * qsrc(air_comp_id) * &
+    !                 gen_auxvar_ss%d%deng_pg
+    !       ! derivative wrt gas saturation
+    !       ! derivative wrt temperature
+    !       Jg(2,3) = dden_bool * qsrc(air_comp_id) * &
+    !                 gen_auxvar_ss%d%deng_T
+    !   end select
+    !   J = J + Jg
+    ! endif
+#endif
+    !endif
+
+    if (dabs(qsrc(solute_comp_id)) < 1.d-40 .and. flow_src_sink_type /= &
+            TOTAL_MASS_RATE_SS .and. qsrc(wat_comp_id) < 0.d0) then ! extraction only
+      ! Res(1) holds qsrc_mol for water.  If the src/sink value for air is zero,
+      ! remove/add the equivalent mole fraction of air in the liquid phase.
+      qsrc_mol = Res(wat_comp_id)*gen_auxvar_ss% &
+                 xmol(solute_comp_id,wat_comp_id)
+      Res(solute_comp_id) = qsrc_mol
+      ss_flow_vol_flux(solute_comp_id) = qsrc_mol / &
+                                      gen_auxvar_ss%den(solute_comp_id)
+      ! if (analytical_derivatives) then
+      !   !Jg = 0.d0
+      !   select case(global_auxvar%istate)
+      !     case(LIQUID_STATE)
+      !       ! derivative wrt liquid pressure
+      !       ! derivative wrt air mole fraction
+      !       Jg(2,2) = Jg(2,2) + Res(wat_comp_id)
+      !       ! derivative wrt temperature
+      !     case(GAS_STATE)
+      !       ! derivative wrt gas pressure
+      !       ! derivative wrt air pressure
+      !       ! derivative wrt temperature
+      !     case(TWO_PHASE_STATE)
+      !       ! derivative wrt gas pressure
+      !       Jg(2,1) = Jg(2,1) + &
+      !                 dden_bool * qsrc(wat_comp_id) * &
+      !                 gen_auxvar_ss%d%denl_pl * &
+      !                 gen_auxvar_ss%xmol(air_comp_id,wat_comp_id)+ &
+      !                 Res(wat_comp_id) * gen_auxvar_ss%d%xmol_p(2,1)
+      !       ! derivative wrt gas saturation
+      !       ! derivative wrt temperature
+      !       Jg(2,3) = Jg(2,3) + &
+      !                 dden_bool * qsrc(wat_comp_id) * &
+      !                 gen_auxvar_ss%d%denl_T * &
+      !                 gen_auxvar_ss%xmol(air_comp_id,wat_comp_id)+ &
+      !                 Res(wat_comp_id) * gen_auxvar_ss%d%xmol_T(2,1)
+      !   end select
+      !   J = J + Jg
+      ! endif
+    endif!DF: end solute
+endif
+
   ! energy units: MJ/sec
-  if (size(qsrc) == THREE_INTEGER) then
+  if ((option%nflowdof == 3 .and. size(qsrc) == THREE_INTEGER).or. &
+      (option%nflowdof == 4 .and. size(qsrc) == FOUR_INTEGER)) then
     if (flow_src_sink_type /= TOTAL_MASS_RATE_SS) then
       if (dabs(qsrc(wat_comp_id)) > 1.d-40) then
         if (associated(gen_auxvar_ss%d)) then
@@ -4385,6 +4491,28 @@ subroutine GeneralAuxVarComputeAndSrcSink(option,qsrc,flow_src_sink_type, &
           Je(3,3) = Jg(2,3) * enthalpy + Res(air_comp_id) * ha_dT
         endif 
         J = J + Je
+      endif
+      if (dabs(qsrc(solute_comp_id)) > 1.d-40) then
+         ! DF: Need a second look at this.
+         ! this is pure air, we use the enthalpy of air, NOT the air/water
+         ! mixture in gas
+         ! air enthalpy is only a function of temperature
+         if (associated(gen_auxvar_ss%d)) then
+            ha_dp = gen_auxvar_ss%d%Ha_pg
+            ha_dT = gen_auxvar_ss%d%Ha_T
+         endif
+
+         internal_energy = gen_auxvar_ss%u(solute_comp_id)
+         enthalpy = gen_auxvar_ss%h(solute_comp_id)                                 
+         ! enthalpy units: MJ/kmol                       ! air component mass
+         Res(energy_id) = Res(energy_id) + Res(solute_comp_id) * enthalpy
+         if (analytical_derivatives) then
+            Je = 0.d0
+            Je(3,1) = Jg(2,1) * enthalpy + Res(air_comp_id) * ha_dp
+            Je(3,2) = Jg(2,2) * enthalpy
+            Je(3,3) = Jg(2,3) * enthalpy + Res(air_comp_id) * ha_dT
+         endif
+         J = J + Je
       endif
     endif
     Res(energy_id) = Res(energy_id) + qsrc(energy_id)*scale ! MJ/s

@@ -1019,6 +1019,7 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
                      liquid_phase:option%gas_phase))
       xxss(2) = 5.d-1
       xxss(3) = gen_auxvars_ss(ZERO_INTEGER,sum_connection)%temp
+
     
       cell_pressure = maxval(gen_auxvars(ZERO_INTEGER,ghosted_id)% &
                              pres(option%liquid_phase:option%gas_phase))    

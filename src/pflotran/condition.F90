@@ -1770,10 +1770,11 @@ subroutine FlowConditionGeneralRead(condition,input,option)
               case(G_MODE)
                 if (option%nflowdof == 3) then
                   internal_units = trim(rate_string) // ',' // &
-                    trim(rate_string) // ',MJ/sec|MW'
+                                   trim(rate_string) // ',MJ/sec|MW'
                 elseif (option%nflowdof == 4) then
-                   internal_units = trim(rate_string) // ',' // &
-                     ',' // trim(rate_string) // ',MJ/sec|MW'
+                  internal_units = trim(rate_string) // ',' // &
+                                   trim(rate_string) // ',' // &
+                                   trim(rate_string) // ',MJ/sec|MW'
                 endif
             end select
           case('LIQUID_FLUX','GAS_FLUX')
@@ -1871,7 +1872,7 @@ subroutine FlowConditionGeneralRead(condition,input,option)
           condition%iphase = TWO_PHASE_STATE
         else if (associated(general%liquid_pressure) .and. &
                  associated(general%mole_fraction)) then
-          if ((option%nflowdof == 4) .and. associated(general%solute_fraction)&
+          if (((option%nflowdof == 4) .and. associated(general%solute_fraction))&
                .or. option%nflowdof == 3) then
             ! liquid phase condition
             condition%iphase = LIQUID_STATE
