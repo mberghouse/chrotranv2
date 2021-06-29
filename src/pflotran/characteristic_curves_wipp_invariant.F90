@@ -52,14 +52,16 @@ type, public, extends(sat_func_base_type) :: sf_WIPP_type
     PetscReal :: pct_exp
     PetscReal :: pct
     PetscReal :: alpha
-    PetscBool :: ignore_permeability ! Old WIPP module types
+    PetscBool :: ignore_permeability 
 
+! Derived parameters for linear unsaturated extension
     PetscReal :: Swj, Pcj
     PetscReal :: dPcj_dSwj, dSwj_dPcj
+
   contains
     procedure, public :: CapillaryPressure => SF_BRAGFLO_CapillaryPressure
     procedure, public :: Saturation        => SF_BRAGFLO_Saturation
-    procedure, public :: setPcmax         => SF_BRAGFLO_setPcmax
+    procedure, public :: SetPcmax          => SF_BRAGFLO_SetPcmax
 end type
 
 ! **************************************************************************** !
@@ -127,10 +129,12 @@ contains
 ! BRAGFLO Saturation Function Constructor
 ! **************************************************************************** !
 
-function SFWIPPctor(KRP, KPC, Swr, Sgr, expon, Pcmax) result (new)
+function SFWIPPctor(KRP, KPC, Swr, Sgr, alpha, expon, Pcmax, Pct_a, Pct_exp, &
+                    ignore_pct) result (new)
   class(sf_WIPP_type), pointer :: new
   PetscInt, intent(in)  :: KRP, KPC
-  PetscReal, intent(in) :: Swr, Sgr, expon, Pcmax
+  PetscReal, intent(in) :: Swr, Sgr, alpha, expon, Pcmax, Pct_a, Pct_exp
+  PetscBool, intent(in) :: ignore_pct
   PetscInt :: error
 
   ! Memory allocation
@@ -250,6 +254,12 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, expon, Pcmax) result (new)
 
   ! Calculate beta, Swj, and Pcj for linear unsaturated extension to Pcmax
   error = new%setPcmax(Pcmax)
+
+  ! Copy Pct parameters
+  new%alpha = alpha
+  new%pct_a = pct_a
+  new%pct_exp = pct_exp
+  new%ignore_permeability = ignore_pct
 end function
 
 ! **************************************************************************** !

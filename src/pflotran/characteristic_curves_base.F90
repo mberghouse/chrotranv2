@@ -296,6 +296,7 @@ subroutine SFBaseTest(this,cc_name,option)
   PetscReal :: pert
   PetscReal :: dummy_real
   PetscInt :: count, i
+  PetscBool :: ignore_permeability
  
   ! calculate saturation as a function of capillary pressure
   ! start at 1 Pa up to maximum capillary pressure
@@ -303,13 +304,16 @@ subroutine SFBaseTest(this,cc_name,option)
   pc_increment = 1.d0
   perturbation = 1.d-6
   count = 0
+
   do
     if (pc > this%pcmax) exit
     count = count + 1
+    option%flow%pct_updated = .TRUE.
     call this%Saturation(pc,liquid_saturation(count),dsat_dpres(count),option)
     capillary_pressure(count) = pc
     ! calculate numerical derivative dsat_dpres_numerical
     capillary_pressure_pert = pc + pc*perturbation
+    option%flow%pct_updated = .TRUE.
     call this%Saturation(capillary_pressure_pert,liquid_saturation_pert, &
                          dummy_real,option)
     dsat_dpres_numerical(count) = (liquid_saturation_pert - &
@@ -338,6 +342,7 @@ subroutine SFBaseTest(this,cc_name,option)
     else if (liquid_saturation(i) > (1.d0-1.d-7)) then
       liquid_saturation(i) = 1.d0-1.d-7
     endif
+    option%flow%pct_updated = .TRUE.
     call this%CapillaryPressure(liquid_saturation(i), &
                                 capillary_pressure(i),dpc_dsatl(i),option)
     ! calculate numerical derivative dpc_dsatl_numerical
@@ -346,6 +351,7 @@ subroutine SFBaseTest(this,cc_name,option)
       pert = -1.d0 * pert
     endif
     liquid_saturation_pert = liquid_saturation(i) + pert
+    option%flow%pct_updated = .TRUE.
     call this%CapillaryPressure(liquid_saturation_pert, &
                                 capillary_pressure_pert,dummy_real,option)
     dpc_dsatl_numerical(i) = (capillary_pressure_pert - &
@@ -415,11 +421,13 @@ subroutine RPFBaseTest(this,cc_name,phase,option)
 
   do i = 1, num_values
     liquid_saturation(i) = dble(i-1)*0.01d0
+    option%flow%pct_updated = .TRUE.
     call this%RelativePermeability(liquid_saturation(i),kr(i),dkr_dsat(i), &
                                    option)
     ! calculate numerical derivative dkr_dsat_numerical
     liquid_saturation_pert(i) = liquid_saturation(i) &
                                 + liquid_saturation(i)*perturbation
+    option%flow%pct_updated = .TRUE.
     call this%RelativePermeability(liquid_saturation_pert(i),kr_pert(i), &
                                    dummy_real(i),option)
     if (i > 1) then

@@ -373,8 +373,10 @@ function SaturationFunctionRead(saturation_function,input,option) &
   PetscBool :: loop_invariant, tension
   PetscInt :: vg_rpf_opt
   PetscReal :: alpha, m, Pcmax, Slj, Sr, Srg
+
   PetscInt :: wipp_krp, wipp_kpc
   PetscReal :: wipp_expon
+  PetscBool :: wipp_pct_ignore
 
   nullify(sf_swap)
   ! Default values for unspecified parameters
@@ -574,9 +576,11 @@ function SaturationFunctionRead(saturation_function,input,option) &
                                error_string)
           case('IGNORE_PERMEABILITY')
             sf%ignore_permeability = PETSC_TRUE
+            wipp_pct_ignore = PETSC_TRUE
             call InputErrorMsg(input,option,'IGNORE_PERMEABILITY',error_string)
           case('ALPHA')
             call InputReadDouble(input,option,sf%alpha)
+            alpha = sf%alpha
             call InputErrorMsg(input,option,'ALPHA',error_string)
           case default
             call InputKeywordUnrecognized(input,keyword, &
@@ -590,11 +594,9 @@ function SaturationFunctionRead(saturation_function,input,option) &
             loop_invariant = PETSC_TRUE
           case('KPC')
             call InputReadInt(input,option,sf%kpc)
-            wipp_kpc = sf%kpc
             call InputErrorMsg(input,option,'KPC',error_string)
           case('LAMBDA')
             call InputReadDouble(input,option,sf%lambda)
-            wipp_expon = sf%lambda
             call InputErrorMsg(input,option,'LAMBDA',error_string)
           case('PCT_A')
             call InputReadDouble(input,option,sf%pct_a)
@@ -604,9 +606,11 @@ function SaturationFunctionRead(saturation_function,input,option) &
             call InputErrorMsg(input,option,'PCT_EXP',error_string)
           case('IGNORE_PERMEABILITY')
             sf%ignore_permeability = PETSC_TRUE
+            wipp_pct_ignore = PETSC_TRUE
             call InputErrorMsg(input,option,'IGNORE_PERMEABILITY',error_string)
           case('ALPHA')
             call InputReadDouble(input,option,sf%alpha)
+            alpha = sf%alpha
             call InputErrorMsg(input,option,'ALPHA',error_string)
           case default
             call InputKeywordUnrecognized(input,keyword, &
@@ -639,9 +643,11 @@ function SaturationFunctionRead(saturation_function,input,option) &
                                error_string)
           case('IGNORE_PERMEABILITY')
             sf%ignore_permeability = PETSC_TRUE
+            wipp_pct_ignore = PETSC_TRUE
             call InputErrorMsg(input,option,'IGNORE_PERMEABILITY',error_string)
           case('ALPHA')
             call InputReadDouble(input,option,sf%alpha)
+            alpha = sf%alpha
             call InputErrorMsg(input,option,'ALPHA',error_string)
           case default
             call InputKeywordUnrecognized(input,keyword, &
@@ -674,9 +680,11 @@ function SaturationFunctionRead(saturation_function,input,option) &
                                error_string)
           case('IGNORE_PERMEABILITY')
             sf%ignore_permeability = PETSC_TRUE
+            wipp_pct_ignore = PETSC_TRUE
             call InputErrorMsg(input,option,'IGNORE_PERMEABILITY',error_string)
           case('ALPHA')
             call InputReadDouble(input,option,sf%alpha)
+            alpha = sf%alpha
             call InputErrorMsg(input,option,'ALPHA',error_string)
           case default
             call InputKeywordUnrecognized(input,keyword, &
@@ -705,9 +713,11 @@ function SaturationFunctionRead(saturation_function,input,option) &
                                error_string)
           case('IGNORE_PERMEABILITY')
             sf%ignore_permeability = PETSC_TRUE
+            wipp_pct_ignore = PETSC_TRUE
             call InputErrorMsg(input,option,'IGNORE_PERMEABILITY',error_string)
           case('ALPHA')
             call InputReadDouble(input,option,sf%alpha)
+            alpha = sf%alpha
             call InputErrorMsg(input,option,'ALPHA',error_string)
           case default
             call InputKeywordUnrecognized(input,keyword, &
@@ -739,9 +749,11 @@ function SaturationFunctionRead(saturation_function,input,option) &
                                error_string)
           case('IGNORE_PERMEABILITY')
             sf%ignore_permeability = PETSC_TRUE
+            wipp_pct_ignore = PETSC_TRUE
             call InputErrorMsg(input,option,'IGNORE_PERMEABILITY',error_string)
           case('ALPHA')
             call InputReadDouble(input,option,sf%alpha)
+            alpha = sf%alpha
             call InputErrorMsg(input,option,'ALPHA',error_string)
           case default
             call InputKeywordUnrecognized(input,keyword, &
@@ -794,9 +806,11 @@ function SaturationFunctionRead(saturation_function,input,option) &
             call InputErrorMsg(input,option,'s_effmin',error_string)
           case('IGNORE_PERMEABILITY')
             sf%ignore_permeability = PETSC_TRUE
+            wipp_pct_ignore = PETSC_TRUE
             call InputErrorMsg(input,option,'IGNORE_PERMEABILITY',error_string)
           case('ALPHA')
             call InputReadDouble(input,option,sf%alpha)
+            alpha = sf%alpha
             call InputErrorMsg(input,option,'ALPHA',error_string)
           case default
             call InputKeywordUnrecognized(input,keyword, &
@@ -842,7 +856,9 @@ function SaturationFunctionRead(saturation_function,input,option) &
     ! Call constructor
 
     if (wipp_krp /= 0) then
-      sf_swap => SFWIPPctor(wipp_krp, wipp_kpc, Sr, Srg, wipp_expon, Pcmax)
+      sf_swap => SFWIPPctor(wipp_krp, wipp_kpc, Sr, Srg, alpha, wipp_expon, &
+                           Pcmax, alpha, sf%pct_a, sf%pct_exp, &
+                           wipp_pct_ignore)
     else
       select type (saturation_function)
       class is (sat_func_VG_type)
