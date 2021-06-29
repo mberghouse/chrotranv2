@@ -7,6 +7,7 @@ module Characteristic_Curves_module
   use Characteristic_Curves_Common_module
   use Characteristic_Curves_WIPP_module
   use Characteristic_Curves_loop_invariant_module
+  use Characteristic_Curves_WIPP_invariant_module
 
   implicit none
 
@@ -371,7 +372,9 @@ function SaturationFunctionRead(saturation_function,input,option) &
   character(len=MAXWORDLENGTH) :: unsat_ext
   PetscBool :: loop_invariant, tension
   PetscInt :: vg_rpf_opt
-  PetscReal :: alpha, m, Pcmax, Slj, Sr
+  PetscReal :: alpha, m, Pcmax, Slj, Sr, Srg
+  PetscInt :: wipp_krp, wipp_kpc
+  PetscReal :: wipp_expon
 
   nullify(sf_swap)
   ! Default values for unspecified parameters
@@ -384,6 +387,9 @@ function SaturationFunctionRead(saturation_function,input,option) &
   Pcmax = 1d9
   Slj = 0d0
   Sr = 0d0
+  wipp_krp = 0
+  wipp_kpc = 0     ! TODO confirm there is no default
+  wipp_expon = 0d0
 
   input%ierr = 0
   smooth = PETSC_FALSE
@@ -543,12 +549,17 @@ function SaturationFunctionRead(saturation_function,input,option) &
           end select
     !------------------------------------------
       class is(sat_func_KRP1_type)
+        wipp_krp = 1
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case('KPC')
             call InputReadInt(input,option,sf%kpc)
+            wipp_kpc = sf%kpc 
             call InputErrorMsg(input,option,'KPC',error_string)
           case('M')
             call InputReadDouble(input,option,sf%m)
+            wipp_expon = sf%m
             call InputErrorMsg(input,option,'M',error_string)
           case('PCT_A')
             call InputReadDouble(input,option,sf%pct_a)
@@ -558,6 +569,7 @@ function SaturationFunctionRead(saturation_function,input,option) &
             call InputErrorMsg(input,option,'PCT_EXP',error_string)
           case('GAS_RESIDUAL_SATURATION')
             call InputReadDouble(input,option,sf%Srg)
+            Srg = sf%Srg
             call InputErrorMsg(input,option,'GAS_RESIDUAL_SATURATION', &
                                error_string)
           case('IGNORE_PERMEABILITY')
@@ -572,12 +584,17 @@ function SaturationFunctionRead(saturation_function,input,option) &
         end select
     !------------------------------------------
       class is(sat_func_KRP2_type)
+        wipp_krp = 2
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case('KPC')
             call InputReadInt(input,option,sf%kpc)
+            wipp_kpc = sf%kpc
             call InputErrorMsg(input,option,'KPC',error_string)
           case('LAMBDA')
             call InputReadDouble(input,option,sf%lambda)
+            wipp_expon = sf%lambda
             call InputErrorMsg(input,option,'LAMBDA',error_string)
           case('PCT_A')
             call InputReadDouble(input,option,sf%pct_a)
@@ -597,12 +614,17 @@ function SaturationFunctionRead(saturation_function,input,option) &
         end select
     !------------------------------------------
       class is(sat_func_KRP3_type)
+        wipp_krp = 3
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case('KPC')
             call InputReadInt(input,option,sf%kpc)
+            wipp_kpc = sf%kpc
             call InputErrorMsg(input,option,'KPC',error_string)
           case('LAMBDA')
             call InputReadDouble(input,option,sf%lambda)
+            wipp_expon = sf%lambda
             call InputErrorMsg(input,option,'LAMBDA',error_string)
           case('PCT_A')
             call InputReadDouble(input,option,sf%pct_a)
@@ -612,6 +634,7 @@ function SaturationFunctionRead(saturation_function,input,option) &
             call InputErrorMsg(input,option,'PCT_EXP',error_string)
           case('GAS_RESIDUAL_SATURATION')
             call InputReadDouble(input,option,sf%Srg)
+            Srg = sf%Srg
             call InputErrorMsg(input,option,'GAS_RESIDUAL_SATURATION', &
                                error_string)
           case('IGNORE_PERMEABILITY')
@@ -626,12 +649,17 @@ function SaturationFunctionRead(saturation_function,input,option) &
         end select
     !------------------------------------------
       class is(sat_func_KRP4_type)
+        wipp_krp = 4
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case('KPC')
             call InputReadInt(input,option,sf%kpc)
+            wipp_kpc = sf%kpc
             call InputErrorMsg(input,option,'KPC',error_string)
           case('LAMBDA')
             call InputReadDouble(input,option,sf%lambda)
+            wipp_expon = sf%lambda
             call InputErrorMsg(input,option,'LAMBDA',error_string)
           case('PCT_A')
             call InputReadDouble(input,option,sf%pct_a)
@@ -641,6 +669,7 @@ function SaturationFunctionRead(saturation_function,input,option) &
             call InputErrorMsg(input,option,'PCT_EXP',error_string)
           case('GAS_RESIDUAL_SATURATION')
             call InputReadDouble(input,option,sf%Srg)
+            Srg = sf%Srg
             call InputErrorMsg(input,option,'GAS_RESIDUAL_SATURATION', &
                                error_string)
           case('IGNORE_PERMEABILITY')
@@ -655,9 +684,13 @@ function SaturationFunctionRead(saturation_function,input,option) &
         end select
     !------------------------------------------
       class is(sat_func_KRP5_type)
+        wipp_krp = 5
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case('KPC')
             call InputReadInt(input,option,sf%kpc)
+            wipp_kpc = sf%kpc
             call InputErrorMsg(input,option,'KPC',error_string)
           case('PCT_A')
             call InputReadDouble(input,option,sf%pct_a)
@@ -667,6 +700,7 @@ function SaturationFunctionRead(saturation_function,input,option) &
             call InputErrorMsg(input,option,'PCT_EXP',error_string)
           case('GAS_RESIDUAL_SATURATION')
             call InputReadDouble(input,option,sf%Srg)
+            Srg = sf%Srg
             call InputErrorMsg(input,option,'GAS_RESIDUAL_SATURATION', &
                                error_string)
           case('IGNORE_PERMEABILITY')
@@ -681,9 +715,13 @@ function SaturationFunctionRead(saturation_function,input,option) &
         end select
     !------------------------------------------
       class is(sat_func_KRP8_type)
+        wipp_krp = 8
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case('KPC')
             call InputReadInt(input,option,sf%kpc)
+            wipp_kpc = sf%kpc
             call InputErrorMsg(input,option,'KPC',error_string)
           case('M')
             call InputReadDouble(input,option,sf%m)
@@ -696,6 +734,7 @@ function SaturationFunctionRead(saturation_function,input,option) &
             call InputErrorMsg(input,option,'PCT_EXP',error_string)
           case('GAS_RESIDUAL_SATURATION')
             call InputReadDouble(input,option,sf%Srg)
+            Srg = sf%Srg
             call InputErrorMsg(input,option,'GAS_RESIDUAL_SATURATION', &
                                error_string)
           case('IGNORE_PERMEABILITY')
@@ -710,23 +749,33 @@ function SaturationFunctionRead(saturation_function,input,option) &
         end select
     !------------------------------------------
       class is(sat_func_KRP9_type)
+        wipp_krp = 9
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case default
             call InputKeywordUnrecognized(input,keyword, &
                    'SATURATION_FUNCTION BRAGFLO_KRP9',option)
         end select
     !------------------------------------------
       class is(sat_func_KRP11_type)
+        wipp_krp = 11
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case default
             call InputKeywordUnrecognized(input,keyword, &
                    'SATURATION_FUNCTION BRAGFLO_KRP11',option)
         end select
     !------------------------------------------
       class is(sat_func_KRP12_type)
+        wipp_krp = 12
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case('KPC')
             call InputReadInt(input,option,sf%kpc)
+            wipp_kpc = sf%kpc 
             call InputErrorMsg(input,option,'KPC',error_string)
           case('PCT_A')
             call InputReadDouble(input,option,sf%pct_a)
@@ -791,15 +840,20 @@ function SaturationFunctionRead(saturation_function,input,option) &
     ! Use default junction saturation if not specified
     if (Slj == 0d0) Slj = Sr + 5d-2*(1d0-Sr)
     ! Call constructor
-    select type (saturation_function)
-    class is (sat_func_VG_type)
-      call StringtoUpper(unsat_ext)
-      sf_swap => SFVGctor(unsat_ext, alpha, m, Sr, vg_rpf_opt, Pcmax, Slj)
-    class default
-      option%io_buffer = 'Loop-invariant optimizations are not yet &
-     & implemented for the designated saturation function type.'
-      call PrintErrMsg(option)
-    end select
+
+    if (wipp_krp /= 0) then
+      sf_swap => SFWIPPctor(wipp_krp, wipp_kpc, Sr, Srg, wipp_expon, Pcmax)
+    else
+      select type (saturation_function)
+      class is (sat_func_VG_type)
+        call StringtoUpper(unsat_ext)
+        sf_swap => SFVGctor(unsat_ext, alpha, m, Sr, vg_rpf_opt, Pcmax, Slj)
+      class default
+        option%io_buffer = 'Loop-invariant optimizations are not yet &
+       & implemented for the designated saturation function type.'
+        call PrintErrMsg(option)
+      end select
+    end if
 
     ! If successful, write tension option to the new object
     if (associated(sf_swap)) then

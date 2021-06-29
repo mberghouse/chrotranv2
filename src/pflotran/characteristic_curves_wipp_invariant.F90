@@ -1,4 +1,4 @@
-module characteristic_curves_WIPP_loop_invariant
+module characteristic_curves_WIPP_invariant_module
 #include "petsc/finclude/petscsys.h"
 
 use petscsys ! Necessary for PETSC_TRUE / PETSC_FALSE
