@@ -378,7 +378,7 @@ subroutine OutputFileRead(input,realization,output_option, &
         call StringToUpper(word)
         select case(trim(word))
           case('OFF')
-            option%print_to_screen = PETSC_FALSE
+            option%driver%print_to_screen = PETSC_FALSE
           case('PERIODIC')
             string = trim(string) // ',PERIODIC'
             call InputReadInt(input,option,output_option%screen_imod)
@@ -461,7 +461,7 @@ subroutine OutputFileRead(input,realization,output_option, &
                 call InputKeywordUnrecognized(input,word,string,option)
             end select
             if (output_option%tecplot_format == TECPLOT_POINT_FORMAT &
-                 .and. option%mycommsize > 1) then
+                 .and. option%comm%mycommsize > 1) then
               option%io_buffer = 'TECPLOT POINT format not supported in &
                 &parallel. Switching to TECPLOT BLOCK.'
               call PrintMsg(option)
@@ -1571,7 +1571,7 @@ subroutine ComputeFlowCellVelocityStats(realization_base)
       string = trim(string) // ' Velocity Statistics [m/' // &
                trim(output_option%tunit) // ']:'
 
-      if (option%myrank == option%io_rank) then
+      if (OptionIsIORank(option)) then
         write(*,'(/,a,/, &
                      &"Average:",1es12.4,/, &
                      &"Max:    ",1es12.4,"  Location:",i11,/, &
@@ -1703,7 +1703,7 @@ subroutine ComputeFlowFluxVelocityStats(realization_base)
       end select
       string = trim(string) // ' Flux Velocity Statistics [m/' // &
                trim(output_option%tunit) // ']:'
-      if (option%myrank == option%io_rank) then
+      if (OptionIsIORank(option)) then
         write(*,'(/,a,/, &
                      &"Average:",1es12.4,/, &
                      &"Max:    ",1es12.4,"  Location:",i11,/, &
@@ -1989,7 +1989,7 @@ subroutine OutputPrintCouplersH5(realization_base,istep)
   endif
 
   !TODO(geh): move conditional inside of OutputXMFHeader
-  if (option%myrank == option%io_rank) then
+  if (OptionIsIORank(option)) then
     call OutputXMFHeader(OUTPUT_UNIT, &
                          option%time/output_option%tconv, &
                          grid%nmax, &
@@ -2057,7 +2057,7 @@ subroutine OutputPrintCouplersH5(realization_base,istep)
       string2 = trim(h5_filename_without_path) // &
                      ":/" // trim(group_name) // "/" // trim(string)
       !TODO(geh): move conditional inside of OutputXMFAttribute
-      if (option%myrank == option%io_rank) then
+      if (OptionIsIORank(option)) then
         call OutputXMFAttribute(OUTPUT_UNIT,grid%nmax,string,string2, &
                                 CELL_CENTERED_OUTPUT_MESH)
       endif
@@ -2066,7 +2066,7 @@ subroutine OutputPrintCouplersH5(realization_base,istep)
   enddo
 
   !TODO(geh): move conditional inside of OutputXMFFooter
-  if (option%myrank == option%io_rank) then
+  if (OptionIsIORank(option)) then
     call OutputXMFFooter(OUTPUT_UNIT)
     close(OUTPUT_UNIT)
   endif
@@ -2211,7 +2211,7 @@ subroutine OutputPrintRegionsH5(realization_base)
   endif
 
   !TODO(geh): move conditional inside of OutputXMFHeader
-  if (option%myrank == option%io_rank) then
+  if (OptionIsIORank(option)) then
     call OutputXMFHeader(OUTPUT_UNIT, &
                          option%time/output_option%tconv, &
                          grid%nmax, &
@@ -2257,7 +2257,7 @@ subroutine OutputPrintRegionsH5(realization_base)
     string2 = trim(h5_filename_without_path) // &
                    ":/" // trim(group_name) // "/" // trim(string)
     !TODO(geh): move conditional inside of OutputXMFAttribute
-    if (option%myrank == option%io_rank) then
+    if (OptionIsIORank(option)) then
       call OutputXMFAttribute(OUTPUT_UNIT,grid%nmax,string,string2, &
                               CELL_CENTERED_OUTPUT_MESH)
     endif
@@ -2273,13 +2273,13 @@ subroutine OutputPrintRegionsH5(realization_base)
   string2 = trim(h5_filename_without_path) // &
                  ":/" // trim(group_name) // "/" // trim(string)
   !TODO(geh): move conditional inside of OutputXMFAttribute
-  if (option%myrank == option%io_rank) then
+  if (OptionIsIORank(option)) then
     call OutputXMFAttribute(OUTPUT_UNIT,grid%nmax,string,string2, &
                             CELL_CENTERED_OUTPUT_MESH)
   endif
 
   !TODO(geh): move conditional inside of OutputXMFFooter
-  if (option%myrank == option%io_rank) then
+  if (OptionIsIORank(option)) then
     call OutputXMFFooter(OUTPUT_UNIT)
     close(OUTPUT_UNIT)
   endif
