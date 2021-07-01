@@ -31,6 +31,9 @@ module Reaction_Gas_Aux_module
     PetscInt :: ngas
     PetscInt :: nactive_gas
     PetscInt :: npassive_gas
+
+    PetscInt :: nsorb
+    PetscInt :: neqsorb
     
     type(gas_species_type), pointer :: list
 
@@ -91,6 +94,10 @@ function GasCreate()
   gas%ngas = 0
   gas%nactive_gas = 0
   gas%npassive_gas = 0
+
+  gas%nsorb = 0
+  gas%neqsorb = 0
+
   gas%print_all = PETSC_FALSE
   nullify(gas%list)
   nullify(gas%active_names)

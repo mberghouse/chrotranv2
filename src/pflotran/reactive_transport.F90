@@ -886,6 +886,7 @@ subroutine RTUpdateFixedAccumulation(realization)
   use Field_module  
   use Grid_module
   use Secondary_Continuum_Aux_module  
+  use Reaction_Gas_module
 
   implicit none
   
@@ -979,7 +980,7 @@ subroutine RTUpdateFixedAccumulation(realization)
                              reaction,option,accum_p(istart:iendall))
     endif
 
-    if (reaction%ngaseqsorb > 0) then
+    if (reaction%gas%neqsorb > 0) then
       call RAccumulationSorbGas(rt_auxvars(ghosted_id), &
                                 global_auxvars(ghosted_id), &
                                 material_auxvars(ghosted_id), &
@@ -2669,7 +2670,8 @@ subroutine RTResidualNonFlux(snes,xx,r,realization,ierr)
   use Secondary_Continuum_Aux_module, only : sec_transport_type
   use Secondary_Continuum_module, only : SecondaryRTResJacMulti
   use Transport_Constraint_RT_module
-  
+  use Reaction_Gas_module 
+ 
   implicit none
 
   SNES, intent(in) :: snes
@@ -2766,7 +2768,7 @@ subroutine RTResidualNonFlux(snes,xx,r,realization,ierr)
                                reaction,option,Res)
       endif
 
-      if (reaction%ngaseqsorb > 0) then
+      if (reaction%gas%neqsorb > 0) then
         call RAccumulationSorbGas(rt_auxvars(ghosted_id), &
                                global_auxvars(ghosted_id), &
                                material_auxvars(ghosted_id), &

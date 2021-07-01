@@ -58,7 +58,6 @@ module Reaction_module
             ReactionInitializeLogK, &
             ReactionComputeKd, &
             RAccumulationSorb, &
-            RAccumulationSorbGas, &
             RAccumulationSorbDerivative, &
             RJumpStartKineticSorption, &
             RAge, &
@@ -923,9 +922,10 @@ subroutine ReactionReadPass1(reaction,input,option)
                      reaction%isotherm%neqkdrxn + &
                      reaction%surface_complexation%neqsrfcplxrxn
 
-  reaction%ngaseqsorb = reaction%gas%isotherm%neqkdrxn
+  reaction%gas%neqsorb = reaction%gas%isotherm%neqkdrxn
+  reaction%gas%nsorb = reaction%gas%neqsorb
 
-  reaction%nsorb = reaction%neqsorb + reaction%ngaseqsorb +&
+  reaction%nsorb = reaction%neqsorb + &
                    reaction%surface_complexation%nkinmrsrfcplxrxn + &
                    reaction%surface_complexation%nkinsrfcplxrxn
 
@@ -2138,7 +2138,7 @@ subroutine ReactionEquilibrateConstraint(rt_auxvar,global_auxvar, &
     endif
   endif
 
-  if (reaction%ngaseqsorb > 0) then
+  if (reaction%gas%neqsorb > 0) then
     call RTotalSorbGas(rt_auxvar,global_auxvar,material_auxvar, &
                        reaction,reaction%isotherm%isotherm_rxn,option)
   endif
@@ -2757,7 +2757,7 @@ subroutine ReactionPrintConstraint(constraint_coupler,reaction,option)
     129 format(2x,a24,1pe12.4,8x,1pe12.4)
   endif
 
-  if (reaction%ngaseqsorb > 0) then
+  if (reaction%gas%neqsorb > 0) then
     !MAN: This needs to be filled out
   endif
   
@@ -3591,7 +3591,7 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
                            option,fixed_accum)  
   endif
 
-  if (reaction%ngaseqsorb > 0) then
+  if (reaction%gas%neqsorb > 0) then
     call RAccumulationSorbGas(rt_auxvar,global_auxvar,material_auxvar,reaction,&
                               option,fixed_accum)
   endif
@@ -3634,7 +3634,7 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
                                        material_auxvar,reaction,option,J)
     endif
 
-    if (reaction%ngaseqsorb > 0) then
+    if (reaction%gas%neqsorb > 0) then
       call RAccumulationSorbGas(rt_auxvar,global_auxvar,material_auxvar, &
                                 reaction,option,fixed_accum)
       !call RAccumulationSorbGasDerivative(rt_auxvar,global_auxvar, &
@@ -4306,7 +4306,7 @@ subroutine RTotal(rt_auxvar,global_auxvar,material_auxvar,reaction,option)
     call RTotalCO2(rt_auxvar,global_auxvar,reaction,option)
   else if (reaction%gas%nactive_gas > 0) then
     call RTotalGas(rt_auxvar,global_auxvar,reaction,option)
-    if (reaction%ngaseqsorb > 0) then
+    if (reaction%gas%neqsorb > 0) then
       call RTotalSorbGas(rt_auxvar,global_auxvar,material_auxvar, &
                          reaction,reaction%isotherm%isotherm_rxn,option)
     endif
@@ -4822,41 +4822,6 @@ subroutine RAccumulationSorb(rt_auxvar,global_auxvar,material_auxvar, &
     rt_auxvar%total_sorb_eq(:)*material_auxvar%volume
 
 end subroutine RAccumulationSorb
-
-! ************************************************************************** !
-
-subroutine RAccumulationSorbGas(rt_auxvar,global_auxvar,material_auxvar, &
-                             reaction,option,Res)
-  ! 
-  ! Computes sorbed portion of the accumulation term in
-  ! residual function, from the gas phase
-  ! 
-  ! Author: Michael Nole
-  ! Date: 06/23/21
-  ! 
-
-  use Option_module
-
-  implicit none
-
-  type(reactive_transport_auxvar_type) :: rt_auxvar
-  type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar
-  type(option_type) :: option
-  class(reaction_rt_type) :: reaction
-  PetscReal :: Res(reaction%ncomp)
-  PetscInt :: irxn, icomp
-
-  ! units = (mol solute/m^3 bulk)*(m^3 bulk)/(sec) = mol/sec
-  ! all residual entries should be in mol/sec
-!  v_t = material_auxvar%volume/option%tran_dt
-  do irxn = 1, reaction%gas%isotherm%neqkdrxn
-    icomp = reaction%gas%isotherm%eqkdspecid(irxn)
-    Res(icomp) = Res(icomp) + rt_auxvar%total_sorb_eq_gas(irxn)* &
-                              material_auxvar%volume
-  enddo
-
-end subroutine RAccumulationSorbGas
 
 ! ************************************************************************** !
 

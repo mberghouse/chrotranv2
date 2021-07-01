@@ -18,6 +18,7 @@ module Reaction_Gas_module
   public :: RGasRead, &
             RTotalGas, &
             RTotalSorbGas, &
+            RAccumulationSorbGas, &
             RTotalCO2
 
 contains
@@ -298,6 +299,42 @@ subroutine RTotalSorbGasKD(rt_auxvar,global_auxvar,material_auxvar,gas, &
   enddo
 
 end subroutine RTotalSorbGasKD
+
+! ************************************************************************** !
+
+subroutine RAccumulationSorbGas(rt_auxvar,global_auxvar,material_auxvar, &
+                             reaction,option,Res)
+  ! 
+  ! Computes sorbed portion of the accumulation term in
+  ! residual function, from the gas phase
+  ! 
+  ! Author: Michael Nole
+  ! Date: 06/23/21
+  ! 
+
+  use Option_module
+  use Material_Aux_class
+
+  implicit none
+
+  type(reactive_transport_auxvar_type) :: rt_auxvar
+  type(global_auxvar_type) :: global_auxvar
+  class(material_auxvar_type) :: material_auxvar
+  type(option_type) :: option
+  class(reaction_rt_type) :: reaction
+  PetscReal :: Res(reaction%ncomp)
+  PetscInt :: irxn, icomp
+
+  ! units = (mol solute/m^3 bulk)*(m^3 bulk)/(sec) = mol/sec
+  ! all residual entries should be in mol/sec
+!  v_t = material_auxvar%volume/option%tran_dt
+  do irxn = 1, reaction%gas%isotherm%neqkdrxn
+    icomp = reaction%gas%isotherm%eqkdspecid(irxn)
+    Res(icomp) = Res(icomp) + rt_auxvar%total_sorb_eq_gas(irxn)* &
+                              material_auxvar%volume
+  enddo
+
+end subroutine RAccumulationSorbGas
 
 ! ************************************************************************** !
 

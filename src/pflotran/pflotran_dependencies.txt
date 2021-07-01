@@ -749,9 +749,9 @@ reactive_transport.o : co2_span_wagner.o co2eos.o condition.o connection.o \
                        global.o global_aux.o grid.o hdf5.o logging.o \
                        material.o material_aux.o option.o output_aux.o \
                        output_tecplot.o patch.o pflotran_constants.o \
-                       reaction.o reaction_aux.o reaction_surf_complex_aux.o \
-                       reactive_transport_aux.o realization_subsurface.o \
-                       region.o secondary_continuum.o \
+                       reaction.o reaction_aux.o reaction_gas.o \
+                       reaction_surf_complex_aux.o reactive_transport_aux.o \
+                       realization_subsurface.o region.o secondary_continuum.o \
                        secondary_continuum_aux.o string.o transport.o \
                        transport_constraint_rt.o
 reactive_transport_aux.o : matrix_block_aux.o matrix_zeroing.o option.o \
