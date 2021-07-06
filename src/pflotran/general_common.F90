@@ -92,16 +92,11 @@ subroutine GeneralAccumulation(gen_auxvar,global_auxvar,material_auxvar, &
   
   ! accumulation term units = kmol/s
   Res = 0.d0
-  if (option%nflowdof == 3) then
-    spec_loop = 2
-  elseif (option%nflowdof == 4) then
-    spec_loop = 4
-  endif
   do iphase = 1, option%nphase
     ! Res[kmol comp/m^3 void] = sat[m^3 phase/m^3 void] * 
     !                           den[kmol phase/m^3 phase] * 
     !                           xmol[kmol comp/kmol phase]
-    do icomp = 1, spec_loop!option%nflowspec
+    do icomp = 1, option%nflowspec
 #ifdef DEBUG_GENERAL
       ! for debug version, aux var entries are initialized to NaNs.  even if
       ! saturation is zero, density may be a NaN.  So the conditional prevents

@@ -180,6 +180,7 @@ subroutine PMGeneralSetFlowMode(pm,option)
     option%nphase = 3
     option%nflowspec = 3
     option%solute_id = 3
+    !option%solute_comp_id = 4
     option%energy_id = 4
     option%precipitate_phase = 3
     general_max_states = 7
@@ -249,7 +250,7 @@ subroutine PMGeneralSetFlowMode(pm,option)
                shape(abs_update_inf_tol)) * &
                1.d0 ! change to 0.d0 to zero tolerances
     residual_abs_inf_tol = [w_mass_abs_inf_tol,a_mass_abs_inf_tol,&
-                            u_abs_inf_tol,s_mass_abs_inf_tol]
+                            s_mass_abs_inf_tol,u_abs_inf_tol]
     allocate(pm%max_change_ivar(7))
     pm%max_change_ivar = [LIQUID_PRESSURE, GAS_PRESSURE, AIR_PRESSURE, &
                           LIQUID_MOLE_FRACTION, TEMPERATURE, &

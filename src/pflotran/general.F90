@@ -1470,7 +1470,7 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
         elseif (option%nflowdof == 4) then
            global_auxvars_bc(sum_connection)%mass_balance_delta(1:3,1) = &
              global_auxvars_bc(sum_connection)%mass_balance_delta(1:3,1) - &
-             (/Res(1:2),Res(4)/)
+             (Res(1:3))!,Res(4)/)
         endif
       endif
 
@@ -1537,7 +1537,7 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
         if (option%nflowdof == 4) then
           global_auxvars_ss(sum_connection)%mass_balance_delta(1:3,1) = &
             global_auxvars_ss(sum_connection)%mass_balance_delta(1:3,1) - &
-            (/Res(1:2),Res(4)/)
+            (Res(1:3))!,Res(4)/)
         elseif (option%nflowdof == 3) then
           global_auxvars_ss(sum_connection)%mass_balance_delta(1:2,1) = &
             global_auxvars_ss(sum_connection)%mass_balance_delta(1:2,1) - &

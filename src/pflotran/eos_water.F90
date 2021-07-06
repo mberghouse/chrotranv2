@@ -1305,7 +1305,7 @@ subroutine EOSWaterSatPressSparrow(T,aux,calculate_derivatives, &
 
   PetscInt :: wid = 1
   PetscInt :: acid = 2
-  PetscInt :: sid = 4
+  PetscInt :: sid = 3
 
   PetscReal :: ws ! NaCl mass fraction
   PetscReal :: avg_molar_mass

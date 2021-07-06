@@ -23,6 +23,8 @@ module General_Aux_module
   PetscReal, public :: general_damping_factor = 0.6d0
   PetscInt, public :: general_debug_cell_id = UNINITIALIZED_INTEGER
   PetscReal, public :: non_darcy_B = -0.78d0
+  PetscReal, public :: PRECIPITATE_DENSITY_KG = 2.170d3
+  PetscReal, public :: PRECIPITATE_DENSITY = 37.132101d0
 #if defined(MATCH_TOUGH2)
   PetscBool, public :: general_temp_dep_gas_air_diff = PETSC_FALSE
   PetscBool, public :: general_diffuse_xmol = PETSC_FALSE
@@ -250,8 +252,8 @@ module General_Aux_module
             GeneralAuxVarPerturb, &
             GeneralAuxVarPerturb4, &
             GeneralPrintAuxVars, &
-            GeneralOutputAuxVars!, &
-            !EOSPrecipitateEnthalpy
+            GeneralOutputAuxVars, &
+            EOSPrecipitateEnergy
 
 contains
 
@@ -1140,7 +1142,7 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
     Ugas_J_kg = xmass_air_in_gas*Uair_J_kg + &
                 (1.d0-xmass_air_in_gas)*Uvapor_J_kg
     Hgas_J_kg = Ugas_J_kg + &
-                gen_auxvar%pres(gid)/gen_auxvar%den_kg(gid)
+                gen_auxvar%pres(gid)/gen_auxvar%den_kg
 #endif
     
     ! MJ/kmol
@@ -1754,8 +1756,8 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
       gen_auxvar%sat(pid) = x(GENERAL_PRECIPITATE_SAT_DOF)
 
       call GeneralAuxNaClSolubility(gen_auxvar%temp,NaClSolubility,solubility_function)
+      gen_auxvar%xmol(sid,lid) = NaClSolubility
 
-      ! call EOSNaClSolubility(gen_auxvar%temp, gen_auxvar%pres(lid), gen_auxvar%xmol(sid,lid))
       gen_auxvar%xmol(wid,lid) = 1.d0 - gen_auxvar%xmol(acid,lid) - gen_auxvar%xmol(sid,lid)
       ! with the gas state, we must calculate the mole fraction of air in 
       ! in the liquid phase, even though the liquid phase does not exist
@@ -1764,7 +1766,11 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
       ! necessary for water since we do not calculate water diffusion 
       ! explicitly.  set mole fractions to zero in gas phase.
       gen_auxvar%xmol(:,gid) = 0.d0
-      gen_auxvar%sat(lid) = 1.d0 - gen_auxvar%sat(pid)
+
+      !if (gen_auxvar%istatechng) then
+      gen_auxvar%sat(pid) = max(0.d0,gen_auxvar%sat(pid))
+      gen_auxvar%sat(lid) = min(1.d0,1.d0 - gen_auxvar%sat(pid))
+      !endif
       gen_auxvar%sat(gid) = 0.d0
 
       if (associated(gen_auxvar%d)) then
@@ -2008,7 +2014,6 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
       call EOSWaterDensityExt(gen_auxvar%temp,cell_pressure,liq_comp, &
                               gen_auxvar%den_kg(lid),gen_auxvar%den(lid), &
                               gen_auxvar%d%denl_pl,gen_auxvar%d%denl_T,ierr)
-      !DF: derivative not implemented yet
     else
       call EOSWaterDensityExt(gen_auxvar%temp,cell_pressure,liq_comp, &
                               gen_auxvar%den_kg(lid),gen_auxvar%den(lid),ierr)
@@ -2202,7 +2207,8 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
   endif ! istate /= LIQUID_STATE
   
   if (global_auxvar%istate == LIQUID_STATE .or. &
-      global_auxvar%istate == TWO_PHASE_STATE) then
+      global_auxvar%istate == TWO_PHASE_STATE .or. &
+      global_auxvar%istate == LP_STATE) then
     ! this does not need to be calculated for LIQUID_STATE (=1)
     call characteristic_curves%liq_rel_perm_function% &
            RelativePermeability(gen_auxvar%sat(lid),krl,dkrl_dsatl,option)
@@ -2281,6 +2287,18 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
     endif    
   endif
 
+  !precipitate
+  gen_auxvar%den(pid) = PRECIPITATE_DENSITY
+  gen_auxvar%den_kg(pid) = PRECIPITATE_DENSITY_KG
+  gen_auxvar%xmol(wid,pid) = 0.d0
+  gen_auxvar%xmol(acid,pid) = 0.d0
+  gen_auxvar%xmol(sid,pid) = 1.d0
+
+  call EOSPrecipitateEnergy(gen_auxvar%temp,U_precip)
+  gen_auxvar%U(pid) = U_precip
+  gen_auxvar%U(pid) = U_precip
+  gen_auxvar%mobility(pid) = 0.d0
+
 #if 0
   if (option%iflag == GENERAL_UPDATE_FOR_ACCUM) then
     write(*,'(a,i3,2f13.4,es13.6,f13.4,a3)') 'i/l/g/x[a/l]/t: ', &
@@ -2344,9 +2362,13 @@ subroutine GeneralAuxSetSolute(solute,option)
   select case(solute)
     case('NACL')
       option%flow%density_depends_on_salinity = PETSC_TRUE
+      PRECIPITATE_DENSITY_KG = 2.170d3 !kg/m^3
+      PRECIPITATE_DENSITY = 37.132101d0 !mol/L
     case default
       ! default solute is NaCl
       option%flow%density_depends_on_salinity = PETSC_TRUE
+      PRECIPITATE_DENSITY_KG = 2.170d3 !kg/m^3
+      PRECIPITATE_DENSITY = 37.132101d0 !mol/L
   end select
 
 end subroutine GeneralAuxSetSolute
@@ -2778,6 +2800,17 @@ subroutine GeneralAuxVarUpdateState4(x,gen_auxvar,global_auxvar, &
         global_auxvar%istate = LP_STATE
         liq_epsilon = general_phase_chng_epsilon
         istatechng = PETSC_TRUE
+        if (option%iflag == GENERAL_UPDATE_FOR_ACCUM) then
+           write(state_change_string,'(''Liquid -> Liquid-Precipitate at Cell '',i8)') &
+                natural_id
+        elseif (option%iflag == GENERAL_UPDATE_FOR_DERIVATIVE) then
+           write(state_change_string, &
+                '(''Liquid -> LP Phase at Cell (due to perturbation) '',i8)') &
+                natural_id
+        else
+           write(state_change_string,'(''Liquid -> LP Phase at Boundary Face '', &
+                & i8)') natural_id
+        endif
       endif
 
     case(GAS_STATE)
@@ -2867,7 +2900,8 @@ subroutine GeneralAuxVarUpdateState4(x,gen_auxvar,global_auxvar, &
         x(GENERAL_LIQUID_STATE_X_MOLE_DOF) = max(0.d0,gen_auxvar% &
           xmol(acid,lid))*(1.d0 + epsilon)
         x(GENERAL_ENERGY_DOF) = gen_auxvar%temp*(1.d0-epsilon)
-        x(GENERAL_SOLUTE_INDEX) = max(0.d0,gen_auxvar%xmol(sid,lid)*(1.d0+epsilon))
+        x(GENERAL_LIQUID_STATE_S_MOLE_DOF) = max(0.d0,&
+                                             gen_auxvar%xmol(sid,lid)*(1.d0+epsilon))
       case(GAS_STATE)
         x(GENERAL_GAS_PRESSURE_DOF) = gen_auxvar%pres(gid) * (1.d0 - epsilon)
         if (general_gas_air_mass_dof == GENERAL_AIR_PRESSURE_INDEX) then
@@ -2910,6 +2944,20 @@ subroutine GeneralAuxVarUpdateState4(x,gen_auxvar,global_auxvar, &
               0.01d0*x(GENERAL_GAS_PRESSURE_DOF)
           endif
         endif
+      case(P_STATE)
+        x(GENERAL_GAS_PRESSURE_DOF) = gen_auxvar%pres(gid) * (1.d0 - epsilon)
+        x(GENERAL_LIQUID_STATE_X_MOLE_DOF) = max(0.d0,gen_auxvar% &
+             xmol(acid,lid))*(1.d0 + epsilon)
+        x(GENERAL_ENERGY_DOF) = gen_auxvar%temp*(1.d0-epsilon)
+        x(GENERAL_SOLUTE_INDEX) = max(0.d0,gen_auxvar%xmol(sid,lid)*(1.d0+epsilon))
+      case(LP_STATE)
+        x(GENERAL_LIQUID_PRESSURE_DOF) = gen_auxvar%pres(lid) * (1.d0 - epsilon)
+        x(GENERAL_LIQUID_STATE_X_MOLE_DOF) = max(0.d0,gen_auxvar% &
+                                             xmol(acid,lid))*(1.d0 + epsilon)
+        x(GENERAL_ENERGY_DOF) = gen_auxvar%temp*(1.d0-epsilon)
+        x(GENERAL_PRECIPITATE_SAT_DOF) = gen_auxvar%sat(pid)
+      case(GP_STATE)
+      case(LGP_STATE)
 
     end select
     call GeneralAuxVarCompute4(x,gen_auxvar, global_auxvar,material_auxvar, &
@@ -2918,10 +2966,11 @@ subroutine GeneralAuxVarUpdateState4(x,gen_auxvar,global_auxvar, &
     if (general_print_state_transition) then
       call PrintMsgByRank(option,state_change_string)
     endif
-!#ifdef DEBUG_GENERAL_INFO
+
+! #ifdef DEBUG_GENERAL_INFO
 !    call GeneralPrintAuxVars(gen_auxvar,global_auxvar,material_auxvar, &
 !                             natural_id,'After Update',option)
-!#endif
+! #endif
   endif
 
 end subroutine GeneralAuxVarUpdateState4
@@ -3693,6 +3742,32 @@ subroutine GeneralAuxVarPerturb4(gen_auxvar,global_auxvar, &
        endif
 #endif
 #endif
+    case(LP_STATE)
+       x(GENERAL_LIQUID_PRESSURE_DOF) = &
+            gen_auxvar(ZERO_INTEGER)%pres(option%liquid_phase)
+       x(GENERAL_LIQUID_STATE_X_MOLE_DOF) = &
+            gen_auxvar(ZERO_INTEGER)%xmol(option%air_id,option%liquid_phase)
+       x(GENERAL_ENERGY_DOF) = &
+            gen_auxvar(ZERO_INTEGER)%temp
+       x(GENERAL_PRECIPITATE_SAT_DOF) = &
+            gen_auxvar(ZERO_INTEGER)%sat(option%precipitate_phase)
+
+       pert(GENERAL_LIQUID_PRESSURE_DOF) = &
+         perturbation_tolerance*x(GENERAL_LIQUID_PRESSURE_DOF)+min_perturbation
+       if (x(GENERAL_LIQUID_STATE_X_MOLE_DOF) > &
+           1.d3 * perturbation_tolerance) then
+         pert(GENERAL_LIQUID_STATE_X_MOLE_DOF) = -1.d0 * perturbation_tolerance
+       else
+         pert(GENERAL_LIQUID_STATE_X_MOLE_DOF) = perturbation_tolerance
+       endif
+       pert(GENERAL_ENERGY_DOF) = -1.d0 * &
+         (perturbation_tolerance*x(GENERAL_ENERGY_DOF) + min_perturbation)
+       if (x(GENERAL_PRECIPITATE_SAT_DOF) > 0.50) THEN
+         pert(GENERAL_PRECIPITATE_SAT_DOF) = -1.d0 * perturbation_tolerance
+       else
+         pert(GENERAL_PRECIPITATE_SAT_DOF) = perturbation_tolerance
+       endif
+
   end select
   
   ! GENERAL_UPDATE_FOR_DERIVATIVE indicates call from perturbation
@@ -3746,6 +3821,9 @@ subroutine GeneralAuxVarPerturb4(gen_auxvar,global_auxvar, &
       gen_auxvar(GENERAL_GAS_STATE_AIR_PRESSURE_DOF)%pert = &
         gen_auxvar(GENERAL_GAS_STATE_AIR_PRESSURE_DOF)%pert / &
         GENERAL_PRESSURE_SCALE
+    case(LP_STATE)
+      gen_auxvar(GENERAL_LIQUID_PRESSURE_DOF)%pert = &
+        gen_auxvar(GENERAL_LIQUID_PRESSURE_DOF)%pert / GENERAL_PRESSURE_SCALE
   end select
   
 #ifdef DEBUG_GENERAL
@@ -3754,6 +3832,35 @@ subroutine GeneralAuxVarPerturb4(gen_auxvar,global_auxvar, &
 #endif
  
 end subroutine GeneralAuxVarPerturb4
+
+! ************************************************************************** !
+
+subroutine EOSPrecipitateEnergy(T,U)
+
+  ! Calculate internal energy of the solid precipitate phase
+  ! (Wood, 1976)
+  !
+  ! Author: David Fukuyama
+  ! Date 07/02/21
+  !
+
+  implicit none
+
+  PetscReal, intent(in) :: T
+  PetscReal, intent(out) :: U
+
+  PetscInt :: wid = 1
+  PetscInt :: acid = 2
+  PetscInt :: sid = 3
+
+  PetscReal :: wsw = 0.d0 ! Brine inclusion mass fraction (assumed 0)
+  PetscReal :: wsh = 1.d0 ! Halite mass fraction
+  PetscReal :: avg_molar_mass
+
+  U = (3144.0*T)*wsw + (800*T)*wsh !J/kg
+  U = U * fmw_comp(THREE_INTEGER) !J/kmol
+  
+end subroutine EOSPrecipitateEnergy
 
 ! ************************************************************************** !
 
@@ -3851,6 +3958,9 @@ subroutine GeneralPrintAuxVars(general_auxvar,global_auxvar,material_auxvar, &
   print *, '     saturation pressure: ', general_auxvar%pres(spid)
   print *, '       liquid saturation: ', general_auxvar%sat(lid)
   print *, '          gas saturation: ', general_auxvar%sat(gid)
+  if (option%nflowdof == 4) then
+    print *, '  precipitate saturation: ', general_auxvar%sat(pid)
+  endif
   print *, '   liquid density [kmol]: ', general_auxvar%den(lid)
   print *, '      gas density [kmol]: ', general_auxvar%den(gid)
   print *, '     liquid density [kg]: ', general_auxvar%den_kg(lid)
