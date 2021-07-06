@@ -800,7 +800,7 @@ subroutine IllitizationConvertListToArray(list,array,option)
     array(count)%ptr => cur_ilf
     if (cur_ilf%test) then
       call OptionSetBlocking(option,PETSC_FALSE)
-      if (option%myrank == option%io_rank) then
+      if (OptionIsIORank(option)) then
         if (associated(cur_ilf%illitization_function)) then
           call cur_ilf%illitization_function%Test( &
                cur_ilf%name,option)
