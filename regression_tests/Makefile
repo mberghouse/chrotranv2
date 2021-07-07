@@ -90,6 +90,7 @@ STANDARD_CFG = \
 	general/general.cfg \
 	general/hydrate/hydrate.cfg \
 	ngee/ngee.cfg \
+	ntrdc/ntrdc.cfg \
 	shortcourse/1D_Calcite/calcite.cfg \
 	shortcourse/1D_variably_saturated_flow/vsat_flow.cfg \
 	shortcourse/regional_doublet/regional_doublet.cfg \
@@ -158,6 +159,7 @@ FLOW_CFG = \
 	default/steady/steady.cfg \
 	default/scco2/mphase/mphase.cfg \
 	general/general.cfg \
+	ntrdc/ntrdc.cfg \
 	shortcourse/1D_variably_saturated_flow/vsat_flow.cfg \
 	shortcourse/copper_leaching/cu_leaching.cfg
 #	wipp/bragflo/wipp_flow/wipp_flow.cfg
