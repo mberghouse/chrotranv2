@@ -99,6 +99,7 @@ STANDARD_CFG = \
 	inversion/inversion.cfg \
 	ngee/ngee.cfg \
 	pnf/unit_cube/unit_cube.cfg \
+	ntrdc/ntrdc.cfg \
 	shortcourse/1D_Calcite/calcite.cfg \
 	shortcourse/1D_variably_saturated_flow/vsat_flow.cfg \
 	shortcourse/copper_leaching/cu_leaching.cfg \
@@ -167,6 +168,7 @@ FLOW_CFG = \
 	default/zflow/zflow.cfg \
 	general/general.cfg \
 	pnf/unit_cube/unit_cube.cfg \
+	ntrdc/ntrdc.cfg \
 	shortcourse/1D_variably_saturated_flow/vsat_flow.cfg \
 	shortcourse/copper_leaching/cu_leaching.cfg
 #	wipp/bragflo/wipp_flow/wipp_flow.cfg
