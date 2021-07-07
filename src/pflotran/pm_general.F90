@@ -30,7 +30,7 @@ module PM_General_class
     PetscReal, pointer :: residual_scaled_inf_tol(:)
     PetscReal, pointer :: abs_update_inf_tol(:,:)
     PetscReal, pointer :: rel_update_inf_tol(:,:)
-    PetscReal, pointer :: damping_factor
+    PetscReal :: damping_factor
   contains
     procedure, public :: ReadSimulationOptionsBlock => &
                            PMGeneralReadSimOptionsBlock
@@ -233,9 +233,9 @@ subroutine PMGeneralSetFlowMode(pm,option)
       reshape([pres_rel_inf_tol,xmol_rel_inf_tol,temp_rel_inf_tol,xmol_rel_inf_tol,&
                pres_rel_inf_tol,pres_rel_inf_tol,temp_rel_inf_tol,xmol_rel_inf_tol,&
                pres_rel_inf_tol,sat_rel_inf_tol,temp_rel_inf_tol,xmol_rel_inf_tol,&
-               pres_rel_inf_tol,xmol_rel_inf_tol,temp_rel_inf_tol,xmol_rel_inf_tol,&
+               pres_rel_inf_tol,999.d0,temp_rel_inf_tol,999.d0,&
                pres_rel_inf_tol,xmol_rel_inf_tol,temp_rel_inf_tol,sat_rel_inf_tol,&
-               pres_rel_inf_tol,pres_rel_inf_tol,temp_rel_inf_tol,sat_rel_inf_tol,&
+               pres_rel_inf_tol,sat_rel_inf_tol,temp_rel_inf_tol,pres_rel_inf_tol,&
                pres_rel_inf_tol,sat_rel_inf_tol,temp_rel_inf_tol,sat_rel_inf_tol], &
                shape(rel_update_inf_tol)) * &
                1.d0 ! change to 0.d0 to zero tolerances
@@ -243,9 +243,9 @@ subroutine PMGeneralSetFlowMode(pm,option)
       reshape([pres_abs_inf_tol,xmol_abs_inf_tol,temp_abs_inf_tol,xmol_abs_inf_tol,&
                pres_abs_inf_tol,pres_abs_inf_tol,temp_abs_inf_tol,xmol_abs_inf_tol,&
                pres_abs_inf_tol,sat_abs_inf_tol,temp_abs_inf_tol,xmol_abs_inf_tol,&
-               pres_abs_inf_tol,xmol_abs_inf_tol,temp_abs_inf_tol,xmol_abs_inf_tol,&
+               pres_abs_inf_tol,999.d0,temp_abs_inf_tol,999.d0,&
                pres_abs_inf_tol,xmol_abs_inf_tol,temp_abs_inf_tol,sat_abs_inf_tol,&
-               pres_abs_inf_tol,pres_abs_inf_tol,temp_abs_inf_tol,sat_abs_inf_tol,&
+               pres_abs_inf_tol,sat_abs_inf_tol,temp_abs_inf_tol,pres_abs_inf_tol,&
                pres_abs_inf_tol,sat_abs_inf_tol,temp_abs_inf_tol,sat_abs_inf_tol], &
                shape(abs_update_inf_tol)) * &
                1.d0 ! change to 0.d0 to zero tolerances

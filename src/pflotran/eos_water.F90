@@ -1310,19 +1310,19 @@ subroutine EOSWaterSatPressSparrow(T,aux,calculate_derivatives, &
   PetscReal :: ws ! NaCl mass fraction
   PetscReal :: avg_molar_mass
 
-  PetscReal, parameter :: MPa_to_Pa = 1E6
+  PetscReal, parameter :: MPa_to_Pa = 1.d6
   PetscReal :: A,B,C,D,E
 
-  avg_molar_mass = aux(acid)*FMWAIR+aux(wid)*FMWH2O+aux(sid)*FMWNACL
+  avg_molar_mass = (1-aux(sid))*FMWH2O+aux(sid)*FMWNACL!+aux(acid)*FMWAIR
   ws = aux(sid)*FMWNACL/avg_molar_mass
 
-  if (T >= 0.d0 .and. T <= 150) then
+  if (T >= 0.d0 .and. T <= 150.d0) then
     A = (0.9083+ws*(-0.569+ws*(0.1945+ws*(-3.736+ws*2.82))))*1.d-3
     B = (-0.0669+ws*(0.0582+ws*(0.1668+ws*(-0.6761+ws*2.091))))*1.d-3
     C = (7.541+ws*(-5.143+ws*(6.482+ws*(-52.62+ws*115.7))))*1.d-6
     D = (-0.0922+ws*(0.0649+ws*(-0.1313+ws*(0.8024-ws*1.986))))*1.d-6
     E = (1.237+ws*(-0.753+ws*(0.1448+ws*(-6.964+ws*14.61))))*1.d-9
-  elseif (T > 150 .and. T <= 300) then
+  elseif (T > 150.d0 .and. T <= 300.d0) then
     A = -3.248+ws*(7.081+ws*(-49.93+ws*(219.6+ws*(-308.5))))
     B = 0.0610+ws*(-0.1185+ws*(0.7916+ws*(-3.474+ws*4.882)))
     C = (-0.4109+ws*(0.6789+ws*(-4.155+ws*(18.34+ws*(-25.89)))))*1.d-3
