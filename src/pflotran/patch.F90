@@ -1414,7 +1414,8 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
   PetscBool :: dof1, dof2, dof3, dof4
   PetscReal :: temperature, p_sat, p_cap, s_liq, xmol, xmol2
   PetscReal :: relative_humidity
-  PetscReal :: gas_sat, hyd_sat, air_pressure, gas_pressure, liq_pressure
+  PetscReal :: gas_sat, hyd_sat, air_pressure, gas_pressure, liq_pressure, &
+               precipitate_sat
   PetscReal :: dummy_real
   PetscReal :: x(option%nflowdof)
   character(len=MAXSTRINGLENGTH) :: string, string2
@@ -1468,6 +1469,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
       select type(dataset => general%gas_saturation%dataset)
         class is(dataset_ascii_type)
           gas_sat = general%gas_saturation%dataset%rarray(1)
+          precipitate_sat = general%precipitate_saturation%dataset%rarray(1)
           if (gas_sat > 0.d0 .and. gas_sat < 1.d0) then
             coupler%flow_aux_int_var(GENERAL_STATE_INDEX,1:num_connections) = &
               TWO_PHASE_STATE
@@ -1476,6 +1478,9 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
           else if (gas_sat < 0.5d0) then
             coupler%flow_aux_int_var(GENERAL_STATE_INDEX,1:num_connections) = &
               LIQUID_STATE
+          else if (precipitate_sat > 0.5d0) then
+            coupler%flow_aux_int_var(GENERAL_STATE_INDEX,1:num_connections) = &
+               LP_STATE
           else
             coupler%flow_aux_int_var(GENERAL_STATE_INDEX,1:num_connections) = &
               GAS_STATE
@@ -1518,6 +1523,9 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
         TWO_PHASE_STATE
         ! no need to loop in the next do loop if its all the same state, which
         ! you know from flow_condition%iphase
+    case(LP_STATE)
+      coupler%flow_aux_int_var(GENERAL_STATE_INDEX,1:num_connections) = &
+        LP_STATE
     case(LIQUID_STATE)
       coupler%flow_aux_int_var(GENERAL_STATE_INDEX,1:num_connections) = &
         LIQUID_STATE
@@ -1543,6 +1551,8 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                 string = 'gas state'
               case(TWO_PHASE_STATE)
                 string = 'two phase state'
+              case(LP_STATE)
+                string = 'liquid-precipitate state'
               case(ANY_STATE)
                 string = 'any phase state'
             end select
@@ -1841,6 +1851,108 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                 call PrintErrMsg(option)
             end select
           endif
+      ! ---------------------------------------------------------------------- !
+        case(LP_STATE)
+          ! liquid pressure; 1st dof ------------------------ !
+          select case(general%liquid_pressure%itype)
+            case(DIRICHLET_BC)
+              call PatchGetCouplerValueFromDataset(coupler,option, &
+                     patch%grid,general%liquid_pressure%dataset,iconn,liq_pressure)
+              coupler%flow_aux_real_var(ONE_INTEGER,iconn) = liq_pressure
+              dof1 = PETSC_TRUE
+              coupler%flow_bc_type(GENERAL_LIQUID_EQUATION_INDEX) = DIRICHLET_BC
+            case default
+              string = GetSubConditionName(general%liquid_pressure%itype)
+              option%io_buffer = &
+                FlowConditionUnknownItype(coupler%flow_condition, &
+                  'GENERAL_MODE LP state liquid pressure ',string)
+              call PrintErrMsg(option)
+          end select
+          ! temperature; 2nd dof ------------------------- !
+          select case(general%temperature%itype)
+            case(DIRICHLET_BC)
+              call PatchGetCouplerValueFromDataset(coupler,option, &
+                       patch%grid,general%temperature%dataset,iconn,temperature)
+              if (general_2ph_energy_dof == GENERAL_TEMPERATURE_INDEX) then
+                coupler%flow_aux_real_var(TWO_INTEGER,iconn) = temperature
+              else
+                call EOSWaterSaturationPressure(temperature,p_sat,ierr)
+                call PatchGetCouplerValueFromDataset(coupler,option, &
+                     patch%grid,general%gas_pressure%dataset,iconn,gas_pressure)
+                ! should it still be index = 2 here below?
+                coupler%flow_aux_real_var(TWO_INTEGER,iconn) = &
+                                                              gas_pressure-p_sat
+              endif
+              dof2 = PETSC_TRUE
+              coupler%flow_bc_type(GENERAL_ENERGY_EQUATION_INDEX) = DIRICHLET_BC
+            case default
+              string = GetSubConditionName(general%temperature%itype)
+              option%io_buffer = &
+                FlowConditionUnknownItype(coupler%flow_condition, &
+                  'GENERAL_MODE two phase state temperature ',string)
+              call PrintErrMsg(option)
+          end select
+          ! air mole fraction; 3rd dof ------------------- !
+          if (associated(general%mole_fraction)) then
+            select case(general%mole_fraction%itype)
+              case(DIRICHLET_BC)
+                if (Uninitialized(gas_pressure) .or. &
+                    Uninitialized(temperature)) then
+                  option%io_buffer = 'GAS_PRESSURE or TEMPERATURE not set &
+                    &correctly in flow condition "' // &
+                    trim(flow_condition%name) // '".'
+                  call PrintErrMsg(option)
+                endif
+                call PatchGetCouplerValueFromDataset(coupler,option, &
+                            patch%grid,general%mole_fraction%dataset,iconn,xmol)
+                air_pressure = xmol * gas_pressure
+                if (general_immiscible) then
+                  air_pressure = gas_pressure - GENERAL_IMMISCIBLE_VALUE
+                endif
+                call EOSWaterSaturationPressure(temperature,p_sat,ierr)
+                if (gas_pressure - air_pressure >= p_sat) then
+                  option%io_buffer = 'MOLE_FRACTION set in flow &
+                    &condition "' // trim(flow_condition%name) // &
+                    '" results in a vapor pressure exceeding the water &
+                    &saturation pressure, which indicates that a two-phase &
+                    &state with GAS_PRESSURE and GAS_SATURATION should be used.'
+                  call PrintErrMsg(option)
+                endif
+                if (general_gas_air_mass_dof == GENERAL_AIR_PRESSURE_INDEX) then
+                  coupler%flow_aux_real_var(THREE_INTEGER,iconn) = air_pressure
+                  dof3 = PETSC_TRUE
+                  coupler%flow_bc_type(GENERAL_GAS_EQUATION_INDEX) = &
+                                                                     DIRICHLET_BC
+                else
+                  coupler%flow_aux_real_var(THREE_INTEGER,iconn) = 1.d0 - xmol
+                  dof3 = PETSC_TRUE
+                  coupler%flow_bc_type(GENERAL_GAS_EQUATION_INDEX) = &
+                                                                    DIRICHLET_BC
+                endif
+              case default
+                string = GetSubConditionName(general%mole_fraction%itype)
+                option%io_buffer = &
+                  FlowConditionUnknownItype(coupler%flow_condition, &
+                  'GENERAL_MODE air mole fraction',string)
+                call PrintErrMsg(option)
+            end select
+
+          ! precipitate saturation; 4th dof ---------------------- !
+          select case(general%precipitate_saturation%itype)
+          case(DIRICHLET_BC)
+             call PatchGetCouplerValueFromDataset(coupler,option, &
+                  patch%grid,general%precipitate_saturation%dataset,iconn,precipitate_sat)
+             coupler%flow_aux_real_var(FOUR_INTEGER,iconn) = precipitate_sat
+             dof4 = PETSC_TRUE
+             coupler%flow_bc_type(GENERAL_SOLUTE_EQUATION_INDEX) = DIRICHLET_BC
+          case default
+             string = GetSubConditionName(general%gas_saturation%itype)
+             option%io_buffer = &
+                  FlowConditionUnknownItype(coupler%flow_condition, &
+                  'GENERAL_MODE LP state precipitate saturation ',string)
+             call PrintErrMsg(option)
+        end select
+      endif
       ! ---------------------------------------------------------------------- !
         case(ANY_STATE)
           ! temperature; 2nd dof ------------------------- !

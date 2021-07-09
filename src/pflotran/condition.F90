@@ -393,12 +393,19 @@ function FlowGeneralSubConditionPtr(input,sub_condition_name,general, &
         sub_condition_ptr => FlowSubConditionCreate(ONE_INTEGER)
         general%gas_pressure => sub_condition_ptr
       endif
-    case('LIQUID_SATURATION','GAS_SATURATION','PRECIPITATE_SATURATION')
+    case('LIQUID_SATURATION','GAS_SATURATION')
       if (associated(general%gas_saturation)) then
         sub_condition_ptr => general%gas_saturation
       else
         sub_condition_ptr => FlowSubConditionCreate(ONE_INTEGER)
         general%gas_saturation => sub_condition_ptr
+      endif
+    case('PRECIPITATE_SATURATION')
+      if (associated(general%precipitate_saturation)) then
+         sub_condition_ptr => general%precipitate_saturation
+      else
+         sub_condition_ptr => FlowSubConditionCreate(ONE_INTEGER)
+         general%precipitate_saturation => sub_condition_ptr
       endif
     case('TEMPERATURE')
       if (associated(general%temperature)) then
@@ -1746,7 +1753,7 @@ subroutine FlowConditionGeneralRead(condition,input,option)
       case('LIQUID_PRESSURE','GAS_PRESSURE','LIQUID_SATURATION', &
            'GAS_SATURATION', 'TEMPERATURE','MOLE_FRACTION','RATE', &
            'LIQUID_FLUX','GAS_FLUX','ENERGY_FLUX','RELATIVE_HUMIDITY', &
-           'SOLUTE_FRACTION')
+           'SOLUTE_FRACTION','PRECIPITATE_SATURATION')
         select case(option%iflowmode)
           case(G_MODE,WF_MODE)
             sub_condition_ptr => &
@@ -1757,7 +1764,7 @@ subroutine FlowConditionGeneralRead(condition,input,option)
           case('LIQUID_PRESSURE','GAS_PRESSURE')
             internal_units = 'Pa'
           case('LIQUID_SATURATION','GAS_SATURATION','MOLE_FRACTION', &
-                'RELATIVE_HUMIDITY','SOLUTE_FRACTION')
+                'RELATIVE_HUMIDITY','SOLUTE_FRACTION','PRECIPITATE_SATURATION')
             internal_units = 'unitless'
           case('TEMPERATURE')
             internal_units = 'C'
@@ -1871,6 +1878,11 @@ subroutine FlowConditionGeneralRead(condition,input,option)
           ! two phase condition
           condition%iphase = TWO_PHASE_STATE
         else if (associated(general%liquid_pressure) .and. &
+            (associated(general%precipitate_saturation)) .and. &
+            (associated(general%mole_fraction))) then
+          ! liquid-precipitate condition
+          condition%iphase = LP_STATE
+        else if (associated(general%liquid_pressure) .and. &
                  associated(general%mole_fraction)) then
           if (((option%nflowdof == 4) .and. associated(general%solute_fraction))&
                .or. option%nflowdof == 3) then
@@ -1915,6 +1927,10 @@ subroutine FlowConditionGeneralRead(condition,input,option)
                               PETSC_TRUE)
   word = 'gas saturation'
   call FlowSubConditionVerify(option,condition,word,general%gas_saturation, &
+                              default_time_storage, &
+                              PETSC_TRUE)
+  word = 'precipitate saturation'
+  call FlowSubConditionVerify(option,condition,word,general%precipitate_saturation, &
                               default_time_storage, &
                               PETSC_TRUE)
   word = 'relative humidity'

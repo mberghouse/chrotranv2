@@ -349,6 +349,26 @@ subroutine CondControlAssignFlowInitCond(realization)
                   endif
                   xx_p(ibegin+GENERAL_ENERGY_DOF) = &
                     general%temperature%dataset%rarray(1)
+                case(P_STATE)
+                case(LP_STATE)
+                   xx_p(ibegin+GENERAL_LIQUID_PRESSURE_DOF) = &
+                        general%liquid_pressure%dataset%rarray(1)
+                   xx_p(ibegin+GENERAL_PRECIPITATE_SAT_DOF) = &
+                        general%precipitate_saturation%dataset%rarray(1)
+                   temperature = general%temperature%dataset%rarray(1)
+                   if (general_2ph_energy_dof == GENERAL_TEMPERATURE_INDEX) then
+                      xx_p(ibegin+GENERAL_ENERGY_DOF) = temperature
+                   else
+                      call EOSWaterSaturationPressure(temperature,p_sat,ierr)
+                      ! p_a = p_g - p_s(T)
+                      xx_p(ibegin+GENERAL_2PH_STATE_AIR_PRESSURE_DOF) = &
+                           general%gas_pressure%dataset%rarray(1) - &
+                           p_sat
+                   endif
+                   xx_p(ibegin+GENERAL_LIQUID_STATE_X_MOLE_DOF) = &
+                      general%mole_fraction%dataset%rarray(1)
+                case(GP_STATE)
+                case(LGP_STATE)
               end select
               cur_patch%aux%Global%auxvars(ghosted_id)%istate = &
                 initial_condition%flow_condition%iphase
