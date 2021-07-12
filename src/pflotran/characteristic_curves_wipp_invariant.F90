@@ -22,8 +22,6 @@ type, public, extends(sat_func_base_type) :: sf_WIPP_type
     procedure(calc_Pc_type), pointer :: KRPPc
     procedure(calc_Sw_type), pointer :: KRPSw
 
-    procedure(get_Sw_type) , pointer  :: KRPSw_inflection
-
     PetscInt  :: KRP                      ! KRP
     PetscInt  :: KPC                      ! KPC
     PetscReal :: Swr                      ! SWR
@@ -63,7 +61,6 @@ type, public, extends(sat_func_base_type) :: sf_WIPP_type
   contains
     procedure, public :: CapillaryPressure => SF_BRAGFLO_CapillaryPressure
     procedure, public :: Saturation        => SF_BRAGFLO_Saturation
-    procedure, public :: SetPcmax          => SF_BRAGFLO_SetPcmax
     procedure, public :: SetPermeability   => SF_BRAGFLO_SetPermeability
 end type
 
@@ -90,7 +87,7 @@ abstract interface
     PetscReal, intent(in)  :: Pc
     PetscReal, intent(out) :: Sw
   end subroutine
-  pure function get_Sw_type(this) result (Sw)
+  pure function get_Sw_type(this) result (Sw) ! TODO Presently unused
     import sf_WIPP_type
     class(sf_WIPP_type), intent(in) :: this
     PetscReal :: Sw
@@ -261,17 +258,14 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, alpha, expon, Pct_a, Pct_exp, &
   new%m_comp =  1d0 - new%m
   new%n      =  1d0 / new%m_comp
   new%n_rec  =  1d0 / new%n
-  ! Copy Pct parameters
-  ! TODO
-  ! If ignore permeability, alpha must be set
-  ! If .NOT. ignore_permeability, pct_a and pct_exp must be set
-  ! Unknown if it ever flips back and forth.
-  ! In theory, 
+
+
+  ! Set Pct model parameters
 
   new%alpha = alpha
   new%pct_a = pct_a
   new%pct_exp = pct_exp
-  new%ignore_permeability = ignore_pct
+  new%ignore_permeability = ignore_pct ! TODO determine if necessary
 
   ! Setup default Pct for test function
   if (alpha == 0d0) then 
@@ -279,17 +273,15 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, alpha, expon, Pct_a, Pct_exp, &
   else
     new%Pct = 1/alpha
   end if
-  select case(KPC)
-  case (2)
-    error = new%KPCSwj(Swj)
-  case (6) ! Linear-designated junction
-    error = new%KPCSwj(Swj)
-  end select
+  error = new%KPCSwj(Swj)
 
 end function
 
 ! **************************************************************************** !
 
+
+! TODO evaluate if fixed maximum with linear extension is necessary
+! It is much more computationally favorable to select a fixed transition point
 function SF_BRAGFLO_setPcmax(this,Pcmax) result (error)
   class(sf_WIPP_type), intent(inout) :: this
   PetscReal, intent(in) :: Pcmax
