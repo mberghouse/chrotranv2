@@ -864,16 +864,16 @@ function SaturationFunctionRead(saturation_function,input,option) &
 
   ! At end of input block, call constructors if implemented
   ! Throw errors for invalid combinations of options or parameters
+  
   if (loop_invariant) then 
     ! Use default junction saturation if not specified
     if (Slj == 0d0) Slj = Sr + 5d-2*(1d0-Sr)
     ! Call constructor
-
-    if (wipp_krp /= 0) then
+    if (wipp_krp /= 0) then ! WIPP invariants flagged by wipp_krp
       sf_swap => SFWIPPctor(wipp_krp, wipp_kpc, Sr, Srg, alpha, wipp_expon, &
                            Pcmax, wipp_pct_a, wipp_pct_exp, &
                            wipp_pct_ignore)
-    else
+    else ! Old object type is used to identify common invariants
       select type (saturation_function)
       class is (sat_func_VG_type)
         call StringtoUpper(unsat_ext)

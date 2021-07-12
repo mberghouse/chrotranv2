@@ -255,7 +255,7 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, alpha, expon, Pcmax, Pct_a, Pct_exp, &
   new%n_rec  =  1d0 / new%n
 
   ! Calculate beta, Swj, and Pcj for linear unsaturated extension to Pcmax
-  error = new%setPcmax(Pcmax)
+!  error = new%setPcmax(Pcmax)
 
   ! Copy Pct parameters
   ! TODO
