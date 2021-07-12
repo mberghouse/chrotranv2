@@ -48,6 +48,7 @@ type, public, extends(sat_func_base_type) :: sf_WIPP_type
     PetscReal :: PcmPct
 
 ! SF_WIPP_Parameters to calculate Pct
+    PetscReal :: permeability
     PetscReal :: pct_a
     PetscReal :: pct_exp
     PetscReal :: pct
@@ -62,6 +63,7 @@ type, public, extends(sat_func_base_type) :: sf_WIPP_type
     procedure, public :: CapillaryPressure => SF_BRAGFLO_CapillaryPressure
     procedure, public :: Saturation        => SF_BRAGFLO_Saturation
     procedure, public :: SetPcmax          => SF_BRAGFLO_SetPcmax
+    procedure, public :: SetPermeability   => SF_BRAGFLO_SetPermeability
 end type
 
 ! **************************************************************************** !
@@ -256,10 +258,23 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, alpha, expon, Pcmax, Pct_a, Pct_exp, &
   error = new%setPcmax(Pcmax)
 
   ! Copy Pct parameters
+  ! TODO
+  ! If ignore permeability, alpha must be set
+  ! If .NOT. ignore_permeability, pct_a and pct_exp must be set
+  ! Unknown if it ever flips back and forth.
+  ! In theory, 
+
   new%alpha = alpha
   new%pct_a = pct_a
   new%pct_exp = pct_exp
   new%ignore_permeability = ignore_pct
+
+  ! Setup default Pct
+  if (alpha == 0d0) then 
+    new%Pct = 1E6 ! Default 1 GPa for test function. 
+  else
+    new%Pct = 1/alpha
+  end if
 end function
 
 ! **************************************************************************** !
@@ -307,23 +322,27 @@ end function
 ! BRAGFLO Saturation Function Wrappers
 ! **************************************************************************** !
 
+subroutine SF_BRAGFLO_SetPermeability(this, permeability)
+  class(sf_WIPP_type)              :: this
+  PetscReal, intent(in)            :: permeability
+
+  ! TODO could do data validation, i.e. permeability > 0d0
+  if (permeability /= this%permeability) then
+    this%permeability = permeability
+    this%pct = this%pct_a * permeability ** this%pct_exp
+    ! TODO update the extension. Fast for Sj options, slow for Pcmax options
+    ! call this%set_Sj(this%Sj)
+    ! Skip the option%flow%pct_updated. This is bad practice as it is process/thread unsafe.
+    ! It would be appropriate to pass permeability to CapillaryPressure
+  end if
+end subroutine
+
 subroutine SF_BRAGFLO_CapillaryPressure(this, liquid_saturation, &
                      capillary_pressure, dpc_dsatl, option)
   class(sf_WIPP_type)           :: this
   PetscReal, intent(in)            :: liquid_saturation
   PetscReal, intent(out)           :: capillary_pressure, dpc_dsatl
   type(option_type), intent(inout) :: option
-
-  if (this%ignore_permeability) then
-    this%pct = 1d0/this%alpha
-  else
-    if (.not. option%flow%pct_updated) then
-      option%io_buffer = '!! this%pct has not been updated: &
-                         &sf_WIPP_type. STOPPING.'
-      call PrintErrMsg(option)
-    end if
-    option%flow%pct_updated = PETSC_FALSE
-  end if
 
   ! Calls the function pointer KPCPc
   ! KPCPc in turn calls KRPPc as needed
@@ -509,9 +528,8 @@ pure subroutine SFWIPPKRP1Sw(this, Pc, Sw)
   class(sf_WIPP_type), intent(in) :: this
   PetscReal, intent(in)  :: Pc
   PetscReal, intent(out) :: Sw
-  PetscReal :: Se2, Pct
+  PetscReal :: Se2
   PetscReal :: Po
-  PetscReal :: aPc_n, Se_mrtrec, Se
 
   if (Pc <= 0d0) then
     Sw = 1d0
@@ -529,16 +547,14 @@ pure subroutine SFWIPPKRP2Pc(this, Sw, Pc, dPc_dSw)
   class(sf_WIPP_type), intent(in) :: this
   PetscReal, intent(in)  :: Sw
   PetscReal, intent(out) :: Pc, dPc_dSw
-  PetscReal :: Se1, Pct
-
-  Pct = this%Pct
+  PetscReal :: Se1
 
   if (Sw <= this%Swr) then
     Pc = 0d0
     dPc_dSw = 0d0
   else
     Se1     = (Sw-this%Swr)*this%dSe1_dSw
-    Pc      = Pct*(Se1**this%lambda_nrec)
+    Pc      = this%Pct*(Se1**this%lambda_nrec)
     dPc_dSw = -this%dSe1_dSw*Pc/(this%lambda*Se1)
   end if
 end subroutine
@@ -667,7 +683,7 @@ pure subroutine SFWIPPKRP5Sw(this, Pc, Sw)
   class(sf_WIPP_type), intent(in) :: this
   PetscReal, intent(in)  :: Pc
   PetscReal, intent(out) :: Sw
-  PetscReal :: Se2, Pct
+  PetscReal :: Se2
 
   if (Pc <= 0d0) then
    Sw = 1d0
@@ -703,12 +719,12 @@ pure subroutine SFWIPPKRP8Sw(this, Pc, Sw)
   class(sf_WIPP_type), intent(in) :: this
   PetscReal, intent(in)  :: Pc
   PetscReal, intent(out) :: Sw
-  PetscReal :: Se1, Pct
+  PetscReal :: Se1
 
   if (Pc <= 0d0) then
    Sw = 1d0
   else
-    Se1 = ((Pc**this%n)/Pct + 1d0)**this%m_nrec
+    Se1 = ((Pc**this%n)/this%Pct + 1d0)**this%m_nrec
     Sw = this%Swr + this%Se1_span*Se1
   end if
 end subroutine
@@ -754,7 +770,7 @@ pure subroutine SFWIPPKRP9Sw(this, Pc, Sw)
   class(sf_WIPP_type), intent(in) :: this
   PetscReal, intent(in)  :: Pc
   PetscReal, intent(out) :: Sw
-  PetscReal :: Se9, Pct
+  PetscReal :: Se9
 
   PetscReal, parameter :: a = 3783.0145d0
   PetscReal, parameter :: b = 2.9d0

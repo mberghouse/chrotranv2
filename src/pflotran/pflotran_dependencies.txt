@@ -912,6 +912,7 @@ wipp_flow.o : characteristic_curves.o connection.o coupler.o debug.o \
               srcsink_sandbox_wipp_well.o upwind_direction.o variables.o \
               wipp.o wipp_flow_aux.o wipp_flow_common.o
 wipp_flow_aux.o : characteristic_curves.o characteristic_curves_wipp.o \
+                  characteristic_curves_wipp_invariant.o \
                   eos_gas.o eos_water.o global_aux.o material_aux.o \
                   matrix_zeroing.o option.o pflotran_constants.o utility.o \
                   variables.o wipp.o
