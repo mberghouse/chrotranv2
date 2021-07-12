@@ -107,12 +107,13 @@ public  :: SFWIPPctor
 ! Implemented BRAGFLO KPC subroutines
 private :: SFWIPPKPC1Pc , &
            SFWIPPKPC1Sw , &
-           SFWIPPKPC2Swj, &
+           SFWIPPKPC1Swj, &
            SFWIPPKPC2Pc , &
            SFWIPPKPC2Sw , &
-           SFWIPPKPC6Swj, &
+           SFWIPPKPC2Swj, &
            SFWIPPKPC6Pc , &
-           SFWIPPKPC6Sw
+           SFWIPPKPC6Sw , &
+           SFWIPPKPC6Swj
 
 ! Implemented BRAGFLO KRP Pc subroutines
 private :: SFWIPPKRP1Pc , &
@@ -189,8 +190,9 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, alpha, expon, Pct_a, Pct_exp, &
   ! If KPC is in branch table, set function pointer, otherwise flag error
   select case(KPC)
   case (1)
-    new%KPCPc => SFWIPPKPC1Pc
-    new%KPCSw => SFWIPPKPC1Sw
+    new%KPCPc  => SFWIPPKPC1Pc
+    new%KPCSw  => SFWIPPKPC1Sw
+    new%KPCSwj => SFWIPPKPC1Swj
   case (2)
     new%KPCPc  => SFWIPPKPC2Pc
     new%KPCSw  => SFWIPPKPC2Sw
@@ -259,15 +261,6 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, alpha, expon, Pct_a, Pct_exp, &
   new%m_comp =  1d0 - new%m
   new%n      =  1d0 / new%m_comp
   new%n_rec  =  1d0 / new%n
-
-  ! Calculate beta, Swj, and Pcj for linear unsaturated extension to Pcmax
-  select case(KPC)
-  case (2)
-    error = new%KPCSwj(Swj)
-  case (6) ! Linear-designated junction
-    error = new%KPCSwj(Swj)
-  end select
-
   ! Copy Pct parameters
   ! TODO
   ! If ignore permeability, alpha must be set
@@ -280,12 +273,19 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, alpha, expon, Pct_a, Pct_exp, &
   new%pct_exp = pct_exp
   new%ignore_permeability = ignore_pct
 
-  ! Setup default Pct
+  ! Setup default Pct for test function
   if (alpha == 0d0) then 
     new%Pct = 1E6 ! Default 1 GPa for test function. 
   else
     new%Pct = 1/alpha
   end if
+  select case(KPC)
+  case (2)
+    error = new%KPCSwj(Swj)
+  case (6) ! Linear-designated junction
+    error = new%KPCSwj(Swj)
+  end select
+
 end function
 
 ! **************************************************************************** !
@@ -334,19 +334,20 @@ end function
 ! **************************************************************************** !
 
 subroutine SF_BRAGFLO_SetPermeability(this, permeability)
-  class(sf_WIPP_type)              :: this
-  PetscReal, intent(in)            :: permeability
+  class(sf_WIPP_type)   :: this
+  PetscReal, intent(in) :: permeability
+  PetscInt :: error
 
   ! TODO could do data validation, i.e. permeability > 0d0
   if (permeability /= this%permeability) then
     this%permeability = permeability
     this%pct = this%pct_a * permeability ** this%pct_exp
-    ! TODO update the extension. Fast for Sj options, slow for Pcmax options
-    ! call this%set_Sj(this%Sj)
-    ! Skip the option%flow%pct_updated. This is bad practice as it is process/thread unsafe.
-    ! It would be appropriate to pass permeability to CapillaryPressure
+    ! Refresh unsaturated extension
+    error = this%KPCSwj(this%Swj)
   end if
 end subroutine
+
+! **************************************************************************** !
 
 subroutine SF_BRAGFLO_CapillaryPressure(this, liquid_saturation, &
                      capillary_pressure, dpc_dsatl, option)
@@ -368,17 +369,6 @@ subroutine SF_BRAGFLO_Saturation(this, capillary_pressure, liquid_saturation, &
   PetscReal, intent(in)            :: capillary_pressure
   PetscReal, intent(out)           :: liquid_saturation, dsat_dpres
   type(option_type), intent(inout) :: option
-
-  if (this%ignore_permeability) then
-    this%pct = 1d0/this%alpha
-  else
-    if (.not. option%flow%pct_updated) then
-      option%io_buffer = '!! this%pct has not been updated: &
-                         &sf_WIPP_type. STOPPING.'
-      call PrintErrMsg(option)
-    end if
-    option%flow%pct_updated = PETSC_FALSE
-  end if
 
   ! Calls the function pointer KPCSw
   ! KPCSw in turn calls KRPSw as needed
@@ -409,6 +399,16 @@ pure subroutine SFWIPPKPC1Sw(this, Pc, Sw)
 
   call this%KRPSw(Pc, Sw)
 end subroutine
+
+! **************************************************************************** !
+
+function SFWIPPKPC1Swj(this,Swj) result (error)
+  class (sf_WIPP_type), intent(inout) :: this
+  PetscReal, intent(in) :: Swj
+  PetscInt :: error
+
+  error = 0
+end function
 
 ! **************************************************************************** !
 
@@ -469,11 +469,11 @@ pure subroutine SFWIPPKPC6Pc(this, Sw, Pc, dPc_dSw)
   PetscReal, intent(out) :: Pc, dPc_dSw
 
   if (Sw <= this%Swj) then
+    dPc_dSw = this%dPcj_dSwj
     if (Sw <= 0d0) then
       Pc = this%Pcmax
     else
-      Pc = this%Pcmax - this%dPcj_dSwj*Sw
-      dPc_dSw = this%dPcj_dSwj
+      Pc = this%Pcmax + this%dPcj_dSwj*Sw
     end if
   else
     call this%KRPPc(Sw, Pc, dPc_dSw)
@@ -511,7 +511,7 @@ function SFWIPPKPC6Swj(this,Swj) result (error)
     error = 0
     this%Swj = Swj
     call this%KRPPc(Swj, this%Pcj, this%dPcj_dSwj)
-    this%Pcmax = this%Pcj + this%dPcj_dSwj * Swj
+    this%Pcmax = this%Pcj - this%dPcj_dSwj * Swj
   else
     error = 1
   end if
@@ -528,14 +528,12 @@ pure subroutine SFWIPPKRP1Pc(this, Sw, Pc, dPc_dSw)
   class(sf_WIPP_type), intent(in) :: this
   PetscReal, intent(in)  :: Sw
   PetscReal, intent(out) :: Pc, dPc_dSw
-  PetscReal :: Se2, Pct
-
-  Pct = this%Pct
+  PetscReal :: Se2
 
   if (Sw >= this%Swr) then
     Se2 = (Sw-this%Swr) * this%dSe2_dSw
     Se2 = MIN(Se2,1d0)
-    Pc = Pct*this%PcmPct*(Se2**this%m_nrec-1d0)**this%m_comp
+    Pc = this%Pct*this%PcmPct*(Se2**this%m_nrec-1d0)**this%m_comp
   else
     Pc = 0d0
     dPc_dSw = 0d0
@@ -653,9 +651,9 @@ pure subroutine SFWIPPKRP4Pc(this, Sw, Pc, dPc_dSw)
 !-------   original wetting phase
 ! Note, Se2 can be greater than 1d0 in this model
   if (Sw > this%Swr) then
-    Se2 = (Sw - this%Swr)*this%dSe2_dSw
-    Pc = this%Pct*(Se2**this%lambda_nrec)
-    dPc_dSw = -this%dSe2_dSw*Pc/(this%lambda*Se2)
+    Se2 = (Sw - this%Swr) * this%dSe2_dSw
+    Pc = this%Pct * Se2**this%lambda_nrec
+    dPc_dSw = -this%dSe2_dSw * Pc / (this%lambda*Se2)
   else
     Pc = 0d0
     dPc_dSw = 0d0
