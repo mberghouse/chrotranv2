@@ -871,8 +871,8 @@ function SaturationFunctionRead(saturation_function,input,option) &
     ! Call constructor
     if (wipp_krp /= 0) then ! WIPP invariants flagged by wipp_krp
       sf_swap => SFWIPPctor(wipp_krp, wipp_kpc, Sr, Srg, alpha, wipp_expon, &
-                           Pcmax, wipp_pct_a, wipp_pct_exp, &
-                           wipp_pct_ignore)
+                           wipp_pct_a, wipp_pct_exp, wipp_pct_ignore, &
+                           Pcmax, Slj)
     else ! Old object type is used to identify common invariants
       select type (saturation_function)
       class is (sat_func_VG_type)

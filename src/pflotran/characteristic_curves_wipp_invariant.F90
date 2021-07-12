@@ -15,6 +15,7 @@ implicit none
 
 type, public, extends(sat_func_base_type) :: sf_WIPP_type
   private
+    procedure(set_Swj_type), pointer :: KPCSwj
     procedure(calc_Pc_type), pointer :: KPCPc
     procedure(calc_Sw_type), pointer :: KPCSw
 
@@ -71,6 +72,12 @@ end type
 ! **************************************************************************** !
 
 abstract interface
+  function set_Swj_type(this, Swj) result (error)
+    import sf_WIPP_type
+    class(sf_WIPP_type), intent(inout) :: this
+    PetscReal, intent(in)  :: Swj
+    PetscInt :: error
+  end function
   pure subroutine calc_Pc_type(this, Sw, Pc, dPc_dSw)
     import sf_WIPP_type
     class(sf_WIPP_type), intent(in) :: this
@@ -100,8 +107,10 @@ public  :: SFWIPPctor
 ! Implemented BRAGFLO KPC subroutines
 private :: SFWIPPKPC1Pc , &
            SFWIPPKPC1Sw , &
+           SFWIPPKPC2Swj, &
            SFWIPPKPC2Pc , &
            SFWIPPKPC2Sw , &
+           SFWIPPKPC6Swj, &
            SFWIPPKPC6Pc , &
            SFWIPPKPC6Sw
 
@@ -116,7 +125,6 @@ private :: SFWIPPKRP1Pc , &
            SFWIPPKRP4Sw , &
            SFWIPPKRP5Pc , &
            SFWIPPKRP5Sw , &
-           SFWIPPKRP8Pc , &
            SFWIPPKRP8Sw , &
            SFWIPPKRP9Pc , &
            SFWIPPKRP9Sw , &
@@ -131,11 +139,11 @@ contains
 ! BRAGFLO Saturation Function Constructor
 ! **************************************************************************** !
 
-function SFWIPPctor(KRP, KPC, Swr, Sgr, alpha, expon, Pcmax, Pct_a, Pct_exp, &
-                    ignore_pct) result (new)
+function SFWIPPctor(KRP, KPC, Swr, Sgr, alpha, expon, Pct_a, Pct_exp, &
+                    ignore_pct, Pcmax, Swj) result (new)
   class(sf_WIPP_type), pointer :: new
   PetscInt, intent(in)  :: KRP, KPC
-  PetscReal, intent(in) :: Swr, Sgr, alpha, expon, Pcmax, Pct_a, Pct_exp
+  PetscReal, intent(in) :: Swr, Sgr, alpha, expon, Pct_a, Pct_exp, Swj, Pcmax
   PetscBool, intent(in) :: ignore_pct
   PetscInt :: error
 
@@ -184,11 +192,13 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, alpha, expon, Pcmax, Pct_a, Pct_exp, &
     new%KPCPc => SFWIPPKPC1Pc
     new%KPCSw => SFWIPPKPC1Sw
   case (2)
-    new%KPCPc => SFWIPPKPC2Pc
-    new%KPCSw => SFWIPPKPC2Sw
+    new%KPCPc  => SFWIPPKPC2Pc
+    new%KPCSw  => SFWIPPKPC2Sw
+    new%KPCSwj => SFWIPPKPC2Swj
   case (6)
-    new%KPCPc => SFWIPPKPC6Pc
-    new%KPCSw => SFWIPPKPC6Sw
+    new%KPCPc  => SFWIPPKPC6Pc
+    new%KPCSw  => SFWIPPKPC6Sw
+    new%KPCSwj => SFWIPPKPC6Swj
   case default
                                         error = error + 2
   end select
@@ -208,9 +218,6 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, alpha, expon, Pcmax, Pct_a, Pct_exp, &
     ! Other KRP functions do not use lambda or m
   end select
 
-  ! Pcmax must more particularly be above Pct
-  if (Pcmax < 0d0)                      error = error + 32
-
   ! Abort if errors caught in data validation
   if (error /= 0) then
     ! Potentally write which parameters were invalid to error stream
@@ -222,7 +229,6 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, alpha, expon, Pcmax, Pct_a, Pct_exp, &
   ! Assign canonical parameters
   new%Swr = Swr
   new%Sgr = Sgr
-  new%Pcmax = Pcmax
   
   ! Depending on the KRP option, canonical expon is either VG m or BC lambda
   select case(KRP)
@@ -255,7 +261,12 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, alpha, expon, Pcmax, Pct_a, Pct_exp, &
   new%n_rec  =  1d0 / new%n
 
   ! Calculate beta, Swj, and Pcj for linear unsaturated extension to Pcmax
-!  error = new%setPcmax(Pcmax)
+  select case(KPC)
+  case (2)
+    error = new%KPCSwj(Swj)
+  case (6) ! Linear-designated junction
+    error = new%KPCSwj(Swj)
+  end select
 
   ! Copy Pct parameters
   ! TODO
@@ -420,7 +431,7 @@ end subroutine
 
 pure subroutine SFWIPPKPC2Sw(this, Pc, Sw)
   ! Apply maximum Pc below Swj
-  ! Apply KRP     Pc above
+  ! Apply KRP     Pc abovecall this%KRPPc(Swj, this%Pcj, this%dPcj_dSwj)
   class(sf_WIPP_type), intent(in) :: this
   PetscReal, intent(in)  :: Pc
   PetscReal, intent(out) :: Sw
@@ -434,29 +445,24 @@ end subroutine
 
 ! **************************************************************************** !
 
-pure subroutine SFWIPPKPC5Pc(this, Sw, Pc, dPc_dSw)
-  ! Apply maximum Pc below Swr
-  ! Apply linear  Pc below Sgr_comp
-  ! Apply KRP     Pc above
-  class(sf_WIPP_type), intent(in) :: this
-  PetscReal, intent(in)  :: Sw
-  PetscReal, intent(out) :: Pc, dPc_dSw
+function SFWIPPKPC2Swj(this,Swj) result (error)
+  class (sf_WIPP_type), intent(inout) :: this
+  PetscReal, intent(in) :: Swj
+  PetscInt :: error
 
-  if (Sw < this%Swr) then 
-    Pc = this%Pcmax
-    dPc_dSw = 0d0
-  else if (Sw < this%Sgr_comp) then
-    dPc_dSw = (this%Pct - this%Pcmax) * this%dSe2_dSw
-    Pc = this%Pcmax + dPc_dSw*(Sw - this%Swr)
+  if (Swj > this%Swr) then
+    error = 0
+    this%Swj = Swj
+    call this%KRPPc(Swj,this%Pcmax,this%dPcj_dSwj)
   else
-    call this%KRPPc(Sw, Pc, dPc_dSw)
+    error = 1
   end if
-end subroutine
+end function
 
 ! **************************************************************************** !
 
 pure subroutine SFWIPPKPC6Pc(this, Sw, Pc, dPc_dSw)
-  ! Apply linear Pc below Sjr
+  ! Apply linear Pc below Swr
   ! Apply KRP    Pc above
   class(sf_WIPP_type), intent(in) :: this
   PetscReal, intent(in)  :: Sw
@@ -493,6 +499,23 @@ pure subroutine SFWIPPKPC6Sw(this, Pc, Sw)
     call this%KRPSw(Pc, Sw)
   end if
 end subroutine
+
+! **************************************************************************** !
+
+function SFWIPPKPC6Swj(this,Swj) result (error)
+  class(sf_WIPP_type), intent(inout) :: this
+  PetscReal, intent(in) :: Swj
+  PetscInt :: error
+
+  if (Swj > this%Swr) then
+    error = 0
+    this%Swj = Swj
+    call this%KRPPc(Swj, this%Pcj, this%dPcj_dSwj)
+    this%Pcmax = this%Pcj + this%dPcj_dSwj * Swj
+  else
+    error = 1
+  end if
+end function
 
 ! **************************************************************************** !
 ! BRAGFLO KRP Subroutines
