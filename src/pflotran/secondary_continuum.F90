@@ -701,6 +701,7 @@ subroutine SecondaryRTResJacMulti(sec_transport_vars,auxvar, &
   use Reaction_Aux_module
   use Reactive_Transport_Aux_module
   use Material_Aux_class
+  use Reaction_Gas_module
 
   implicit none
   
@@ -845,6 +846,9 @@ subroutine SecondaryRTResJacMulti(sec_transport_vars,auxvar, &
        call RTotalSorb(rt_auxvar,global_auxvar,material_auxvar,reaction, &
                        reaction%isotherm%multicontinuum_isotherm_rxn,option)
     endif
+    if (reaction%gas%nactive_gas > 0) then
+      call RTotalGas(rt_auxvar,global_auxvar,reaction,option)
+    endif
     total_upd(:,i) = rt_auxvar%total(:,1)
     dtotal(:,:,i) = rt_auxvar%aqueous%dtotal(:,:,1)
     if (reaction%neqsorb > 0) then 
@@ -982,6 +986,9 @@ subroutine SecondaryRTResJacMulti(sec_transport_vars,auxvar, &
                       option)
     rt_auxvar%pri_molal = conc_upd(:,i) ! in mol/kg
     call RTotalAqueous(rt_auxvar,global_auxvar,reaction,option)
+    if (reaction%gas%nactive_gas > 0) then
+      call RTotalGas(rt_auxvar,global_auxvar,reaction,option)
+    endif
     material_auxvar%volume = vol(i)
     call RReaction(res_react,jac_react,PETSC_TRUE, &
                    rt_auxvar,global_auxvar,material_auxvar,reaction,option)                     
@@ -1139,6 +1146,9 @@ subroutine SecondaryRTResJacMulti(sec_transport_vars,auxvar, &
                     option)
   rt_auxvar%pri_molal = conc_current_M ! in mol/kg
   call RTotalAqueous(rt_auxvar,global_auxvar,reaction,option)
+  if (reaction%gas%nactive_gas > 0) then
+    call RTotalGas(rt_auxvar,global_auxvar,reaction,option)
+  endif
   total_current_M = rt_auxvar%total(:,1)
   if (reaction%neqcplx > 0) sec_sec_molal_M = rt_auxvar%sec_molal
   call RTAuxVarStrip(rt_auxvar)
@@ -1254,6 +1264,9 @@ subroutine SecondaryRTResJacMulti(sec_transport_vars,auxvar, &
       call RTAuxVarCopy(rt_auxvar,auxvar,option)
       rt_auxvar%pri_molal = conc_prim_pert ! in mol/kg
       call RTotalAqueous(rt_auxvar,global_auxvar,reaction,option)
+      if (reaction%gas%nactive_gas > 0) then
+        call RTotalGas(rt_auxvar,global_auxvar,reaction,option)
+      endif
       total_primary_node_pert = rt_auxvar%total(:,1)
                           
 !================ Calculate the secondary residual =============================        
@@ -1353,6 +1366,9 @@ subroutine SecondaryRTResJacMulti(sec_transport_vars,auxvar, &
                         option)
       rt_auxvar%pri_molal = conc_current_M_pert ! in mol/kg
       call RTotalAqueous(rt_auxvar,global_auxvar,reaction,option)
+      if (reaction%gas%nactive_gas > 0) then
+        call RTotalGas(rt_auxvar,global_auxvar,reaction,option)
+      endif
       total_current_M_pert = rt_auxvar%total(:,1)
              
       ! Calculate the coupling term
@@ -1485,6 +1501,7 @@ subroutine SecondaryRTUpdateEquilState(sec_transport_vars,global_auxvars, &
   use Reaction_module
   use Global_Aux_module
   use Material_Aux_class
+  use Reaction_Gas_module
  
   implicit none
   
@@ -1519,6 +1536,9 @@ subroutine SecondaryRTUpdateEquilState(sec_transport_vars,global_auxvars, &
       call RTotalSorb(sec_transport_vars%sec_rt_auxvar(i),global_auxvars, &
                       material_auxvar,reaction, &
                       reaction%isotherm%multicontinuum_isotherm_rxn,option)
+    endif
+    if (reaction%gas%nactive_gas > 0) then
+      call RTotalGas(sec_transport_vars%sec_rt_auxvar(i),global_auxvars,reaction,option)
     endif
   enddo
  
@@ -1616,6 +1636,7 @@ subroutine SecondaryRTCheckResidual(sec_transport_vars,auxvar, &
   use Reaction_Aux_module
   use Reactive_Transport_Aux_module
   use Material_Aux_class
+  use Reaction_Gas_module
 
   implicit none
   
@@ -1691,6 +1712,10 @@ subroutine SecondaryRTCheckResidual(sec_transport_vars,auxvar, &
       call RTotalSorb(rt_auxvar,global_auxvar,material_auxvar,reaction, &
                       reaction%isotherm%multicontinuum_isotherm_rxn,option)
     endif
+    if (reaction%gas%nactive_gas > 0) then
+      call RTotalGas(rt_auxvar,global_auxvar,reaction,option)
+    endif
+
     total_upd(:,i) = rt_auxvar%total(:,1)
     if (reaction%neqsorb > 0) then 
       total_sorb_upd(:,i) = rt_auxvar%total_sorb_eq(:)
@@ -1746,6 +1771,9 @@ subroutine SecondaryRTCheckResidual(sec_transport_vars,auxvar, &
                       option)
     rt_auxvar%pri_molal = conc_upd(:,i) ! in mol/kg
     call RTotalAqueous(rt_auxvar,global_auxvar,reaction,option)
+    if (reaction%gas%nactive_gas > 0) then
+      call RTotalGas(rt_auxvar,global_auxvar,reaction,option)
+    endif
     material_auxvar%volume = vol(i)
     call RReaction(res_react,jac_react,PETSC_FALSE, &
                    rt_auxvar,global_auxvar,material_auxvar,reaction,option)                     
