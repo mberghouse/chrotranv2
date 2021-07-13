@@ -292,33 +292,33 @@ function SF_BRAGFLO_setPcmax(this,Pcmax) result (error)
   PetscReal :: Swa, Swb, Pce, dPcj_dSwj
 
   ! Set lower saturation bracket set where P(Sa) = Pcmax
-  call this%KRPSw(Pcmax, Swa)
+!  call this%KRPSw(Pcmax, Swa)
 
   ! Set upper saturation limit (Sb) to be the the inflection point
-  Swb = this%KRPSw_inflection()
+!  Swb = this%KRPSw_inflection()
 
   ! Confirm Pcmax is above minimum extrapolating from inflection point
   call this%KRPPc(Swb, Pce, dPcj_dSwj)
-  if (Pcmax > Pce - dPcj_dSwj*Swb) then
+!  if (Pcmax > Pce - dPcj_dSwj*Swb) then
     error = 0
-    this%Pcmax = Pcmax
+!    this%Pcmax = Pcmax
 
-    do while (Swb-Swa > epsilon(this%Swj)) ! Tolerance interval epsilon
-      this%Swj = (Swa+Swb)/2d0             ! Bisect bracket
-      call this%KRPPc(this%Swj, this%Pcj, this%dPcj_dSwj)
+!    do while (Swb-Swa > epsilon(this%Swj)) ! Tolerance interval epsilon
+!      this%Swj = (Swa+Swb)/2d0             ! Bisect bracket
+!      call this%KRPPc(this%Swj, this%Pcj, this%dPcj_dSwj)
 
       ! Residual error = Pcmax + dPj_dSj * Sj - Pf(Sj)
-      Pce = Pcmax + this%dPcj_dSwj*this%Swj - this%Pcj
-      if (Pce < 0d0) then ! Sde a Error is negative below inflection point
-        Swa = this%Swj
-      else
-        Swb = this%Swj
-      end if
-    end do
-    this%dSwj_dPcj = 1d0 / this%dPcj_dSwj
-  else
-    error = 1
-  end if
+!      Pce = Pcmax + this%dPcj_dSwj*this%Swj - this%Pcj
+!      if (Pce < 0d0) then ! Sde a Error is negative below inflection point
+!        Swa = this%Swj
+!      else
+!        Swb = this%Swj
+!      end if
+!    end do
+!    this%dSwj_dPcj = 1d0 / this%dPcj_dSwj
+!  else
+!    error = 1
+!  end if
 end function
 
 ! **************************************************************************** !
