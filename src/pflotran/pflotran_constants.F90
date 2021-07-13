@@ -56,7 +56,8 @@ module PFLOTRAN_Constants_module
 
   ! formula weights
   PetscReal, parameter, public :: FMWNACL = 58.44277d0
-  PetscReal, parameter, public :: FMWH2O = 18.01534d0  ! kg/kmol h2o
+!geh  PetscReal, parameter, public :: FMWH2O = 18.01534d0  ! kg/kmol h2o
+  PetscReal, parameter, public :: FMWH2O = 18.015d0  ! kg/kmol h2o
   PetscReal, parameter, public :: FMWCO2 = 44.0098d0
   PetscReal, parameter, public :: FMWAIR = 28.96d0
 
@@ -64,7 +65,8 @@ module PFLOTRAN_Constants_module
   PetscReal, parameter, public :: DAYS_PER_YEAR = 365.d0
 !geh: for bragflo year
 !  PetscReal, parameter, public :: DAYS_PER_YEAR = 365.24224537d0
-  PetscReal, parameter, public :: H2O_CRITICAL_TEMPERATURE = 647.3d0  ! K
+!geh  PetscReal, parameter, public :: H2O_CRITICAL_TEMPERATURE = 647.3d0  ! K
+  PetscReal, parameter, public :: H2O_CRITICAL_TEMPERATURE = 647.096d0  ! K
 #if defined(MATCH_TOUGH2)
   PetscReal, parameter, public :: H2O_CRITICAL_PRESSURE = 22.12d6 ! Pa
 #else
