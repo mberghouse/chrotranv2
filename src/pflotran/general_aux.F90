@@ -2154,17 +2154,17 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
 
   ! Liquid phase thermodynamic properties
   ! must use cell_pressure as the pressure, not %pres(lid)
-  if (.not.option%flow%density_depends_on_salinity) then
-    if (associated(gen_auxvar%d)) then
-      call EOSWaterDensity(gen_auxvar%temp,cell_pressure, &
-                           gen_auxvar%den_kg(lid),gen_auxvar%den(lid), &
-                           gen_auxvar%d%denl_pl,gen_auxvar%d%denl_T,ierr)
-    else
-      call EOSWaterDensity(gen_auxvar%temp,cell_pressure, &
-                           gen_auxvar%den_kg(lid),gen_auxvar%den(lid),ierr)
-    endif
-  else
-    liq_comp(:) = gen_auxvar%xmol(:,lid)
+  ! if (.not.option%flow%density_depends_on_salinity) then
+  !   if (associated(gen_auxvar%d)) then
+  !     call EOSWaterDensity(gen_auxvar%temp,cell_pressure, &
+  !                          gen_auxvar%den_kg(lid),gen_auxvar%den(lid), &
+  !                          gen_auxvar%d%denl_pl,gen_auxvar%d%denl_T,ierr)
+  !   else
+  !     call EOSWaterDensity(gen_auxvar%temp,cell_pressure, &
+  !                          gen_auxvar%den_kg(lid),gen_auxvar%den(lid),ierr)
+  !   endif
+  ! else
+    liq_comp(:) = gen_auxvar%xmol(sid,lid)
     if (associated(gen_auxvar%d)) then
       call EOSWaterDensityExt(gen_auxvar%temp,cell_pressure,liq_comp, &
                               gen_auxvar%den_kg(lid),gen_auxvar%den(lid), &
@@ -2173,7 +2173,7 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
       call EOSWaterDensityExt(gen_auxvar%temp,cell_pressure,liq_comp, &
                               gen_auxvar%den_kg(lid),gen_auxvar%den(lid),ierr)
     endif
-  endif
+  ! endif
   if (associated(gen_auxvar%d)) then
     call EOSWaterEnthalpy(gen_auxvar%temp,cell_pressure,hw,hw_dp,hw_dT,ierr)
     one_over_dw = 1.d0/gen_auxvar%den(lid)

@@ -1882,6 +1882,12 @@ subroutine FlowConditionGeneralRead(condition,input,option)
             (associated(general%mole_fraction))) then
           ! liquid-precipitate condition
           condition%iphase = LP_STATE
+        else if ((associated(general%liquid_pressure) .or. &
+                 associated(general%gas_pressure)) .and. &
+                associated(general%gas_saturation) .and. &
+                associated(general%precipitate_saturation)) then
+          ! liquid-gas-precipitate condition
+          condition%iphase = LGP_STATE
         else if (associated(general%liquid_pressure) .and. &
                  associated(general%mole_fraction)) then
           if (((option%nflowdof == 4) .and. associated(general%solute_fraction))&

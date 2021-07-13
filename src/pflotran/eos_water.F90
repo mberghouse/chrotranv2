@@ -3856,7 +3856,7 @@ subroutine EOSWaterDensitySparrow(T,P, aux, &
   PetscInt :: wid = 1
   PetscInt :: acid = 2
   PetscInt :: lid = 1
-  PetscInt :: sid = 4
+  PetscInt :: sid = 3
 
   PetscReal :: avg_molar_mass
   PetscReal :: ws
@@ -3864,6 +3864,8 @@ subroutine EOSWaterDensitySparrow(T,P, aux, &
 
   avg_molar_mass = aux(acid)*FMWAIR+aux(wid)*FMWH2O+aux(sid)*FMWNACL
   ws = aux(sid)*FMWNACL/avg_molar_mass
+  !avg_molar_mass = aux(1)*FMWNACL+(1-aux(1))*FMWH2O
+  !ws = aux(1)*FMWNACL/avg_molar_mass
 
   A = (1.001+ws*(0.7666+ws*(-0.0149+ws*(0.2663+ws*0.8845))))*1.d3
   B = -0.0214+ws*(-3.496+ws*(10.02+ws*(-6.56+ws*(-31.37))))
@@ -3872,7 +3874,7 @@ subroutine EOSWaterDensitySparrow(T,P, aux, &
   E = (-0.0276+ws*(0.2978+ws*(-2.017+ws*(6.345+ws*(-3.914)))))*1.d-6
 
   dw = A+T*(B+T*(C+T*(D+E*T))) !kg/m^3
-
+  dwmol = dw/FMWH2O ! kmol/m^3 
 
 end subroutine EOSWaterDensitySparrow
 
@@ -3941,7 +3943,7 @@ subroutine EOSWaterEnthalpySparrow(T,P,aux,calculate_derivatives,hw,hwp,&
   PetscInt :: wid = 1
   PetscInt :: acid = 2
   PetscInt :: lid = 1
-  PetscInt :: sid = 4
+  PetscInt :: sid = 3
 
   PetscReal :: ws
   PetscReal :: avg_molar_mass !g/mol

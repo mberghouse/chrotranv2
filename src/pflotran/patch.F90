@@ -1526,6 +1526,9 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
     case(LP_STATE)
       coupler%flow_aux_int_var(GENERAL_STATE_INDEX,1:num_connections) = &
         LP_STATE
+    case(LGP_STATE)
+      coupler%flow_aux_int_var(GENERAL_STATE_INDEX,1:num_connections) = &
+        LGP_STATE
     case(LIQUID_STATE)
       coupler%flow_aux_int_var(GENERAL_STATE_INDEX,1:num_connections) = &
         LIQUID_STATE
@@ -1553,6 +1556,8 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                 string = 'two phase state'
               case(LP_STATE)
                 string = 'liquid-precipitate state'
+              case(LGP_STATE)
+                string = 'liquid-gas-precipitate state'
               case(ANY_STATE)
                 string = 'any phase state'
             end select
@@ -1954,6 +1959,78 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
         end select
       endif
       ! ---------------------------------------------------------------------- !
+      case(LGP_STATE)
+        ! gas pressure; 1st dof ------------------------ !
+        select case(general%gas_pressure%itype)
+        case(DIRICHLET_BC)
+           call PatchGetCouplerValueFromDataset(coupler,option, &
+                patch%grid,general%gas_pressure%dataset,iconn,gas_pressure)
+           coupler%flow_aux_real_var(ONE_INTEGER,iconn) = gas_pressure
+           dof1 = PETSC_TRUE
+           coupler%flow_bc_type(GENERAL_LIQUID_EQUATION_INDEX) = DIRICHLET_BC
+        case default
+           string = GetSubConditionName(general%gas_pressure%itype)
+           option%io_buffer = &
+                FlowConditionUnknownItype(coupler%flow_condition, &
+                'GENERAL_MODE two phase state gas pressure ',string)
+           call PrintErrMsg(option)
+        end select
+        ! temperature; 2nd dof ------------------------- !
+        select case(general%temperature%itype)
+          case(DIRICHLET_BC)
+            call PatchGetCouplerValueFromDataset(coupler,option, &
+                     patch%grid,general%temperature%dataset,iconn,temperature)
+            if (general_2ph_energy_dof == GENERAL_TEMPERATURE_INDEX) then
+              coupler%flow_aux_real_var(TWO_INTEGER,iconn) = temperature
+            else
+              call EOSWaterSaturationPressure(temperature,p_sat,ierr)
+              call PatchGetCouplerValueFromDataset(coupler,option, &
+                   patch%grid,general%gas_pressure%dataset,iconn,gas_pressure)
+              ! should it still be index = 2 here below?
+              coupler%flow_aux_real_var(TWO_INTEGER,iconn) = &
+                                                            gas_pressure-p_sat
+            endif
+            dof2 = PETSC_TRUE
+            coupler%flow_bc_type(GENERAL_ENERGY_EQUATION_INDEX) = DIRICHLET_BC
+          case default
+            string = GetSubConditionName(general%temperature%itype)
+            option%io_buffer = &
+              FlowConditionUnknownItype(coupler%flow_condition, &
+                'GENERAL_MODE two phase state temperature ',string)
+            call PrintErrMsg(option)
+        end select
+        ! gas saturation; 3rd dof ---------------------- !
+        select case(general%gas_saturation%itype)
+        case(DIRICHLET_BC)
+           call PatchGetCouplerValueFromDataset(coupler,option, &
+                patch%grid,general%gas_saturation%dataset,iconn,gas_sat)
+           coupler%flow_aux_real_var(THREE_INTEGER,iconn) = gas_sat
+           dof3 = PETSC_TRUE
+           coupler%flow_bc_type(GENERAL_GAS_EQUATION_INDEX) = DIRICHLET_BC
+        case default
+           string = GetSubConditionName(general%gas_saturation%itype)
+           option%io_buffer = &
+                FlowConditionUnknownItype(coupler%flow_condition, &
+                'GENERAL_MODE two phase state gas saturation ',string)
+           call PrintErrMsg(option)
+        end select
+        ! precipitate saturation; 4th dof ---------------------- !
+        select case(general%precipitate_saturation%itype)
+        case(DIRICHLET_BC)
+           call PatchGetCouplerValueFromDataset(coupler,option, &
+                patch%grid,general%precipitate_saturation%dataset,iconn,precipitate_sat)
+           coupler%flow_aux_real_var(FOUR_INTEGER,iconn) = precipitate_sat
+           dof4 = PETSC_TRUE
+           coupler%flow_bc_type(GENERAL_SOLUTE_EQUATION_INDEX) = DIRICHLET_BC
+        case default
+           string = GetSubConditionName(general%gas_saturation%itype)
+           option%io_buffer = &
+                FlowConditionUnknownItype(coupler%flow_condition, &
+                'GENERAL_MODE LP state precipitate saturation ',string)
+           call PrintErrMsg(option)
+         end select
+ 
+      ! ---------------------------------------------------------------------- !
         case(ANY_STATE)
           ! temperature; 2nd dof ------------------------- !
           if (associated(general%temperature)) then
@@ -2095,6 +2172,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
         call DatasetUnknownClass(selector,option, &
                                  'PatchUpdateCouplerAuxVarsG')
     end select
+    if (option%nflowdof == 4) dof4 = PETSC_TRUE
   endif
 
   if (associated(general%rate)) then
