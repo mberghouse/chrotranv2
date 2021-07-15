@@ -2539,7 +2539,18 @@ subroutine OutputMassBalance(realization_base)
           string = 'Region ' // trim(cur_mbr%region_name) // ' Water Mass'
           call OutputWriteToHeader(fid,string,'kg','',icol)
           if (option%ntrandof > 0) then
-            string = 'Region ' // trim(cur_mbr%region_name) // ' Total Mass'
+            do i=1, reaction%naqcomp
+              if (reaction%primary_spec_region_print(i)) then  
+                 string = 'Region ' // trim(cur_mbr%region_name) // ' ' // &
+                      trim(reaction%primary_species_names(i)) // ' Total Mass'
+                 if (reaction%print_total_mass_kg) then                
+                   call OutputWriteToHeader(fid,string,'kg','',icol)
+                 else
+                   call OutputWriteToHeader(fid,string,'mol','',icol)
+                endif
+              endif
+            enddo
+            string = 'Region ' // trim(cur_mbr%region_name) // ' Total Mass'                 
             if (reaction%print_total_mass_kg) then                
               call OutputWriteToHeader(fid,string,'kg','',icol)
             else
@@ -3035,9 +3046,15 @@ subroutine OutputMassBalance(realization_base)
                                      global_water_mass)
       write(fid,110,advance="no") global_water_mass
       if (option%ntrandof > 0) then
-        call PatchGetCompMassInRegion(cur_mbr%region_cell_ids, &
-             cur_mbr%num_cells,patch,option,global_total_mass)
-        write(fid,110,advance="no") global_total_mass
+         do icomp = 1, reaction%naqcomp
+            if (reaction%primary_spec_region_print(icomp)) then
+              call PatchGetCompMassInRegion(cur_mbr%region_cell_ids, &
+                  cur_mbr%num_cells,patch,option,icomp,global_total_mass)
+ !       call PatchGetCompMassInRegion(cur_mbr%region_cell_ids, &
+ !            cur_mbr%num_cells,patch,option,-999,global_total_mass)
+              write(fid,110,advance="no") global_total_mass
+            endif
+         enddo
       endif
       cur_mbr => cur_mbr%next
     enddo

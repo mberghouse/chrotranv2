@@ -3278,6 +3278,57 @@ subroutine ReactionReadOutput(reaction,input,option)
           endif
           cur_srfcplx_rxn => cur_srfcplx_rxn%next
         enddo
+      case ('TOTAL_MASS_REGION')        
+        do
+  
+         call InputReadPflotranString(input,option)
+         if (InputError(input)) exit
+         if (InputCheckExit(input,option)) exit
+
+          call InputReadWord(input,option,word,PETSC_TRUE) 
+         call InputErrorMsg(input,option,'keyword','CHEMISTRY,OUTPUT,TOTAL_MASS_REGION')
+         cur_aq_spec => reaction%primary_species_list
+         found = PETSC_FALSE
+         name = word
+         do
+            if (.not.associated(cur_aq_spec)) exit
+                        if (StringCompare(name,cur_aq_spec%name,MAXWORDLENGTH)) then
+              cur_aq_spec%region_print_me = PETSC_TRUE
+              found = PETSC_TRUE
+              exit
+           endif
+            cur_aq_spec => cur_aq_spec%next
+         enddo
+                 if (.not.found) then
+          option%io_buffer = 'CHEMISTRY,OUTPUT,TOTAL_MASS_REGION species name: '//trim(name)// &
+                             ' not found among chemical species'
+          call PrintErrMsg(option)
+       endif
+       enddo
+      !   word = name 
+!        do
+!          call InputReadWord(input,option,name,PETSC_TRUE)
+!          call InputErrorMsg(input,option,'keyword',string)
+!          found = PETSC_FALSE
+          ! primary aqueous species
+!        print *, name
+     !   if (.not.found) then
+!          cur_aq_spec => reaction%primary_species_list
+       !   do
+!            if (.not.associated(cur_aq_spec)) exit
+!            if (StringCompare(name,cur_aq_spec%name,MAXWORDLENGTH)) then
+!              cur_aq_spec%region_print_me = PETSC_TRUE
+!              found = PETSC_TRUE
+!              exit
+!            endif
+!            cur_aq_spec => cur_aq_spec%next
+!          enddo
+!        endif   
+!        if (.not.found) then
+!          option%io_buffer = 'CHEMISTRY,OUTPUT,TOTAL_MASS_REGION species name: '//trim(name)// &
+!                             ' not found among chemical species'
+!          call PrintErrMsg(option)
+!        endif
       case default        
         found = PETSC_FALSE
         ! primary aqueous species

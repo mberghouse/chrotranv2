@@ -8711,7 +8711,7 @@ end subroutine PatchCouplerInputRecord
 ! **************************************************************************** !
 
 subroutine PatchGetCompMassInRegion(cell_ids,num_cells,patch,option, &
-                                    global_total_mass)
+                                    species_index,global_total_mass)
   !
   ! Calculates the total mass (aqueous, sorbed, and precipitated) in a region
   ! in units of kg. [modified to kg from mol by Heeho]
@@ -8729,7 +8729,7 @@ subroutine PatchGetCompMassInRegion(cell_ids,num_cells,patch,option, &
   implicit none
 
   PetscInt, pointer :: cell_ids(:)
-  PetscInt :: num_cells
+  PetscInt :: num_cells, species_index
   type(patch_type), pointer :: patch
   type(option_type), pointer :: option
   PetscReal :: global_total_mass  ! [mol]
@@ -8765,6 +8765,11 @@ subroutine PatchGetCompMassInRegion(cell_ids,num_cells,patch,option, &
                material_auxvars(ghosted_id)%volume               ! [m^3-bulk]
     m3_bulk = material_auxvars(ghosted_id)%volume                ! [m^3-bulk]
     ! Loop through aqueous and sorbed species:
+    if (species_index > 0) then
+       local_total_mass = local_total_mass + rt_auxvars(ghosted_id)%total(species_index,LIQUID_PHASE) * &
+            m3_water * 1.0d3
+    
+    else  
     do j = 1,reaction%ncomp
       aq_species_mass = 0.d0
       sorb_species_mass = 0.d0
@@ -8801,6 +8806,7 @@ subroutine PatchGetCompMassInRegion(cell_ids,num_cells,patch,option, &
       endif
       local_total_mass = local_total_mass + ppt_species_mass
     enddo
+    endif
   enddo ! Cell loop
 
   ! Sum the local_total_mass across all processes that own the region:

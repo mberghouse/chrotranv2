@@ -1623,6 +1623,9 @@ subroutine BasisInit(reaction,option)
   allocate(reaction%primary_species_print(reaction%naqcomp))
   reaction%primary_species_print = PETSC_FALSE
 
+  allocate(reaction%primary_spec_region_print(reaction%naqcomp))
+  reaction%primary_spec_region_print = PETSC_FALSE
+
   allocate(reaction%primary_spec_Z(reaction%naqcomp))
   reaction%primary_spec_Z = 0.d0
 
@@ -1649,7 +1652,8 @@ subroutine BasisInit(reaction,option)
     reaction%primary_spec_molar_wt(ispec) = cur_pri_aq_spec%molar_weight
     reaction%primary_spec_a0(ispec) = cur_pri_aq_spec%a0
     reaction%primary_species_print(ispec) = cur_pri_aq_spec%print_me .or. &
-                                            reaction%print_all_primary_species
+                                reaction%print_all_primary_species
+    reaction%primary_spec_region_print(ispec) = cur_pri_aq_spec%region_print_me
     reaction%kd_print(ispec) = (cur_pri_aq_spec%print_me .or. &
                                 reaction%print_all_primary_species) .and. &
                                 reaction%print_kd
