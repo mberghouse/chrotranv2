@@ -107,7 +107,6 @@ subroutine GeneralAccumulation(gen_auxvar,global_auxvar,material_auxvar, &
       Res(icomp) = Res(icomp) + gen_auxvar%sat(iphase) * &
                                 gen_auxvar%den(iphase) * &
                                 gen_auxvar%xmol(icomp,iphase)
-
 #ifdef DEBUG_GENERAL
       endif
 #endif
@@ -119,6 +118,12 @@ subroutine GeneralAccumulation(gen_auxvar,global_auxvar,material_auxvar, &
   !                 vol[m^3 bulk] / dt[sec]
   Res(1:option%nflowspec) = Res(1:option%nflowspec) * &
                             porosity * volume_over_dt
+  if (general_soluble_matrix) then
+    Res(option%solute_id) = Res(option%solute_id) + (1.d0 - porosity) * &
+                            material_auxvar%soil_particle_density * &
+                            volume_over_dt
+    ! mass of salt in the solid phase
+  endif
 
   do iphase = 1, option%nphase
     ! Res[MJ/m^3 void] = sat[m^3 phase/m^3 void] *

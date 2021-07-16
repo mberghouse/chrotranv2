@@ -1412,7 +1412,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
   type(flow_general_condition_type), pointer :: general
   PetscBool :: update
   PetscBool :: dof1, dof2, dof3, dof4
-  PetscReal :: temperature, p_sat, p_cap, s_liq, xmol, xmol2
+  PetscReal :: temperature, p_sat, p_cap, s_liq, xmol, xmol2, por
   PetscReal :: relative_humidity
   PetscReal :: gas_sat, hyd_sat, air_pressure, gas_pressure, liq_pressure, &
                precipitate_sat
@@ -1461,6 +1461,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
     if (option%nflowdof == 4) then
       coupler%flow_aux_mapping(GENERAL_SOLUTE_INDEX) = 4
       coupler%flow_aux_mapping(GENERAL_PRECIPITATE_SAT_INDEX) = 4
+      coupler%flow_aux_mapping(GENERAL_POROSITY_INDEX) = 4
     endif
   endif
   
@@ -1717,7 +1718,24 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                   'GENERAL_MODE liquid state mole fraction ',string)
                 call PrintErrMsg(option)
             end select
-            if (option%nflowdof == 4) then
+            if (option%nflowdof == 4 .and. general_soluble_matrix) then
+              ! porosity fraction; 4th dof ----------------------- !
+              select case(general%porosity%itype)
+                case(DIRICHLET_BC)
+                  call PatchGetCouplerValueFromDataset(coupler,option, &
+                         patch%grid,general%porosity%dataset,iconn,por)
+                    coupler%flow_aux_real_var(FOUR_INTEGER,iconn) = por
+                    dof4 = PETSC_TRUE
+                    coupler%flow_bc_type(GENERAL_SOLUTE_EQUATION_INDEX) = &
+                       DIRICHLET_BC
+                 case default
+                   string = GetSubConditionName(general%porosity%itype)
+                   option%io_buffer = &
+                       FlowConditionUnknownItype(coupler%flow_condition, &
+                       'GENERAL_MODE liquid state porosity ',string)
+                 call PrintErrMsg(option)
+               end select
+            elseif (option%nflowdof == 4) then
               ! mole fraction; 4th dof ----------------------- !
               select case(general%solute_fraction%itype)
                 case(DIRICHLET_BC)

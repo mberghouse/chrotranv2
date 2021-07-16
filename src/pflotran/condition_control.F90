@@ -266,6 +266,14 @@ subroutine CondControlAssignFlowInitCond(realization)
                   option%io_buffer = 'Mole fraction ' // trim(string)
                   call PrintErrMsg(option)
                 endif
+                if (option%nflowdof == 4 .and. general_soluble_matrix) then
+                  if (.not. &
+                       (general%porosity%itype == DIRICHLET_BC .or. &
+                         general%porosity%itype == HYDROSTATIC_BC)) then
+                    option%io_buffer = 'Porosity ' // trim(string)
+                    call PrintErrMsg(option)
+                  endif
+                endif
                 if (option%nflowdof == 4) then
                   if (.not. &
                        (general%solute_fraction%itype == DIRICHLET_BC .or. &
@@ -331,7 +339,10 @@ subroutine CondControlAssignFlowInitCond(realization)
                     general%mole_fraction%dataset%rarray(1)
                   xx_p(ibegin+GENERAL_ENERGY_DOF) = &
                     general%temperature%dataset%rarray(1)
-                  if (option%nflowdof == 4) then
+                  if (option%nflowdof == 4 .and. general_soluble_matrix) then
+                    xx_p(ibegin+GENERAL_POROSITY_DOF) = &
+                      general%porosity%dataset%rarray(1)
+                  elseif (option%nflowdof == 4) then
                     xx_p(ibegin+GENERAL_LIQUID_STATE_S_MOLE_DOF) = &
                       general%solute_fraction%dataset%rarray(1)
                   endif
