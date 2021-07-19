@@ -14,8 +14,8 @@ implicit none
 ! **************************************************************************** !
 
 type, public, extends(sat_func_base_type) :: sf_WIPP_type
-    procedure(set_Pct_type), public, pointer :: setPct
   private
+    procedure(set_Pct_type), public, pointer :: setPct
     procedure(set_Swj_type), pointer :: setSwj
     procedure(calc_Pc_type), pointer :: KPCPc
     procedure(calc_Sw_type), pointer :: KPCSw
