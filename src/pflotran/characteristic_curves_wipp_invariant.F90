@@ -317,10 +317,10 @@ end subroutine
 
 subroutine SF_BRAGFLO_SetPermeability(this, permeability)
   class(sf_WIPP_type)   :: this
-  PetscReal, intent(in) :: permeability
+  PetscReal, intent(inout) :: permeability
   PetscInt :: error
   
-  if (permeability == this%permeability) then
+  if (permeability /= this%permeability) then
     this%permeability = permeability
     this%pct = this%pct_a * permeability ** this%pct_exp
     ! Refresh unsaturated extension
@@ -332,7 +332,7 @@ end subroutine
 
 subroutine SF_BRAGFLO_IgnorePermeability(this, permeability)
   class(sf_WIPP_type)   :: this
-  PetscReal, intent(in) :: permeability
+  PetscReal, intent(inout) :: permeability
 end subroutine
 
 ! **************************************************************************** !
