@@ -286,7 +286,7 @@ end function
 
 subroutine SF_BRAGFLO_CapillaryPressure(this, liquid_saturation, &
                      capillary_pressure, dpc_dsatl, option)
-  class(sf_WIPP_type)           :: this
+  class(sf_WIPP_type)              :: this
   PetscReal, intent(in)            :: liquid_saturation
   PetscReal, intent(out)           :: capillary_pressure, dpc_dsatl
   type(option_type), intent(inout) :: option
@@ -300,7 +300,7 @@ end subroutine
 
 subroutine SF_BRAGFLO_Saturation(this, capillary_pressure, liquid_saturation, &
                                  dsat_dpres, option)
-  class(sf_WIPP_type)           :: this
+  class(sf_WIPP_type)              :: this
   PetscReal, intent(in)            :: capillary_pressure
   PetscReal, intent(out)           :: liquid_saturation, dsat_dpres
   type(option_type), intent(inout) :: option
@@ -316,8 +316,8 @@ end subroutine
 ! **************************************************************************** !
 
 subroutine SF_BRAGFLO_SetPermeability(this, permeability)
-  class(sf_WIPP_type)   :: this
-  PetscReal, intent(inout) :: permeability
+  class(sf_WIPP_type), intent(inout) :: this
+  PetscReal, intent(in) :: permeability
   PetscInt :: error
   
   if (permeability /= this%permeability) then
@@ -331,8 +331,8 @@ end subroutine
 ! **************************************************************************** !
 
 subroutine SF_BRAGFLO_IgnorePermeability(this, permeability)
-  class(sf_WIPP_type)   :: this
-  PetscReal, intent(inout) :: permeability
+  class(sf_WIPP_type), intent(inout)   :: this
+  PetscReal, intent(in) :: permeability
 end subroutine
 
 ! **************************************************************************** !
