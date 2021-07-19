@@ -14,8 +14,9 @@ implicit none
 ! **************************************************************************** !
 
 type, public, extends(sat_func_base_type) :: sf_WIPP_type
+    procedure(set_Pct_type), public, pointer :: setPct
   private
-    procedure(set_Swj_type), pointer :: KPCSwj
+    procedure(set_Swj_type), pointer :: setSwj
     procedure(calc_Pc_type), pointer :: KPCPc
     procedure(calc_Sw_type), pointer :: KPCSw
 
@@ -39,6 +40,7 @@ type, public, extends(sat_func_base_type) :: sf_WIPP_type
     PetscReal :: n                        ! 1/XLAM7
     PetscReal :: n_rec                    ! -XLAM7
 !   PetscReal :: Pcmax                    ! PCFIX
+    PetscReal :: Semin                    ! SOCEFFMIN
 
 ! In BRAGFLO, VG functions use the closed form Mualem relationship n = 1/(1-m)
 ! XLAM2, XLAM3, and XLAM5 are only necessary for relative permeability
@@ -46,22 +48,20 @@ type, public, extends(sat_func_base_type) :: sf_WIPP_type
 !   Precalculated ratio between midpoint BC Pc and Pt for KRP1
     PetscReal :: PcmPct
 
-! SF_WIPP_Parameters to calculate Pct
+! Parameters for efficient Pct
+    PetscReal :: pct
     PetscReal :: permeability
     PetscReal :: pct_a
     PetscReal :: pct_exp
-    PetscReal :: pct
     PetscReal :: alpha
-    PetscBool :: ignore_permeability 
 
-! Derived parameters for linear unsaturated extension
+! Derived parameters for unsaturated extensions
     PetscReal :: Swj, Pcj
     PetscReal :: dPcj_dSwj, dSwj_dPcj
 
   contains
     procedure, public :: CapillaryPressure => SF_BRAGFLO_CapillaryPressure
     procedure, public :: Saturation        => SF_BRAGFLO_Saturation
-    procedure, public :: SetPermeability   => SF_BRAGFLO_SetPermeability
 end type
 
 ! **************************************************************************** !
@@ -87,11 +87,11 @@ abstract interface
     PetscReal, intent(in)  :: Pc
     PetscReal, intent(out) :: Sw
   end subroutine
-  pure function get_Sw_type(this) result (Sw) ! TODO Presently unused
+  subroutine set_pct_type(this, K)
     import sf_WIPP_type
-    class(sf_WIPP_type), intent(in) :: this
-    PetscReal :: Sw
-  end function
+    class(sf_WIPP_type), intent(inout) :: this
+    PetscReal, intent(in)  :: K
+  end subroutine
 end interface
 
 ! **************************************************************************** !
@@ -102,9 +102,7 @@ end interface
 public  :: SFWIPPctor
 
 ! Implemented BRAGFLO KPC subroutines
-private :: SFWIPPKPC1Pc , &
-           SFWIPPKPC1Sw , &
-           SFWIPPKPC1Swj, &
+private :: SFWIPPKPC1Swj, &
            SFWIPPKPC2Pc , &
            SFWIPPKPC2Sw , &
            SFWIPPKPC2Swj, &
@@ -127,9 +125,9 @@ private :: SFWIPPKRP1Pc , &
            SFWIPPKRP9Pc , &
            SFWIPPKRP9Sw , &
            SFWIPPKRP11Pc , &
-           SFWIPPKRP11Sw
-!           SFWIPPKRP12Pc , &
-!           SFWIPPKRP12Sw
+           SFWIPPKRP11Sw , &
+           SFWIPPKRP12Pc , &
+           SFWIPPKRP12Sw
 
 contains 
 
@@ -137,12 +135,13 @@ contains
 ! BRAGFLO Saturation Function Constructor
 ! **************************************************************************** !
 
-function SFWIPPctor(KRP, KPC, Swr, Sgr, alpha, expon, Pct_a, Pct_exp, &
-                    ignore_pct, Pcmax, Swj) result (new)
+function SFWIPPctor(KRP, KPC, Swr, Sgr, expon, Pct_ignore, Pct_alpha, &
+                    Pct_expon, Pcmax, Swj, Smin, Semin) result (new)
   class(sf_WIPP_type), pointer :: new
   PetscInt, intent(in)  :: KRP, KPC
-  PetscReal, intent(in) :: Swr, Sgr, alpha, expon, Pct_a, Pct_exp, Swj, Pcmax
-  PetscBool, intent(in) :: ignore_pct
+  PetscReal, intent(in) :: Swr, Sgr, expon, Pct_alpha, Pct_expon, Swj, Pcmax
+  PetscReal, intent(in) :: Smin, Semin
+  PetscBool, intent(in) :: Pct_ignore
   PetscInt :: error
 
   ! Memory allocation
@@ -177,27 +176,27 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, alpha, expon, Pct_a, Pct_exp, &
   case (11)
     new%KRPPc => SFWIPPKRP11Pc
     new%KRPSw => SFWIPPKRP11Sw
-!  case (12)
-!    new%KRPPc => SFWIPPKRP12Pc
-!    new%KRPSw => SFWIPPKRP12Sw
+  case (12)
+    new%KRPPc => SFWIPPKRP12Pc
+    new%KRPSw => SFWIPPKRP12Sw
   case default
                                         error = error + 1
   end select
 
   ! If KPC is in branch table, set function pointer, otherwise flag error
   select case(KPC)
-  case (1)
-    new%KPCPc  => SFWIPPKPC1Pc
-    new%KPCSw  => SFWIPPKPC1Sw
-    new%KPCSwj => SFWIPPKPC1Swj
+  case (1) ! KPC 1 points directly to KRP
+    new%KPCPc  => new%KRPPc
+    new%KPCSw  => new%KRPSW
+    new%setSwj => SFWIPPKPC1Swj
   case (2)
     new%KPCPc  => SFWIPPKPC2Pc
     new%KPCSw  => SFWIPPKPC2Sw
-    new%KPCSwj => SFWIPPKPC2Swj
+    new%setSwj => SFWIPPKPC2Swj
   case (6)
     new%KPCPc  => SFWIPPKPC6Pc
     new%KPCSw  => SFWIPPKPC6Sw
-    new%KPCSwj => SFWIPPKPC6Swj
+    new%setSwj => SFWIPPKPC6Swj
   case default
                                         error = error + 2
   end select
@@ -228,6 +227,12 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, alpha, expon, Pct_a, Pct_exp, &
   ! Assign canonical parameters
   new%Swr = Swr
   new%Sgr = Sgr
+
+  ! Override Swr for KRP 12 only
+  if (KRP == 12) then ! Note, BRAGFLO code does not match the BRAGFLO UM
+    new%Swr = Smin - Semin ! Swr is BRAGFLO SOCZRO
+    new%Semin = Semin
+  end if
   
   ! Depending on the KRP option, canonical expon is either VG m or BC lambda
   select case(KRP)
@@ -241,6 +246,17 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, alpha, expon, Pct_a, Pct_exp, &
     new%lambda = 0d0
     new%m = 0d0
   end select
+
+  ! Depending on the PCT option, pct_alpha is either alpha or pct_a
+  if (Pct_ignore) then
+    new%setPct => SF_BRAGFLO_IgnorePermeability
+    new%Pct = pct_alpha ! Pct permanently set to alpha
+  else
+    new%setPct => SF_BRAGFLO_SetPermeability
+    new%pct_a = pct_alpha
+    new%pct_exp = pct_expon
+    new%Pct = 1E6 ! Initialize to 1 MPa for test function. 
+  end if
 
   ! Derived 1 or 2 residual saturation parameters
   new%Sgr_comp = 1d0 - new%Sgr
@@ -259,86 +275,13 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, alpha, expon, Pct_a, Pct_exp, &
   new%n      =  1d0 / new%m_comp
   new%n_rec  =  1d0 / new%n
 
+  ! Initialize unsaturated extension
+  error = new%setSwj(Swj)
 
-  ! Set Pct model parameters
-
-  new%alpha = alpha
-  new%pct_a = pct_a
-  new%pct_exp = pct_exp
-  new%ignore_permeability = ignore_pct ! TODO determine if necessary
-
-  ! Setup default Pct for test function
-  if (alpha == 0d0) then 
-    new%Pct = 1E6 ! Default 1 GPa for test function. 
-  else
-    new%Pct = 1/alpha
-  end if
-  error = new%KPCSwj(Swj)
-
-end function
-
-! **************************************************************************** !
-
-
-! TODO evaluate if fixed maximum with linear extension is necessary
-! It is much more computationally favorable to select a fixed transition point
-function SF_BRAGFLO_setPcmax(this,Pcmax) result (error)
-  class(sf_WIPP_type), intent(inout) :: this
-  PetscReal, intent(in) :: Pcmax
-  PetscInt :: error
-
-  ! Use the bisection method to satisfy C1 continuity for linear extensions
-
-  PetscReal :: Swa, Swb, Pce, dPcj_dSwj
-
-  ! Set lower saturation bracket set where P(Sa) = Pcmax
-!  call this%KRPSw(Pcmax, Swa)
-
-  ! Set upper saturation limit (Sb) to be the the inflection point
-!  Swb = this%KRPSw_inflection()
-
-  ! Confirm Pcmax is above minimum extrapolating from inflection point
-  call this%KRPPc(Swb, Pce, dPcj_dSwj)
-!  if (Pcmax > Pce - dPcj_dSwj*Swb) then
-    error = 0
-!    this%Pcmax = Pcmax
-
-!    do while (Swb-Swa > epsilon(this%Swj)) ! Tolerance interval epsilon
-!      this%Swj = (Swa+Swb)/2d0             ! Bisect bracket
-!      call this%KRPPc(this%Swj, this%Pcj, this%dPcj_dSwj)
-
-      ! Residual error = Pcmax + dPj_dSj * Sj - Pf(Sj)
-!      Pce = Pcmax + this%dPcj_dSwj*this%Swj - this%Pcj
-!      if (Pce < 0d0) then ! Sde a Error is negative below inflection point
-!        Swa = this%Swj
-!      else
-!        Swb = this%Swj
-!      end if
-!    end do
-!    this%dSwj_dPcj = 1d0 / this%dPcj_dSwj
-!  else
-!    error = 1
-!  end if
 end function
 
 ! **************************************************************************** !
 ! BRAGFLO Saturation Function Wrappers
-! **************************************************************************** !
-
-subroutine SF_BRAGFLO_SetPermeability(this, permeability)
-  class(sf_WIPP_type)   :: this
-  PetscReal, intent(in) :: permeability
-  PetscInt :: error
-
-  ! TODO could do data validation, i.e. permeability > 0d0
-  if (permeability /= this%permeability) then
-    this%permeability = permeability
-    this%pct = this%pct_a * permeability ** this%pct_exp
-    ! Refresh unsaturated extension
-    error = this%KPCSwj(this%Swj)
-  end if
-end subroutine
-
 ! **************************************************************************** !
 
 subroutine SF_BRAGFLO_CapillaryPressure(this, liquid_saturation, &
@@ -369,36 +312,38 @@ subroutine SF_BRAGFLO_Saturation(this, capillary_pressure, liquid_saturation, &
 end subroutine
 
 ! **************************************************************************** !
+! BRAGFLO PCT Subroutines
+! **************************************************************************** !
+
+subroutine SF_BRAGFLO_SetPermeability(this, permeability)
+  class(sf_WIPP_type)   :: this
+  PetscReal, intent(in) :: permeability
+  PetscInt :: error
+  
+  if (permeability == this%permeability) then
+    this%permeability = permeability
+    this%pct = this%pct_a * permeability ** this%pct_exp
+    ! Refresh unsaturated extension
+    error = this%setSwj(this%Swj)
+  end if
+end subroutine
+
+! **************************************************************************** !
+
+subroutine SF_BRAGFLO_IgnorePermeability(this, permeability)
+  class(sf_WIPP_type)   :: this
+  PetscReal, intent(in) :: permeability
+end subroutine
+
+! **************************************************************************** !
 ! BRAGFLO KPC Subroutines
-! **************************************************************************** !
-
-pure subroutine SFWIPPKPC1Pc(this, Sw, Pc, dPc_dSw)
-  ! Apply KRP everywhere
-  class(sf_WIPP_type), intent(in) :: this
-  PetscReal, intent(in)  :: Sw
-  PetscReal, intent(out) :: Pc, dPc_dSw
-
-  call this%KRPPc(Sw, Pc, dPc_dSw)
-end subroutine
-
-! **************************************************************************** !
-
-pure subroutine SFWIPPKPC1Sw(this, Pc, Sw)
-  ! Apply KRP everywhere
-  class(sf_WIPP_type), intent(in) :: this
-  PetscReal, intent(in)  :: Pc
-  PetscReal, intent(out) :: Sw
-
-  call this%KRPSw(Pc, Sw)
-end subroutine
-
 ! **************************************************************************** !
 
 function SFWIPPKPC1Swj(this,Swj) result (error)
   class (sf_WIPP_type), intent(inout) :: this
   PetscReal, intent(in) :: Swj
   PetscInt :: error
-
+  
   error = 0
 end function
 
@@ -442,13 +387,10 @@ function SFWIPPKPC2Swj(this,Swj) result (error)
   PetscReal, intent(in) :: Swj
   PetscInt :: error
 
-  if (Swj > this%Swr) then
-    error = 0
-    this%Swj = Swj
-    call this%KRPPc(Swj,this%Pcmax,this%dPcj_dSwj)
-  else
-    error = 1
-  end if
+  call this%KRPSw(this%Pcmax,this%Swj)
+  this%Pcj = this%Pcmax
+  this%dPcj_dSwj = 0d0
+  error = 0 
 end function
 
 ! **************************************************************************** !
@@ -504,6 +446,7 @@ function SFWIPPKPC6Swj(this,Swj) result (error)
     this%Swj = Swj
     call this%KRPPc(Swj, this%Pcj, this%dPcj_dSwj)
     this%Pcmax = this%Pcj - this%dPcj_dSwj * Swj
+    this%dSwj_dPcj = 1d0 / this%dPcj_dSwj
   else
     error = 1
   end if
@@ -522,14 +465,19 @@ pure subroutine SFWIPPKRP1Pc(this, Sw, Pc, dPc_dSw)
   PetscReal, intent(out) :: Pc, dPc_dSw
   PetscReal :: Se2
 
-  if (Sw >= this%Swr) then
-    Se2 = (Sw-this%Swr) * this%dSe2_dSw
-    Se2 = MIN(Se2,1d0)
-    Pc = this%Pct*this%PcmPct*(Se2**this%m_nrec-1d0)**this%m_comp
+  if (Sw > this%Swr) then
+    if (Sw > this%Sgr_comp) then
+      Pc = 0d0
+    else
+      Se2 = (Sw-this%Swr) * this%dSe2_dSw
+      Pc = this%Pct*this%PcmPct*(Se2**this%m_nrec-1d0)**this%m_comp
+    end if
   else
     Pc = 0d0
-    dPc_dSw = 0d0
   end if
+
+  ! TODO analytic derivatives
+  dPc_dSw = 0d0
 end subroutine
 
 ! **************************************************************************** !
@@ -542,14 +490,12 @@ pure subroutine SFWIPPKRP1Sw(this, Pc, Sw)
   PetscReal, intent(in)  :: Pc
   PetscReal, intent(out) :: Sw
   PetscReal :: Se2
-  PetscReal :: Po
 
   if (Pc <= 0d0) then
     Sw = 1d0
   else
-    Po = this%Pct * this%PcmPct
-    Se2 = (((Pc**this%n)/Po) + 1d0)**(-this%m)
-    Sw = this%Swr + Se2 * this%Se2_span
+    Se2 = ( Pc**this%n / (this%Pct * this%PcmPct) + 1d0)**(-this%m)
+    Sw = this%Swr + this%Se2_span * Se2
   end if
 end subroutine
 
@@ -562,13 +508,13 @@ pure subroutine SFWIPPKRP2Pc(this, Sw, Pc, dPc_dSw)
   PetscReal, intent(out) :: Pc, dPc_dSw
   PetscReal :: Se1
 
-  if (Sw <= this%Swr) then
+  if (Sw > this%Swr) then
+    Se1     = (Sw-this%Swr)*this%dSe1_dSw
+    Pc      = this%Pct * Se1**this%lambda_nrec
+    dPc_dSw = -this%dSe1_dSw*Pc / (this%lambda*Se1)
+  else
     Pc = 0d0
     dPc_dSw = 0d0
-  else
-    Se1     = (Sw-this%Swr)*this%dSe1_dSw
-    Pc      = this%Pct*(Se1**this%lambda_nrec)
-    dPc_dSw = -this%dSe1_dSw*Pc/(this%lambda*Se1)
   end if
 end subroutine
 
@@ -597,10 +543,9 @@ pure subroutine SFWIPPKRP3Pc(this, Sw, Pc, dPc_dSw)
   class(sf_WIPP_type), intent(in) :: this
   PetscReal, intent(in)  :: Sw
   PetscReal, intent(out) :: Pc, dPc_dSw
-!------- Modified Brooks-Corey model
   PetscReal :: Se2
 
-  if (Sw <= this%Sgr_comp) then
+  if (Sw >= this%Sgr_comp) then
     Pc = this%Pct
     dPc_dSw = 0d0
   else if (Sw > this%Swr) then
@@ -616,7 +561,6 @@ end subroutine
 ! **************************************************************************** !
 
 pure subroutine SFWIPPKRP3Sw(this, Pc, Sw)
-!------- Original Brooks-Corey model
   class(sf_WIPP_type), intent(in) :: this
   PetscReal, intent(in)  :: Pc
   PetscReal, intent(out) :: Sw
@@ -790,7 +734,7 @@ pure subroutine SFWIPPKRP9Sw(this, Pc, Sw)
   PetscReal, parameter :: b_rec = 1d0/b
 
   if (Pc <= 0d0) then
-   Sw = 1d0
+    Sw = 1d0
   else
     Se9 = (Pc/a)**b
     Sw = 1d0 / (Se9+1d0)
@@ -814,6 +758,40 @@ pure subroutine SFWIPPKRP11Sw(this, Pc, Sw)
   PetscReal, intent(in)  :: Pc
   PetscReal, intent(out) :: Sw
   Sw = 1d0
+end subroutine
+
+! **************************************************************************** !
+
+pure subroutine SFWIPPKRP12Pc(this, Sw, Pc, dPc_dSw)
+  class(sf_WIPP_type), intent(in) :: this
+  PetscReal, intent(in)  :: Sw
+  PetscReal, intent(out) :: Pc, dPc_dSw
+  PetscReal :: Se21
+  ! Extra-modified Brooks-Corey
+  ! The sign of Semin is inconsistent between BRAGFLO and the BRAGFLO UM 
+  ! Szero is calculated in the constructor
+
+  Se21 = (Sw - this%Swr) * this%dSe1_dSw
+  Se21 = max(min(Se21,1d0),this%Semin)
+
+  Pc = this%pct * Se21**this%lambda_nrec
+  dPc_dSw = -this%dSe1_dSw*Pc / (this%lambda*Se21)
+end subroutine
+
+! **************************************************************************** !
+
+pure subroutine SFWIPPKRP12Sw(this, Pc, Sw)
+  class(sf_WIPP_type), intent(in) :: this
+  PetscReal, intent(in)  :: Pc
+  PetscReal, intent(out) :: Sw
+  PetscReal :: Se21
+
+  if (Pc < this%Pct) then
+    Sw = 1d0
+  else
+    Se21 = (this%pct/Pc)**this%lambda
+    Sw = this%Swr + this%Se1_span*Se21
+  end if
 end subroutine
 
 end module

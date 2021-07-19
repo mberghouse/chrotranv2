@@ -375,7 +375,8 @@ function SaturationFunctionRead(saturation_function,input,option) &
   PetscReal :: alpha, m, Pcmax, Slj, Sr, Srg
 
   PetscInt :: wipp_krp, wipp_kpc
-  PetscReal :: wipp_expon, wipp_pct_a, wipp_pct_exp
+  PetscReal :: wipp_expon, wipp_pct_alpha, wipp_pct_expon
+  PetscReal :: wipp_s_min, wipp_s_effmin
   PetscBool :: wipp_pct_ignore
 
   nullify(sf_swap)
@@ -565,11 +566,11 @@ function SaturationFunctionRead(saturation_function,input,option) &
             call InputErrorMsg(input,option,'M',error_string)
           case('PCT_A')
             call InputReadDouble(input,option,sf%pct_a)
-            wipp_pct_a = sf%pct_a
+            wipp_pct_alpha = sf%pct_a
             call InputErrorMsg(input,option,'PCT_A',error_string)
           case('PCT_EXP')
             call InputReadDouble(input,option,sf%pct_exp)
-            wipp_pct_exp = sf%pct_exp
+            wipp_pct_expon = sf%pct_exp
             call InputErrorMsg(input,option,'PCT_EXP',error_string)
           case('GAS_RESIDUAL_SATURATION')
             call InputReadDouble(input,option,sf%Srg)
@@ -602,11 +603,11 @@ function SaturationFunctionRead(saturation_function,input,option) &
             call InputErrorMsg(input,option,'LAMBDA',error_string)
           case('PCT_A')
             call InputReadDouble(input,option,sf%pct_a)
-            wipp_pct_a = sf%pct_a
+            wipp_pct_alpha = sf%pct_a
             call InputErrorMsg(input,option,'PCT_A',error_string)
           case('PCT_EXP')
             call InputReadDouble(input,option,sf%pct_exp)
-            wipp_pct_exp = sf%pct_exp
+            wipp_pct_expon = sf%pct_exp
             call InputErrorMsg(input,option,'PCT_EXP',error_string)
           case('IGNORE_PERMEABILITY')
             sf%ignore_permeability = PETSC_TRUE
@@ -636,11 +637,11 @@ function SaturationFunctionRead(saturation_function,input,option) &
             call InputErrorMsg(input,option,'LAMBDA',error_string)
           case('PCT_A')
             call InputReadDouble(input,option,sf%pct_a)
-            wipp_pct_a = sf%pct_a
+            wipp_pct_alpha = sf%pct_a
             call InputErrorMsg(input,option,'PCT_A',error_string)
           case('PCT_EXP')
             call InputReadDouble(input,option,sf%pct_exp)
-            wipp_pct_exp = sf%pct_exp
+            wipp_pct_expon = sf%pct_exp
             call InputErrorMsg(input,option,'PCT_EXP',error_string)
           case('GAS_RESIDUAL_SATURATION')
             call InputReadDouble(input,option,sf%Srg)
@@ -675,11 +676,11 @@ function SaturationFunctionRead(saturation_function,input,option) &
             call InputErrorMsg(input,option,'LAMBDA',error_string)
           case('PCT_A')
             call InputReadDouble(input,option,sf%pct_a)
-            wipp_pct_a = sf%pct_a
+            wipp_pct_alpha = sf%pct_a
             call InputErrorMsg(input,option,'PCT_A',error_string)
           case('PCT_EXP')
             call InputReadDouble(input,option,sf%pct_exp)
-            wipp_pct_exp = sf%pct_exp
+            wipp_pct_expon = sf%pct_exp
             call InputErrorMsg(input,option,'PCT_EXP',error_string)
           case('GAS_RESIDUAL_SATURATION')
             call InputReadDouble(input,option,sf%Srg)
@@ -710,11 +711,11 @@ function SaturationFunctionRead(saturation_function,input,option) &
             call InputErrorMsg(input,option,'KPC',error_string)
           case('PCT_A')
             call InputReadDouble(input,option,sf%pct_a)
-            wipp_pct_a = sf%pct_a
+            wipp_pct_alpha = sf%pct_a
             call InputErrorMsg(input,option,'PCT_A',error_string)
           case('PCT_EXP')
             call InputReadDouble(input,option,sf%pct_exp)
-            wipp_pct_exp = sf%pct_exp
+            wipp_pct_expon = sf%pct_exp
             call InputErrorMsg(input,option,'PCT_EXP',error_string)
           case('GAS_RESIDUAL_SATURATION')
             call InputReadDouble(input,option,sf%Srg)
@@ -748,11 +749,11 @@ function SaturationFunctionRead(saturation_function,input,option) &
             call InputErrorMsg(input,option,'M',error_string)
           case('PCT_A')
             call InputReadDouble(input,option,sf%pct_a)
-            wipp_pct_a = sf%pct_a
+            wipp_pct_alpha = sf%pct_a
             call InputErrorMsg(input,option,'PCT_A',error_string)
           case('PCT_EXP')
             call InputReadDouble(input,option,sf%pct_exp)
-            wipp_pct_exp = sf%pct_exp
+            wipp_pct_expon = sf%pct_exp
             call InputErrorMsg(input,option,'PCT_EXP',error_string)
           case('GAS_RESIDUAL_SATURATION')
             call InputReadDouble(input,option,sf%Srg)
@@ -803,20 +804,23 @@ function SaturationFunctionRead(saturation_function,input,option) &
             call InputErrorMsg(input,option,'KPC',error_string)
           case('PCT_A')
             call InputReadDouble(input,option,sf%pct_a)
-            wipp_pct_a = sf%pct_a
+            wipp_pct_alpha = sf%pct_a
             call InputErrorMsg(input,option,'PCT_A',error_string)
           case('PCT_EXP')
             call InputReadDouble(input,option,sf%pct_exp)
-            wipp_pct_exp = sf%pct_exp
+            wipp_pct_expon = sf%pct_exp
             call InputErrorMsg(input,option,'PCT_EXP',error_string)
           case('LAMBDA')
             call InputReadDouble(input,option,sf%lambda)
+            wipp_expon = sf%lambda
             call InputErrorMsg(input,option,'lambda',error_string)
           case('S_MIN')
             call InputReadDouble(input,option,sf%s_min)
+            wipp_s_min = sf%s_min 
             call InputErrorMsg(input,option,'s_min',error_string)
           case('S_EFFMIN')
             call InputReadDouble(input,option,sf%s_effmin)
+            wipp_s_effmin = sf%s_effmin
             call InputErrorMsg(input,option,'s_effmin',error_string)
           case('IGNORE_PERMEABILITY')
             sf%ignore_permeability = PETSC_TRUE
@@ -863,16 +867,29 @@ function SaturationFunctionRead(saturation_function,input,option) &
   call InputPopBlock(input,option)
 
   ! At end of input block, call constructors if implemented
-  ! Throw errors for invalid combinations of options or parameters
+  ! Throw errors for invalid combinations of options or parametersa
+
+  ! Error checking for wipp_pct_ignore option
+  if (wipp_pct_ignore) then ! Check it is not overspecife
+    if (alpha == 0d0) then
+      option%io_buffer = 'Must specify ALPHA with IGNORE_PERMEABILITY option'
+    else
+      wipp_pct_alpha = alpha ! Copy to wipp_pct_alpha for constructor
+    end if
+  else
+    if (alpha /= 0d0) then ! Error, pct_a must be specified
+      option%io_buffer = 'Must NOT specify ALPHA without IGNORE_PERMEABILITY option'
+    end if
+  end if
   
   if (loop_invariant) then 
     ! Use default junction saturation if not specified
     if (Slj == 0d0) Slj = Sr + 5d-2*(1d0-Sr)
     ! Call constructor
     if (wipp_krp /= 0) then ! WIPP invariants flagged by wipp_krp
-      sf_swap => SFWIPPctor(wipp_krp, wipp_kpc, Sr, Srg, alpha, wipp_expon, &
-                           wipp_pct_a, wipp_pct_exp, wipp_pct_ignore, &
-                           Pcmax, Slj)
+      sf_swap => SFWIPPctor(wipp_krp, wipp_kpc, Sr, Srg, wipp_expon, &
+                           wipp_pct_ignore, wipp_pct_alpha, wipp_pct_expon, &
+                           Pcmax, Slj, wipp_s_min, wipp_s_effmin)
     else ! Old object type is used to identify common invariants
       select type (saturation_function)
       class is (sat_func_VG_type)
