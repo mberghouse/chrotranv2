@@ -712,40 +712,40 @@ subroutine SecondaryRTResJacMulti(sec_transport_vars,auxvar, &
   class(reaction_rt_type), pointer :: reaction
   type(option_type) :: option
   PetscReal :: coeff_left(reaction%naqcomp,reaction%naqcomp, &
-                          sec_transport_vars%ncells)
+                          sec_transport_vars%ncells,option%transport%nphase)
   PetscReal :: coeff_diag(reaction%naqcomp,reaction%naqcomp, &
-                          sec_transport_vars%ncells)
+                          sec_transport_vars%ncells,option%transport%nphase)
   PetscReal :: coeff_right(reaction%naqcomp,reaction%naqcomp, &
-                           sec_transport_vars%ncells)
-  PetscReal :: res(sec_transport_vars%ncells*reaction%naqcomp)
-  PetscReal :: rhs(sec_transport_vars%ncells*reaction%naqcomp)
+                           sec_transport_vars%ncells,option%transport%nphase)
+  PetscReal :: res(sec_transport_vars%ncells*reaction%naqcomp*option%transport%nphase)
+  PetscReal :: rhs(sec_transport_vars%ncells*reaction%naqcomp*option%transport%nphase)
   PetscReal :: D_M(reaction%naqcomp,reaction%naqcomp)
   PetscReal :: identity(reaction%naqcomp,reaction%naqcomp)
   PetscReal :: b_M(reaction%naqcomp,reaction%naqcomp)
   PetscReal :: sec_jac(reaction%naqcomp,reaction%naqcomp)
   PetscReal :: inv_D_M(reaction%naqcomp,reaction%naqcomp)
   PetscReal :: conc_upd(reaction%naqcomp,sec_transport_vars%ncells) 
-  PetscReal :: total_upd(reaction%naqcomp,sec_transport_vars%ncells)
-  PetscReal :: total_prev(reaction%naqcomp,sec_transport_vars%ncells)
+  PetscReal :: total_upd(reaction%naqcomp,sec_transport_vars%ncells,option%transport%nphase)
+  PetscReal :: total_prev(reaction%naqcomp,sec_transport_vars%ncells,option%transort%nphase)
   PetscReal :: conc_current_M(reaction%naqcomp)
   PetscReal :: total_current_M(reaction%naqcomp)
   PetscReal :: res_transport(reaction%naqcomp)
-  PetscReal :: total_primary_node(reaction%naqcomp)
+  PetscReal :: total_primary_node(reaction%naqcomp,option%transort%nphase)
   PetscReal :: area(sec_transport_vars%ncells)
   PetscReal :: vol(sec_transport_vars%ncells)
   PetscReal :: dm_plus(sec_transport_vars%ncells)
   PetscReal :: dm_minus(sec_transport_vars%ncells)
   PetscReal :: res_react(reaction%naqcomp)
   PetscReal :: jac_react(reaction%naqcomp,reaction%naqcomp)
-  PetscReal :: dtotal(reaction%naqcomp,reaction%naqcomp,sec_transport_vars%ncells)
-  PetscReal :: dtotal_prim(reaction%naqcomp,reaction%naqcomp)
+  PetscReal :: dtotal(reaction%naqcomp,reaction%naqcomp,sec_transport_vars%ncells,option%transport%nphase)
+  PetscReal :: dtotal_prim(reaction%naqcomp,reaction%naqcomp,,option%transport%nphase)
   PetscInt :: i, j, k, n, l
   PetscInt :: ngcells, ncomp
   PetscReal :: area_fm
-  PetscReal :: diffusion_coefficient
+  PetscReal :: diffusion_coefficient(option%transort%nphase)
   PetscReal :: porosity
   PetscReal :: arrhenius_factor
-  PetscReal :: pordt, pordiff
+  PetscReal :: pordt, pordiff(option%transport%nphase)
   PetscReal :: prim_vol ! volume of primary grid cell
   PetscReal :: dCsec_dCprim(reaction%naqcomp,reaction%naqcomp)
   PetscReal :: dPsisec_dCprim(reaction%naqcomp,reaction%naqcomp)
@@ -754,7 +754,7 @@ subroutine SecondaryRTResJacMulti(sec_transport_vars,auxvar, &
   
   PetscInt :: pivot(reaction%naqcomp,sec_transport_vars%ncells)
   PetscInt :: indx(reaction%naqcomp)
-  PetscInt :: d, ier
+  PetscInt :: d, ier, nphase
   PetscReal :: m
   
   ! Quantities for numerical jacobian
@@ -769,23 +769,23 @@ subroutine SecondaryRTResJacMulti(sec_transport_vars,auxvar, &
   PetscReal :: dPsisec_dCprim_num(reaction%naqcomp,reaction%naqcomp)
   PetscReal :: pert
   PetscReal :: coeff_diag_dm(reaction%naqcomp,reaction%naqcomp, &
-                          sec_transport_vars%ncells)
+                          sec_transport_vars%ncells,option%transport%nphase)
   PetscReal :: coeff_left_dm(reaction%naqcomp,reaction%naqcomp, &
-                          sec_transport_vars%ncells)
+                          sec_transport_vars%ncells,option%transport%nphase)
   PetscReal :: coeff_right_dm(reaction%naqcomp,reaction%naqcomp, &
-                          sec_transport_vars%ncells)
+                          sec_transport_vars%ncells,option%transport%nphase)
   PetscReal :: coeff_left_pert(reaction%naqcomp,reaction%naqcomp, &
-                          sec_transport_vars%ncells)
+                          sec_transport_vars%ncells,option%transport%nphase)
   PetscReal :: coeff_diag_pert(reaction%naqcomp,reaction%naqcomp, &
-                          sec_transport_vars%ncells)
+                          sec_transport_vars%ncells,option%transport%nphase)
   PetscReal :: coeff_right_pert(reaction%naqcomp,reaction%naqcomp, &
-                           sec_transport_vars%ncells)
+                           sec_transport_vars%ncells,option%transport%nphase)
   PetscReal :: coeff_left_copy(reaction%naqcomp,reaction%naqcomp, &
-                          sec_transport_vars%ncells)
+                          sec_transport_vars%ncells,option%transport%nphase)
   PetscReal :: coeff_diag_copy(reaction%naqcomp,reaction%naqcomp, &
-                          sec_transport_vars%ncells)
+                          sec_transport_vars%ncells,option%transport%nphase)
   PetscReal :: coeff_right_copy(reaction%naqcomp,reaction%naqcomp, &
-                           sec_transport_vars%ncells)
+                           sec_transport_vars%ncells,option%transport%nphase)
 
   PetscReal :: total_sorb_upd(reaction%naqcomp,sec_transport_vars%ncells) 
   PetscReal :: total_sorb_prev(reaction%naqcomp,sec_transport_vars%ncells)
@@ -800,17 +800,20 @@ subroutine SecondaryRTResJacMulti(sec_transport_vars,auxvar, &
   dm_minus = sec_transport_vars%dm_minus
   area_fm = sec_transport_vars%interfacial_area
   ncomp = reaction%naqcomp
+  nphase = option%transport%nphase
 
   allocate(material_auxvar)
   call MaterialAuxVarInit(material_auxvar,option)
   material_auxvar%porosity = porosity
   
   do j = 1, ncomp
-    do i = 1, ngcells
-      total_prev(j,i) = sec_transport_vars%sec_rt_auxvar(i)%total(j,1)
+     do i = 1, ngcells
+        do k=1, nphase
+      total_prev(j,i,k) = sec_transport_vars%sec_rt_auxvar(i)%total(j,k)
       if (reaction%neqsorb > 0) then
         total_sorb_prev(j,i) = sec_transport_vars%sec_rt_auxvar(i)%total_sorb_eq(j)
-      endif
+     endif
+     enddo
     enddo
   enddo
   conc_upd = sec_transport_vars%updated_conc
@@ -832,10 +835,10 @@ subroutine SecondaryRTResJacMulti(sec_transport_vars,auxvar, &
   dPsisec_dCprim = 0.d0
   dCsec_dCprim = 0.d0
   
-  total_primary_node = auxvar%total(:,1)                         ! in mol/L 
-  dtotal_prim = auxvar%aqueous%dtotal(:,:,1)
+  total_primary_node = auxvar%total(:,:)      !!index this?                   ! in mol/L 
+  dtotal_prim = auxvar%aqueous%dtotal(:,:,:)
   pordt = porosity/option%tran_dt * 1.d3
-  pordiff = porosity*diffusion_coefficient * 1.d3
+  pordiff = porosity*diffusion_coefficient(:) * 1.d3   !!to do index by phase
 
   call RTAuxVarInit(rt_auxvar,reaction,option)
   do i = 1, ngcells
@@ -848,9 +851,11 @@ subroutine SecondaryRTResJacMulti(sec_transport_vars,auxvar, &
     endif
     if (reaction%gas%nactive_gas > 0) then
       call RTotalGas(rt_auxvar,global_auxvar,reaction,option)
+      total_upd(:,i,2) = rt_auxvar%total(:,2)
+      dtotal(:,:,i,2) = rt_auxvar%aqueous%dtotal(:,:,2)
     endif
-    total_upd(:,i) = rt_auxvar%total(:,1)
-    dtotal(:,:,i) = rt_auxvar%aqueous%dtotal(:,:,1)
+    total_upd(:,i,1) = rt_auxvar%total(:,1)
+    dtotal(:,:,i,1) = rt_auxvar%aqueous%dtotal(:,:,1)
     if (reaction%neqsorb > 0) then 
       total_sorb_upd(:,i) = rt_auxvar%total_sorb_eq(:)
       dtotal_sorb_upd(:,:,i) = rt_auxvar%dtotal_sorb_eq(:,:)
@@ -860,80 +865,81 @@ subroutine SecondaryRTResJacMulti(sec_transport_vars,auxvar, &
 !================ Calculate the secondary residual =============================        
 
   do j = 1, ncomp
-      
+    do k=1, nphase  
     ! Accumulation
-    do i = 1, ngcells
-      n = j + (i-1)*ncomp
-      res(n) = pordt*(total_upd(j,i) - total_prev(j,i))*vol(i)
-      if (reaction%neqsorb > 0) then 
-        res(n) = res(n) + vol(i)/option%tran_dt*(total_sorb_upd(j,i) - total_sorb_prev(j,i))
-      endif      
-    enddo
+      do i = 1, ngcells
+        n = j + (i-1)*ncomp*nphase + (k-1)*ncomp
+        res(n) = pordt*(total_upd(j,i,k) - total_prev(j,i,k))*vol(i)
+        if (reaction%neqsorb > 0) then 
+          res(n) = res(n) + vol(i)/option%tran_dt*(total_sorb_upd(j,i) - total_sorb_prev(j,i))
+        endif      
+      enddo
   
     ! Flux terms
     do i = 2, ngcells - 1
-      n = j + (i-1)*ncomp
+      n = j + (i-1)*ncomp*nphase + (k-1)*ncomp
       res(n) = res(n) - pordiff*area(i)/(dm_minus(i+1) + dm_plus(i))* &
-                        (total_upd(j,i+1) - total_upd(j,i))
+                        (total_upd(j,i+1,k) - total_upd(j,i,k))
       res(n) = res(n) + pordiff*area(i-1)/(dm_minus(i) + dm_plus(i-1))* &
-                        (total_upd(j,i) - total_upd(j,i-1))                      
+                        (total_upd(j,i,k) - total_upd(j,i-1,k))                      
     enddo
          
               
     ! Apply boundary conditions
     ! Inner boundary
-    res(j) = res(j) - pordiff*area(1)/(dm_minus(2) + dm_plus(1))* &
-                      (total_upd(j,2) - total_upd(j,1))
+    res(j+(k-1)*ncomp) = res(j+(k-1)*ncomp) - pordiff*area(1)/(dm_minus(2) + dm_plus(1))* &
+                      (total_upd(j,2,k) - total_upd(j,1,k))
                                       
     ! Outer boundary
-    res(j+(ngcells-1)*ncomp) = res(j+(ngcells-1)*ncomp) - &
+    res(j+(ngcells-1)*ncomp*nphase+(k-1)*ncomp) = res(j+(ngcells-1)*ncomp*nphase+(k-1)*ncomp) - &
                                pordiff*area(ngcells)/dm_plus(ngcells)* &
-                               (total_primary_node(j) - total_upd(j,ngcells))
-    res(j+(ngcells-1)*ncomp) = res(j+(ngcells-1)*ncomp) + &
+                               (total_primary_node(j,k) - total_upd(j,ngcells,k))
+    res(j+(ngcells-1)*ncomp*nphase++(k-1)*ncomp) = res(j+(ngcells-1)*ncomp*nphase+(k-1)*ncomp) + &
                                pordiff*area(ngcells-1)/(dm_minus(ngcells) &
-                               + dm_plus(ngcells-1))*(total_upd(j,ngcells) - &
-                               total_upd(j,ngcells-1))  
+                               + dm_plus(ngcells-1))*(total_upd(j,ngcells,k) - &
+                               total_upd(j,ngcells-1,k))  
                                
   enddo                                                                                                                                                       
 !================ Calculate the secondary jacobian =============================        
 
 
   do j = 1, ncomp
-    do k = 1, ncomp  
+     do k = 1, ncomp
+        do n=1, nphase
         ! Accumulation
         do i = 1, ngcells 
-          coeff_diag(j,k,i) = coeff_diag(j,k,i) + pordt*vol(i)
+          coeff_diag(j,k,i,n) = coeff_diag(j,k,i,n) + pordt*vol(i)
         enddo
   
         ! Flux terms
         do i = 2, ngcells-1
-          coeff_diag(j,k,i) = coeff_diag(j,k,i) + &
-                              pordiff*area(i)/(dm_minus(i+1) + dm_plus(i)) + &
+          coeff_diag(j,k,i,n) = coeff_diag(j,k,i,n) + &
+                              pordiff(n)*area(i)/(dm_minus(i+1) + dm_plus(i)) + &
+                              pordiff(n)*area(i-1)/(dm_minus(i) + dm_plus(i-1))
+          coeff_left(j,k,i,n) = coeff_left(j,k,i) - &
                               pordiff*area(i-1)/(dm_minus(i) + dm_plus(i-1))
-          coeff_left(j,k,i) = coeff_left(j,k,i) - &
-                              pordiff*area(i-1)/(dm_minus(i) + dm_plus(i-1))
-          coeff_right(j,k,i) = coeff_right(j,k,i) - &
+          coeff_right(j,k,i,n) = coeff_right(j,k,i) - &
                                pordiff*area(i)/(dm_minus(i+1) + dm_plus(i))
         enddo
   
   
         ! Apply boundary conditions
         ! Inner boundary
-        coeff_diag(j,k,1) = coeff_diag(j,k,1) + &
-                            pordiff*area(1)/(dm_minus(2) + dm_plus(1))
+        coeff_diag(j,k,1,n) = coeff_diag(j,k,1,n) + &
+                            pordiff(n)*area(1)/(dm_minus(2) + dm_plus(1))
                    
-        coeff_right(j,k,1) = coeff_right(j,k,1) - &
-                             pordiff*area(1)/(dm_minus(2) + dm_plus(1))
+        coeff_right(j,k,1,n) = coeff_right(j,k,1,n) - &
+                             pordiff(n)*area(1)/(dm_minus(2) + dm_plus(1))
   
         ! Outer boundary -- closest to primary node
-        coeff_diag(j,k,ngcells) = coeff_diag(j,k,ngcells) + &
-                                  pordiff*area(ngcells-1)/(dm_minus(ngcells) &
+        coeff_diag(j,k,ngcells,n) = coeff_diag(j,k,ngcells,n) + &
+                                  pordiff(n)*area(ngcells-1)/(dm_minus(ngcells) &
                                   + dm_plus(ngcells-1)) + &
-                                  pordiff*area(ngcells)/dm_plus(ngcells)
-        coeff_left(j,k,ngcells) = coeff_left(j,k,ngcells) - &
-                                  pordiff*area(ngcells-1)/(dm_minus(ngcells) + &
+                                  pordiff(n)*area(ngcells)/dm_plus(ngcells)
+        coeff_left(j,k,ngcells,n) = coeff_left(j,k,ngcells,n) - &
+                                  pordiff(n)*area(ngcells-1)/(dm_minus(ngcells) + &
                                   dm_plus(ngcells-1)) 
-
+    enddo
     enddo    
   enddo
 
@@ -942,37 +948,45 @@ subroutine SecondaryRTResJacMulti(sec_transport_vars,auxvar, &
   ! Include dtotal (units of kg water/ L water)
   i = 1
   do j = 1, ncomp
-    do k = 1, ncomp
-      coeff_diag(j,k,i) = coeff_diag(j,k,i)*dtotal(j,k,i)
-      coeff_right(j,k,i) = coeff_right(j,k,i)*dtotal(j,k,i+1)
-    enddo
+     do k = 1, ncomp
+        do n=1, nphase
+      coeff_diag(j,k,i,n) = coeff_diag(j,k,i,n)*dtotal(j,k,i,n)
+      coeff_right(j,k,i,n) = coeff_right(j,k,i,n)*dtotal(j,k,i+1,n)
+   enddo
+   enddo
   enddo
   do i = 2, ngcells-1
     do j = 1, ncomp
-      do k = 1, ncomp
-        coeff_diag(j,k,i) = coeff_diag(j,k,i)*dtotal(j,k,i) 
-        coeff_left(j,k,i) = coeff_left(j,k,i)*dtotal(j,k,i-1)
-        coeff_right(j,k,i) = coeff_right(j,k,i)*dtotal(j,k,i+1)
-      enddo
+       do k = 1, ncomp
+          do n=1, nphase
+        coeff_diag(j,k,i,n) = coeff_diag(j,k,i,n)*dtotal(j,k,i,n) 
+        coeff_left(j,k,i,n) = coeff_left(j,k,i,n)*dtotal(j,k,i-1,n)
+        coeff_right(j,k,i,n) = coeff_right(j,k,i,n)*dtotal(j,k,i+1,n)
+     enddo
+     enddo
     enddo
   enddo
   i = ngcells
   do j = 1, ncomp
-    do k = 1, ncomp
-      coeff_diag(j,k,i) = coeff_diag(j,k,i)*dtotal(j,k,i) 
-      coeff_left(j,k,i) = coeff_left(j,k,i)*dtotal(j,k,i-1)
-    enddo
+     do k = 1, ncomp
+        dp n=1, nphase
+      coeff_diag(j,k,i,n) = coeff_diag(j,k,i,n)*dtotal(j,k,i,n) 
+      coeff_left(j,k,i,n) = coeff_left(j,k,i,n)*dtotal(j,k,i-1,n)
+   enddo
+   enddo
   enddo
   
   ! Sorption
   do j = 1, ncomp
-    do k = 1, ncomp  
+     do k = 1, ncomp
+        do n=1, nphase
       ! Accumulation
       do i = 1, ngcells 
         if (reaction%neqsorb > 0) then
-          coeff_diag(j,k,i) = coeff_diag(j,k,i) + vol(i)/option%tran_dt*(dtotal_sorb_upd(j,k,i))
+          coeff_diag(j,k,i,n) = coeff_diag(j,k,i,n) + vol(i)/option%tran_dt*(dtotal_sorb_upd(j,k,i))
         endif
-      enddo
+     enddo
+     enddo
     enddo
   enddo
   
@@ -984,7 +998,7 @@ subroutine SecondaryRTResJacMulti(sec_transport_vars,auxvar, &
     jac_react = 0.d0
     call RTAuxVarCopy(rt_auxvar,sec_transport_vars%sec_rt_auxvar(i), &
                       option)
-    rt_auxvar%pri_molal = conc_upd(:,i) ! in mol/kg
+    rt_auxvar%pri_molal = conc_upd(:,i) ! in mol/kg   !change anything?
     call RTotalAqueous(rt_auxvar,global_auxvar,reaction,option)
     if (reaction%gas%nactive_gas > 0) then
       call RTotalGas(rt_auxvar,global_auxvar,reaction,option)
@@ -993,9 +1007,11 @@ subroutine SecondaryRTResJacMulti(sec_transport_vars,auxvar, &
     call RReaction(res_react,jac_react,PETSC_TRUE, &
                    rt_auxvar,global_auxvar,material_auxvar,reaction,option)                     
     do j = 1, ncomp
-      res(j+(i-1)*ncomp) = res(j+(i-1)*ncomp) + res_react(j) 
-    enddo
-    coeff_diag(:,:,i) = coeff_diag(:,:,i) + jac_react  ! in kg water/s
+       do n=1, nphase
+      res(j+(i-1)*ncomp*nphase+(n-1)*ncomp) = res(j+(i-1)*ncomp*nphase+n-1)*ncomp) + res_react(j) 
+   enddo
+   enddo
+    coeff_diag(:,:,i,:) = coeff_diag(:,:,i,:) + jac_react  ! in kg water/s
   enddo  
   call MaterialAuxVarStrip(material_auxvar)
   deallocate(material_auxvar)
@@ -1004,7 +1020,7 @@ subroutine SecondaryRTResJacMulti(sec_transport_vars,auxvar, &
                         
   rhs = -res   
   
-  if (reaction%use_log_formulation) then
+  if (reaction%use_log_formulation) then !!!!change
   ! scale the jacobian by concentrations
     i = 1
     do k = 1, ncomp
@@ -1033,9 +1049,10 @@ subroutine SecondaryRTResJacMulti(sec_transport_vars,auxvar, &
   select case (option%secondary_continuum_solver)
     case(1) 
       do i = 2, ngcells
-        coeff_left_dm(:,:,i-1) = coeff_left_dm(:,:,i)
+        coeff_left_dm(:,:,i-1,:) = coeff_left_dm(:,:,i,:)
       enddo
-      coeff_left_dm(:,:,ngcells) = 0.d0
+      coeff_left_dm(:,:,ngcells,:) = 0.d0
+      !test?
       call bl3dfac(ngcells,ncomp,coeff_right_dm,coeff_diag_dm,coeff_left_dm,pivot)  
     case(2)
       call decbt(ncomp,ngcells,ncomp,coeff_diag_dm,coeff_right_dm,coeff_left_dm,pivot,ier)
@@ -1456,7 +1473,7 @@ subroutine SecondaryRTUpdateIterate(snes,P0,dP,P1,dX_changed, &
       if (realization%patch%imat(ghosted_id) <= 0) cycle
       sec_diffusion_coefficient = realization%patch% &
                                   material_property_array(1)%ptr% &
-                                  multicontinuum%diff_coeff
+                                  multicontinuum%diff_coeff(:)
       sec_porosity = realization%patch%material_property_array(1)%ptr% &
                     multicontinuum%porosity
 

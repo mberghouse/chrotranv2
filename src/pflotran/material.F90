@@ -105,7 +105,7 @@ module Material_module
     PetscReal :: init_temp
     PetscReal :: init_conc
     PetscReal :: porosity
-    PetscReal :: diff_coeff
+    PetscReal :: diff_coeff(:) !iphase
     PetscReal :: mnrl_volfrac
     PetscReal :: mnrl_area 
     PetscBool :: log_spacing
@@ -240,6 +240,7 @@ function MaterialPropertyCreate(option)
     material_property%multicontinuum%init_temp = 100.d0
     material_property%multicontinuum%init_conc = 0.d0
     material_property%multicontinuum%porosity = 0.5d0
+    allocate(material_property%multicontinuum%diff_coeff(option%transport%nphase))
     material_property%multicontinuum%diff_coeff = 1.d-9
     material_property%multicontinuum%mnrl_volfrac = 0.d0
     material_property%multicontinuum%mnrl_area = 0.d0
@@ -249,7 +250,7 @@ function MaterialPropertyCreate(option)
     material_property%multicontinuum%area_scaling = 1.d0
     nullify(material_property%multicontinuum%epsilon_dataset)
   endif
- 
+
   nullify(material_property%next)
   MaterialPropertyCreate => material_property
 
@@ -812,7 +813,13 @@ subroutine MaterialPropertyRead(material_property,input,option)
                            'MATERIAL_PROPERTY')
             case('DIFFUSION_COEFFICIENT')
               call InputReadDouble(input,option, &
-                             material_property%multicontinuum%diff_coeff)
+                             material_property%multicontinuum%diff_coeff(1))
+              call InputErrorMsg(input,option, &
+                                 'secondary continuum diff coeff', &
+                                 'MATERIAL_PROPERTY')
+            case('GAS_DIFFUSION_COEFFICIENT')
+              call InputReadDouble(input,option, &
+                             material_property%multicontinuum%diff_coeff(2)) !put error messaging here
               call InputErrorMsg(input,option, &
                                  'secondary continuum diff coeff', &
                                  'MATERIAL_PROPERTY')
