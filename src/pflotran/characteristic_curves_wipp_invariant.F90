@@ -23,9 +23,15 @@ type, public, extends(sat_func_base_type) :: sf_WIPP_type
     procedure(calc_Pc_type), pointer :: KRPPc
     procedure(calc_Sw_type), pointer :: KRPSw
 
-    PetscInt  :: KRP                      ! KRP
-    PetscInt  :: KPC                      ! KPC
-    PetscReal :: Swr                      ! SWR
+! KRP and KPC enums. could be stored locally, but it is so far unnecessary
+! Branching statements should be evaluated at ctor time with function pointers
+!
+!   PetscInt  :: KRP                      ! KRP
+!   PetscInt  :: KPC                      ! KPC
+
+! Some memory could be saved with union/equivalence statements
+! But, there are very few saturation_function objects
+    PetscReal :: Swr                      ! SWR or SOCZRO
     PetscReal :: Sgr                      ! SGR
     PetscReal :: Sgr_comp
     PetscReal :: Se1_span                 ! 1/SETERM
@@ -173,9 +179,13 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, expon, Pct_ignore, Pct_alpha, &
   case (9)
     new%KRPPc => SFWIPPKRP9Pc
     new%KRPSw => SFWIPPKRP9Sw
-  case (11)
+  case (11) ! Cavity model, Pc is always 0, nothing else matters
     new%KRPPc => SFWIPPKRP11Pc
     new%KRPSw => SFWIPPKRP11Sw
+    new%KPCPc  => new%KRPPc
+    new%KPCSw  => new%KRPSW
+    new%setPct => SF_BRAGFLO_IgnorePermeability
+    return
   case (12)
     new%KRPPc => SFWIPPKRP12Pc
     new%KRPSw => SFWIPPKRP12Sw
