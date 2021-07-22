@@ -156,9 +156,9 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, expon, Pct_ignore, Pct_alpha, &
 
   ! TODO confirm PCT model.
   ! Except for KRP 9, if PCT_A, capilary pressure is always 0, as per KRP 11
-  if (Pct_alpha == 0d0 .AND. KRP /= 9) then
-    KRP = 11
-  end if
+!  if (Pct_alpha == 0d0 .AND. KRP /= 9) then
+!    KRP = 11
+! end if
 
   ! Data validation
                                         error = 0
