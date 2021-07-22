@@ -7,7 +7,7 @@ use characteristic_curves_base_module ! Needed to define base type
 implicit none
 
 #define KRP_VG_range 1,8
-#define KRP_BC_range 2,3,4
+#define KRP_BC_range 2,3,4,12
 
 ! **************************************************************************** !
 ! Common BRAGFLO Saturation Function type
@@ -144,7 +144,7 @@ contains
 function SFWIPPctor(KRP, KPC, Swr, Sgr, expon, Pct_ignore, Pct_alpha, &
                     Pct_expon, Pcmax, Swj, Smin, Semin) result (new)
   class(sf_WIPP_type), pointer :: new
-  PetscInt, intent(in)  :: KRP, KPC
+  PetscInt, intent(inout)  :: KRP, KPC
   PetscReal, intent(in) :: Swr, Sgr, expon, Pct_alpha, Pct_expon, Swj, Pcmax
   PetscReal, intent(in) :: Smin, Semin
   PetscBool, intent(in) :: Pct_ignore
@@ -153,6 +153,12 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, expon, Pct_ignore, Pct_alpha, &
   ! Memory allocation
   allocate(new)
   if (.not. associated(new)) return ! Memory allocation failed
+
+  ! TODO confirm PCT model.
+  ! Except for KRP 9, if PCT_A, capilary pressure is always 0, as per KRP 11
+  if (Pct_alpha == 0d0 .AND. KRP /= 9) then
+    KRP = 11
+  end if
 
   ! Data validation
                                         error = 0
