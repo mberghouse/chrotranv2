@@ -2722,7 +2722,8 @@ subroutine BasisInit_hpt(reaction,option)
         cur_isotherm_rxn%Langmuir_b
       reaction%isotherm%isotherm_rxn%eqisothermfreundlichn(irxn) = &
         cur_isotherm_rxn%Freundlich_n
-       
+      reaction%isotherm%isotherm_rxn%eqisothermdimensionlesskd(irxn) = &
+        cur_isotherm_rxn%dimensionless_kd
       cur_isotherm_rxn => cur_isotherm_rxn%next
     enddo
   endif

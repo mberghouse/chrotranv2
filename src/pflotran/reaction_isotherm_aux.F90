@@ -11,6 +11,7 @@ module Reaction_Isotherm_Aux_module
   !kd units
   PetscInt, parameter, public :: KD_UNIT_KG_M3_BULK = 0
   PetscInt, parameter, public :: KD_UNIT_MLW_GSOIL = 1
+  PetscInt, parameter, public :: KD_UNIT_DIMENSIONLESS = 2
 
   type, public :: isotherm_link_type
     PetscInt :: id
@@ -20,6 +21,7 @@ module Reaction_Isotherm_Aux_module
     PetscReal :: Kd
     PetscReal :: Langmuir_B
     PetscReal :: Freundlich_n
+    PetscReal :: dimensionless_kd
     type(isotherm_link_type), pointer :: next
   end type isotherm_link_type
 
@@ -27,6 +29,7 @@ module Reaction_Isotherm_Aux_module
     PetscReal, pointer :: eqisothermcoeff(:)
     PetscReal, pointer :: eqisothermlangmuirb(:)
     PetscReal, pointer :: eqisothermfreundlichn(:)
+    PetscReal, pointer :: eqisothermdimensionlesskd(:)
   end type isotherm_rxn_type
 
   type, public :: isotherm_type
@@ -99,6 +102,7 @@ function IsothermLinkCreate()
   rxn%Kd = 0.d0
   rxn%Langmuir_B = 0.d0
   rxn%Freundlich_n = 0.d0
+  rxn%dimensionless_kd = 0.d0
   nullify(rxn%next)
 
   IsothermLinkCreate => rxn
@@ -122,7 +126,9 @@ subroutine IsothermRxnCreate(isotherm_rxn, isotherm)
   allocate(isotherm_rxn%eqisothermlangmuirb(isotherm%neqkdrxn))
   isotherm_rxn%eqisothermlangmuirb = 0.d0
   allocate(isotherm_rxn%eqisothermfreundlichn(isotherm%neqkdrxn))
-  isotherm_rxn%eqisothermfreundlichn = 0.d0 
+  isotherm_rxn%eqisothermfreundlichn = 0.d0
+  allocate(isotherm_rxn%eqisothermdimensionlesskd(isotherm%neqkdrxn))
+  isotherm_rxn%eqisothermdimensionlesskd = 0.d0
 
 end subroutine IsothermRxnCreate
 
@@ -189,6 +195,7 @@ subroutine IsothermDestroy(isotherm,option)
     call DeallocateArray(isotherm%isotherm_rxn%eqisothermcoeff)
     call DeallocateArray(isotherm%isotherm_rxn%eqisothermlangmuirb)
     call DeallocateArray(isotherm%isotherm_rxn%eqisothermfreundlichn)
+    call DeallocateArray(isotherm%isotherm_rxn%eqisothermdimensionlesskd)
   endif
 
   nullify(isotherm%isotherm_rxn)
@@ -197,6 +204,7 @@ subroutine IsothermDestroy(isotherm,option)
     call DeallocateArray(isotherm%multicontinuum_isotherm_rxn%eqisothermcoeff)
     call DeallocateArray(isotherm%multicontinuum_isotherm_rxn%eqisothermlangmuirb)
     call DeallocateArray(isotherm%multicontinuum_isotherm_rxn%eqisothermfreundlichn)
+    call DeallocateArray(isotherm%multicontinuum_isotherm_rxn%eqisothermdimensionlesskd)
   endif
 
   nullify(isotherm%multicontinuum_isotherm_rxn)

@@ -128,6 +128,7 @@ module PFLOTRAN_Constants_module
   PetscInt, parameter, public :: SORPTION_LINEAR = 1
   PetscInt, parameter, public :: SORPTION_LANGMUIR = 2
   PetscInt, parameter, public :: SORPTION_FREUNDLICH  = 3
+  PetscInt, parameter, public :: SORPTION_DIMENSIONLESS_KD = 4
 
   ! Classes
   PetscInt, parameter, public :: NULL_CLASS = 0

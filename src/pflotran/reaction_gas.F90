@@ -239,14 +239,27 @@ subroutine RTotalSorbGasKD(rt_auxvar,global_auxvar,material_auxvar,gas, &
   PetscReal :: tempreal
   PetscReal :: one_over_n
   PetscReal :: molality_one_over_n
-  PetscReal :: kd_kgw_m3b
+  PetscReal :: kd_kgw_m3b, kd_sorb_gas
   PetscReal :: partial_pres,pp_one_over_n
+  PetscReal :: gas_concentration
+  PetscReal :: RT
+  PetscReal :: L_pore, L_gas
   PetscInt :: ncomp
 
   PetscInt, parameter :: iphase = 2
 
   isotherm => gas%isotherm
 
+  ! units of ideal gas constant = J/mol-K = kPa-L/mol-K
+  ! units of RT = Pa-L/mol
+  RT = IDEAL_GAS_CONSTANT*(global_auxvar%temp+273.15d0)*1.d3
+  ! Concentration units = mol/L gas
+  gas_concentration = partial_pres * 1.d5 / RT
+  ! Pore volume (L)
+  L_pore = material_auxvar%porosity*material_auxvar%volume*1.d3
+  ! Gas volume (L)
+  L_gas = L_pore*global_auxvar%sat(option%gas_phase)
+  
   do irxn = 1, isotherm%neqkdrxn
     partial_pres =  rt_auxvar%gas_pp(irxn)
     ncomp = gas%acteqspecid(0,irxn)
@@ -287,6 +300,15 @@ subroutine RTotalSorbGasKD(rt_auxvar,global_auxvar,material_auxvar,gas, &
         pp_one_over_n = partial_pres**one_over_n
         res = kd_kgw_m3b*partial_pres**one_over_n
         dres_dc = res/partial_pres*one_over_n
+      case(SORPTION_DIMENSIONLESS_KD)
+        ! Dimensionless Kd: moles sorbed/moles gas
+        ! (1/(1+1/Kd)) = moles sorbed / (moles sorbed + moles in gas phase)
+        ! units = mole solute/L gas * L gas * sorbed/total / m^3 bulk
+        !       = mole solute sorbed / m^3 bulk
+        kd_sorb_gas = isotherm_rxn%eqisothermdimensionlesskd(irxn)
+        !res = gas_concentration * L_gas * (1/(1+1/kd_sorb_gas)) / material_auxvar%volume
+        res = gas_concentration*L_gas*kd_sorb_gas / material_auxvar%volume
+        dres_dc = res/gas_concentration
       case default
         res = 0.d0
         dres_dc = 0.d0

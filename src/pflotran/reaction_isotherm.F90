@@ -105,6 +105,8 @@ subroutine IsothermRead(isotherm,input,option)
               isotherm_rxn%itype = SORPTION_LANGMUIR
             case('FREUNDLICH')
               isotherm_rxn%itype = SORPTION_FREUNDLICH
+            case('DIMENSIONLESS_KD')
+              isotherm_rxn%itype = SORPTION_DIMENSIONLESS_KD
             case default
               call InputKeywordUnrecognized(input,word, &
                     'CHEMISTRY,SORPTION,ISOTHERM_REACTIONS,TYPE', &
@@ -147,6 +149,15 @@ subroutine IsothermRead(isotherm,input,option)
           call InputErrorMsg(input,option,'Freundlich_N', &
                              'CHEMISTRY,ISOTHERM_REACTIONS')
           isotherm_rxn%itype = SORPTION_FREUNDLICH
+        case('DIMENSIONLESS_KD')
+          call InputReadDouble(input,option,&
+                               isotherm_rxn%dimensionless_kd)
+          call InputErrorMsg(input,option, &
+               'DIMENSIONLESS_KD', &
+               'CHEMISTRY,ISOTHERM_REACTIONS')
+          call InputReadWord(input,option,word,PETSC_TRUE)
+          if (input%ierr == 0) kd_units = trim(word)
+          isotherm_rxn%itype = SORPTION_DIMENSIONLESS_KD
         case('KD_MINERAL_NAME')
           call InputReadWord(input,option,word,PETSC_TRUE)
           call InputErrorMsg(input,option,'KD_MINERAL_NAME', &
