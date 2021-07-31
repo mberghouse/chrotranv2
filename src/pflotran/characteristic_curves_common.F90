@@ -264,7 +264,18 @@ module Characteristic_Curves_Common_module
     procedure, public :: RelativePermeability => &
                                   RPFTableGasRelPerm
   end type rpf_Table_gas_type
-
+  !---------------------------------------------------------------------------
+  type, public, extends(rel_perm_func_base_type) :: rpf_Mualem_VG_ECM_type
+    PetscReal :: m_mat, m_frac
+    PetscReal :: Sr_frac ! Sr stores matrix residual saturation
+    PetscReal :: volume_fraction_fracture
+    PetscReal :: perm_frac
+    PetscReal :: perm_mat
+  contains
+    procedure, public :: Init => RPFMualemVGECMInit
+    procedure, public :: Verify => RPFMualemVGECMVerify
+    procedure, public :: RelativePermeability => RPFMualemVGECMRelPerm
+  end type rpf_Mualem_VG_ECM_type
  
   public :: &! standard char. curves:
             SFDefaultCreate, &
@@ -296,7 +307,8 @@ module Characteristic_Curves_Common_module
             RPFIGHCC2CompLiqCreate, &
             RPFIGHCC2CompGasCreate, &
             RPFTableLiqCreate, &
-            RPFTableGasCreate
+            RPFTableGasCreate, &
+            RPFMualemVGECMCreate
   
 contains
 
@@ -4193,5 +4205,179 @@ subroutine RPFmKGasRelPerm(this,liquid_saturation, &
 
 end subroutine RPFmKGasRelPerm
 
- 
+ ! ************************************************************************** !
+! ************************************************************************** !
+
+function RPFMualemVGECMCreate()
+
+  ! Creates the van Genutchten Mualem relative permeability function ECM object 
+
+  implicit none
+  
+  class(rpf_Mualem_vg_ECM_type), pointer :: RPFMualemVGECMCreate
+  
+  allocate(RPFMualemVGECMCreate)
+  call RPFMualemVGECMCreate%Init()
+  
+end function RPFMualemVGECMCreate
+
+! ************************************************************************** !
+
+subroutine RPFMualemVGECMInit(this)
+
+  ! Initializes the van Genutchten Mualem relative permeability function ECM 
+  ! object
+
+  implicit none
+  
+  class(rpf_Mualem_vg_ECM_type) :: this
+
+  call RPFBaseInit(this)
+  this%m_frac = UNINITIALIZED_DOUBLE
+  this%m_mat = UNINITIALIZED_DOUBLE
+  this%Sr_frac = UNINITIALIZED_DOUBLE
+  
+  this%analytical_derivative_available = PETSC_TRUE
+  
+end subroutine RPFMualemVGECMInit
+
+! ************************************************************************** !
+
+subroutine RPFMualemVGECMVerify(this,name,option)
+
+  use Option_module
+
+  implicit none
+  
+  class(rpf_Mualem_vg_ECM_type) :: this
+  character(len=MAXSTRINGLENGTH) :: name
+  type(option_type) :: option
+  
+  character(len=MAXSTRINGLENGTH) :: string
+  
+  if (index(name,'PERMEABILITY_FUNCTION') > 0) then
+    string = name
+  else
+    string = trim(name) // 'PERMEABILITY_FUNCTION,MUALEM_VG_ECM'
+  endif  
+  call RPFBaseVerify(this,string,option)
+  if (Uninitialized(this%m_frac)) then
+    option%io_buffer = UninitializedMessage('M_FRAC',string)
+    call PrintErrMsg(option)
+  endif   
+  if (Uninitialized(this%m_mat)) then
+    option%io_buffer = UninitializedMessage('M_MAT',string)
+    call PrintErrMsg(option)
+  endif  
+  if (Uninitialized(this%Sr_frac)) then
+    option%io_buffer = UninitializedMessage('RESIDUAL_SATURATION_FRAC',string)
+    call PrintErrMsg(option)
+  endif   
+  if (Uninitialized(this%volume_fraction_fracture)) then
+    option%io_buffer = UninitializedMessage('VOLUME_FRACTION_FRACTURE',string)
+    call PrintErrMsg(option)
+  endif   
+  if (Uninitialized(this%perm_frac)) then
+    option%io_buffer = UninitializedMessage('PERMEABILITY_FRACTURE',string)
+    call PrintErrMsg(option)
+  endif   
+  if (Uninitialized(this%perm_mat)) then
+    option%io_buffer = UninitializedMessage('PERMEABILITY_MATRIX',string)
+    call PrintErrMsg(option)
+  endif   
+end subroutine RPFMualemVGECMVerify
+
+! ************************************************************************** !
+
+subroutine RPFMualemVGECMRelPerm(this,liquid_saturation, &
+                                     relative_permeability,dkr_sat,option)
+  ! 
+  ! Computes the relative permeability (and associated derivatives) as a 
+  ! function of saturation for ECM
+  ! RLP model 4 in FEHM
+  ! (1) FEHM User Manual: https://www.lanl.gov/orgs/ees/fehm/docs/FEHM_UM_V3.3.0.pdf                                   
+  ! 
+  !   
+  ! Author: Satish Karra
+  ! Date: 07/30/2021
+
+  use Option_module
+  use Utility_module
+  
+  implicit none
+
+  class(rpf_Mualem_VG_ECM_type) :: this
+  PetscReal, intent(in) :: liquid_saturation
+  PetscReal, intent(out) :: relative_permeability
+  PetscReal, intent(out) :: dkr_sat
+  type(option_type), intent(inout) :: option
+  
+  PetscReal :: Se_mat, Se_frac
+  PetscReal :: one_over_m_mat, one_over_m_frac
+  PetscReal :: Se_one_over_m_mat, Se_one_over_m_frac
+  PetscReal :: dkr_Se_mat, dkr_Se_frac
+  PetscReal :: dSe_sat_mat, dSe_sat_frac
+  PetscReal :: rel_perm_mat, rel_perm_frac
+  PetscReal :: dkr_sat_mat, dkr_sat_frac
+  PetscReal :: bulk_permeability
+
+  relative_permeability = 0.d0
+  rel_perm_mat = 0.d0
+  rel_perm_frac = 0.d0
+  dkr_sat_mat = 0.d0
+  dkr_sat_frac = 0.d0
+  dkr_sat = 0.d0
+  
+  ! matrix contribution
+  Se_mat = (liquid_saturation - this%Sr) / (1.d0 - this%Sr)
+  if (Se_mat >= 1.d0) then
+    rel_perm_mat = 1.d0
+    return
+  else if (Se_mat <= 0.d0) then
+    rel_perm_mat = 0.d0
+    return
+  endif
+  
+
+  one_over_m_mat = 1.d0/this%m_mat
+  Se_one_over_m_mat = Se_mat**one_over_m_mat
+  rel_perm_mat = sqrt(Se_mat)*(1.d0-(1.d0-Se_one_over_m_mat)**this%m_mat)**2.d0
+  dkr_Se_mat = 0.5d0*rel_perm_mat/Se_mat+ &
+            2.d0*Se_mat**(one_over_m_mat-0.5d0)* &
+                (1.d0-Se_one_over_m_mat)**(this%m_mat-1.d0)* &
+                (1.d0-(1.d0-Se_one_over_m_mat)**this%m_mat)
+
+  dSe_sat_mat = 1.d0 / (1.d0 - this%Sr)
+  dkr_sat_mat = dkr_Se_mat * dSe_sat_mat
+
+
+  ! fracture contribution
+  Se_frac = (liquid_saturation - this%Sr_frac) / (1.d0 - this%Sr_frac)
+  if (Se_frac >= 1.d0) then
+    rel_perm_frac = 1.d0
+    return
+  else if (Se_frac <= 0.d0) then
+    rel_perm_frac = 0.d0
+    return
+  endif
+  
+
+  one_over_m_frac = 1.d0/this%m_frac
+  Se_one_over_m_frac = Se_frac**one_over_m_frac
+  rel_perm_frac = sqrt(Se_frac)*(1.d0-(1.d0-Se_one_over_m_frac)**this%m_frac)**2.d0
+  dkr_Se_frac = 0.5d0*rel_perm_frac/Se_frac+ &
+            2.d0*Se_frac**(one_over_m_frac-0.5d0)* &
+                (1.d0-Se_one_over_m_frac)**(this%m_frac-1.d0)* &
+                (1.d0-(1.d0-Se_one_over_m_frac)**this%m_frac)
+
+  dSe_sat_frac = 1.d0 / (1.d0 - this%Sr_frac)
+  dkr_sat_frac = dkr_Se_frac * dSe_sat_frac
+
+  bulk_permeability = this%volume_fraction_fracture*this%perm_frac + (1.d0-this%volume_fraction_fracture)*this%perm_mat
+  relative_permeability = 1.d0/bulk_permeability*(this%volume_fraction_fracture*this%perm_frac*rel_perm_frac + (1.d0-this%volume_fraction_fracture)*this%perm_mat*rel_perm_mat)
+  dkr_sat = 1.d0/bulk_permeability*(this%volume_fraction_fracture*this%perm_frac*dkr_sat_frac + (1.d0-this%volume_fraction_fracture)*this%perm_mat*dkr_sat_mat)
+
+
+end subroutine RPFMualemVGECMRelPerm
+
 end module Characteristic_Curves_Common_module

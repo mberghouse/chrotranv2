@@ -296,6 +296,9 @@ subroutine CharacteristicCurvesRead(this,input,option)
           case('CONSTANT')
             rel_perm_function_ptr => RPFConstantCreate()
             ! phase_keyword = 'NONE'
+          case('MUALEM_ECM', 'MUALEM_VG_ECM')
+            rel_perm_function_ptr => RPFMualemVGECMCreate()
+            phase_keyword = 'LIQUID'
           case default
             call InputKeywordUnrecognized(input,word,'PERMEABILITY_FUNCTION', &
                                           option)
@@ -1513,6 +1516,32 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
               option)
         end select
     !------------------------------------------
+      class is(rpf_Mualem_VG_ECM_type)
+        select case(keyword)
+          case('M_FRACTURE')
+            call InputReadDouble(input,option,rpf%m_frac)
+            call InputErrorMsg(input,option,'m_frac',error_string)
+          case('M_MATRIX')
+            call InputReadDouble(input,option,rpf%m_mat)
+            call InputErrorMsg(input,option,'m_mat',error_string)
+          case('RESIDUAL_SATURATION_FRACTURE')
+            call InputReadDouble(input,option,rpf%Sr_frac)
+            call InputErrorMsg(input,option,'Sr_frac',error_string)
+          case('PERMEABILITY_FRACTURE')
+            call InputReadDouble(input,option,rpf%perm_frac)
+            call InputErrorMsg(input,option,'perm_frac',error_string)
+          case('PERMEABILITY_MATRIX')
+            call InputReadDouble(input,option,rpf%perm_mat)
+            call InputErrorMsg(input,option,'perm_mat',error_string)
+          case('RESIDUAL_SATURATION_MATRIX')
+            call InputReadDouble(input,option,rpf%Sr)
+            call InputErrorMsg(input,option,'Sr',error_string)
+          case default
+            call InputKeywordUnrecognized(input,keyword, &
+              'Mualem van Genuchten equivalent continuum relative permeability function', &
+              option)
+        end select
+    !------------------------------------------
       class default
         option%io_buffer = 'Read routine not implemented for relative ' // &
                            'permeability function class.'
@@ -2255,6 +2284,27 @@ subroutine CharCurvesInputRecord(char_curve_list)
           write(id,'(a)') adjustl(trim(word1))
           write(id,'(a29)',advance='no') 'liquid residual sat.: '
           write(word1,*) rpf%Sr
+          write(id,'(a)') adjustl(trim(word1))
+      !------------------------------------
+          class is (rpf_Mualem_VG_ECM_type)
+          write(id,'(a)') 'mualem_VG_ECM_liq'
+          write(id,'(a29)',advance='no') 'm_mat: '
+          write(word1,*) rpf%m_mat
+          write(id,'(a)') adjustl(trim(word1))
+          write(id,'(a29)',advance='no') 'm_frac: '
+          write(word1,*) rpf%m_frac
+          write(id,'(a)') adjustl(trim(word1))
+          write(id,'(a29)',advance='no') 'residual sat fracture: '
+          write(word1,*) rpf%Sr_frac
+          write(id,'(a)') adjustl(trim(word1))
+          write(id,'(a29)',advance='no') 'residual sat matrix: '
+          write(word1,*) rpf%Sr
+          write(id,'(a)') adjustl(trim(word1))
+          write(id,'(a29)',advance='no') 'permeability fracture: '
+          write(word1,*) rpf%perm_frac
+          write(id,'(a)') adjustl(trim(word1))
+          write(id,'(a29)',advance='no') 'permeability matrix: '
+          write(word1,*) rpf%perm_mat
           write(id,'(a)') adjustl(trim(word1))
       !------------------------------------
         class default
