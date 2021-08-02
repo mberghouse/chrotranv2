@@ -4347,7 +4347,7 @@ subroutine RPFMualemVGECMRelPerm(this,liquid_saturation, &
   Se_one_over_m_mat = Se_mat**one_over_m_mat
   rel_perm_mat = sqrt(Se_mat)*(1.d0-(1.d0-Se_one_over_m_mat)**this%m_mat)**2.d0
   dkr_Se_mat = 0.5d0*rel_perm_mat/Se_mat+ &
-            2.d0*Se_mat**(one_over_m_mat-0.5d0)* &
+                2.d0*Se_mat**(one_over_m_mat-0.5d0)* &
                 (1.d0-Se_one_over_m_mat)**(this%m_mat-1.d0)* &
                 (1.d0-(1.d0-Se_one_over_m_mat)**this%m_mat)
 
@@ -4370,16 +4370,22 @@ subroutine RPFMualemVGECMRelPerm(this,liquid_saturation, &
   Se_one_over_m_frac = Se_frac**one_over_m_frac
   rel_perm_frac = sqrt(Se_frac)*(1.d0-(1.d0-Se_one_over_m_frac)**this%m_frac)**2.d0
   dkr_Se_frac = 0.5d0*rel_perm_frac/Se_frac+ &
-            2.d0*Se_frac**(one_over_m_frac-0.5d0)* &
-                (1.d0-Se_one_over_m_frac)**(this%m_frac-1.d0)* &
-                (1.d0-(1.d0-Se_one_over_m_frac)**this%m_frac)
+                 2.d0*Se_frac**(one_over_m_frac-0.5d0)* &
+                 (1.d0-Se_one_over_m_frac)**(this%m_frac-1.d0)* &
+                 (1.d0-(1.d0-Se_one_over_m_frac)**this%m_frac)
 
   dSe_sat_frac = 1.d0 / (1.d0 - this%Sr_frac)
   dkr_sat_frac = dkr_Se_frac * dSe_sat_frac
 
-  bulk_permeability = this%volume_fraction_fracture*this%perm_frac + (1.d0-this%volume_fraction_fracture)*this%perm_mat
-  relative_permeability = 1.d0/bulk_permeability*(this%volume_fraction_fracture*this%perm_frac*rel_perm_frac + (1.d0-this%volume_fraction_fracture)*this%perm_mat*rel_perm_mat)
-  dkr_sat = 1.d0/bulk_permeability*(this%volume_fraction_fracture*this%perm_frac*dkr_sat_frac + (1.d0-this%volume_fraction_fracture)*this%perm_mat*dkr_sat_mat)
+  bulk_permeability = this%volume_fraction_fracture*this%perm_frac + &
+                       (1.d0-this%volume_fraction_fracture)*this%perm_mat
+  relative_permeability = 1.d0/bulk_permeability*(this%volume_fraction_fracture* &
+                           this%perm_frac*rel_perm_frac + &
+                           (1.d0-this%volume_fraction_fracture)* &
+                           this%perm_mat*rel_perm_mat)
+  dkr_sat = 1.d0/bulk_permeability*(this%volume_fraction_fracture* &
+             this%perm_frac*dkr_sat_frac + &
+             (1.d0-this%volume_fraction_fracture)*this%perm_mat*dkr_sat_mat)
 
 
 end subroutine RPFMualemVGECMRelPerm
