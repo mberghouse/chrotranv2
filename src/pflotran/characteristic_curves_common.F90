@@ -4236,6 +4236,10 @@ subroutine RPFMualemVGECMInit(this)
   this%m_frac = UNINITIALIZED_DOUBLE
   this%m_mat = UNINITIALIZED_DOUBLE
   this%Sr_frac = UNINITIALIZED_DOUBLE
+  this%volume_fraction_fracture = UNINITIALIZED_DOUBLE
+  this%perm_frac = UNINITIALIZED_DOUBLE
+  this%perm_mat = UNINITIALIZED_DOUBLE
+ 
   
   this%analytical_derivative_available = PETSC_TRUE
   

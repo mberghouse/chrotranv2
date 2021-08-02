@@ -1536,6 +1536,9 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
           case('RESIDUAL_SATURATION_MATRIX')
             call InputReadDouble(input,option,rpf%Sr)
             call InputErrorMsg(input,option,'Sr',error_string)
+          case('VOLUME_FRACTION_FRACTURE')
+            call InputReadDouble(input,option,rpf%volume_fraction_fracture)
+            call InputErrorMsg(input,option,'voume_fraction_fracture',error_string)
           case default
             call InputKeywordUnrecognized(input,keyword, &
               'Mualem van Genuchten equivalent continuum relative permeability function', &
@@ -2305,6 +2308,9 @@ subroutine CharCurvesInputRecord(char_curve_list)
           write(id,'(a)') adjustl(trim(word1))
           write(id,'(a29)',advance='no') 'permeability matrix: '
           write(word1,*) rpf%perm_mat
+          write(id,'(a)') adjustl(trim(word1))
+          write(id,'(a29)',advance='no') 'volume fraction fracture: '
+          write(word1,*) rpf%volume_fraction_fracture
           write(id,'(a)') adjustl(trim(word1))
       !------------------------------------
         class default
