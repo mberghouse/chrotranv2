@@ -903,6 +903,8 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
       error_string = trim(error_string) // 'MUALEM_VG_LIQ'
     class is(rpf_Mualem_VG_gas_type)
       error_string = trim(error_string) // 'MUALEM_VG_GAS'
+    class is(rpf_Mualem_VG_ECM_type)
+      error_string = trim(error_string) // 'MUALEM_VG_ECM'
     class is(rpf_Burdine_BC_liq_type)
       error_string = trim(error_string) // 'BURDINE_BC_LIQ'
     class is(rpf_Burdine_BC_gas_type)
@@ -1524,6 +1526,12 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
           case('M_MATRIX')
             call InputReadDouble(input,option,rpf%m_mat)
             call InputErrorMsg(input,option,'m_mat',error_string)
+          case('ALPHA_FRACTURE')
+            call InputReadDouble(input,option,rpf%alpha_frac)
+            call InputErrorMsg(input,option,'alpha_frac',error_string)
+          case('ALPHA_MATRIX')
+            call InputReadDouble(input,option,rpf%alpha_mat)
+            call InputErrorMsg(input,option,'alpha_mat',error_string)
           case('RESIDUAL_SATURATION_FRACTURE')
             call InputReadDouble(input,option,rpf%Sr_frac)
             call InputErrorMsg(input,option,'Sr_frac',error_string)
@@ -2296,6 +2304,12 @@ subroutine CharCurvesInputRecord(char_curve_list)
           write(id,'(a)') adjustl(trim(word1))
           write(id,'(a29)',advance='no') 'm_frac: '
           write(word1,*) rpf%m_frac
+          write(id,'(a)') adjustl(trim(word1))
+          write(id,'(a29)',advance='no') 'alpha_mat: '
+          write(word1,*) rpf%alpha_mat
+          write(id,'(a)') adjustl(trim(word1))
+          write(id,'(a29)',advance='no') 'alpha_frac: '
+          write(word1,*) rpf%alpha_frac
           write(id,'(a)') adjustl(trim(word1))
           write(id,'(a29)',advance='no') 'residual sat fracture: '
           write(word1,*) rpf%Sr_frac

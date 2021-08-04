@@ -267,6 +267,7 @@ module Characteristic_Curves_Common_module
   !---------------------------------------------------------------------------
   type, public, extends(rel_perm_func_base_type) :: rpf_Mualem_VG_ECM_type
     PetscReal :: m_mat, m_frac
+    PetscReal :: alpha_mat, alpha_frac
     PetscReal :: Sr_frac ! Sr stores matrix residual saturation
     PetscReal :: volume_fraction_fracture
     PetscReal :: perm_frac
@@ -4235,6 +4236,8 @@ subroutine RPFMualemVGECMInit(this)
   call RPFBaseInit(this)
   this%m_frac = UNINITIALIZED_DOUBLE
   this%m_mat = UNINITIALIZED_DOUBLE
+  this%alpha_frac= UNINITIALIZED_DOUBLE
+  this%alpha_mat = UNINITIALIZED_DOUBLE
   this%Sr_frac = UNINITIALIZED_DOUBLE
   this%volume_fraction_fracture = UNINITIALIZED_DOUBLE
   this%perm_frac = UNINITIALIZED_DOUBLE
@@ -4271,6 +4274,14 @@ subroutine RPFMualemVGECMVerify(this,name,option)
   endif   
   if (Uninitialized(this%m_mat)) then
     option%io_buffer = UninitializedMessage('M_MAT',string)
+    call PrintErrMsg(option)
+  endif  
+  if (Uninitialized(this%alpha_frac)) then
+    option%io_buffer = UninitializedMessage('ALPHA_FRAC',string)
+    call PrintErrMsg(option)
+  endif   
+  if (Uninitialized(this%alpha_mat)) then
+    option%io_buffer = UninitializedMessage('ALPHA_MAT',string)
     call PrintErrMsg(option)
   endif  
   if (Uninitialized(this%Sr_frac)) then
@@ -4324,16 +4335,26 @@ subroutine RPFMualemVGECMRelPerm(this,liquid_saturation, &
   PetscReal :: rel_perm_mat, rel_perm_frac
   PetscReal :: dkr_sat_mat, dkr_sat_frac
   PetscReal :: bulk_permeability
+  PetscReal :: liquid_saturation_mat, liquid_saturation_frac
+  PetscReal :: n_mat, n_frac
+  PetscReal :: capillary_pressure
 
+
+  ! incoming liquid_saturation is matrix liquid saturation
+  liquid_saturation_mat = liquid_saturation
   relative_permeability = 0.d0
   rel_perm_mat = 0.d0
   rel_perm_frac = 0.d0
   dkr_sat_mat = 0.d0
   dkr_sat_frac = 0.d0
   dkr_sat = 0.d0
-  
+  liquid_saturation_frac = 0.d0
+ 
+  n_mat = 1.d0/(1.d0-this%m_mat)
+  n_frac = 1.d0/(1.d0-this%m_frac)
+ 
   ! matrix contribution
-  Se_mat = (liquid_saturation - this%Sr) / (1.d0 - this%Sr)
+  Se_mat = (liquid_saturation_mat - this%Sr) / (1.d0 - this%Sr)
   if (Se_mat >= 1.d0) then
     rel_perm_mat = 1.d0
     return
@@ -4356,7 +4377,15 @@ subroutine RPFMualemVGECMRelPerm(this,liquid_saturation, &
 
 
   ! fracture contribution
-  Se_frac = (liquid_saturation - this%Sr_frac) / (1.d0 - this%Sr_frac)
+  ! Need to recalculate liquid saturation in fracture from liquid saturation in matrix
+  ! capillary pressure in both is assumed to be same
+
+  capillary_pressure = this%alpha_mat* &
+                         (Se_mat**(-1.d0/this%m_mat)-1.d0)**(1.d0/n_mat)
+  Se_frac = (1.d0+(this%alpha_frac*capillary_pressure)**n_frac)** &
+              (-1.d0*this%m_frac)
+
+!  Se_frac = (liquid_saturation_frac - this%Sr_frac) / (1.d0 - this%Sr_frac)
   if (Se_frac >= 1.d0) then
     rel_perm_frac = 1.d0
     return
