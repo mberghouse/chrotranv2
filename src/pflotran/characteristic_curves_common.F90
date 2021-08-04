@@ -4335,7 +4335,7 @@ subroutine RPFMualemVGECMRelPerm(this,liquid_saturation, &
   PetscReal :: rel_perm_mat, rel_perm_frac
   PetscReal :: dkr_sat_mat, dkr_sat_frac
   PetscReal :: bulk_permeability
-  PetscReal :: liquid_saturation_mat, liquid_saturation_frac
+  PetscReal :: liquid_saturation_mat
   PetscReal :: n_mat, n_frac
   PetscReal :: capillary_pressure
 
@@ -4348,7 +4348,6 @@ subroutine RPFMualemVGECMRelPerm(this,liquid_saturation, &
   dkr_sat_mat = 0.d0
   dkr_sat_frac = 0.d0
   dkr_sat = 0.d0
-  liquid_saturation_frac = 0.d0
  
   n_mat = 1.d0/(1.d0-this%m_mat)
   n_frac = 1.d0/(1.d0-this%m_frac)
