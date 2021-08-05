@@ -4356,24 +4356,21 @@ subroutine RPFMualemVGECMRelPerm(this,liquid_saturation, &
   Se_mat = (liquid_saturation_mat - this%Sr) / (1.d0 - this%Sr)
   if (Se_mat >= 1.d0) then
     rel_perm_mat = 1.d0
-    return
   else if (Se_mat <= 0.d0) then
     rel_perm_mat = 0.d0
-    return
+  else
+    one_over_m_mat = 1.d0/this%m_mat
+    Se_one_over_m_mat = Se_mat**one_over_m_mat
+    rel_perm_mat = sqrt(Se_mat)*(1.d0-(1.d0-Se_one_over_m_mat)**this%m_mat)**2.d0
+    dkr_Se_mat = 0.5d0*rel_perm_mat/Se_mat+ &
+                  2.d0*Se_mat**(one_over_m_mat-0.5d0)* &
+                  (1.d0-Se_one_over_m_mat)**(this%m_mat-1.d0)* &
+                  (1.d0-(1.d0-Se_one_over_m_mat)**this%m_mat)
+
+    dSe_sat_mat = 1.d0 / (1.d0 - this%Sr)
+    dkr_sat_mat = dkr_Se_mat * dSe_sat_mat
   endif
   
-
-  one_over_m_mat = 1.d0/this%m_mat
-  Se_one_over_m_mat = Se_mat**one_over_m_mat
-  rel_perm_mat = sqrt(Se_mat)*(1.d0-(1.d0-Se_one_over_m_mat)**this%m_mat)**2.d0
-  dkr_Se_mat = 0.5d0*rel_perm_mat/Se_mat+ &
-                2.d0*Se_mat**(one_over_m_mat-0.5d0)* &
-                (1.d0-Se_one_over_m_mat)**(this%m_mat-1.d0)* &
-                (1.d0-(1.d0-Se_one_over_m_mat)**this%m_mat)
-
-  dSe_sat_mat = 1.d0 / (1.d0 - this%Sr)
-  dkr_sat_mat = dkr_Se_mat * dSe_sat_mat
-
 
   ! fracture contribution
   ! Need to recalculate liquid saturation in fracture from liquid saturation in matrix
@@ -4387,23 +4384,21 @@ subroutine RPFMualemVGECMRelPerm(this,liquid_saturation, &
 !  Se_frac = (liquid_saturation_frac - this%Sr_frac) / (1.d0 - this%Sr_frac)
   if (Se_frac >= 1.d0) then
     rel_perm_frac = 1.d0
-    return
   else if (Se_frac <= 0.d0) then
     rel_perm_frac = 0.d0
-    return
+  else
+    one_over_m_frac = 1.d0/this%m_frac
+    Se_one_over_m_frac = Se_frac**one_over_m_frac
+    rel_perm_frac = sqrt(Se_frac)*(1.d0-(1.d0-Se_one_over_m_frac)**this%m_frac)**2.d0
+    dkr_Se_frac = 0.5d0*rel_perm_frac/Se_frac+ &
+                   2.d0*Se_frac**(one_over_m_frac-0.5d0)* &
+                   (1.d0-Se_one_over_m_frac)**(this%m_frac-1.d0)* &
+                   (1.d0-(1.d0-Se_one_over_m_frac)**this%m_frac)
+
+    dSe_sat_frac = 1.d0 / (1.d0 - this%Sr_frac)
+    dkr_sat_frac = dkr_Se_frac * dSe_sat_frac
   endif
   
-
-  one_over_m_frac = 1.d0/this%m_frac
-  Se_one_over_m_frac = Se_frac**one_over_m_frac
-  rel_perm_frac = sqrt(Se_frac)*(1.d0-(1.d0-Se_one_over_m_frac)**this%m_frac)**2.d0
-  dkr_Se_frac = 0.5d0*rel_perm_frac/Se_frac+ &
-                 2.d0*Se_frac**(one_over_m_frac-0.5d0)* &
-                 (1.d0-Se_one_over_m_frac)**(this%m_frac-1.d0)* &
-                 (1.d0-(1.d0-Se_one_over_m_frac)**this%m_frac)
-
-  dSe_sat_frac = 1.d0 / (1.d0 - this%Sr_frac)
-  dkr_sat_frac = dkr_Se_frac * dSe_sat_frac
 
   bulk_permeability = this%volume_fraction_fracture*this%perm_frac + &
                        (1.d0-this%volume_fraction_fracture)*this%perm_mat
