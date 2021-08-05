@@ -1739,10 +1739,10 @@ subroutine ReactionInputRecord(rxn)
           write(id,'(a29)',advance='no') 'freundlich n: '
           write(word1,*) cur_isotherm_rxn%Freundlich_N
           write(id,'(a)') adjustl(trim(word1))
-        case (SORPTION_DIMENSIONLESS_KD)
-          write(id,'(a)') 'dimensionless kd'
-          write(id,'(a29)',advance='no') 'dimensionless kd: '
-          write(word1,*) cur_isotherm_rxn%dimensionless_kd
+        case (SORPTION_RETENTION_FACTOR)
+          write(id,'(a)') 'retention factor'
+          write(id,'(a29)',advance='no') 'retention factor: '
+          write(word1,*) cur_isotherm_rxn%retention_factor
           write(id,'(a)') adjustl(trim(word1))
       end select
       if (len_trim(cur_isotherm_rxn%kd_mineral_name) > 0) then  !UPDATE

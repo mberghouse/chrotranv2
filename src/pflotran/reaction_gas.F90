@@ -300,14 +300,14 @@ subroutine RTotalSorbGasKD(rt_auxvar,global_auxvar,material_auxvar,gas, &
         pp_one_over_n = partial_pres**one_over_n
         res = kd_kgw_m3b*partial_pres**one_over_n
         dres_dc = res/partial_pres*one_over_n
-      case(SORPTION_DIMENSIONLESS_KD)
-        ! Dimensionless Kd: moles sorbed/moles gas
-        ! (1/(1+1/Kd)) = moles sorbed / (moles sorbed + moles in gas phase)
+      case(SORPTION_RETENTION_FACTOR)
+        ! Retention factor: moles sorbed/moles gas
+        ! (1/(1+1/rf)) = moles sorbed / (moles sorbed + moles in gas phase)
         ! units = mole solute/L gas * L gas * sorbed/total / m^3 bulk
         !       = mole solute sorbed / m^3 bulk
-        kd_sorb_gas = isotherm_rxn%eqisothermdimensionlesskd(irxn)
-        !res = gas_concentration * L_gas * (1/(1+1/kd_sorb_gas)) / material_auxvar%volume
-        res = gas_concentration*L_gas*kd_sorb_gas / material_auxvar%volume
+        rf = isotherm_rxn%eqisothermretentionfactor(irxn)
+        res = gas_concentration * L_gas * (1/(1+1/rf)) / material_auxvar%volume
+        !res = gas_concentration*L_gas*kd_sorb_gas / material_auxvar%volume
         dres_dc = res/gas_concentration
       case default
         res = 0.d0

@@ -3594,7 +3594,7 @@ subroutine BasisInit(reaction,option)
       reaction%isotherm%isotherm_rxn%eqisothermcoeff(irxn) = cur_isotherm_rxn%Kd
       reaction%isotherm%isotherm_rxn%eqisothermlangmuirb(irxn) = cur_isotherm_rxn%Langmuir_b
       reaction%isotherm%isotherm_rxn%eqisothermfreundlichn(irxn) = cur_isotherm_rxn%Freundlich_n
-      reaction%isotherm%isotherm_rxn%eqisothermdimensionlesskd(irxn) = cur_isotherm_rxn%dimensionless_kd
+      reaction%isotherm%isotherm_rxn%eqisothermretentionfactor(irxn) = cur_isotherm_rxn%retention_factor
        
       cur_isotherm_rxn => cur_isotherm_rxn%next
       
@@ -3605,8 +3605,8 @@ subroutine BasisInit(reaction,option)
           sec_cont_cur_isotherm_rxn%Langmuir_b
         reaction%isotherm%multicontinuum_isotherm_rxn%eqisothermfreundlichn(irxn) = &
           sec_cont_cur_isotherm_rxn%Freundlich_n
-        reaction%isotherm%multicontinuum_isotherm_rxn%eqisothermdimensionlesskd(irxn) = &
-          sec_cont_cur_isotherm_rxn%dimensionless_kd
+        reaction%isotherm%multicontinuum_isotherm_rxn%eqisothermretentionfactor(irxn) = &
+          sec_cont_cur_isotherm_rxn%retention_factor
         sec_cont_cur_isotherm_rxn => sec_cont_cur_isotherm_rxn%next
       endif
       
@@ -4008,10 +4008,10 @@ subroutine BasisInit(reaction,option)
            write(86,'("freundlich ; ",es13.5)',advance='no') &
              reaction%isotherm%isotherm_rxn%eqisothermcoeff(irxn)
            write(86,'(es13.5)') reaction%isotherm%isotherm_rxn%eqisothermfreundlichn(irxn)
-        case(SORPTION_DIMENSIONLESS_KD)
-           write(86,'("dimensionless kd ; ",es13.5)',advance='no') &
+        case(SORPTION_RETENTION_FACTOR)
+           write(86,'("retention factor ; ",es13.5)',advance='no') &
                 reaction%isotherm%isotherm_rxn%eqisothermcoeff(irxn)
-           write(86,'(es13.5)') reaction%isotherm%isotherm_rxn%eqisothermdimensionlesskd(irxn)
+           write(86,'(es13.5)') reaction%isotherm%isotherm_rxn%eqisothermretentionfactor(irxn)
       end select
     enddo
 
@@ -4390,8 +4390,8 @@ subroutine ReactionDatabaseSetupGases(reaction,num_logKs,option,h2o_id, &
                                                       cur_isotherm_rxn%Langmuir_b
         gas%isotherm%isotherm_rxn%eqisothermfreundlichn(irxn) = &
                                                   cur_isotherm_rxn%Freundlich_n
-        gas%isotherm%isotherm_rxn%eqisothermdimensionlesskd(irxn) = &
-                                                cur_isotherm_rxn%dimensionless_kd
+        gas%isotherm%isotherm_rxn%eqisothermretentionfactor(irxn) = &
+                                                cur_isotherm_rxn%retention_factor
         cur_isotherm_rxn => cur_isotherm_rxn%next
 
         !MAN: same as above, haven't tested for mc
@@ -4402,8 +4402,8 @@ subroutine ReactionDatabaseSetupGases(reaction,num_logKs,option,h2o_id, &
             sec_cont_cur_isotherm_rxn%Langmuir_b
           gas%isotherm%multicontinuum_isotherm_rxn%eqisothermfreundlichn(irxn) = &
             sec_cont_cur_isotherm_rxn%Freundlich_n
-          gas%isotherm%multicontinuum_isotherm_rxn%eqisothermdimensionlesskd(irxn) = &
-            sec_cont_cur_isotherm_rxn%dimensionless_kd
+          gas%isotherm%multicontinuum_isotherm_rxn%eqisothermretentionfactor(irxn) = &
+            sec_cont_cur_isotherm_rxn%retention_factor
           sec_cont_cur_isotherm_rxn => sec_cont_cur_isotherm_rxn%next
         endif
 
