@@ -4379,7 +4379,7 @@ subroutine RPFMualemVGECMRelPerm(this,liquid_saturation, &
   ! Need to recalculate liquid saturation in fracture from liquid saturation in matrix
   ! capillary pressure in both is assumed to be same
 
-  capillary_pressure = this%alpha_mat* &
+  capillary_pressure = 1.d0/this%alpha_mat* &
                          (Se_mat**(-1.d0/this%m_mat)-1.d0)**(1.d0/n_mat)
   Se_frac = (1.d0+(this%alpha_frac*capillary_pressure)**n_frac)** &
               (-1.d0*this%m_frac)
