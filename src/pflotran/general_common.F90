@@ -2799,8 +2799,10 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
       !     if liquid flux is non-zero, SOLUTE_FRACTION becomes mole fraction of flux fluid
       if (dabs(auxvars(idof)) > floweps) then
         v_darcy(iphase) = auxvars(idof)
-        xmol(option%solute_id) = auxvars(GENERAL_LIQUID_STATE_S_MOLE_DOF)
-        xmol(iphase) = 1.d0 - xmol(option%solute_id)
+        if (option%nflowdof == 4) then
+          xmol(option%solute_id) = auxvars(GENERAL_LIQUID_STATE_S_MOLE_DOF)
+          xmol(iphase) = 1.d0 - xmol(option%solute_id)
+        endif
         if (v_darcy(iphase) > 0.d0) then 
           density_ave = gen_auxvar_up%den(iphase)
           uH = gen_auxvar_up%H(iphase)
