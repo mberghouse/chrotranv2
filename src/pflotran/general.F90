@@ -898,8 +898,12 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
                   end select
                 case(NEUMANN_BC)
                 case default
-                  option%io_buffer = 'Unknown BC type in GeneralUpdateAuxVars().'
-                  call PrintErrMsg(option)
+                  if (general_soluble_matrix) then
+                    continue
+                  else
+                    option%io_buffer = 'Unknown BC type in GeneralUpdateAuxVars().'
+                    call PrintErrMsg(option)
+                  endif
               end select
             enddo  
         end select

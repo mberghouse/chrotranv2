@@ -119,10 +119,12 @@ subroutine GeneralAccumulation(gen_auxvar,global_auxvar,material_auxvar, &
   Res(1:option%nflowspec) = Res(1:option%nflowspec) * &
                             porosity * volume_over_dt
   if (general_soluble_matrix) then
+    ! Res[kmol/sec] = Res[kmol/sec] + (1-por)[m^3 solid/m^3 bulk] * den[kmol/m^3]
+    !                 * vol[m^3 bulk] / dt[sec]
     Res(option%solute_id) = Res(option%solute_id) + (1.d0 - porosity) * &
-                            material_auxvar%soil_particle_density * &
+                            PRECIPITATE_DENSITY * &
                             volume_over_dt
-    ! mass of salt in the solid phase
+    !
   endif
 
   do iphase = 1, option%nphase
@@ -2793,8 +2795,12 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
       !geh: we should read in the mole fraction for both phases as the
       !     enthalpy, etc. applies to phase, not pure component.
       xmol(iphase) = 1.d0
+      ! DF: if liquid flux is set to 0, SOLUTE_FRACTION becomes a dirichlet BC
+      !     if liquid flux is non-zero, SOLUTE_FRACTION becomes mole fraction of flux fluid
       if (dabs(auxvars(idof)) > floweps) then
         v_darcy(iphase) = auxvars(idof)
+        xmol(option%solute_id) = auxvars(GENERAL_LIQUID_STATE_S_MOLE_DOF)
+        xmol(iphase) = 1.d0 - xmol(option%solute_id)
         if (v_darcy(iphase) > 0.d0) then 
           density_ave = gen_auxvar_up%den(iphase)
           uH = gen_auxvar_up%H(iphase)
@@ -2803,7 +2809,7 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
           density_ave = gen_auxvar_dn%den(iphase)
           uH = gen_auxvar_dn%H(iphase)
           ddensity_ave_dden_dn = 1.d0
-        endif 
+        endif
       endif
     case default
       option%io_buffer = &
@@ -3388,7 +3394,9 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
   ! but gas phase diffusion only occurs if the internal cell has a gas
   ! phase.
   sat_dn = gen_auxvar_dn%sat(iphase)
-  if (sat_dn > eps .and. ibndtype(iphase) /= NEUMANN_BC) then
+  if ((sat_dn > eps .and. ibndtype(iphase) /= NEUMANN_BC) &
+      .or. (ibndtype(iphase)==NEUMANN_BC .and. ibndtype(GENERAL_LIQUID_STATE_S_MOLE_DOF) &
+            == DIRICHLET_BC)) then
     if (general_harmonic_diff_density) then
       ! density_ave in this case is not used.
       density_ave = 1.d0

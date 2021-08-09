@@ -19,7 +19,7 @@ module PM_General_class
   PetscInt, pointer :: general_max_states
   PetscInt, pointer :: max_change_index
   PetscBool, public :: general_g_state_air_mass_dof = PETSC_FALSE
-  PetscBool, public :: general_soluble_matrix = PETSC_TRUE
+  PetscBool, public :: general_soluble_matrix = PETSC_FALSE
 
   PetscBool, public :: transient_porosity
 
@@ -192,7 +192,7 @@ subroutine PMGeneralSetFlowMode(pm,option)
       general_max_states = 3
       max_change_index = 7
       transient_porosity = PETSC_TRUE
-    elseif (general_soluble_matrix) then
+    else
       option%nphase = 3
       option%precipitate_phase = 3
       general_max_states = 7

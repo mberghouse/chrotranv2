@@ -1500,19 +1500,18 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
   endif
 #endif
 ! Soluble matrix (salt) mode
-  if (.not. general_soluble_matrix) then
+  if (general_soluble_matrix) then
     select case(global_auxvar%istate)
       case(LIQUID_STATE)
         gen_auxvar%pres(lid) = x(GENERAL_LIQUID_PRESSURE_DOF)
         gen_auxvar%xmol(acid,lid) = x(GENERAL_LIQUID_STATE_X_MOLE_DOF)
         gen_auxvar%temp = x(GENERAL_ENERGY_DOF)
-        !porosity = x(GENERAL_POROSITY_DOF)
-        gen_auxvar%effective_porosity = x(GENERAL_POROSITY_DOF)
+        gen_auxvar%effective_porosity = max(0.d0,x(GENERAL_POROSITY_DOF))
+        material_auxvar%porosity = gen_auxvar%effective_porosity
         ! if the matrix is the same species as the solute, the solute mole
         ! fraction is always at solubility
         call GeneralAuxNaClSolubility(gen_auxvar%temp,NaClSolubility,solubility_function)
         gen_auxvar%xmol(sid,lid) = NaClSolubility
-
         gen_auxvar%xmol(wid,lid) = 1.d0 - gen_auxvar%xmol(acid,lid) - gen_auxvar%xmol(sid,lid)
 
         ! with the gas state, we must calculate the mole fraction of air in 
@@ -1573,7 +1572,7 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
 
       case(GAS_STATE)
         gen_auxvar%pres(gid) = x(GENERAL_GAS_PRESSURE_DOF)
-
+        gen_auxvar%effective_porosity = x(GENERAL_POROSITY_DOF)
         !man
         !gen_auxvar%pres(gid) = max(0.d0,gen_auxvar%pres(gid))
 
@@ -1590,6 +1589,8 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
         endif
 
         gen_auxvar%temp = x(GENERAL_ENERGY_DOF)
+        gen_auxvar%effective_porosity = max(0.d0,x(GENERAL_POROSITY_DOF))
+        material_auxvar%porosity = gen_auxvar%effective_porosity
 
         gen_auxvar%sat(lid) = 0.d0
         gen_auxvar%sat(gid) = 1.d0
@@ -1656,7 +1657,8 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
 
         !man
         !gen_auxvar%pres(gid) = max(0.d0,gen_auxvar%pres(gid))
-
+        gen_auxvar%effective_porosity = max(0.d0,x(GENERAL_POROSITY_DOF))
+        material_auxvar%porosity = gen_auxvar%effective_porosity
         gen_auxvar%sat(gid) = x(GENERAL_GAS_SATURATION_DOF)
 
         if (gen_auxvar%istatechng) then
@@ -1739,8 +1741,10 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
         if (general_immiscible) then
           gen_auxvar%xmol(acid,lid) = GENERAL_IMMISCIBLE_VALUE
         endif
+        call GeneralAuxNaClSolubility(gen_auxvar%temp,NaClSolubility,solubility_function)
+        gen_auxvar%xmol(sid,lid) = NaClSolubility
+        gen_auxvar%xmol(wid,lid) = 1.d0 - gen_auxvar%xmol(acid,lid) - gen_auxvar%xmol(sid,lid)
 
-        gen_auxvar%xmol(wid,lid) = 1.d0 - gen_auxvar%xmol(acid,lid)
         gen_auxvar%xmol(acid,gid) = gen_auxvar%pres(apid) / gen_auxvar%pres(gid)
         gen_auxvar%xmol(wid,gid) = 1.d0 - gen_auxvar%xmol(acid,gid)
 
@@ -1774,15 +1778,9 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
         gen_auxvar%pres(lid) = x(GENERAL_LIQUID_PRESSURE_DOF)
         gen_auxvar%xmol(acid,lid) = x(GENERAL_LIQUID_STATE_X_MOLE_DOF)
         gen_auxvar%temp = x(GENERAL_ENERGY_DOF)
-        !gen_auxvar%xmol(sid,lid) = x(GENERAL_LIQUID_STATE_S_MOLE_DOF)
-        gen_auxvar%effective_porosity = x(GENERAL_POROSITY_DOF)
-        ! DF: Temporarily change 4th dof to porosity for salt mass balance
-        ! matrix + dissolved (1-phi + xmol(sid,lid))
-        ! porosity acts similar to a saturation
-        ! Fix xmol(sid,lid) as NaCl solubility
+        gen_auxvar%xmol(sid,lid) = x(GENERAL_LIQUID_STATE_S_MOLE_DOF)
 
         call GeneralAuxNaClSolubility(gen_auxvar%temp,NaClSolubility,solubility_function)
-        gen_auxvar%xmol(sid,lid) = NaClSolubility
 
         gen_auxvar%xmol(wid,lid) = 1.d0 - gen_auxvar%xmol(acid,lid) - gen_auxvar%xmol(sid,lid)
         ! with the gas state, we must calculate the mole fraction of air in 
@@ -2390,54 +2388,57 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
                       gen_auxvar%pres(spid))
         
   ! calculate effective porosity as a function of pressure
-!   if (option%iflag /= GENERAL_UPDATE_FOR_BOUNDARY) then
-!     dpor_dp = 0.d0
-!     gen_auxvar%effective_porosity = material_auxvar%porosity_base
-! #if 0
-! !geh this code is no longer valid
-!     if (associated(material_auxvar%fracture) .and. & 
-!       material_auxvar%fracture%setup) then
-!       ! The initiating pressure and maximum pressure must be calculated
-!       ! before fracture function applies - Heeho
-!       call FractureInitialSetup(material_auxvar,cell_pressure)
-!     endif
-!     if (soil_compressibility_index > 0 .and. &
-!       material_auxvar%setup_reference_pressure) then
-!       call MaterialReferencePressureSetup(material_auxvar,cell_pressure)
-!     endif
-! #endif
-!     ! creep_closure, fracture, and soil_compressibility are mutually exclusive
-!     if (option%flow%creep_closure_on) then
-!       creep_closure => wipp%creep_closure_tables_array( &
-!                          material_auxvar%creep_closure_id )%ptr
-!       if ( associated(creep_closure) ) then
-!         ! option%time here is the t time, not t + dt time.
-!         creep_closure_time = option%time
-!         if (option%iflag /= GENERAL_UPDATE_FOR_FIXED_ACCUM) then
-!           creep_closure_time = creep_closure_time + option%flow_dt
-!         endif
-        
-!         gen_auxvar%effective_porosity = &
-!           creep_closure%Evaluate(creep_closure_time,cell_pressure)
-!       else if (associated(material_auxvar%fracture)) then
-!           call FracturePoroEvaluate(material_auxvar,cell_pressure, &
-!                                 gen_auxvar%effective_porosity,dpor_dp)
-!       else if (soil_compressibility_index > 0) then
-!           call MaterialCompressSoil(material_auxvar,cell_pressure, &
-!                                 gen_auxvar%effective_porosity,dpor_dp)
-!       endif
-!     else if (associated(material_auxvar%fracture)) then
-!       call FracturePoroEvaluate(material_auxvar,cell_pressure, &
-!                                 gen_auxvar%effective_porosity,dpor_dp)
-!     else if (soil_compressibility_index > 0) then
-!       call MaterialCompressSoil(material_auxvar,cell_pressure, &
-!                                 gen_auxvar%effective_porosity,dpor_dp)
-!     endif
-!     if (option%iflag /= GENERAL_UPDATE_FOR_DERIVATIVE) then
-!       material_auxvar%porosity = gen_auxvar%effective_porosity
-!     endif
-!   endif
-  material_auxvar%porosity = gen_auxvar%effective_porosity
+  if (.not. general_soluble_matrix) then
+    if (option%iflag /= GENERAL_UPDATE_FOR_BOUNDARY) then
+      dpor_dp = 0.d0
+      gen_auxvar%effective_porosity = material_auxvar%porosity_base
+#if 0
+  !geh this code is no longer valid
+      if (associated(material_auxvar%fracture) .and. & 
+        material_auxvar%fracture%setup) then
+        ! The initiating pressure and maximum pressure must be calculated
+        ! before fracture function applies - Heeho
+        call FractureInitialSetup(material_auxvar,cell_pressure)
+      endif
+      if (soil_compressibility_index > 0 .and. &
+        material_auxvar%setup_reference_pressure) then
+        call MaterialReferencePressureSetup(material_auxvar,cell_pressure)
+      endif
+#endif
+      ! creep_closure, fracture, and soil_compressibility are mutually exclusive
+      if (option%flow%creep_closure_on) then
+        creep_closure => wipp%creep_closure_tables_array( &
+                           material_auxvar%creep_closure_id )%ptr
+        if ( associated(creep_closure) ) then
+          ! option%time here is the t time, not t + dt time.
+          creep_closure_time = option%time
+          if (option%iflag /= GENERAL_UPDATE_FOR_FIXED_ACCUM) then
+            creep_closure_time = creep_closure_time + option%flow_dt
+          endif
+
+          gen_auxvar%effective_porosity = &
+            creep_closure%Evaluate(creep_closure_time,cell_pressure)
+        else if (associated(material_auxvar%fracture)) then
+            call FracturePoroEvaluate(material_auxvar,cell_pressure, &
+                                  gen_auxvar%effective_porosity,dpor_dp)
+        else if (soil_compressibility_index > 0) then
+            call MaterialCompressSoil(material_auxvar,cell_pressure, &
+                                  gen_auxvar%effective_porosity,dpor_dp)
+        endif
+      else if (associated(material_auxvar%fracture)) then
+        call FracturePoroEvaluate(material_auxvar,cell_pressure, &
+                                  gen_auxvar%effective_porosity,dpor_dp)
+      else if (soil_compressibility_index > 0) then
+        call MaterialCompressSoil(material_auxvar,cell_pressure, &
+                                  gen_auxvar%effective_porosity,dpor_dp)
+      endif
+      if (option%iflag /= GENERAL_UPDATE_FOR_DERIVATIVE) then
+        material_auxvar%porosity = gen_auxvar%effective_porosity
+      endif
+    endif
+  else
+    material_auxvar%porosity = gen_auxvar%effective_porosity
+  endif
   if (associated(gen_auxvar%d)) then
     gen_auxvar%d%por_p = dpor_dp
   endif
@@ -3217,8 +3218,8 @@ subroutine GeneralAuxVarUpdateState4(x,gen_auxvar,global_auxvar, &
       !    window_epsilon) .or. gen_auxvar%pres(apid) >= gen_auxvar% &
       !    pres(lid)*(1.d0-window_epsilon)) then
       if (gen_auxvar%pres(vpid) <= gen_auxvar%pres(spid)*(1.d0- &
-          window_epsilon) .and. gen_auxvar%xmol(sid,lid) < &
-          NaClSolubility*(1.d0-window_epsilon)) then
+          window_epsilon) .and. (gen_auxvar%xmol(sid,lid) < &
+          NaClSolubility*(1.d0-window_epsilon) .or. general_soluble_matrix)) then
 
           global_auxvar%istate = LG_STATE
           liq_epsilon = general_phase_chng_epsilon
@@ -3468,6 +3469,9 @@ subroutine GeneralAuxVarUpdateState4(x,gen_auxvar,global_auxvar, &
                                           xmol(wid,gid)*(1.d0 + epsilon))
         endif 
         x(GENERAL_ENERGY_DOF) = gen_auxvar%temp*(1.d0-epsilon)
+        if (general_soluble_matrix) then
+          x(GENERAL_POROSITY_DOF) = gen_auxvar%effective_porosity
+        endif
       case(LG_STATE)
         if (gas_flag) then
           x(GENERAL_GAS_SATURATION_DOF) = 1.d0-gas_epsilon
@@ -4127,6 +4131,9 @@ subroutine GeneralAuxVarPerturb4(gen_auxvar,global_auxvar, &
          x(GENERAL_GAS_STATE_AIR_PRESSURE_DOF) = &
            gen_auxvar(ZERO_INTEGER)%xmol(option%water_id,option%air_id)
        endif
+       if (general_soluble_matrix) then
+         x(GENERAL_POROSITY_DOF) = gen_auxvar(ZERO_INTEGER)%effective_porosity
+       endif
        x(GENERAL_ENERGY_DOF) = gen_auxvar(ZERO_INTEGER)%temp
 #ifdef HEEHO_PERTURBATION
        pert(GENERAL_GAS_PRESSURE_DOF) = &
@@ -4211,7 +4218,13 @@ subroutine GeneralAuxVarPerturb4(gen_auxvar,global_auxvar, &
                  x(GENERAL_GAS_STATE_AIR_PRESSURE_DOF)
          endif
        endif
-       
+
+       if (x(GENERAL_POROSITY_DOF) > &
+            1.d3 * perturbation_tolerance) then
+          pert(GENERAL_POROSITY_DOF) = -1.d0 * perturbation_tolerance
+       else
+          pert(GENERAL_POROSITY_DOF) = perturbation_tolerance
+       endif
        pert(GENERAL_ENERGY_DOF) = &
          perturbation_tolerance*x(GENERAL_ENERGY_DOF) + min_perturbation
 #endif
@@ -4223,8 +4236,13 @@ subroutine GeneralAuxVarPerturb4(gen_auxvar,global_auxvar, &
 !         gen_auxvar(ZERO_INTEGER)%pres(option%air_pressure_id)
        x(GENERAL_GAS_SATURATION_DOF) = &
          gen_auxvar(ZERO_INTEGER)%sat(option%gas_phase)
-       x(GENERAL_LIQUID_STATE_S_MOLE_DOF) = &
-         gen_auxvar(ZERO_INTEGER)%xmol(option%solute_id,option%liquid_phase)
+       if (general_soluble_matrix) then
+         x(GENERAL_POROSITY_DOF) = &
+           gen_auxvar(ZERO_INTEGER)%effective_porosity
+       else
+          x(GENERAL_LIQUID_STATE_S_MOLE_DOF) = &
+            gen_auxvar(ZERO_INTEGER)%xmol(option%solute_id,option%liquid_phase)
+       endif
 #ifdef HEEHO_PERTURBATION
        if (general_2ph_energy_dof == GENERAL_TEMPERATURE_INDEX) then
           x(GENERAL_ENERGY_DOF) = gen_auxvar(ZERO_INTEGER)%temp
