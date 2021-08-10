@@ -205,6 +205,9 @@ subroutine GeneralSetup(realization)
     patch%aux%General%general_parameter% &
       diffusion_coefficient(cur_fluid_property%phase_id) = &
         cur_fluid_property%diffusion_coefficient
+    patch%aux%General%general_parameter% &
+      solute_diffusion_coefficient = &
+        cur_fluid_property%solute_diffusion_coefficient
     cur_fluid_property => cur_fluid_property%next
   enddo  
   ! check whether diffusion coefficients are initialized.
@@ -220,7 +223,14 @@ subroutine GeneralSetup(realization)
       UninitializedMessage('Gas phase diffusion coefficient','')
     call PrintErrMsg(option)
   endif
-
+  if (option%nflowdof == 4) then
+    if (Uninitialized(patch%aux%General%general_parameter% &
+         solute_diffusion_coefficient)) then
+       option%io_buffer = &
+            UninitializedMessage('Solute diffusion coefficient','')
+       call PrintErrMsg(option)
+    endif
+  endif
   list => realization%output_option%output_snap_variable_list
   call GeneralSetPlotVariables(realization,list)
   list => realization%output_option%output_obs_variable_list
