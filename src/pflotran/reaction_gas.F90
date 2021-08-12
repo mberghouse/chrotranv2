@@ -239,7 +239,7 @@ subroutine RTotalSorbGasKD(rt_auxvar,global_auxvar,material_auxvar,gas, &
   PetscReal :: tempreal
   PetscReal :: one_over_n
   PetscReal :: molality_one_over_n
-  PetscReal :: kd_kgw_m3b, kd_sorb_gas
+  PetscReal :: kd_kgw_m3b, kd_sorb_gas, rf
   PetscReal :: partial_pres,pp_one_over_n
   PetscReal :: gas_concentration
   PetscReal :: RT
