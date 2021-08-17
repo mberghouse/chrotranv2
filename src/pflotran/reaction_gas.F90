@@ -19,6 +19,7 @@ module Reaction_Gas_module
             RTotalGas, &
             RTotalSorbGas, &
             RAccumulationSorbGas, &
+            RAccumulationSorbGasDerivative, &
             RTotalCO2
 
 contains
@@ -253,8 +254,6 @@ subroutine RTotalSorbGasKD(rt_auxvar,global_auxvar,material_auxvar,gas, &
   ! units of ideal gas constant = J/mol-K = kPa-L/mol-K
   ! units of RT = Pa-L/mol
   RT = IDEAL_GAS_CONSTANT*(global_auxvar%temp+273.15d0)*1.d3
-  ! Concentration units = mol/L gas
-  gas_concentration = partial_pres * 1.d5 / RT
   ! Pore volume (L)
   L_pore = material_auxvar%porosity*material_auxvar%volume*1.d3
   ! Gas volume (L)
@@ -262,6 +261,8 @@ subroutine RTotalSorbGasKD(rt_auxvar,global_auxvar,material_auxvar,gas, &
   
   do irxn = 1, isotherm%neqkdrxn
     partial_pres =  rt_auxvar%gas_pp(irxn)
+    ! Concentration units = mol/L gas
+    gas_concentration = partial_pres * 1.d5 / RT
     ncomp = gas%acteqspecid(0,irxn)
     if (isotherm%ikd_units == KD_UNIT_MLW_GSOIL) then
                    !KD units [mL water/g soil]
@@ -349,7 +350,8 @@ subroutine RAccumulationSorbGas(rt_auxvar,global_auxvar,material_auxvar, &
 
   ! units = (mol solute/m^3 bulk)*(m^3 bulk)/(sec) = mol/sec
   ! all residual entries should be in mol/sec
-!  v_t = material_auxvar%volume/option%tran_dt
+  !  v_t = material_auxvar%volume/option%tran_dt
+  ! DF: divided by dt later
   do irxn = 1, reaction%gas%isotherm%neqkdrxn
     icomp = reaction%gas%isotherm%eqkdspecid(irxn)
     Res(icomp) = Res(icomp) + rt_auxvar%total_sorb_eq_gas(irxn)* &
@@ -357,6 +359,42 @@ subroutine RAccumulationSorbGas(rt_auxvar,global_auxvar,material_auxvar, &
   enddo
 
 end subroutine RAccumulationSorbGas
+
+! ************************************************************************** !
+
+subroutine RAccumulationSorbGasDerivative(rt_auxvar,global_auxvar, &
+                                          material_auxvar,reaction,option,J)
+  ! 
+  ! Computes derivative of the sorbed gas portion of
+  ! the accumulation term in residual function
+  ! 
+  ! Author: Glenn Hammond, modified for gas by David Fukuyama
+  ! Date: 05/26/09, 08/16/21
+  ! 
+
+  use Option_module
+  use Material_Aux_Class
+
+  implicit none
+  
+  type(reactive_transport_auxvar_type) :: rt_auxvar
+  type(global_auxvar_type) :: global_auxvar
+  class(material_auxvar_type) :: material_auxvar
+  type(option_type) :: option
+  class(reaction_rt_type) :: reaction
+  PetscReal :: J(reaction%ncomp,reaction%ncomp)
+  
+  PetscInt :: icomp
+  PetscReal :: v_t
+  
+  ! units = (kg water/m^3 bulk)*(m^3 bulk)/(sec) = kg water/sec
+  ! all Jacobian entries should be in kg water/sec
+  v_t = material_auxvar%volume/option%tran_dt
+  J(1:reaction%naqcomp,1:reaction%naqcomp) = &
+    J(1:reaction%naqcomp,1:reaction%naqcomp) + &
+    rt_auxvar%dtotal_sorb_eq_gas(:,:)*v_t
+
+end subroutine RAccumulationSorbGasDerivative
 
 ! ************************************************************************** !
 

@@ -3488,6 +3488,7 @@ subroutine RTJacobianNonFlux(snes,xx,A,B,realization,ierr)
   use Debug_module
   use Logging_module
   use Secondary_Continuum_Aux_module
+  use Reaction_Gas_module
 
   
   implicit none
@@ -3570,6 +3571,12 @@ subroutine RTJacobianNonFlux(snes,xx,A,B,realization,ierr)
                                          global_auxvars(ghosted_id), &
                                          material_auxvars(ghosted_id), &
                                          reaction,option,Jup)
+      endif
+      if (reaction%gas%neqsorb > 0) then
+        call RAccumulationSorbGasDerivative(rt_auxvars(ghosted_id), &
+                                            global_auxvars(ghosted_id), &
+                                            material_auxvars(ghosted_id), &
+                                            reaction,option,Jup)
       endif
       
       if (option%use_mc) then
