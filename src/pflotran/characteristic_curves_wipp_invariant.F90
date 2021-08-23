@@ -154,11 +154,6 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, expon, Pct_ignore, Pct_alpha, &
   allocate(new)
   if (.not. associated(new)) return ! Memory allocation failed
 
-  ! TODO confirm PCT model.
-  ! Except for KRP 9, if PCT_A, capilary pressure is always 0, as per KRP 11
-!  if (Pct_alpha == 0d0 .AND. KRP /= 9) then
-!    KRP = 11
-! end if
 
   ! Data validation
                                         error = 0
@@ -186,8 +181,8 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, expon, Pct_ignore, Pct_alpha, &
     new%KRPPc => SFWIPPKRP9Pc
     new%KRPSw => SFWIPPKRP9Sw
   case (11) ! Cavity model, Pc is always 0, nothing else matters
-    new%KRPPc => SFWIPPKRP11Pc
-    new%KRPSw => SFWIPPKRP11Sw
+    new%KRPPc  => SFWIPPKRP11Pc
+    new%KRPSw  => SFWIPPKRP11Sw
     new%KPCPc  => new%KRPPc
     new%KPCSw  => new%KRPSW
     new%setPct => SF_BRAGFLO_IgnorePermeability
@@ -198,6 +193,17 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, expon, Pct_ignore, Pct_alpha, &
   case default
                                         error = error + 1
   end select
+
+! Except for KRP 9, if PCT_A is 0, capilary pressure is 0,
+! equivalent to KRP 11
+  if (Pct_alpha == 0d0 .AND. KRP /= 9) then
+    new%KRPPc  => SFWIPPKRP11Pc
+    new%KRPSw  => SFWIPPKRP11Sw
+    new%KPCPc  => new%KRPPc
+    new%KPCSw  => new%KRPSW
+    new%setPct => SF_BRAGFLO_IgnorePermeability
+    return
+  end if
 
   ! If KPC is in branch table, set function pointer, otherwise flag error
   select case(KPC)
