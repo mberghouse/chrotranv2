@@ -369,7 +369,7 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
             call InputErrorMsg(input,option, &
                                'USE_CAUCHY TRUE or FALSE', &
                                'NEWTON TRD options')
-            string = '-flow_snes_use_cauchy'
+            string = '-flow_snes_tr_use_cauchy'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
                                       ierr);CHKERRQ(ierr)
@@ -378,7 +378,7 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
             call InputErrorMsg(input,option, &
                                'auto scale multiphase flow modes', &
                                'NEWTON TRD options')
-            string = '-flow_snes_auto_scale_multiphase'
+            string = '-flow_snes_tr_auto_scale_multiphase'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
                                       ierr);CHKERRQ(ierr)
@@ -387,7 +387,7 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
             call InputErrorMsg(input,option, &
                                'initial trust region size', &
                                'NEWTON TRD options')
-            string = '-flow_snes_auto_scale_max'
+            string = '-flow_snes_tr_auto_scale_max'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
                                       ierr);CHKERRQ(ierr)
