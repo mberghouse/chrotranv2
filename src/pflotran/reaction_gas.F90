@@ -307,8 +307,11 @@ subroutine RTotalSorbGasKD(rt_auxvar,global_auxvar,material_auxvar,gas, &
         ! units = mole solute/L gas * L gas * sorbed/total / m^3 bulk
         !       = mole solute sorbed / m^3 bulk
         rf = isotherm_rxn%eqisothermretentionfactor(irxn)
-        res = gas_concentration * L_gas * (1/(1+1/rf)) / material_auxvar%volume
-        !res = gas_concentration*L_gas*kd_sorb_gas / material_auxvar%volume
+        if (rf < 1.d-20) then
+           res = 0.d0
+        else
+           res = gas_concentration * L_gas *(1.d0/(1.d0+1.d0/rf)) / material_auxvar%volume
+        endif
         dres_dc = res/gas_concentration
       case default
         res = 0.d0
@@ -352,11 +355,18 @@ subroutine RAccumulationSorbGas(rt_auxvar,global_auxvar,material_auxvar, &
   ! all residual entries should be in mol/sec
   !  v_t = material_auxvar%volume/option%tran_dt
   ! DF: divided by dt later
-  do irxn = 1, reaction%gas%isotherm%neqkdrxn
-    icomp = reaction%gas%isotherm%eqkdspecid(irxn)
-    Res(icomp) = Res(icomp) + rt_auxvar%total_sorb_eq_gas(irxn)* &
-                              material_auxvar%volume
-  enddo
+
+  ! do irxn = 1, reaction%gas%isotherm%neqkdrxn
+  !   icomp = reaction%gas%isotherm%eqkdspecid(irxn)
+  !   Res(icomp) = Res(icomp) + rt_auxvar%total_sorb_eq_gas(irxn)* &
+  !                             material_auxvar%volume
+  ! enddo
+
+  ! DF: the commented code above doesn't properly add to the residual. I'm
+  ! not sure why, but the code below adds to the residual
+  Res(1:reaction%naqcomp) = Res(1:reaction%naqcomp) + &
+                            rt_auxvar%total_sorb_eq_gas(:) * &
+                            material_auxvar%volume
 
 end subroutine RAccumulationSorbGas
 

@@ -3636,7 +3636,7 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
 
     if (reaction%gas%neqsorb > 0) then
       call RAccumulationSorbGas(rt_auxvar,global_auxvar,material_auxvar, &
-                                reaction,option,fixed_accum)
+                                reaction,option,residual)
       call RAccumulationSorbGasDerivative(rt_auxvar,global_auxvar, &
                                        material_auxvar,reaction,option,J)
     endif
@@ -5329,7 +5329,7 @@ subroutine RTAuxVarCompute(rt_auxvar,global_auxvar,material_auxvar,reaction, &
   enddo
   rt_auxvar%aqueous%dtotal(:,:,:) = dtotal
   if (reaction%neqsorb > 0) rt_auxvar%dtotal_sorb_eq = dtotalsorb
-  !if (reaction%gas%neqsorb > 0) rt_auxvar%dtotal_sorb_eq = dtotalsorbgas
+  if (reaction%gas%neqsorb > 0) rt_auxvar%dtotal_sorb_eq = dtotalsorbgas
   call RTAuxVarStrip(rt_auxvar_pert)
 #endif
 
@@ -5872,7 +5872,16 @@ subroutine RTPrintAuxVar(file_unit,rt_auxvar,global_auxvar,material_auxvar,&
                     rt_auxvar%total_sorb_eq(i)
     enddo
     write(file_unit,30)
-  endif    
+  endif
+
+  if (reaction%gas%neqsorb > 0) then
+    write(file_unit,20) 'Total Gas Sorbed EQ', 'mol/m^3'
+    do i = 1, reaction%naqcomp  
+      write(file_unit,10) reaction%gas%active_names(i), &
+            rt_auxvar%total_sorb_eq_gas(i)
+    enddo
+    write(file_unit,30)
+  endif
 
 #if 0  
   if (reaction%surface_complexation%neqsrfcplx > 0) then
