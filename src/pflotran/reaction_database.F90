@@ -4355,16 +4355,19 @@ subroutine ReactionDatabaseSetupGases(reaction,num_logKs,option,h2o_id, &
 
         found = PETSC_FALSE
         cur_gas_spec => gas%list
-        do
+        igas_spec = 1
+        do 
           if (.not. associated(cur_gas_spec)) exit
           if (StringCompare(cur_isotherm_rxn%species_name, &
                             cur_gas_spec%name, MAXWORDLENGTH) .and. &
                             (cur_gas_spec%itype==ACTIVE_GAS .or. &
                              cur_gas_spec%itype==ACTIVE_AND_PASSIVE_GAS)) then
-            gas%isotherm%eqkdspecid(irxn) = i
+            gas%isotherm%eqkdspecid(irxn) = igas_spec
             found = PETSC_TRUE
             exit
           endif
+          igas_spec = igas_spec + 1
+          cur_gas_spec => cur_gas_spec%next
         enddo
         if (.not.found) then
           option%io_buffer = 'Species ' // trim(cur_isotherm_rxn%species_name) // &
