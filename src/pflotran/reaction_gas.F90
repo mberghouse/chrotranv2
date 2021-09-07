@@ -356,17 +356,11 @@ subroutine RAccumulationSorbGas(rt_auxvar,global_auxvar,material_auxvar, &
   !  v_t = material_auxvar%volume/option%tran_dt
   ! DF: divided by dt later
 
-  ! do irxn = 1, reaction%gas%isotherm%neqkdrxn
-  !   icomp = reaction%gas%isotherm%eqkdspecid(irxn)
-  !   Res(icomp) = Res(icomp) + rt_auxvar%total_sorb_eq_gas(irxn)* &
-  !                             material_auxvar%volume
-  ! enddo
-
-  ! DF: the commented code above doesn't properly add to the residual. I'm
-  ! not sure why, but the code below adds to the residual
-  Res(1:reaction%naqcomp) = Res(1:reaction%naqcomp) + &
-                            rt_auxvar%total_sorb_eq_gas(:) * &
-                            material_auxvar%volume
+  do irxn = 1, reaction%gas%isotherm%neqkdrxn
+    icomp = reaction%gas%isotherm%eqkdspecid(irxn)
+    Res(icomp) = Res(icomp) + rt_auxvar%total_sorb_eq_gas(irxn)* &
+                              material_auxvar%volume
+  enddo
 
 end subroutine RAccumulationSorbGas
 
