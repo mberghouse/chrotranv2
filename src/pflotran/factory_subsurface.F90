@@ -835,6 +835,7 @@ subroutine SubsurfaceSetFlowMode(pm_flow,option)
   use PM_TH_class
   use PM_Richards_TS_class
   use PM_TH_TS_class
+  use PM_ZFlow_class
   use General_Aux_module
 
   implicit none
@@ -842,10 +843,11 @@ subroutine SubsurfaceSetFlowMode(pm_flow,option)
   type(option_type) :: option
   class(pm_subsurface_flow_type), pointer :: pm_flow
 
+  option%liquid_phase = 1
+  option%gas_phase = 2 ! always set gas phase to 2 for transport
+
   if (.not.associated(pm_flow)) then
     option%nphase = 1
-    option%liquid_phase = 1
-    option%gas_phase = 2 ! still set gas phase to 2 for transport
     ! assume default isothermal when only transport
     option%use_isothermal = PETSC_TRUE
     return
@@ -855,32 +857,22 @@ subroutine SubsurfaceSetFlowMode(pm_flow,option)
     class is (pm_wippflo_type)
       option%iflowmode = WF_MODE
       option%nphase = 2
-      option%liquid_phase = 1  ! liquid_pressure
-      option%gas_phase = 2     ! gas_pressure
-
       option%capillary_pressure_id = 3
       option%saturation_pressure_id = 4
-
       option%water_id = 1
       option%air_id = 2
-
       option%nflowdof = 2
       option%nflowspec = 2
     class is (pm_general_type)
       option%iflowmode = G_MODE
       option%nphase = 2
-      option%liquid_phase = 1  ! liquid_pressure
-      option%gas_phase = 2     ! gas_pressure
-
       option%air_pressure_id = 3
       option%capillary_pressure_id = 4
       option%vapor_pressure_id = 5
       option%saturation_pressure_id = 6
-
       option%water_id = 1
       option%air_id = 2
       option%energy_id = 3
-
       option%nflowdof = 3
       option%nflowspec = 2
       option%use_isothermal = PETSC_FALSE
@@ -889,8 +881,6 @@ subroutine SubsurfaceSetFlowMode(pm_flow,option)
     class is (pm_mphase_type)
       option%iflowmode = MPH_MODE
       option%nphase = 2
-      option%liquid_phase = 1
-      option%gas_phase = 2
       option%nflowdof = 3
       option%nflowspec = 2
       option%itable = 2 ! read CO2DATA0.dat
@@ -901,15 +891,18 @@ subroutine SubsurfaceSetFlowMode(pm_flow,option)
     class is (pm_richards_type)
       option%iflowmode = RICHARDS_MODE
       option%nphase = 1
-      option%liquid_phase = 1
+      option%nflowdof = 1
+      option%nflowspec = 1
+      option%use_isothermal = PETSC_TRUE
+    class is (pm_zflow_type)
+      option%iflowmode = ZFLOW_MODE
+      option%nphase = 1
       option%nflowdof = 1
       option%nflowspec = 1
       option%use_isothermal = PETSC_TRUE
     class is (pm_th_type)
       option%iflowmode = TH_MODE
       option%nphase = 1
-      option%liquid_phase = 1
-      option%gas_phase = 2
       option%nflowdof = 2
       option%nflowspec = 1
       option%use_isothermal = PETSC_FALSE
@@ -917,15 +910,12 @@ subroutine SubsurfaceSetFlowMode(pm_flow,option)
     class is (pm_richards_ts_type)
       option%iflowmode = RICHARDS_TS_MODE
       option%nphase = 1
-      option%liquid_phase = 1
       option%nflowdof = 1
       option%nflowspec = 1
       option%use_isothermal = PETSC_TRUE
     class is (pm_th_ts_type)
       option%iflowmode = TH_TS_MODE
       option%nphase = 1
-      option%liquid_phase = 1
-      option%gas_phase = 2
       option%nflowdof = 2
       option%nflowspec = 1
       option%use_isothermal = PETSC_FALSE
@@ -994,6 +984,7 @@ subroutine FactorySubsurfaceReadFlowPM(input,option,pm)
   use PM_TH_class
   use PM_Richards_TS_class
   use PM_TH_TS_class
+  use PM_ZFlow_class
   use Init_Common_module
   use General_module
 
@@ -1051,6 +1042,8 @@ subroutine FactorySubsurfaceReadFlowPM(input,option,pm)
             pm => PMRichardsTSCreate()
           case ('TH_TS')
             pm => PMTHTSCreate()
+          case ('ZFLOW')
+            pm => PMZFlowCreate()
           case default
             error_string = trim(error_string) // ',MODE'
             call InputKeywordUnrecognized(input,word,error_string,option)
@@ -2844,6 +2837,7 @@ subroutine SubsurfaceReadInput(simulation,input)
             (option%iflowmode == TH_MODE .and. &
              .not. option%flow%th_freezing) .or. &
             option%iflowmode == TH_TS_MODE .or. &
+            option%iflowmode == ZFLOW_MODE .or. &
             option%iflowmode == WF_MODE) then
           option%io_buffer = &
             'Must compile with legacy_saturation_function=1 to use the &
@@ -2867,15 +2861,17 @@ subroutine SubsurfaceReadInput(simulation,input)
         if (.not.(option%iflowmode == NULL_MODE .or. &
                   option%iflowmode == RICHARDS_MODE .or. &
                   option%iflowmode == RICHARDS_TS_MODE .or. &
+                  option%iflowmode == ZFLOW_MODE .or. &
                   option%iflowmode == G_MODE .or. &
                   option%iflowmode == H_MODE .or. &
                   option%iflowmode == TH_TS_MODE .or. &
+                  option%iflowmode == ZFLOW_MODE .or. &
                   (option%iflowmode == TH_MODE .and. &
                     .not. option%flow%th_freezing) .or. &
                   option%iflowmode == WF_MODE)) then
           option%io_buffer = 'CHARACTERISTIC_CURVES not supported in flow &
-            &modes other than RICHARDS, RICHARDS_TS, WIPP_FLOW, TH, or GENERAL. &
-            &Use SATURATION_FUNCTION.'
+            &modes other than RICHARDS, RICHARDS_TS, WIPP_FLOW, TH, ZFLOW, &
+            &or GENERAL. Use SATURATION_FUNCTION.'
           call PrintErrMsg(option)
         endif
         characteristic_curves => CharacteristicCurvesCreate()
@@ -3801,7 +3797,8 @@ subroutine SubsurfaceReadInput(simulation,input)
 
   if (associated(simulation%flow_process_model_coupler)) then
     select case(option%iflowmode)
-      case(MPH_MODE,G_MODE,TH_MODE,WF_MODE,RICHARDS_TS_MODE,TH_TS_MODE,H_MODE)
+      case(MPH_MODE,G_MODE,TH_MODE,WF_MODE,RICHARDS_TS_MODE,TH_TS_MODE,H_MODE, &
+           ZFLOW_MODE)
         if (option%flow%steady_state) then
           option%io_buffer = 'Steady state solution is not supported with &
             &the current flow mode.'
