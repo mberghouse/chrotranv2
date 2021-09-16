@@ -891,7 +891,7 @@ subroutine PMSubsurfaceFlowPreSolve(this)
 
   PetscErrorCode :: ierr
   PetscReal :: inverse_factor
-  
+
   if (this%option%flow%scale_all_pressure) then
     call VecCopy(this%realization%field%flow_xx, &
                  this%realization%field%flow_scaled_xx,ierr);CHKERRQ(ierr)
