@@ -1886,7 +1886,11 @@ subroutine FlowConditionGeneralRead(condition,input,option)
         else if (associated(general%gas_pressure) .and. &
                 associated(general%gas_saturation)) then
           ! two phase condition
-          condition%iphase = TWO_PHASE_STATE
+          if (general_soluble_matrix) then
+            condition%iphase = LGP_STATE
+          else
+            condition%iphase = TWO_PHASE_STATE
+          endif
         else if (associated(general%liquid_pressure) .and. &
             (associated(general%precipitate_saturation)) .and. &
             (associated(general%mole_fraction))) then
@@ -1904,13 +1908,21 @@ subroutine FlowConditionGeneralRead(condition,input,option)
                .or. associated(general%porosity)) &
                .or. (option%nflowdof == 3))) then
             ! liquid phase condition
-            condition%iphase = LIQUID_STATE
+            if (general_soluble_matrix) then
+              condition%iphase = LP_STATE
+            else
+              condition%iphase = LIQUID_STATE
+            endif
           endif
         else if (associated(general%gas_pressure) .and. &
                  (associated(general%mole_fraction) .or. &
                   associated(general%relative_humidity))) then
           ! gas phase condition
-          condition%iphase = GAS_STATE
+          if (general_soluble_matrix) then
+            condition%iphase = GP_STATE
+          else
+            condition%iphase = GAS_STATE
+          endif
         endif
       else
         if (.not.associated(general%liquid_pressure)) then
@@ -1923,7 +1935,11 @@ subroutine FlowConditionGeneralRead(condition,input,option)
             &a gas saturation'
           call PrintErrMsg(option)
         endif
-        condition%iphase = TWO_PHASE_STATE
+        if (.not. general_soluble_matrix) then
+          condition%iphase = TWO_PHASE_STATE
+        elseif (general_soluble_matrix) then
+          condition%iphase = LGP_STATE
+        endif
       endif
     endif
     if (condition%iphase == NULL_STATE) then

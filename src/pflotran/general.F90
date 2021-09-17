@@ -823,7 +823,7 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
       if (istate == ANY_STATE) then
         istate = global_auxvars(ghosted_id)%istate
         select case(istate)
-          case(LIQUID_STATE,GAS_STATE)
+          case(LIQUID_STATE,GAS_STATE,LP_STATE,GP_STATE)
             do idof = 1, option%nflowdof
               select case(boundary_condition%flow_bc_type(idof))
                 case(DIRICHLET_BC,HYDROSTATIC_BC)
@@ -831,7 +831,8 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
                   xxbc(idof) = boundary_condition%flow_aux_real_var(real_index,iconn)
               end select   
             enddo
-          case(TWO_PHASE_STATE)
+          case(TWO_PHASE_STATE,LGP_STATE)
+            !DF: conditions for LGP_STATE need to be filled out
             do idof = 1, option%nflowdof
               select case(boundary_condition%flow_bc_type(idof))
                 case(HYDROSTATIC_BC)
@@ -940,7 +941,11 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
       if (istate <= 5) then 
         global_auxvars_bc(sum_connection)%istate = istate
       else
-        global_auxvars_bc(sum_connection)%istate = TWO_PHASE_STATE
+        if (.not. general_soluble_matrix) then
+          global_auxvars_bc(sum_connection)%istate = TWO_PHASE_STATE
+        elseif (general_soluble_matrix) then
+          global_auxvars_bc(sum_connection)%istate = LGP_STATE
+        endif
       endif
       ! GENERAL_UPDATE_FOR_BOUNDARY indicates call from non-perturbation
       option%iflag = GENERAL_UPDATE_FOR_BOUNDARY

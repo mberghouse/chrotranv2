@@ -161,4 +161,6 @@ module Variables_module
   PetscInt, parameter, public :: PRECIPITATE_SATURATION = 130
   PetscInt, parameter, public :: DARCY_VELOCITY = 141
 
+  PetscInt, parameter, public :: SOLUBLE_MATRIX = 142
+
 end module Variables_module

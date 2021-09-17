@@ -1414,17 +1414,6 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
                'Gas Pressure     ','Air Pressure     ','Temperature      ', &
                'Gas Pressure     ','Gas Saturation   ','Temperature      '], &
                shape(dof_string))
-  elseif (option%nflowdof == 4 .and. general_soluble_matrix) then
-     state_string = &
-        ['Liquid State','Gas State   ','2Phase State']
-     dof_string = &
-       reshape(['Liquid Pressure  ','Air Mole Fraction','Temperature      ', &
-                'Porosity         ', &
-                'Gas Pressure     ','Air Pressure     ','Temperature      ', &
-                'Porosity         ', &
-                'Gas Pressure     ','Gas Saturation   ','Temperature      ', &
-                'Porosity         '], &
-       shape(dof_string))
   elseif (option%nflowdof == 4) then
     state_string = &
       ['Liquid State','Gas State   ','LG State    ',&
