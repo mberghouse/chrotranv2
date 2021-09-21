@@ -418,7 +418,7 @@ end subroutine RTSetup
 
 ! ************************************************************************** !
 
-subroutine RTComputeMassBalance(realization,max_size,sum_mol)
+subroutine RTComputeMassBalance(realization,num_cells,cell_ids,region,max_size,sum_mol)
   ! 
   ! Author: Glenn Hammond
   ! Date: 12/23/08
@@ -434,6 +434,9 @@ subroutine RTComputeMassBalance(realization,max_size,sum_mol)
   type(realization_subsurface_type) :: realization
   PetscInt :: max_size
   PetscReal :: sum_mol(max_size,8)
+  PetscInt, pointer :: cell_ids(:)
+  PetscInt :: num_cells
+  PetscBool :: region
   type(option_type), pointer :: option
   type(patch_type), pointer :: patch
   type(field_type), pointer :: field
@@ -455,7 +458,7 @@ subroutine RTComputeMassBalance(realization,max_size,sum_mol)
   PetscErrorCode :: ierr
   PetscInt :: local_id
   PetscInt :: ghosted_id
-  PetscInt :: i, icomp, imnrl, ncomp, irate, irxn, naqcomp
+  PetscInt :: i, icomp, imnrl, ncomp, irate, irxn, naqcomp,k
   PetscReal :: pp_to_mol_per_L
   PetscReal :: liquid_saturation, porosity, volume
   PetscReal :: tempreal
@@ -482,8 +485,13 @@ subroutine RTComputeMassBalance(realization,max_size,sum_mol)
   sum_mol_by_gas = 0.d0
 
   naqcomp = reaction%naqcomp
-
-  do local_id = 1, grid%nlmax
+  !put in print kg
+  do k=1, num_cells
+    if (region) then
+       local_id = cell_ids(k)
+    else
+       local_id = k
+    endif
     ghosted_id = grid%nL2G(local_id)
     !geh - Ignore inactive cells with inactive materials
     if (patch%imat(ghosted_id) <= 0) cycle

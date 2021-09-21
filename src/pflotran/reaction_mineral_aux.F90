@@ -22,6 +22,7 @@ module Reaction_Mineral_Aux_module
     PetscReal :: molar_volume
     PetscReal :: molar_weight
     PetscBool :: print_me
+    PetscBool :: region_print_me
     type(database_rxn_type), pointer :: dbaserxn
     type(transition_state_rxn_type), pointer :: tstrxn
     type(mineral_rxn_type), pointer :: next
@@ -99,12 +100,14 @@ module Reaction_Mineral_Aux_module
     PetscReal, pointer :: mnrl_logK(:)
     PetscReal, pointer :: mnrl_logKcoef(:,:)
     PetscBool, pointer :: mnrl_print(:)
+    PetscBool, pointer :: mnrl_region_print(:)
     
     ! for kinetic reactions
     PetscInt :: nkinmnrl
     character(len=MAXWORDLENGTH), pointer :: kinmnrl_names(:)
     character(len=MAXWORDLENGTH), pointer :: kinmnrl_armor_min_names(:)
     PetscBool, pointer :: kinmnrl_print(:)
+    PetscBool, pointer :: kinmnrl_region_print(:)
     PetscInt, pointer :: kinmnrlspecid(:,:)
     PetscReal, pointer :: kinmnrlstoich(:,:)
     PetscInt, pointer :: kinmnrlh2oid(:)
@@ -188,6 +191,7 @@ function MineralCreate()
   mineral%nmnrl = 0  
   nullify(mineral%mineral_names)
   nullify(mineral%mnrl_print)
+  nullify(mineral%mnrl_region_print)
   nullify(mineral%mnrlspecid)
   nullify(mineral%mnrlh2oid)
   nullify(mineral%mnrlstoich)
@@ -199,6 +203,7 @@ function MineralCreate()
   mineral%nkinmnrl = 0  
   nullify(mineral%kinmnrl_names)
   nullify(mineral%kinmnrl_print)
+  nullify(mineral%kinmnrl_region_print)
   nullify(mineral%kinmnrlspecid)
   nullify(mineral%kinmnrlstoich)
   nullify(mineral%kinmnrlh2oid)
@@ -260,6 +265,7 @@ function MineralRxnCreate()
   mineral%molar_volume = 0.d0
   mineral%molar_weight = 0.d0
   mineral%print_me = PETSC_FALSE
+  mineral%region_print_me = PETSC_FALSE
   nullify(mineral%tstrxn)
   nullify(mineral%next)
   
@@ -771,6 +777,8 @@ subroutine MineralDestroy(mineral)
   call DeallocateArray(mineral%kinmnrl_names)
   call DeallocateArray(mineral%mnrl_print)
   call DeallocateArray(mineral%kinmnrl_print)
+  call DeallocateArray(mineral%mnrl_region_print)
+  call DeallocateArray(mineral%kinmnrl_region_print)
   call DeallocateArray(mineral%mnrlspecid)
   call DeallocateArray(mineral%mnrlstoich)
   call DeallocateArray(mineral%mnrlh2oid)

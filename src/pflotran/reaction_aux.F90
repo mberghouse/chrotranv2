@@ -673,7 +673,7 @@ function AqueousSpeciesCreate()
   species%molar_weight = 0.d0
   species%Z = 0.d0
   species%print_me = PETSC_FALSE
-  species%region_print_me = PETSC_TRUE
+  species%region_print_me = PETSC_FALSE
   species%is_redox = PETSC_FALSE
   nullify(species%dbaserxn)
   nullify(species%next)

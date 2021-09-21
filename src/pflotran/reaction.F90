@@ -3279,56 +3279,75 @@ subroutine ReactionReadOutput(reaction,input,option)
           cur_srfcplx_rxn => cur_srfcplx_rxn%next
         enddo
       case ('TOTAL_MASS_REGION')        
-        do
-  
-         call InputReadPflotranString(input,option)
-         if (InputError(input)) exit
-         if (InputCheckExit(input,option)) exit
+        do 
+          call InputReadPflotranString(input,option)
+          if (InputError(input)) exit
+          if (InputCheckExit(input,option)) exit
 
           call InputReadWord(input,option,word,PETSC_TRUE) 
-         call InputErrorMsg(input,option,'keyword','CHEMISTRY,OUTPUT,TOTAL_MASS_REGION')
-         cur_aq_spec => reaction%primary_species_list
-         found = PETSC_FALSE
-         name = word
-         do
+          call InputErrorMsg(input,option,'keyword','CHEMISTRY,OUTPUT,TOTAL_MASS_REGION')
+          cur_aq_spec => reaction%primary_species_list
+          found = PETSC_FALSE
+          name = word
+ 
+          do
             if (.not.associated(cur_aq_spec)) exit
-                        if (StringCompare(name,cur_aq_spec%name,MAXWORDLENGTH)) then
-              cur_aq_spec%region_print_me = PETSC_TRUE
-              found = PETSC_TRUE
-              exit
-           endif
-            cur_aq_spec => cur_aq_spec%next
-         enddo
-                 if (.not.found) then
-          option%io_buffer = 'CHEMISTRY,OUTPUT,TOTAL_MASS_REGION species name: '//trim(name)// &
-                             ' not found among chemical species'
-          call PrintErrMsg(option)
-       endif
-       enddo
-      !   word = name 
-!        do
-!          call InputReadWord(input,option,name,PETSC_TRUE)
-!          call InputErrorMsg(input,option,'keyword',string)
-!          found = PETSC_FALSE
-          ! primary aqueous species
-!        print *, name
-     !   if (.not.found) then
-!          cur_aq_spec => reaction%primary_species_list
-       !   do
-!            if (.not.associated(cur_aq_spec)) exit
-!            if (StringCompare(name,cur_aq_spec%name,MAXWORDLENGTH)) then
-!              cur_aq_spec%region_print_me = PETSC_TRUE
-!              found = PETSC_TRUE
-!              exit
-!            endif
-!            cur_aq_spec => cur_aq_spec%next
-!          enddo
-!        endif   
-!        if (.not.found) then
-!          option%io_buffer = 'CHEMISTRY,OUTPUT,TOTAL_MASS_REGION species name: '//trim(name)// &
-!                             ' not found among chemical species'
-!          call PrintErrMsg(option)
-!        endif
+              if (StringCompare(name,cur_aq_spec%name,MAXWORDLENGTH)) then
+               cur_aq_spec%region_print_me = PETSC_TRUE
+               found = PETSC_TRUE
+               exit
+             endif
+             cur_aq_spec => cur_aq_spec%next
+          enddo
+
+          ! gas
+          if (.not.found) then
+            ! be sure to check both lists, not skipping the passive list
+            ! if found in the active list
+            cur_gas_spec => reaction%gas%list
+            do
+              if (.not.associated(cur_gas_spec)) exit
+              if (StringCompare(name,cur_gas_spec%name,MAXWORDLENGTH)) then
+                cur_gas_spec%region_print_me = PETSC_TRUE
+                found = PETSC_TRUE
+                exit
+              endif
+              cur_gas_spec => cur_gas_spec%next
+            enddo  
+          endif
+               ! minerals
+          if (.not.found) then
+            cur_mineral => reaction%mineral%mineral_list
+            do
+              if (.not.associated(cur_mineral)) exit
+              if (StringCompare(name,cur_mineral%name,MAXWORDLENGTH)) then
+                cur_mineral%region_print_me = PETSC_TRUE
+                found = PETSC_TRUE
+                exit
+              endif
+              cur_mineral => cur_mineral%next
+            enddo
+          endif
+          ! immobile
+          if (.not.found) then
+            cur_immobile => reaction%immobile%list
+            do  
+              if (.not.associated(cur_immobile)) exit
+              if (StringCompare(name,cur_immobile%name,MAXWORDLENGTH)) then
+                cur_immobile%region_print_me = PETSC_TRUE
+                found = PETSC_TRUE
+                exit
+              endif
+              cur_immobile => cur_immobile%next
+            enddo
+          endif
+         
+          if (.not.found) then
+            option%io_buffer = 'CHEMISTRY,OUTPUT,TOTAL_MASS_REGION species name: '//trim(name)// &
+                              ' not found among printable chemical species'
+            call PrintErrMsg(option)
+          endif
+        enddo
       case default        
         found = PETSC_FALSE
         ! primary aqueous species
