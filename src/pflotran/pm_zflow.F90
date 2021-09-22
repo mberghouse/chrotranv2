@@ -587,6 +587,107 @@ end subroutine PMZFlowJacobian
 
 ! ************************************************************************** !
 
+subroutine PMZFlowSolveAdjoint(this,snes)
+  ! Solves the adjoint matrix equation to compute adjoint fields for zflow
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 09/22/21
+  !
+
+  use ZFlow_module, only : ZFlowCalculateAdjointMatrix
+
+  implicit none
+
+  class(pm_zflow_type) :: this
+  SNES ::snes
+
+  Vec :: rhs
+  Mat :: M
+
+  PetscInt :: imat
+  PetscInt :: local_id
+  PetscReal, pointer :: vec_ptr(:)
+  PetscErrorCode :: ierr
+
+  call SNESGetJacobian(snes,M,PETSC_NULL_MAT,PETSC_NULL_FUNCTION, &
+                       PETSC_NULL_INTEGER,ierr);CHKERRQ(ierr)
+
+  ! Get the adjoint matrix
+  call ZFlowCalculateAdjointMatrix(this%realization,M)
+
+  call KSPSetOperators(this%solver%ksp,M,M,ierr);CHKERRQ(ierr)
+
+  call VecDuplicate(this%realization%field%work,rhs,ierr);CHKERRQ(ierr)
+
+  call VecZeroEntries(rhs,ierr);CHKERRQ(ierr)
+  call VecZeroEntries(this%realization%field%work,ierr);CHKERRQ(ierr)
+
+  ! Assign RHS values -> TEMP
+  call VecGetArrayF90(rhs,vec_ptr,ierr);CHKERRQ(ierr)
+  vec_ptr(1) = 1.d0
+  call VecRestoreArrayF90(rhs,vec_ptr,ierr);CHKERRQ(ierr)
+
+  call KSPSolveTranspose(this%solver%ksp,rhs,this%realization%field%work, &
+                         ierr);CHKERRQ(ierr)
+
+end subroutine PMZFlowSolveAdjoint
+
+! ************************************************************************** !
+
+subroutine PMZFlowBuildJacobian(this)
+  !
+  ! Builds ZFlow Jacobian Matrix distributed across processors
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 09/22/21
+  !
+
+  use Patch_module
+  use Grid_module
+  use Option_module
+  !use Material_Aux_class
+  use Timer_class
+  use String_module
+
+  implicit none
+
+  class(pm_zflow_type) :: this
+
+  type(patch_type), pointer :: patch
+  type(grid_type), pointer :: grid
+  type(option_type), pointer :: option
+  class(timer_type), pointer ::timer
+
+  PetscErrorCode :: ierr
+
+  option => this%option
+  patch => this%realization%patch
+  grid => patch%grid
+
+  call MPI_Barrier(option%mycomm,ierr)
+  timer => TimerCreate()
+  call timer%Start()
+
+  if (OptionPrintToScreen(this%option)) then
+    write(*,'(/," --> Building ZFLOW Jacobian matrix:")')
+  endif
+
+  ! PJ: All calculations for Jacobian building go bellow
+  ! For all data at a current time step?
+
+
+  call MPI_Barrier(option%mycomm,ierr)
+  call timer%Stop()
+  option%io_buffer = '    ' // &
+    trim(StringWrite('(f20.1)',timer%GetCumulativeTime())) &
+    // ' seconds to build Jacobian.'
+  call PrintMsg(option)
+  call TimerDestroy(timer)
+
+end subroutine PMZFlowBuildJacobian
+
+! ************************************************************************** !
+
 subroutine PMZFlowCheckUpdatePre(this,snes,X,dX,changed,ierr)
   !
   ! Author: Glenn Hammond

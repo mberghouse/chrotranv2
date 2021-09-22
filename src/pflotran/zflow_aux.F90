@@ -54,6 +54,8 @@ module ZFlow_Aux_module
     PetscReal :: dsat_dp ! derivative of saturation wrt pressure
     PetscReal :: dkr_dp  ! derivative of rel. perm. wrt pressure
     PetscReal :: pert
+    ! For inversion
+    PetscReal, pointer :: dA_dk(:)   ! System matrix derivative dA/dKin
   end type zflow_auxvar_type
 
   type, public :: zflow_parameter_type
@@ -158,6 +160,7 @@ subroutine ZFlowAuxVarInit(auxvar,option)
   auxvar%dsat_dp = 0.d0
   auxvar%dkr_dp = 0.d0
   auxvar%pert = 0.d0
+  nullify(auxvar%dA_dk)
 
 end subroutine ZFlowAuxVarInit
 
@@ -512,6 +515,8 @@ subroutine ZFlowAuxVarStrip(auxvar)
   implicit none
 
   type(zflow_auxvar_type) :: auxvar
+
+  call DeallocateArray(auxvar%dA_dk)
 
 end subroutine ZFlowAuxVarStrip
 

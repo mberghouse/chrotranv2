@@ -21,6 +21,7 @@ module ZFlow_module
             ZFlowComputeMassBalance, &
             ZFlowZeroMassBalanceDelta, &
             ZFlowResidual, &
+            ZFlowCalculateAdjointMatrix, &
             ZFlowSetPlotVariables, &
             ZFlowMapBCAuxVarsToGlobal, &
             ZFlowDestroy
@@ -1014,6 +1015,418 @@ subroutine ZFlowResidual(snes,xx,r,A,realization,ierr)
   endif
 
 end subroutine ZFlowResidual
+
+! ************************************************************************** !
+
+subroutine ZFlowCalculateAdjointMatrix(realization,M)
+  !
+  ! Calculate Adjoint State Matrix for zflow
+  ! =>  M = A + dA/dp
+  ! M is basically p-Jacobian of residual R
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 09/21/21
+  !
+
+  use Realization_Subsurface_class
+  use Field_module
+  use Patch_module
+  use Option_module
+  use Connection_module
+  use Grid_module
+  use Coupler_module
+  use Material_Aux_class
+
+  implicit none
+
+  type(realization_subsurface_type) :: realization
+  Mat :: M
+
+  type(grid_type), pointer :: grid
+  type(patch_type), pointer :: patch
+  type(option_type), pointer :: option
+  type(field_type), pointer :: field
+  type(coupler_type), pointer :: boundary_condition
+  !type(coupler_type), pointer :: source_sink
+  !type(material_parameter_type), pointer :: material_parameter
+  type(zflow_parameter_type), pointer :: zflow_parameter
+  type(zflow_auxvar_type), pointer :: zflow_auxvars(:,:)
+  type(zflow_auxvar_type), pointer :: zflow_auxvars_bc(:)
+  type(global_auxvar_type), pointer :: global_auxvars(:)
+  type(global_auxvar_type), pointer :: global_auxvars_bc(:)
+  class(material_auxvar_type), pointer :: material_auxvars(:)
+  type(connection_set_list_type), pointer :: connection_set_list
+  type(connection_set_type), pointer :: cur_connection_set
+
+  PetscInt :: iconn
+  PetscInt :: sum_connection
+  PetscInt :: local_id, ghosted_id
+  PetscInt :: local_id_up, local_id_dn, ghosted_id_up, ghosted_id_dn
+  PetscInt :: i, imat, imat_up, imat_dn
+
+  PetscReal :: Res(1)
+  PetscReal :: Jup(1,1),Jdn(1,1)
+  PetscReal :: v_darcy(1)
+
+  PetscErrorCode :: ierr
+
+  option => realization%option
+  patch => realization%patch
+  grid => patch%grid
+  field => realization%field
+
+  zflow_auxvars => patch%aux%ZFlow%auxvars
+  zflow_parameter => patch%aux%ZFlow%zflow_parameter
+  zflow_auxvars_bc => patch%aux%ZFlow%auxvars_bc
+  global_auxvars => patch%aux%Global%auxvars
+  global_auxvars_bc => patch%aux%Global%auxvars_bc
+  material_auxvars => patch%aux%Material%auxvars
+
+  ! Pre-set Matrix to zeros
+  call MatZeroEntries(M,ierr); CHKERRQ(ierr)
+
+  ! For Steady state only flux term needs to be evaluated
+  ! Other terms are zero
+
+  ! Interior Flux Terms -----------------------------------
+  connection_set_list => grid%internal_connection_set_list
+  cur_connection_set => connection_set_list%first
+  sum_connection = 0
+  do
+    if (.not.associated(cur_connection_set)) exit
+    do iconn = 1, cur_connection_set%num_connections
+      sum_connection = sum_connection + 1
+
+      ghosted_id_up = cur_connection_set%id_up(iconn)
+      ghosted_id_dn = cur_connection_set%id_dn(iconn)
+
+      local_id_up = grid%nG2L(ghosted_id_up) ! = zero for ghost nodes
+      local_id_dn = grid%nG2L(ghosted_id_dn) ! Ghost to local mapping
+
+      imat_up = patch%imat(ghosted_id_up)
+      imat_dn = patch%imat(ghosted_id_dn)
+      if (imat_up <= 0 .or. imat_dn <= 0) cycle
+
+      call XXFlux(zflow_auxvars(ZERO_INTEGER,ghosted_id_up), &
+                  global_auxvars(ghosted_id_up), &
+                  material_auxvars(ghosted_id_up), &
+                  zflow_auxvars(ZERO_INTEGER,ghosted_id_dn), &
+                  global_auxvars(ghosted_id_dn), &
+                  material_auxvars(ghosted_id_dn), &
+                  cur_connection_set%area(iconn), &
+                  cur_connection_set%dist(:,iconn), &
+                  zflow_parameter,option,v_darcy, &
+                  Res,Jup,Jdn, &
+                  PETSC_TRUE)
+
+      ! Fill adjoint matrix
+      if (local_id_up > 0) then
+        call MatSetValuesBlockedLocal(M,1,ghosted_id_up-1, &
+                                      1,ghosted_id_up-1, &
+                                      Jup,ADD_VALUES,ierr);CHKERRQ(ierr)
+        call MatSetValuesBlockedLocal(M,1,ghosted_id_up-1, &
+                                      1,ghosted_id_dn-1, &
+                                      Jdn,ADD_VALUES,ierr);CHKERRQ(ierr)
+      endif
+
+      if (local_id_dn > 0) then
+        Jup = -Jup
+        Jdn = -Jdn
+        call MatSetValuesBlockedLocal(M,1,ghosted_id_dn-1, &
+                                      1,ghosted_id_dn-1, &
+                                      Jdn,ADD_VALUES,ierr);CHKERRQ(ierr)
+        call MatSetValuesBlockedLocal(M,1,ghosted_id_dn-1, &
+                                      1,ghosted_id_up-1, &
+                                      Jup,ADD_VALUES,ierr);CHKERRQ(ierr)
+      endif
+    enddo
+    cur_connection_set => cur_connection_set%next
+  enddo
+
+  ! Boundary Flux Terms -----------------------------------
+  boundary_condition => patch%boundary_condition_list%first
+  sum_connection = 0
+  do
+    if (.not.associated(boundary_condition)) exit
+
+    cur_connection_set => boundary_condition%connection_set
+
+    do iconn = 1, cur_connection_set%num_connections
+      sum_connection = sum_connection + 1
+
+      local_id = cur_connection_set%id_dn(iconn)
+      ghosted_id = grid%nL2G(local_id)
+
+      imat = patch%imat(ghosted_id)
+      if (imat <= 0) cycle
+
+      call XXBCFlux(boundary_condition%flow_bc_type, &
+                    boundary_condition%flow_aux_mapping, &
+                    boundary_condition%flow_aux_real_var(:,iconn), &
+                    zflow_auxvars_bc(sum_connection), &
+                    global_auxvars_bc(sum_connection), &
+                    zflow_auxvars(ZERO_INTEGER,ghosted_id), &
+                    global_auxvars(ghosted_id), &
+                    material_auxvars(ghosted_id), &
+                    cur_connection_set%area(iconn), &
+                    cur_connection_set%dist(:,iconn), &
+                    zflow_parameter,option, &
+                    v_darcy,Res,Jdn, &
+                    PETSC_TRUE)
+
+
+      Jdn = -Jdn
+      call MatSetValuesBlockedLocal(M,1,ghosted_id-1,1,ghosted_id-1,Jdn, &
+                                    ADD_VALUES,ierr);CHKERRQ(ierr)
+
+    enddo
+    boundary_condition => boundary_condition%next
+  enddo
+
+  call MatAssemblyBegin(M,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
+  call MatAssemblyEnd(M,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
+
+end subroutine ZFlowCalculateAdjointMatrix
+
+! ************************************************************************** !
+
+subroutine ZFlowCalculateMatrixDerivatives(realization)
+  !
+  ! Calculate derivatives of system matrices/vector for Zflow
+  !   A(m,p)p1 = Bp0 + c
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 09/15/21
+  !
+
+  use Realization_Subsurface_class
+  use Option_module
+  use Grid_module
+  use Patch_module
+  use Coupler_module
+  use Connection_module
+  use Material_Aux_class
+
+  implicit none
+
+  type(realization_subsurface_type) :: realization
+  !PetscBool :: calculate_dA_dk, calculate_dB_dk, calculate_dc_dk
+
+  class(material_auxvar_type), pointer :: material_auxvars(:)
+  type(zflow_auxvar_type), pointer :: zflow_auxvars(:,:)
+  type(zflow_auxvar_type), pointer :: zflow_auxvars_bc(:)
+  type(option_type), pointer :: option
+  type(patch_type), pointer :: patch
+  type(grid_type), pointer :: grid
+
+  type(connection_set_list_type), pointer :: connection_set_list
+  type(connection_set_type), pointer :: cur_connection_set
+  type(coupler_type), pointer :: boundary_condition
+  PetscInt :: sum_connection, iconn
+  PetscInt :: num_neighbors_up, num_neighbors_dn
+  PetscInt :: ineighbor, num_neighbors
+  PetscInt :: local_id, ghosted_id
+  PetscInt :: local_id_up, ghosted_id_up
+  PetscInt :: local_id_dn, ghosted_id_dn
+
+  PetscReal :: dAup, dAdn, dAdn_bc
+  PetscReal :: dcoef_up, dcoef_dn
+
+
+  option => realization%option
+  patch => realization%patch
+  grid => patch%grid
+  material_auxvars => patch%aux%Material%auxvars
+  zflow_auxvars => patch%aux%ZFlow%auxvars
+  zflow_auxvars_bc => patch%aux%ZFlow%auxvars_bc
+
+  !if (calculate_dA_dk)
+  ! Setting matrix derivatives enteries for Internal Flux terms/connections
+  connection_set_list => grid%internal_connection_set_list
+  cur_connection_set => connection_set_list%first
+  sum_connection = 0
+  do
+    if (.not. associated(cur_connection_set)) exit
+    do iconn = 1, cur_connection_set%num_connections
+      sum_connection = sum_connection + 1
+
+      ! get ghosted ids of up and down
+      ghosted_id_up = cur_connection_set%id_up(iconn)
+      ghosted_id_dn = cur_connection_set%id_dn(iconn)
+
+      ! Ghosted to local id mapping. Local id is zero/-1 for
+      ! ghosted cells
+      local_id_up = grid%nG2L(ghosted_id_up)
+      local_id_dn = grid%nG2L(ghosted_id_dn)
+
+      ! cycle if material is negative for any cell -> inactive cell
+      if (patch%imat(ghosted_id_up) <= 0 .or.   &
+          patch%imat(ghosted_id_dn) <=0 ) cycle
+
+      ! Get matrix coeffs derivatives w.r.t. perm
+      call ZFlowFluxDerivativeWithPerm(zflow_auxvars(                    &
+                                         ZERO_INTEGER,ghosted_id_up),    &
+                                       material_auxvars(ghosted_id_up),  &
+                                       zflow_auxvars(                    &
+                                         ZERO_INTEGER,ghosted_id_dn),    &
+                                       material_auxvars(ghosted_id_dn),  &
+                                       option,                           &
+                                       cur_connection_set%area(iconn),   &
+                                       cur_connection_set%dist(:,iconn), &
+                                       dAup,dAdn)
+
+      if (local_id_up > 0) then
+        num_neighbors_up = grid%cell_neighbors_local_ghosted(0,local_id_up)
+        ineighbor = FindLocNeighbor(grid%cell_neighbors_local_ghosted      &
+                                      (1:num_neighbors_up,local_id_up),    &
+                                    num_neighbors_up,ghosted_id_dn)
+
+        if (.not.associated(zflow_auxvars(ZERO_INTEGER, &
+                                          ghosted_id_up)%dA_dk)) then
+          allocate(zflow_auxvars(ZERO_INTEGER, &
+                                 ghosted_id_up)%dA_dk(num_neighbors_up + 1))
+          zflow_auxvars(ZERO_INTEGER,ghosted_id_up)%dA_dk = 0.d0
+        endif
+
+        ! Fill values to dA/dperm_up matrix for up cell
+        dcoef_up = dAup
+        dcoef_dn = - dcoef_up
+        call FillDADkFlux(dcoef_up,dcoef_dn,num_neighbors_up,ineighbor, &
+                          zflow_auxvars(ZERO_INTEGER,ghosted_id_up)%dA_dk)
+      endif
+
+      if (local_id_dn > 0) then
+        num_neighbors_dn = grid%cell_neighbors_local_ghosted(0,local_id_dn)
+        ineighbor = FindLocNeighbor(grid%cell_neighbors_local_ghosted      &
+                                      (1:num_neighbors_dn,local_id_dn),    &
+                                    num_neighbors_dn,ghosted_id_up)
+
+        if (.not.associated(zflow_auxvars(ZERO_INTEGER,  &
+                                          ghosted_id_dn)%dA_dk)) then
+          allocate(zflow_auxvars(ZERO_INTEGER,  &
+                                 ghosted_id_dn)%dA_dk(num_neighbors_dn + 1))
+          zflow_auxvars(ZERO_INTEGER,ghosted_id_dn)%dA_dk = 0.d0
+        endif
+
+        ! Fill values to dA/dperm_dn matrix for dn cell
+        dcoef_dn = dAdn
+        dcoef_up = - dcoef_dn
+        call FillDADkFlux(dcoef_dn,dcoef_up,num_neighbors_dn,ineighbor, &
+                          zflow_auxvars(ZERO_INTEGER,ghosted_id_dn)%dA_dk)
+      endif
+    enddo
+    cur_connection_set => cur_connection_set%next
+  enddo
+
+  ! Setting matrix derivatives enteries for boundary Flux terms/connections
+  boundary_condition => patch%boundary_condition_list%first
+  sum_connection = 0
+  do
+    if (.not.associated(boundary_condition)) exit
+
+    cur_connection_set => boundary_condition%connection_set
+
+    do iconn = 1, cur_connection_set%num_connections
+      sum_connection = sum_connection + 1
+
+      local_id = cur_connection_set%id_dn(iconn)
+      ghosted_id = grid%nL2G(local_id)
+
+      if (patch%imat(ghosted_id) <= 0) cycle
+
+      call ZFlowBCFluxDerivativeWithPerm(boundary_condition%flow_bc_type, &
+                                         boundary_condition%flow_aux_mapping, &
+                                         boundary_condition%flow_aux_real_var &
+                                           (:,iconn), &
+                                         zflow_auxvars_bc(sum_connection), &
+                                         zflow_auxvars( &
+                                           ZERO_INTEGER,ghosted_id), &
+                                         material_auxvars(ghosted_id), &
+                                         option, &
+                                         cur_connection_set%area(iconn), &
+                                         cur_connection_set%dist(:,iconn), &
+                                         dAdn_bc)
+
+      num_neighbors = grid%cell_neighbors_local_ghosted(0,local_id)
+      call FillDADkFluxBC(dAdn_bc,num_neighbors, &
+                          zflow_auxvars(ZERO_INTEGER,ghosted_id)%dA_dk)
+    enddo
+    boundary_condition => boundary_condition%next
+  enddo
+  !endif !(calculate_dA_dk)
+  ! if (calculate_dB_dk)
+  ! if (calculate_dc_dk)
+
+contains
+  subroutine FillDADkFlux(dcoef_self,dcoef_neighbor,num_neighbors, &
+                          ineighbor,dA_dk)
+    !
+    ! Fills out upper traingle part of the dA/dk matrix for each cell
+    !   Storing only first rows as other rows can easily be retrieved
+    !   from off-diagonal elements of the first row.
+    !
+    ! Author: Piyoosh Jaysaval
+    ! Date: 09/15/21
+
+    implicit none
+
+    PetscReal :: dcoef_self, dcoef_neighbor
+    PetscInt :: num_neighbors
+    PetscInt :: ineighbor
+    PetscReal :: dA_dk(num_neighbors + 1)
+
+    ! Add values for self
+    dA_dk(1) = dA_dk(1) + dcoef_self
+    ! insert values for neighbor
+    dA_dk(1+ineighbor) = dcoef_neighbor
+
+  end subroutine FillDADkFlux
+
+  ! ************************************************************************** !
+
+  subroutine FillDADkFluxBC(dcoef_self,num_neighbors,dA_dk)
+    !
+    ! Fills out dA/dk for boundary flux coeffs
+    !
+    ! Author: Piyoosh Jaysaval
+    ! Date: 09/17/21
+
+    implicit none
+
+    PetscReal :: dcoef_self
+    PetscInt :: num_neighbors
+    PetscReal :: dA_dk(num_neighbors + 1)
+
+    ! Add values for self for boundary coeffs
+    dA_dk(1) = dA_dk(1) + dcoef_self
+
+  end subroutine FillDADkFluxBC
+
+  ! ************************************************************************** !
+
+  function FindLocNeighbor(neighbors,num_neighbors,id_neighbor) &
+                                                            result(ineighbor)
+    implicit none
+
+    PetscInt :: num_neighbors
+    PetscInt :: neighbors(num_neighbors)
+    PetscInt :: id_neighbor
+    PetscInt :: ineighbor
+
+    do ineighbor = 1,num_neighbors
+      if(abs(neighbors(ineighbor)) == id_neighbor) exit
+    enddo
+
+    if (ineighbor > num_neighbors) then
+      option%io_buffer = 'ZFlowCalculateMatrixDerivatives: ' //&
+        &'There is something wrong ' // &
+        &'in finding neighbor location. '
+      call PrintErrMsg(option)
+    endif
+
+  end function FindLocNeighbor
+
+end subroutine ZFlowCalculateMatrixDerivatives
 
 ! ************************************************************************** !
 
