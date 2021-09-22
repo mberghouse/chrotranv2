@@ -16,7 +16,6 @@ module General_Aux_module
   PetscBool, public :: general_non_darcy_flow = PETSC_FALSE
   PetscReal, public :: general_phase_chng_epsilon = 1.d-6
   PetscBool, public :: general_restrict_state_chng = PETSC_FALSE
-  PetscBool, public :: general_soluble_matrix = PETSC_FALSE
   PetscReal, public :: window_epsilon = 1.d-4 !0.d0
   PetscReal, public :: fmw_comp(3) = [FMWH2O,FMWAIR,FMWNACL]
   PetscReal, public :: general_max_pressure_change = 5.d4
@@ -24,8 +23,8 @@ module General_Aux_module
   PetscReal, public :: general_damping_factor = 0.6d0
   PetscInt, public :: general_debug_cell_id = UNINITIALIZED_INTEGER
   PetscReal, public :: non_darcy_B = -0.78d0
-  PetscReal, public :: PRECIPITATE_DENSITY_KG = 2.170d3
-  PetscReal, public :: PRECIPITATE_DENSITY = 37.132101d0
+  PetscReal, public :: PRECIPITATE_DENSITY_KG = 2.170d3 !kg/m^3
+  PetscReal, public :: PRECIPITATE_DENSITY = 37.132101d0 !mol/L
 #if defined(MATCH_TOUGH2)
   PetscBool, public :: general_temp_dep_gas_air_diff = PETSC_FALSE
   PetscBool, public :: general_diffuse_xmol = PETSC_FALSE
@@ -117,6 +116,7 @@ module General_Aux_module
   PetscInt, public :: general_gas_air_mass_dof = GENERAL_AIR_PRESSURE_INDEX
   PetscBool, public :: general_isothermal = PETSC_FALSE
   PetscBool, public :: general_no_air = PETSC_FALSE
+  PetscBool, public :: general_soluble_matrix = PETSC_FALSE
   PetscInt, public :: solubility_function = 1
   
   type, public :: general_auxvar_type
@@ -4380,11 +4380,13 @@ subroutine GeneralAuxVarPerturb4(gen_auxvar,global_auxvar, &
         pert(GENERAL_GAS_SATURATION_DOF) = perturbation_tolerance * &
                         x(GENERAL_GAS_SATURATION_DOF)+min_perturbation
       endif
-      if (x(GENERAL_LIQUID_STATE_S_MOLE_DOF) > &
-           1.d3 * perturbation_tolerance) then
-         pert(GENERAL_LIQUID_STATE_S_MOLE_DOF) = -1.d0 * perturbation_tolerance
-      else
-         pert(GENERAL_LIQUID_STATE_S_MOLE_DOF) = perturbation_tolerance
+      if (.not. general_soluble_matrix) then
+        if (x(GENERAL_LIQUID_STATE_S_MOLE_DOF) > &
+             1.d3 * perturbation_tolerance) then
+           pert(GENERAL_LIQUID_STATE_S_MOLE_DOF) = -1.d0 * perturbation_tolerance
+        else
+           pert(GENERAL_LIQUID_STATE_S_MOLE_DOF) = perturbation_tolerance
+        endif
       endif
 #endif
 #endif

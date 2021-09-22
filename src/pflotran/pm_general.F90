@@ -19,7 +19,6 @@ module PM_General_class
   PetscInt, pointer :: general_max_states
   PetscInt, pointer :: max_change_index
   PetscBool, public :: general_g_state_air_mass_dof = PETSC_FALSE
-  PetscBool, public :: general_soluble_matrix = PETSC_FALSE
 
   PetscBool, public :: transient_porosity
 
@@ -186,19 +185,19 @@ subroutine PMGeneralSetFlowMode(pm,option)
     option%nflowspec = 3
     option%solute_id = 3
     option%energy_id = 4
-    if (general_soluble_matrix) then
-      option%nphase = 2
-      option%precipitate_phase = 3
-      general_max_states = 3
-      max_change_index = 7
-      transient_porosity = PETSC_TRUE
-    else
-      option%nphase = 3
-      option%precipitate_phase = 3
-      general_max_states = 7
-      max_change_index = 7
-      transient_porosity = PETSC_FALSE
-    endif
+    ! if (general_soluble_matrix) then
+    !   option%nphase = 2
+    !   option%precipitate_phase = 3
+    !   general_max_states = 3
+    !   max_change_index = 7
+    !   transient_porosity = PETSC_TRUE
+    ! else
+    option%nphase = 3
+    option%precipitate_phase = 3
+    general_max_states = 7
+    max_change_index = 7
+    transient_porosity = PETSC_FALSE
+    !endif
   else
     write(option%io_buffer,*) option%nflowdof
     option%io_buffer = trim(adjustl(option%io_buffer)) // &
@@ -242,29 +241,29 @@ subroutine PMGeneralSetFlowMode(pm,option)
                                      ! pressures not represented in phase
                                          ! 2 = air in xmol(air,liquid)
     pm%max_change_isubvar = [0,0,0,2,0,0]
-  elseif (option%nflowdof == 4 .and. general_soluble_matrix) then
-    rel_update_inf_tol = &
-      reshape([pres_rel_inf_tol,xmol_rel_inf_tol,temp_rel_inf_tol,por_rel_inf_tol, &
-               pres_rel_inf_tol,pres_rel_inf_tol,temp_rel_inf_tol,por_rel_inf_tol, &
-               pres_rel_inf_tol,sat_rel_inf_tol,temp_rel_inf_tol,por_rel_inf_tol], &
-               shape(rel_update_inf_tol))*1.d0 ! change to 0.d0 to zero tolerances
-    abs_update_inf_tol = &
-      reshape([pres_abs_inf_tol,xmol_abs_inf_tol,temp_abs_inf_tol,por_abs_inf_tol, &
-               pres_abs_inf_tol,pres_abs_inf_tol,temp_abs_inf_tol,por_abs_inf_tol, &
-               pres_abs_inf_tol,sat_abs_inf_tol,temp_abs_inf_tol,por_abs_inf_tol], &
-               shape(abs_update_inf_tol))*1.d0 ! change to 0.d0 to zero tolerances
-    residual_abs_inf_tol(:) = [w_mass_abs_inf_tol,a_mass_abs_inf_tol,&
-                               s_mass_abs_inf_tol,u_abs_inf_tol]
-    residual_scaled_inf_tol(:) = 1.d-6
-    allocate(pm%max_change_ivar(7))
-    pm%max_change_ivar = [LIQUID_PRESSURE, GAS_PRESSURE, AIR_PRESSURE, &
-                          LIQUID_MOLE_FRACTION, TEMPERATURE, &
-                          GAS_SATURATION, POROSITY]
-    allocate(pm%max_change_isubvar(7))
-                                     ! UNINITIALIZED_INTEGER avoids zeroing of 
-                                     ! pressures not represented in phase
-                                         ! 2 = air in xmol(air,liquid)
-    pm%max_change_isubvar = [0,0,0,2,0,0,0]
+  ! elseif (option%nflowdof == 4 .and. general_soluble_matrix) then
+  !   rel_update_inf_tol = &
+  !     reshape([pres_rel_inf_tol,xmol_rel_inf_tol,temp_rel_inf_tol,por_rel_inf_tol, &
+  !              pres_rel_inf_tol,pres_rel_inf_tol,temp_rel_inf_tol,por_rel_inf_tol, &
+  !              pres_rel_inf_tol,sat_rel_inf_tol,temp_rel_inf_tol,por_rel_inf_tol], &
+  !              shape(rel_update_inf_tol))*1.d0 ! change to 0.d0 to zero tolerances
+  !   abs_update_inf_tol = &
+  !     reshape([pres_abs_inf_tol,xmol_abs_inf_tol,temp_abs_inf_tol,por_abs_inf_tol, &
+  !              pres_abs_inf_tol,pres_abs_inf_tol,temp_abs_inf_tol,por_abs_inf_tol, &
+  !              pres_abs_inf_tol,sat_abs_inf_tol,temp_abs_inf_tol,por_abs_inf_tol], &
+  !              shape(abs_update_inf_tol))*1.d0 ! change to 0.d0 to zero tolerances
+  !   residual_abs_inf_tol(:) = [w_mass_abs_inf_tol,a_mass_abs_inf_tol,&
+  !                              s_mass_abs_inf_tol,u_abs_inf_tol]
+  !   residual_scaled_inf_tol(:) = 1.d-6
+  !   allocate(pm%max_change_ivar(7))
+  !   pm%max_change_ivar = [LIQUID_PRESSURE, GAS_PRESSURE, AIR_PRESSURE, &
+  !                         LIQUID_MOLE_FRACTION, TEMPERATURE, &
+  !                         GAS_SATURATION, POROSITY]
+  !   allocate(pm%max_change_isubvar(7))
+  !                                    ! UNINITIALIZED_INTEGER avoids zeroing of 
+  !                                    ! pressures not represented in phase
+  !                                        ! 2 = air in xmol(air,liquid)
+  !   pm%max_change_isubvar = [0,0,0,2,0,0,0]
   elseif (option%nflowdof == 4) then
     rel_update_inf_tol = &
       reshape([pres_rel_inf_tol,xmol_rel_inf_tol,temp_rel_inf_tol,xmol_rel_inf_tol,&
@@ -433,7 +432,6 @@ subroutine PMGeneralReadSimOptionsBlock(this,input)
         call InputErrorMsg(input,option,keyword,error_string)
       case('SOLUBLE_MATRIX')
         general_soluble_matrix = PETSC_TRUE
-
       ! This belongs somewhere else
       ! case('SOLUBILITY_FUNCTION')
       !   call InputReadWord(input,option,word,PETSC_TRUE)
