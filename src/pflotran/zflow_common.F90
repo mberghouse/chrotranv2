@@ -82,7 +82,9 @@ module ZFlow_Common_module
             ZFlowAccumDerivative, &
             XXFluxDerivative, &
             XXBCFluxDerivative, &
-            ZFlowSrcSinkDerivative
+            ZFlowSrcSinkDerivative, &
+            ZFlowFluxDerivativeWithPerm, &
+            ZFlowBCFluxDerivativeWithPerm
 
   public :: XXFlux, &
             XXBCFlux
@@ -651,5 +653,204 @@ subroutine ZFlowSrcSinkDerivative(option,qsrc,flow_src_sink_type, &
   Jac(1,1) = (res_pert(1)-res(1))/zflow_auxvars(ONE_INTEGER)%pert
 
 end subroutine ZFlowSrcSinkDerivative
+
+! ************************************************************************** !
+
+subroutine ZFlowFluxDerivativeWithPerm(zflow_auxvar_up,material_auxvar_up, &
+                                       zflow_auxvar_dn,material_auxvar_dn, &
+                                       option,area,dist,dAup,dAdn)
+  !
+  ! Computes internal flux derivatives w.r.t permeability
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 09/15/21
+  !
+
+  use Option_module
+  use Material_Aux_class
+  use Connection_module
+
+  implicit none
+
+  type(zflow_auxvar_type) :: zflow_auxvar_up, zflow_auxvar_dn
+  class(material_auxvar_type) :: material_auxvar_up, material_auxvar_dn
+  type(option_type) :: option
+  PetscReal :: area
+  PetscReal :: dist(-1:3)
+  PetscReal :: dAup, dAdn  ! out -> A's coeff derivatives for up and down
+
+  ! Internal
+  PetscReal :: dist_gravity  ! distance along gravity vector
+  PetscReal :: dist_up, dist_dn
+  PetscReal :: upweight
+  ! Permeability and its derivatives
+  PetscReal :: perm_up, perm_dn!, perm_avg_over_dist
+  PetscReal :: dperm_avg_dperm_up_over_dist, dperm_avg_dperm_dn_over_dist
+  PetscReal :: factor
+  PetscReal :: dcoef_dperm_up, dcoef_dperm_dn
+
+  PetscReal :: kr
+  PetscReal :: delta_pressure
+  PetscReal :: gravity_term
+  PetscReal :: tempreal
+
+  dAup = 0.d0
+  dAdn = 0.d0
+
+  if (zflow_auxvar_up%kr + zflow_auxvar_dn%kr > eps) then
+
+    call ConnectionCalculateDistances(dist,option%gravity,dist_up,dist_dn, &
+                                      dist_gravity,upweight)
+    call material_auxvar_up%PermeabilityTensorToScalar(dist,perm_up)
+    call material_auxvar_dn%PermeabilityTensorToScalar(dist,perm_dn)
+
+    ! For dA/dk tensor's coeffs where perm_avg -> harmonic averaged
+    factor = dist_up*perm_dn + dist_dn*perm_up
+    factor = factor * factor
+    dperm_avg_dperm_up_over_dist = (dist_up*perm_dn*perm_dn) / factor
+    dperm_avg_dperm_dn_over_dist = (dist_dn*perm_up*perm_up) / factor
+
+    gravity_term = zflow_density_kg * dist_gravity
+
+    delta_pressure = zflow_auxvar_up%pres - &
+                     zflow_auxvar_dn%pres + &
+                     gravity_term
+
+    ! upstream weighting
+    if (delta_pressure >= 0.d0) then
+      kr = zflow_auxvar_up%kr
+    else
+      kr = zflow_auxvar_dn%kr
+    endif
+
+    if (kr > floweps) then
+
+      tempreal = zflow_density_kmol * kr * area / zflow_viscosity
+
+      ! get matrix derivative up coefficients for up cell
+      dcoef_dperm_up = dperm_avg_dperm_up_over_dist * tempreal
+
+      ! get matrix derivative up coefficients for dn cell
+      dcoef_dperm_dn = dperm_avg_dperm_dn_over_dist * tempreal
+
+      dAup = dcoef_dperm_up
+      dAdn = dcoef_dperm_dn
+    endif
+
+  endif
+
+end subroutine ZFlowFluxDerivativeWithPerm
+
+! ************************************************************************** !
+
+subroutine ZFlowBCFluxDerivativeWithPerm(ibndtype,auxvar_mapping,auxvars, &
+                                         zflow_auxvar_up, &
+                                         zflow_auxvar_dn,material_auxvar_dn, &
+                                         option,area,dist,dAdn_bc)
+  !
+  ! Computes internal flux derivatives w.r.t permeability
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 09/15/21
+  !
+
+  use Option_module
+  use Material_Aux_class
+  use String_module
+
+  implicit none
+
+  PetscInt :: ibndtype(1)
+  PetscInt :: auxvar_mapping(ZFLOW_MAX_INDEX)
+  PetscReal :: auxvars(:) ! from aux_real_var array
+  type(zflow_auxvar_type) :: zflow_auxvar_up, zflow_auxvar_dn
+  class(material_auxvar_type) :: material_auxvar_dn
+  type(option_type) :: option
+  PetscReal :: area
+  PetscReal :: dist(-1:3)
+  PetscReal :: dAdn_bc
+
+  PetscInt :: bc_type
+  PetscInt :: idof
+  PetscReal :: dist_gravity
+  PetscReal :: gravity_term
+  PetscReal :: delta_pressure
+  PetscReal :: perm_avg_over_dist_visc
+  PetscReal :: perm_dn
+  PetscReal :: dperm_avg_dperm_dn_over_dist_visc
+  PetscReal :: boundary_pressure
+  PetscReal :: v_darcy(1)
+  PetscReal :: kr
+  PetscReal :: dist_visc
+
+  dAdn_bc = 0.d0
+
+  v_darcy = 0.d0
+  kr = 0.d0
+
+  call material_auxvar_dn%PermeabilityTensorToScalar(dist,perm_dn)
+  bc_type = ibndtype(1)
+
+  select case(bc_type)
+    ! figure out the direction of flow
+    case(DIRICHLET_BC,HYDROSTATIC_BC,HYDROSTATIC_SEEPAGE_BC, &
+         HYDROSTATIC_CONDUCTANCE_BC)
+      if (zflow_auxvar_up%kr + zflow_auxvar_dn%kr > eps) then
+        ! dist(0) = scalar - magnitude of distance
+        ! gravity = vector(3)
+        ! dist(1:3) = vector(3) - unit vector
+        dist_gravity = dist(0) * dot_product(option%gravity,dist(1:3))
+
+        if (bc_type == HYDROSTATIC_CONDUCTANCE_BC) then
+          idof = auxvar_mapping(ZFLOW_LIQUID_CONDUCTANCE_INDEX)
+          perm_avg_over_dist_visc = auxvars(idof) / zflow_viscosity
+          dperm_avg_dperm_dn_over_dist_visc = 0.d0
+        else
+          dist_visc = dist(0) * zflow_viscosity
+          perm_avg_over_dist_visc = perm_dn / dist_visc
+          dperm_avg_dperm_dn_over_dist_visc = 1.d0 / dist_visc
+        endif
+
+        boundary_pressure = zflow_auxvar_up%pres
+        gravity_term = zflow_density_kg * dist_gravity
+        delta_pressure = boundary_pressure - &
+                         zflow_auxvar_dn%pres + &
+                         gravity_term
+
+        if (bc_type == HYDROSTATIC_SEEPAGE_BC .or. &
+            bc_type == HYDROSTATIC_CONDUCTANCE_BC) then
+              ! flow in         ! boundary cell is <= pref
+          if (delta_pressure > 0.d0 .and. &
+              zflow_auxvar_up%pres - option%flow%reference_pressure < eps) then
+            delta_pressure = 0.d0
+          endif
+        endif
+
+        if (delta_pressure >= 0.d0) then
+          kr = zflow_auxvar_up%kr
+        else
+          kr = zflow_auxvar_dn%kr
+        endif
+
+        ! v_darcy[m/sec] = perm[m^2] / dist[m] * kr[-] / mu[Pa-sec]
+        !                    dP[Pa]]
+        v_darcy(1) = perm_avg_over_dist_visc * kr * delta_pressure
+      endif
+
+      if (dabs(v_darcy(1)) > 0.d0 .or. kr > 0.d0) then
+        dAdn_bc = zflow_density_kmol * kr * area * &
+                  dperm_avg_dperm_dn_over_dist_visc
+      endif
+
+    case(NEUMANN_BC)
+      dAdn_bc = 0.d0
+    case default
+      option%io_buffer = &
+        'Boundary condition type (' // trim(StringWrite(bc_type)) // &
+        ') not recognized in ZFlowBCFluxDerivativeWithPerm phase loop.'
+      call PrintErrMsg(option)
+  end select
+
+end subroutine ZFlowBCFluxDerivativeWithPerm
 
 end module ZFlow_Common_module
