@@ -1783,7 +1783,7 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
                                   ADD_VALUES,ierr);CHKERRQ(ierr)
   enddo
 
-  if (realization%debug%matview_Jacobian_detailed) then
+  if (realization%debug%matview_Matrix_detailed) then
     call MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
     call MatAssemblyEnd(A,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
     call DebugWriteFilename(realization%debug,string,'Gjacobian_accum','', &
@@ -1847,7 +1847,7 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
     cur_connection_set => cur_connection_set%next
   enddo
 
-  if (realization%debug%matview_Jacobian_detailed) then
+  if (realization%debug%matview_Matrix_detailed) then
     call MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
     call MatAssemblyEnd(A,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
     call DebugWriteFilename(realization%debug,string,'Gjacobian_flux','', &
@@ -1903,7 +1903,7 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
     boundary_condition => boundary_condition%next
   enddo
 
-  if (realization%debug%matview_Jacobian_detailed) then
+  if (realization%debug%matview_Matrix_detailed) then
     call MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
     call MatAssemblyEnd(A,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
     call DebugWriteFilename(realization%debug,string,'Gjacobian_bcflux','', &
@@ -1957,7 +1957,7 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
   call GeneralSSSandbox(null_vec,A,PETSC_TRUE,grid,material_auxvars, &
                         gen_auxvars,option)
 
-  if (realization%debug%matview_Jacobian_detailed) then
+  if (realization%debug%matview_Matrix_detailed) then
     call MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
     call MatAssemblyEnd(A,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
     call DebugWriteFilename(realization%debug,string,'Gjacobian_srcsink','', &
@@ -2007,7 +2007,7 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
                           PETSC_NULL_VEC,ierr);CHKERRQ(ierr)
   endif
   
-  if (realization%debug%matview_Jacobian) then
+  if (realization%debug%matview_Matrix) then
     call DebugWriteFilename(realization%debug,string,'Gjacobian','', &
                             general_ts_count,general_ts_cut_count, &
                             general_ni_count)
@@ -2015,7 +2015,7 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
     call MatView(J,viewer,ierr);CHKERRQ(ierr)
     call DebugViewerDestroy(realization%debug,viewer)
   endif
-  if (realization%debug%norm_Jacobian) then
+  if (realization%debug%norm_Matrix) then
     option => realization%option
     call MatNorm(J,NORM_1,norm,ierr);CHKERRQ(ierr)
     write(option%io_buffer,'("1 norm: ",es11.4)') norm

@@ -52,6 +52,7 @@ module Material_module
 
     ! Geophysics properties
     PetscReal :: electrical_conductivity
+    class(dataset_base_type), pointer :: electrical_conductivity_dataset
 
     class(fracture_type), pointer :: fracture
 
@@ -202,6 +203,7 @@ function MaterialPropertyCreate(option)
   material_property%thermal_conductivity_wet = UNINITIALIZED_DOUBLE
   material_property%alpha = 0.45d0
   material_property%electrical_conductivity = UNINITIALIZED_DOUBLE
+  nullify(material_property%electrical_conductivity_dataset)
 
   nullify(material_property%fracture)
   nullify(material_property%geomechanics_subsurface_properties)
@@ -845,10 +847,10 @@ subroutine MaterialPropertyRead(material_property,input,option)
         enddo
         call InputPopBlock(input,option)
       case('ELECTRICAL_CONDUCTIVITY')
-              call InputReadDouble(input,option, &
-                                   material_property%electrical_conductivity)
-              call InputErrorMsg(input,option,'electrical conductivity', &
-                                 'MATERIAL_PROPERTY')
+        call DatasetReadDoubleOrDataset(input, &
+                      material_property%electrical_conductivity, &
+                      material_property%electrical_conductivity_dataset, &
+                      'electrical conductivity','MATERIAL_PROPERTY',option)
       case default
         call InputKeywordUnrecognized(input,keyword,'MATERIAL_PROPERTY',option)
     end select
@@ -1284,24 +1286,28 @@ subroutine MaterialSetup(material_parameter, material_property_array, &
   num_mat_prop = size(material_property_array)
   num_characteristic_curves = size(characteristic_curves_array)
 
-  if (option%iflowmode /= RICHARDS_MODE .and. &
-      option%iflowmode /= RICHARDS_TS_MODE) then
-    allocate(material_parameter%soil_heat_capacity(num_mat_prop))
-    allocate(material_parameter%soil_thermal_conductivity(2,num_mat_prop))
-    material_parameter%soil_heat_capacity = UNINITIALIZED_DOUBLE
-    material_parameter%soil_thermal_conductivity = UNINITIALIZED_DOUBLE
-    do i = 1, num_mat_prop
-      if (associated(material_property_array(i)%ptr)) then
-        ! kg rock/m^3 rock * J/kg rock-K * 1.e-6 MJ/J
-        material_parameter%soil_heat_capacity(i) = &
-          material_property_array(i)%ptr%specific_heat * option%scale ! J -> MJ
-        material_parameter%soil_thermal_conductivity(1,i) = &
-          material_property_array(i)%ptr%thermal_conductivity_dry
-        material_parameter%soil_thermal_conductivity(2,i) = &
-          material_property_array(i)%ptr%thermal_conductivity_wet
-      endif
-    enddo
-  endif
+  select case(option%iflowmode)
+    case(RICHARDS_MODE,RICHARDS_TS_MODE,ZFLOW_MODE,WF_MODE)
+    case(PNF_MODE)
+      option%io_buffer = 'MaterialSetup() should not be used in PNF mode'
+      call PrintErrMsg(option)
+    case default
+      allocate(material_parameter%soil_heat_capacity(num_mat_prop))
+      allocate(material_parameter%soil_thermal_conductivity(2,num_mat_prop))
+      material_parameter%soil_heat_capacity = UNINITIALIZED_DOUBLE
+      material_parameter%soil_thermal_conductivity = UNINITIALIZED_DOUBLE
+      do i = 1, num_mat_prop
+        if (associated(material_property_array(i)%ptr)) then
+          ! kg rock/m^3 rock * J/kg rock-K * 1.e-6 MJ/J
+          material_parameter%soil_heat_capacity(i) = &
+            material_property_array(i)%ptr%specific_heat * option%scale ! J -> MJ
+          material_parameter%soil_thermal_conductivity(1,i) = &
+            material_property_array(i)%ptr%thermal_conductivity_dry
+          material_parameter%soil_thermal_conductivity(2,i) = &
+            material_property_array(i)%ptr%thermal_conductivity_wet
+        endif
+      enddo
+  end select
 
 end subroutine MaterialSetup
 
@@ -2330,6 +2336,7 @@ recursive subroutine MaterialPropertyDestroy(material_property)
   nullify(material_property%permeability_dataset_yz)
   nullify(material_property%porosity_dataset)
   nullify(material_property%tortuosity_dataset)
+  nullify(material_property%electrical_conductivity_dataset)
   nullify(material_property%compressibility_dataset)
   nullify(material_property%soil_reference_pressure_dataset)
 
