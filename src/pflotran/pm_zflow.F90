@@ -594,6 +594,11 @@ subroutine PMZFlowSolveAdjoint(this,snes)
   ! Date: 09/22/21
   !
 
+  use Realization_Subsurface_class
+  use Patch_module
+  use Grid_module
+  use Field_module
+  use Solver_module
   use ZFlow_module, only : ZFlowCalculateAdjointMatrix
 
   implicit none
@@ -601,34 +606,46 @@ subroutine PMZFlowSolveAdjoint(this,snes)
   class(pm_zflow_type) :: this
   SNES ::snes
 
-  Vec :: rhs
-  Mat :: M
+  class(realization_subsurface_type), pointer :: realization
+  type(patch_type), pointer :: patch
+  type(grid_type), pointer :: grid
+  type(field_type), pointer :: field
+  type(solver_type), pointer :: solver
 
   PetscInt :: imat
   PetscInt :: local_id
   PetscReal, pointer :: vec_ptr(:)
   PetscErrorCode :: ierr
 
+  Vec :: rhs
+  Mat :: M
+
+  solver => this%solver
+  realization => this%realization
+  field => realization%field
+  patch => realization%patch
+  grid => patch%grid
+
   call SNESGetJacobian(snes,M,PETSC_NULL_MAT,PETSC_NULL_FUNCTION, &
                        PETSC_NULL_INTEGER,ierr);CHKERRQ(ierr)
 
-  ! Get the adjoint matrix
-  call ZFlowCalculateAdjointMatrix(this%realization,M)
+  ! Get the adjoint matrix -> USE Jacobian for now as it's same for steady
+  ! btw: solver%ksp already has M from SNES solve so can be used for steady
 
-  call KSPSetOperators(this%solver%ksp,M,M,ierr);CHKERRQ(ierr)
+  !call ZFlowCalculateAdjointMatrix(realization,M)
 
-  call VecDuplicate(this%realization%field%work,rhs,ierr);CHKERRQ(ierr)
+  call KSPSetOperators(solver%ksp,M,M,ierr);CHKERRQ(ierr)
 
+  call VecDuplicate(field%work,rhs,ierr);CHKERRQ(ierr)
   call VecZeroEntries(rhs,ierr);CHKERRQ(ierr)
-  call VecZeroEntries(this%realization%field%work,ierr);CHKERRQ(ierr)
+  call VecZeroEntries(field%work,ierr);CHKERRQ(ierr)
 
   ! Assign RHS values -> TEMP
   call VecGetArrayF90(rhs,vec_ptr,ierr);CHKERRQ(ierr)
   vec_ptr(1) = 1.d0
   call VecRestoreArrayF90(rhs,vec_ptr,ierr);CHKERRQ(ierr)
 
-  call KSPSolveTranspose(this%solver%ksp,rhs,this%realization%field%work, &
-                         ierr);CHKERRQ(ierr)
+  call KSPSolveTranspose(solver%ksp,rhs,field%work,ierr);CHKERRQ(ierr)
 
 end subroutine PMZFlowSolveAdjoint
 
