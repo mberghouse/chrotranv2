@@ -1,3 +1,4 @@
+adjoint_aux.o : option.o pflotran_constants.o utility.o
 auxiliary.o : ert_aux.o general_aux.o global_aux.o hydrate_aux.o \
               inlinesurface_aux.o material_aux.o mphase_aux.o \
               nw_transport_aux.o pflotran_constants.o pnf_aux.o \
@@ -577,11 +578,14 @@ pm_wipp_srcsink.o : data_mediator_vec.o eos_gas.o eos_water.o global_aux.o \
                     output_aux.o patch.o pflotran_constants.o pm_base.o \
                     realization_base.o realization_subsurface.o region.o \
                     string.o utility.o wipp_flow_aux.o
-pm_zflow.o : checkpoint.o convergence.o debug.o eos_water.o field.o global.o \
-             grid.o input_aux.o material_aux.o option.o patch.o \
-             pflotran_constants.o pm_base.o pm_subsurface_flow.o \
-             realization_base.o realization_subsurface.o string.o \
-             upwind_direction.o utility.o variables.o zflow.o zflow_aux.o
+pm_zflow.o : checkpoint.o convergence.o dataset.o dataset_base.o \
+             dataset_common_hdf5.o debug.o discretization.o eos_water.o \
+             field.o global.o global_aux.o grid.o hdf5.o input_aux.o \
+             material.o material_aux.o option.o patch.o pflotran_constants.o \
+             pm_base.o pm_subsurface_flow.o realization_base.o \
+             realization_subsurface.o region.o saturation_function.o solver.o \
+             string.o timer.o upwind_direction.o utility.o variables.o zflow.o \
+             zflow_aux.o
 pmc_auxiliary.o : option.o pflotran_constants.o pm_auxiliary.o pmc_base.o \
                   realization_subsurface.o timestepper_base.o
 pmc_base.o : checkpoint.o hdf5_aux.o input_aux.o logging.o option.o output.o \
