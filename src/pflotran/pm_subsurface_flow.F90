@@ -297,7 +297,7 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
             call InputErrorMsg(input,option, &
                                'trust region tolerance ', &
                                'NEWTON TRD options')
-            string = '-flow_snes_trtol'
+            string = '-flow_snes_trdc_tol'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
                                       ierr);CHKERRQ(ierr)
@@ -306,7 +306,7 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
             call InputErrorMsg(input,option, &
                                'rho > eta1 trust region satisfactory value', &
                                'NEWTON TRD options')
-            string = '-flow_snes_tr_eta1'
+            string = '-flow_snes_trdc_eta1'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
                                       ierr);CHKERRQ(ierr)
@@ -315,7 +315,7 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
             call InputErrorMsg(input,option, &
                                'rho =< eta2, shrink trust region ', &
                                'NEWTON TRD options')
-            string = '-flow_snes_tr_eta2'
+            string = '-flow_snes_trdc_eta2'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
                                       ierr);CHKERRQ(ierr)
@@ -324,7 +324,7 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
             call InputErrorMsg(input,option, &
                                'rho > eta3, expand trust region', &
                                'NEWTON TRD options')
-            string = '-flow_snes_tr_eta3'
+            string = '-flow_snes_trdc_eta3'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
                                       ierr);CHKERRQ(ierr)
@@ -333,7 +333,7 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
             call InputErrorMsg(input,option, &
                                'shrink trust region by t1', &
                                'NEWTON TRD options')
-            string = '-flow_snes_tr_t1'
+            string = '-flow_snes_trdc_t1'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
                                       ierr);CHKERRQ(ierr)
@@ -342,7 +342,7 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
             call InputErrorMsg(input,option, &
                                'expand trust region by t2', &
                                'NEWTON TRD options')
-            string = '-flow_snes_tr_t2'
+            string = '-flow_snes_trdc_t2'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
                                       ierr);CHKERRQ(ierr)
@@ -351,7 +351,7 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
             call InputErrorMsg(input,option, &
                                'maximum trust region size, Delta_M*xnorm', &
                                'NEWTON TRD options')
-            string = '-flow_snes_tr_deltaM'
+            string = '-flow_snes_trdc_deltaM'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
                                       ierr);CHKERRQ(ierr)
@@ -360,7 +360,7 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
             call InputErrorMsg(input,option, &
                                'initial trust region size', &
                                'NEWTON TRD options')
-            string = '-flow_snes_tr_delta0'
+            string = '-flow_snes_trdc_delta0'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
                                       ierr);CHKERRQ(ierr)
@@ -369,7 +369,7 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
             call InputErrorMsg(input,option, &
                                'USE_CAUCHY TRUE or FALSE', &
                                'NEWTON TRD options')
-            string = '-flow_snes_tr_use_cauchy'
+            string = '-flow_snes_trdc_use_cauchy'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
                                       ierr);CHKERRQ(ierr)
@@ -378,7 +378,7 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
             call InputErrorMsg(input,option, &
                                'auto scale multiphase flow modes', &
                                'NEWTON TRD options')
-            string = '-flow_snes_tr_auto_scale_multiphase'
+            string = '-flow_snes_trdc_auto_scale_multiphase'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
                                       ierr);CHKERRQ(ierr)
@@ -387,7 +387,7 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
             call InputErrorMsg(input,option, &
                                'initial trust region size', &
                                'NEWTON TRD options')
-            string = '-flow_snes_tr_auto_scale_max'
+            string = '-flow_snes_trdc_auto_scale_max'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
                                       ierr);CHKERRQ(ierr)
