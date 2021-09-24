@@ -171,6 +171,10 @@ subroutine PMSubsurfFlowReadSimOptionsSC(this,input,keyword,found, &
       call InputErrorMsg(input,option,keyword,error_string)
     case('MULTIPLE_CONTINUUM')
       option%use_mc = PETSC_TRUE
+      option%io_buffer = 'The MULTIPLE_CONTINUUM capability in v3.0 &
+          &has been disabled. Please use a later version of PFLOTRAN or &
+          &the master (development) branch.'
+      call PrintErrMsg(option)
     case('REPLACE_INIT_PARAMS_ON_RESTART')
       this%replace_init_params_on_restart = PETSC_TRUE
     case('REVERT_PARAMETERS_ON_RESTART')

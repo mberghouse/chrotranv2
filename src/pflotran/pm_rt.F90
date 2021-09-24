@@ -196,6 +196,10 @@ subroutine PMRTReadSimOptionsBlock(this,input)
         call InputErrorMsg(input,option,keyword,error_string)
       case('MULTIPLE_CONTINUUM')
         option%use_mc = PETSC_TRUE
+        option%io_buffer = 'The MULTIPLE_CONTINUUM capability in v3.0 &
+          &has been disabled. Please use a later version of PFLOTRAN or &
+          &the master (development) branch.'
+        call PrintErrMsg(option)
       case('TEMPERATURE_DEPENDENT_DIFFUSION')
         this%temperature_dependent_diffusion = PETSC_TRUE
       case default
