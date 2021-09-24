@@ -16,7 +16,6 @@ module Reaction_Immobile_Aux_module
     character(len=MAXWORDLENGTH) :: name
     PetscReal :: molar_weight
     PetscBool :: print_me
-    PetscBool :: region_print_me
     type(immobile_species_type), pointer :: next    
   end type immobile_species_type
   
@@ -49,7 +48,6 @@ module Reaction_Immobile_Aux_module
     ! immobile species
     character(len=MAXWORDLENGTH), pointer :: names(:)
     PetscBool, pointer :: print_me(:)
-    PetscBool, pointer :: region_print_me(:)
     
     ! decay rxn
     PetscInt :: ndecay_rxn
@@ -96,7 +94,6 @@ function ImmobileCreate()
   immobile%print_all = PETSC_FALSE
   nullify(immobile%names)
   nullify(immobile%print_me)
-  nullify(immobile%region_print_me)
   
   immobile%ndecay_rxn = 0
   nullify(immobile%decayspecid)
@@ -126,7 +123,6 @@ function ImmobileSpeciesCreate()
   species%name = ''
   species%molar_weight = 0.d0
   species%print_me = PETSC_FALSE
-  species%region_print_me = PETSC_FALSE
   nullify(species%next)
 
   ImmobileSpeciesCreate => species
@@ -408,7 +404,6 @@ subroutine ImmobileDestroy(immobile)
   
   call DeallocateArray(immobile%names)
   call DeallocateArray(immobile%print_me)
-  call DeallocateArray(immobile%region_print_me)
   
   call ImmobileDecayRxnDestroy(immobile%decay_rxn_list)
   call DeallocateArray(immobile%decayspecid)

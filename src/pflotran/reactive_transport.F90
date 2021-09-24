@@ -418,7 +418,7 @@ end subroutine RTSetup
 
 ! ************************************************************************** !
 
-subroutine RTComputeMassBalance(realization,num_cells,cell_ids,region,max_size,sum_mol)
+subroutine RTComputeMassBalance(realization,num_cells,max_size,sum_mol,cell_ids)
   ! 
   ! Author: Glenn Hammond
   ! Date: 12/23/08
@@ -434,9 +434,9 @@ subroutine RTComputeMassBalance(realization,num_cells,cell_ids,region,max_size,s
   type(realization_subsurface_type) :: realization
   PetscInt :: max_size
   PetscReal :: sum_mol(max_size,8)
-  PetscInt, pointer :: cell_ids(:)
+  PetscInt, pointer, optional :: cell_ids(:)
   PetscInt :: num_cells
-  PetscBool :: region
+
   type(option_type), pointer :: option
   type(patch_type), pointer :: patch
   type(field_type), pointer :: field
@@ -487,11 +487,9 @@ subroutine RTComputeMassBalance(realization,num_cells,cell_ids,region,max_size,s
   naqcomp = reaction%naqcomp
   !put in print kg
   do k=1, num_cells
-    if (region) then
-       local_id = cell_ids(k)
-    else
-       local_id = k
-    endif
+    local_id = k
+    if (present(cell_ids)) local_id = cell_ids(k)
+ 
     ghosted_id = grid%nL2G(local_id)
     !geh - Ignore inactive cells with inactive materials
     if (patch%imat(ghosted_id) <= 0) cycle

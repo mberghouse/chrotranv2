@@ -2541,7 +2541,7 @@ subroutine OutputMassBalance(realization_base)
           call OutputWriteToHeader(fid,string,'kg','',icol)
           if (option%ntrandof > 0) then
             do i=1, reaction%naqcomp
-              if (reaction%primary_spec_region_print(i)) then  
+              if (reaction%primary_species_print(i)) then  
                  string = 'Region ' // trim(cur_mbr%region_name) // ' ' // &
                       trim(reaction%primary_species_names(i)) // ' Total Mass'
                  if (reaction%print_total_mass_kg) then                
@@ -2553,7 +2553,7 @@ subroutine OutputMassBalance(realization_base)
             enddo
 
             do i=1,reaction%immobile%nimmobile
-              if (reaction%immobile%region_print_me(i)) then
+              if (reaction%immobile%print_me(i)) then
                 string = 'Region ' // trim(cur_mbr%region_name) // ' ' // &
                      trim(reaction%immobile%names(i)) // ' Total Mass'
                 if (reaction%print_total_mass_kg) then                
@@ -2565,7 +2565,7 @@ subroutine OutputMassBalance(realization_base)
             enddo
 
             do i=1,reaction%gas%nactive_gas
-              if (reaction%gas%active_region_print_me(i)) then
+              if (reaction%gas%active_print_me(i)) then
                 string = 'Region ' // trim(cur_mbr%region_name) // ' ' // &
                      trim(reaction%gas%active_names(i)) // ' Total Mass'
                 if (reaction%print_total_mass_kg) then                
@@ -2577,7 +2577,7 @@ subroutine OutputMassBalance(realization_base)
             enddo
 
             do i=1,reaction%mineral%nkinmnrl
-              if (reaction%mineral%kinmnrl_region_print(i)) then
+              if (reaction%mineral%kinmnrl_print(i)) then
                 string = 'Region ' // trim(cur_mbr%region_name) // ' ' // &
                      trim(reaction%mineral%kinmnrl_names(i)) // ' Total Mass'
                 if (reaction%print_total_mass_kg) then                
@@ -2696,9 +2696,9 @@ subroutine OutputMassBalance(realization_base)
     select type(realization_base)
     class is(realization_subsurface_type)
        
-       allocate(cell_ids(10))
-       cell_ids = 0
-        call RTComputeMassBalance(realization_base,realization_base%patch%grid%nlmax,cell_ids,PETSC_FALSE,max_tran_size,sum_mol)
+       call RTComputeMassBalance(realization_base, &
+                                 realization_base%patch%grid%nlmax, &
+                                 max_tran_size,sum_mol)
       class default
         option%io_buffer = 'Unrecognized realization class in MassBalance().'
         call PrintErrMsg(option)
@@ -3091,7 +3091,7 @@ subroutine OutputMassBalance(realization_base)
         select type(realization_base)
           class is(realization_subsurface_type)
             call RTComputeMassBalance(realization_base,cur_mbr%num_cells, &
-                  cur_mbr%region_cell_ids,PETSC_TRUE,max_tran_size,total_mass)
+                 max_tran_size,total_mass,cur_mbr%region_cell_ids)
           class default
             option%io_buffer = 'Unrecognized realization class in MassBalance().'
             call PrintErrMsg(option)
@@ -3103,26 +3103,26 @@ subroutine OutputMassBalance(realization_base)
 
         if (OptionIsIORank(option)) then
           do icomp = 1, reaction%naqcomp
-            if (reaction%primary_spec_region_print(icomp)) then
+            if (reaction%primary_species_print(icomp)) then
               write(fid,110,advance="no") global_total_mass(icomp,1)
             endif
           enddo
           ! immobile species
           do i = 1, reaction%immobile%nimmobile
-            if (reaction%immobile%region_print_me(i)) then
+            if (reaction%immobile%print_me(i)) then
               write(fid,110,advance="no") &
                 global_total_mass(i,7)
             endif
           enddo
           ! gas species
           do i = 1, reaction%gas%nactive_gas
-            if (reaction%gas%active_region_print_me(i)) then
+            if (reaction%gas%active_print_me(i)) then
               write(fid,110,advance="no") &
                 global_total_mass(i,8)
             endif
           enddo
           do i = 1, reaction%mineral%nkinmnrl
-            if (reaction%mineral%kinmnrl_region_print(i)) then
+            if (reaction%mineral%kinmnrl_print(i)) then
               write(fid,110,advance="no") global_total_mass(i,6)
             endif
           enddo

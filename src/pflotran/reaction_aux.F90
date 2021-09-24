@@ -51,7 +51,6 @@ module Reaction_Aux_module
     PetscReal :: molar_weight
     PetscReal :: Z
     PetscBool :: print_me
-    PetscBool :: region_print_me
     PetscBool :: is_redox
     type(database_rxn_type), pointer :: dbaserxn
     type(aq_species_type), pointer :: next
@@ -226,7 +225,6 @@ module Reaction_Aux_module
     
     character(len=MAXWORDLENGTH), pointer :: primary_species_names(:)
     PetscBool, pointer :: primary_species_print(:)
-    PetscBool, pointer :: primary_spec_region_print(:)
     PetscReal, pointer :: primary_spec_a0(:)
     PetscReal, pointer :: primary_spec_Z(:)
     PetscReal, pointer :: primary_spec_molar_wt(:)
@@ -486,7 +484,6 @@ function ReactionCreate()
   nullify(reaction%colloid_species_names)
 
   nullify(reaction%primary_species_print)
-  nullify(reaction%primary_spec_region_print)
   nullify(reaction%secondary_species_print)
   nullify(reaction%eqcplx_basis_print)
   nullify(reaction%kd_print)
@@ -673,7 +670,6 @@ function AqueousSpeciesCreate()
   species%molar_weight = 0.d0
   species%Z = 0.d0
   species%print_me = PETSC_FALSE
-  species%region_print_me = PETSC_FALSE
   species%is_redox = PETSC_FALSE
   nullify(species%dbaserxn)
   nullify(species%next)
@@ -2168,7 +2164,6 @@ subroutine ReactionDestroy(reaction,option)
   call DeallocateArray(reaction%colloid_species_names)  
   
   call DeallocateArray(reaction%primary_species_print)
-  call DeallocateArray(reaction%primary_spec_region_print)
   call DeallocateArray(reaction%secondary_species_print)
   call DeallocateArray(reaction%eqcplx_basis_print)
   call DeallocateArray(reaction%kd_print)

@@ -1623,9 +1623,6 @@ subroutine BasisInit(reaction,option)
   allocate(reaction%primary_species_print(reaction%naqcomp))
   reaction%primary_species_print = PETSC_FALSE
 
-  allocate(reaction%primary_spec_region_print(reaction%naqcomp))
-  reaction%primary_spec_region_print = PETSC_FALSE
-
   allocate(reaction%primary_spec_Z(reaction%naqcomp))
   reaction%primary_spec_Z = 0.d0
 
@@ -1653,7 +1650,6 @@ subroutine BasisInit(reaction,option)
     reaction%primary_spec_a0(ispec) = cur_pri_aq_spec%a0
     reaction%primary_species_print(ispec) = cur_pri_aq_spec%print_me .or. &
                                 reaction%print_all_primary_species
-    reaction%primary_spec_region_print(ispec) = cur_pri_aq_spec%region_print_me
     reaction%kd_print(ispec) = (cur_pri_aq_spec%print_me .or. &
                                 reaction%print_all_primary_species) .and. &
                                 reaction%print_kd
@@ -1806,7 +1802,6 @@ subroutine BasisInit(reaction,option)
                                   reaction%gas%npassive_gas, &
                                   reaction%gas%passive_names, &
                                   reaction%gas%passive_print_me, &
-                                  reaction%gas%passive_region_print_me, &
                                   reaction%gas%paseqspecid, &
                                   reaction%gas%paseqstoich, &
                                   reaction%gas%paseqh2oid, &
@@ -1820,7 +1815,6 @@ subroutine BasisInit(reaction,option)
                                   reaction%gas%nactive_gas, &
                                   reaction%gas%active_names, &
                                   reaction%gas%active_print_me, &
-                                  reaction%gas%active_region_print_me, &
                                   reaction%gas%acteqspecid, &
                                   reaction%gas%acteqstoich, &
                                   reaction%gas%acteqh2oid, &
@@ -1842,8 +1836,6 @@ subroutine BasisInit(reaction,option)
     immobile%names = ''
     allocate(immobile%print_me(immobile%nimmobile))
     immobile%print_me = PETSC_FALSE
-    allocate(immobile%region_print_me(immobile%nimmobile))
-    immobile%region_print_me = PETSC_FALSE
 
     cur_immobile_spec => immobile%list
     temp_int = 0
@@ -1853,7 +1845,6 @@ subroutine BasisInit(reaction,option)
       immobile%names(temp_int) = cur_immobile_spec%name
       immobile%print_me(temp_int) = cur_immobile_spec%print_me .or. &
                                     immobile%print_all
-      immobile%region_print_me(temp_int) = cur_immobile_spec%region_print_me
       cur_immobile_spec => cur_immobile_spec%next
     enddo
   endif
@@ -1927,8 +1918,6 @@ subroutine BasisInit(reaction,option)
     mineral%mnrl_logK = 0.d0
     allocate(mineral%mnrl_print(mineral%nmnrl))
     mineral%mnrl_print = PETSC_FALSE
-    allocate(mineral%mnrl_region_print(mineral%nmnrl))
-    mineral%mnrl_region_print = PETSC_FALSE
     if (.not.reaction%use_geothermal_hpt) then
       if (option%use_isothermal) then
         allocate(mineral%mnrl_logKcoef(reaction%num_dbase_temperatures, &
@@ -1957,8 +1946,6 @@ subroutine BasisInit(reaction,option)
     
       allocate(mineral%kinmnrl_names(mineral%nkinmnrl))
       mineral%kinmnrl_names = ''
-      allocate(mineral%kinmnrl_region_print(mineral%nkinmnrl))
-      mineral%kinmnrl_region_print = PETSC_FALSE
       allocate(mineral%kinmnrl_print(mineral%nkinmnrl))
       mineral%kinmnrl_print = PETSC_FALSE
       allocate(mineral%kinmnrlspecid(0:max_aq_species,mineral%nkinmnrl))
@@ -2237,12 +2224,10 @@ subroutine BasisInit(reaction,option)
       !       mineral printed for non-kinetic reactions (e.g. for SI).
       mineral%mnrl_print(imnrl) = cur_mineral%print_me .or. &
                                   reaction%mineral%print_all
-      mineral%mnrl_region_print(imnrl) = cur_mineral%region_print_me
       if (cur_mineral%itype == MINERAL_KINETIC) then
         mineral%kinmnrl_names(ikinmnrl) = mineral%mineral_names(imnrl)
         mineral%kinmnrl_print(ikinmnrl) = cur_mineral%print_me .or. &
                                           reaction%mineral%print_all
-        mineral%kinmnrl_region_print(ikinmnrl) = cur_mineral%region_print_me
         mineral%kinmnrlspecid(:,ikinmnrl) = mineral%mnrlspecid(:,imnrl)
         mineral%kinmnrlstoich(:,ikinmnrl) = mineral%mnrlstoich(:,imnrl)
         mineral%kinmnrlh2oid(ikinmnrl) = mineral%mnrlh2oid(imnrl)
@@ -4176,7 +4161,7 @@ subroutine ReactionDatabaseSetupGases(reaction,num_logKs,option,h2o_id, &
                                       temp_high,temp_low, &
                                       itemp_high,itemp_low, &
                                       gas,gas_itype, &
-                                      ngas,gas_names,gas_print,gas_region_print, &
+                                      ngas,gas_names,gas_print, &
                                       eqspecid,eqstoich,eqh2oid,eqh2ostoich, &
                                       eqlogK,eqlogKcoef)
   ! 
@@ -4203,7 +4188,6 @@ subroutine ReactionDatabaseSetupGases(reaction,num_logKs,option,h2o_id, &
   PetscInt :: ngas
   character(len=MAXWORDLENGTH), pointer :: gas_names(:)
   PetscBool, pointer :: gas_print(:)
-  PetscBool, pointer :: gas_region_print(:)
   PetscInt, pointer :: eqspecid(:,:)
   PetscReal, pointer :: eqstoich(:,:)
   PetscInt, pointer :: eqh2oid(:)
@@ -4237,8 +4221,6 @@ subroutine ReactionDatabaseSetupGases(reaction,num_logKs,option,h2o_id, &
     gas_names = ''
     allocate(gas_print(ngas))
     gas_print = PETSC_FALSE
-    allocate(gas_region_print(ngas))
-    gas_region_print = PETSC_FALSE
     allocate(eqspecid(0:max_aq_species,ngas))
     eqspecid = 0
     allocate(eqstoich(max_aq_species,ngas))
@@ -4276,13 +4258,6 @@ subroutine ReactionDatabaseSetupGases(reaction,num_logKs,option,h2o_id, &
           if (.not.(cur_gas_spec%itype == ACTIVE_AND_PASSIVE_GAS .and. &
                     gas_itype == PASSIVE_GAS)) then
             gas_print(igas_spec) = PETSC_TRUE
-          endif
-        endif
-
-        if (cur_gas_spec%region_print_me) then
-          if (.not.(cur_gas_spec%itype == ACTIVE_AND_PASSIVE_GAS .and. &
-                    gas_itype == PASSIVE_GAS)) then
-            gas_region_print(igas_spec) = PETSC_TRUE
           endif
         endif
        

@@ -23,7 +23,6 @@ module Reaction_Gas_Aux_module
     PetscReal :: molar_volume
     PetscReal :: molar_weight
     PetscBool :: print_me
-    PetscBool :: region_print_me
     type(database_rxn_type), pointer :: dbaserxn
     type(gas_species_type), pointer :: next    
   end type gas_species_type
@@ -42,8 +41,6 @@ module Reaction_Gas_Aux_module
     PetscBool :: print_all
     PetscBool, pointer :: active_print_me(:)    
     PetscBool, pointer :: passive_print_me(:)
-    PetscBool, pointer :: passive_region_print_me(:)
-    PetscBool, pointer :: active_region_print_me(:) 
     
     PetscInt, pointer :: acteqspecid(:,:)   ! (0:ncomp in rxn)
     PetscReal, pointer :: acteqstoich(:,:)
@@ -99,8 +96,6 @@ function GasCreate()
   nullify(gas%passive_names)
   nullify(gas%active_print_me)
   nullify(gas%passive_print_me)
-  nullify(gas%active_region_print_me)
-  nullify(gas%passive_region_print_me)
 
   nullify(gas%acteqspecid)
   nullify(gas%acteqstoich)
@@ -142,7 +137,6 @@ function GasSpeciesCreate()
   gas_species%molar_volume = 0.d0
   gas_species%molar_weight = 0.d0
   gas_species%print_me = PETSC_FALSE
-  gas_species%region_print_me = PETSC_FALSE
   nullify(gas_species%dbaserxn)
   nullify(gas_species%next)
 
@@ -372,8 +366,6 @@ subroutine GasDestroy(gas)
   call DeallocateArray(gas%passive_names)
   call DeallocateArray(gas%active_print_me)
   call DeallocateArray(gas%passive_print_me)
-  call DeallocateArray(gas%active_region_print_me)
-  call DeallocateArray(gas%passive_region_print_me)
   
   call DeallocateArray(gas%acteqspecid)
   call DeallocateArray(gas%acteqstoich)
