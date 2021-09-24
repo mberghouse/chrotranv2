@@ -22,6 +22,7 @@ module ZFlow_module
             ZFlowZeroMassBalanceDelta, &
             ZFlowResidual, &
             ZFlowCalculateAdjointMatrix, &
+            ZFlowCalculateMatrixDerivatives, &
             ZFlowSetPlotVariables, &
             ZFlowMapBCAuxVarsToGlobal, &
             ZFlowDestroy
@@ -76,6 +77,9 @@ subroutine ZFlowSetup(realization)
   grid => patch%grid
 
   patch%aux%ZFlow => ZFlowAuxCreate(option)
+
+  ! ensure mapping of local cell ids to neighboring ghosted ids exits
+  call GridSetupCellNeighbors(grid,option)
 
   ! ensure that material properties specific to this module are properly
   ! initialized

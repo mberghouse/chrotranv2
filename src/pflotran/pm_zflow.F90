@@ -404,6 +404,8 @@ subroutine PMZFlowPostSolve(this)
 
   class(pm_zflow_type) :: this
 
+  call PMZFlowSolveAdjoint(this)
+
 end subroutine PMZFlowPostSolve
 
 ! ************************************************************************** !
@@ -565,7 +567,7 @@ end subroutine PMZFlowJacobian
 
 ! ************************************************************************** !
 
-subroutine PMZFlowSolveAdjoint(this,snes)
+subroutine PMZFlowSolveAdjoint(this)
   ! Solves the adjoint matrix equation to compute adjoint fields for zflow
   !
   ! Author: Piyoosh Jaysaval
@@ -577,12 +579,12 @@ subroutine PMZFlowSolveAdjoint(this,snes)
   use Grid_module
   use Field_module
   use Solver_module
-  use ZFlow_module, only : ZFlowCalculateAdjointMatrix
+  use ZFlow_module, only : ZFlowCalculateAdjointMatrix, &
+                           ZFlowCalculateMatrixDerivatives
 
   implicit none
 
   class(pm_zflow_type) :: this
-  SNES ::snes
 
   class(realization_subsurface_type), pointer :: realization
   type(patch_type), pointer :: patch
@@ -604,15 +606,20 @@ subroutine PMZFlowSolveAdjoint(this,snes)
   patch => realization%patch
   grid => patch%grid
 
-  call SNESGetJacobian(snes,M,PETSC_NULL_MAT,PETSC_NULL_FUNCTION, &
-                       PETSC_NULL_INTEGER,ierr);CHKERRQ(ierr)
+  !call SNESGetJacobian(solver%snes,M,PETSC_NULL_MAT,PETSC_NULL_FUNCTION, &
+  !                     PETSC_NULL_INTEGER,ierr);CHKERRQ(ierr)
 
   ! Get the adjoint matrix -> USE Jacobian for now as it's same for steady
   ! btw: solver%ksp already has M from SNES solve so can be used for steady
 
   !call ZFlowCalculateAdjointMatrix(realization,M)
 
-  call KSPSetOperators(solver%ksp,M,M,ierr);CHKERRQ(ierr)
+  !call KSPSetOperators(solver%ksp,M,M,ierr);CHKERRQ(ierr)
+
+  !call KSPGetOperators(solver%ksp,M,PETSC_NULL_MAT,ierr);CHKERRQ(ierr)
+  !call MatView(M,PETSC_VIEWER_STDOUT_WORLD,ierr);CHKERRQ(ierr)
+
+  ! NOT BUILDING M as ksp already has the Jacobian matrix for Steady problem
 
   call VecDuplicate(field%work,rhs,ierr);CHKERRQ(ierr)
   call VecZeroEntries(rhs,ierr);CHKERRQ(ierr)
@@ -624,6 +631,11 @@ subroutine PMZFlowSolveAdjoint(this,snes)
   call VecRestoreArrayF90(rhs,vec_ptr,ierr);CHKERRQ(ierr)
 
   call KSPSolveTranspose(solver%ksp,rhs,field%work,ierr);CHKERRQ(ierr)
+
+  call VecView(field%work,PETSC_VIEWER_STDOUT_WORLD,ierr);CHKERRQ(ierr)
+
+  ! Get dAdK
+  call ZFlowCalculateMatrixDerivatives(realization)
 
 end subroutine PMZFlowSolveAdjoint
 
