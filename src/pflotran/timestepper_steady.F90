@@ -318,7 +318,7 @@ subroutine TimestepperSteadyStepDT(this,process_model,stop_flag)
   endif
 
   ! TEMP
-  call process_model%PostSolve()
+  !call process_model%PostSolve()
 
   option%time = this%target_time
   call process_model%FinalizeTimestep()
