@@ -2408,21 +2408,33 @@ subroutine OutputMassBalance(realization_base)
             do i=1,reaction%naqcomp
               if (reaction%primary_species_print(i)) then
                 string = 'Global ' // trim(reaction%primary_species_names(i))
-                call OutputWriteToHeader(fid,string,'mol','',icol)
+                if (reaction%print_total_mass_kg) then                
+                  call OutputWriteToHeader(fid,string,'kg','',icol)
+                else
+                  call OutputWriteToHeader(fid,string,'mol','',icol)
+                endif
               endif
             enddo
 
             do i=1,reaction%immobile%nimmobile
               if (reaction%immobile%print_me(i)) then
                 string = 'Global ' // trim(reaction%immobile%names(i))
-                call OutputWriteToHeader(fid,string,'mol','',icol)
+                if (reaction%print_total_mass_kg) then                
+                  call OutputWriteToHeader(fid,string,'kg','',icol)
+                else
+                  call OutputWriteToHeader(fid,string,'mol','',icol)
+                endif
               endif
             enddo
 
             do i=1,reaction%gas%nactive_gas
               if (reaction%gas%active_print_me(i)) then
                 string = 'Global ' // trim(reaction%gas%active_names(i))
-                call OutputWriteToHeader(fid,string,'mol','',icol)
+                if (reaction%print_total_mass_kg) then                
+                  call OutputWriteToHeader(fid,string,'kg','',icol)
+                else
+                  call OutputWriteToHeader(fid,string,'mol','',icol)
+                endif
               endif
             enddo
 
@@ -2430,7 +2442,11 @@ subroutine OutputMassBalance(realization_base)
               do i=1,reaction%mineral%nkinmnrl
                 if (reaction%mineral%kinmnrl_print(i)) then
                   string = 'Global ' // trim(reaction%mineral%kinmnrl_names(i))
-                  call OutputWriteToHeader(fid,string,'mol','',icol)
+                  if (reaction%print_total_mass_kg) then                
+                    call OutputWriteToHeader(fid,string,'kg','',icol)
+                  else
+                    call OutputWriteToHeader(fid,string,'mol','',icol)
+                  endif
                 endif
               enddo
             endif
@@ -2540,53 +2556,57 @@ subroutine OutputMassBalance(realization_base)
           string = 'Region ' // trim(cur_mbr%region_name) // ' Water Mass'
           call OutputWriteToHeader(fid,string,'kg','',icol)
           if (option%ntrandof > 0) then
-            do i=1, reaction%naqcomp
-              if (reaction%primary_species_print(i)) then  
-                 string = 'Region ' // trim(cur_mbr%region_name) // ' ' // &
-                      trim(reaction%primary_species_names(i)) // ' Total Mass'
-                 if (reaction%print_total_mass_kg) then                
-                   call OutputWriteToHeader(fid,string,'kg','',icol)
-                 else
-                   call OutputWriteToHeader(fid,string,'mol','',icol)
-                endif
-              endif
-            enddo
+            select case(option%itranmode)
+              case(RT_MODE)
+                do i=1, reaction%naqcomp
+                  if (reaction%primary_species_print(i)) then  
+                    string = 'Region ' // trim(cur_mbr%region_name) // ' ' // &
+                           trim(reaction%primary_species_names(i)) // ' Total Mass'
+                    if (reaction%print_total_mass_kg) then                
+                      call OutputWriteToHeader(fid,string,'kg','',icol)
+                    else
+                      call OutputWriteToHeader(fid,string,'mol','',icol)
+                    endif
+                  endif
+                enddo
 
-            do i=1,reaction%immobile%nimmobile
-              if (reaction%immobile%print_me(i)) then
-                string = 'Region ' // trim(cur_mbr%region_name) // ' ' // &
-                     trim(reaction%immobile%names(i)) // ' Total Mass'
-                if (reaction%print_total_mass_kg) then                
-                  call OutputWriteToHeader(fid,string,'kg','',icol)
-                else
-                  call OutputWriteToHeader(fid,string,'mol','',icol)
-                endif
-              endif
-            enddo
+                do i=1,reaction%immobile%nimmobile
+                  if (reaction%immobile%print_me(i)) then
+                    string = 'Region ' // trim(cur_mbr%region_name) // ' ' // &
+                         trim(reaction%immobile%names(i)) // ' Total Mass'
+                    if (reaction%print_total_mass_kg) then                
+                      call OutputWriteToHeader(fid,string,'kg','',icol)
+                    else
+                      call OutputWriteToHeader(fid,string,'mol','',icol)
+                    endif
+                  endif
+                enddo
 
-            do i=1,reaction%gas%nactive_gas
-              if (reaction%gas%active_print_me(i)) then
-                string = 'Region ' // trim(cur_mbr%region_name) // ' ' // &
-                     trim(reaction%gas%active_names(i)) // ' Total Mass'
-                if (reaction%print_total_mass_kg) then                
-                  call OutputWriteToHeader(fid,string,'kg','',icol)
-                else
-                  call OutputWriteToHeader(fid,string,'mol','',icol)
-                endif
-              endif
-            enddo
+                do i=1,reaction%gas%nactive_gas
+                  if (reaction%gas%active_print_me(i)) then
+                    string = 'Region ' // trim(cur_mbr%region_name) // ' ' // &
+                         trim(reaction%gas%active_names(i)) // ' Total Mass'
+                    if (reaction%print_total_mass_kg) then                
+                      call OutputWriteToHeader(fid,string,'kg','',icol)
+                    else
+                      call OutputWriteToHeader(fid,string,'mol','',icol)
+                    endif
+                  endif
+                enddo
 
-            do i=1,reaction%mineral%nkinmnrl
-              if (reaction%mineral%kinmnrl_print(i)) then
-                string = 'Region ' // trim(cur_mbr%region_name) // ' ' // &
-                     trim(reaction%mineral%kinmnrl_names(i)) // ' Total Mass'
-                if (reaction%print_total_mass_kg) then                
-                  call OutputWriteToHeader(fid,string,'kg','',icol)
-                else
-                  call OutputWriteToHeader(fid,string,'mol','',icol)
-                endif
-              endif
-            enddo
+                do i=1,reaction%mineral%nkinmnrl
+                  if (reaction%mineral%kinmnrl_print(i)) then
+                    string = 'Region ' // trim(cur_mbr%region_name) // ' ' // &
+                         trim(reaction%mineral%kinmnrl_names(i)) // ' Total Mass'
+                    if (reaction%print_total_mass_kg) then                
+                      call OutputWriteToHeader(fid,string,'kg','',icol)
+                    else
+                      call OutputWriteToHeader(fid,string,'mol','',icol)
+                    endif
+                  endif
+                enddo
+              case(NWT_MODE)
+            end select    
           endif
           cur_mbr => cur_mbr%next
         enddo
@@ -2694,11 +2714,10 @@ subroutine OutputMassBalance(realization_base)
     allocate(sum_mol_global(max_tran_size,8))
     sum_mol = 0.d0
     select type(realization_base)
-    class is(realization_subsurface_type)
-       
-       call RTComputeMassBalance(realization_base, &
-                                 realization_base%patch%grid%nlmax, &
-                                 max_tran_size,sum_mol)
+      class is(realization_subsurface_type)     
+        call RTComputeMassBalance(realization_base, &
+                                  realization_base%patch%grid%nlmax, &
+                                  max_tran_size,sum_mol)
       class default
         option%io_buffer = 'Unrecognized realization class in MassBalance().'
         call PrintErrMsg(option)

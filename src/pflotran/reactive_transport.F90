@@ -501,19 +501,32 @@ subroutine RTComputeMassBalance(realization,num_cells,max_size,sum_mol,cell_ids)
     sum_mol_aq(1:naqcomp) = sum_mol_aq(1:naqcomp) + &
                rt_auxvars(ghosted_id)%total(:,LIQUID_PHASE) * &
                liquid_saturation*porosity*volume*1.d3
-
+    if (reaction%print_total_mass_kg) then
+      ! aqueous species; [mol] * [g/mol] * [kg/g] = [kg]
+      sum_mol_aq(1:naqcomp) = sum_mol_aq(1:naqcomp) * &
+        reaction%primary_spec_molar_wt(:) * 1.0d-3
+    endif
     ! equilibrium sorption (sum_mol_sb)
     if (reaction%neqsorb > 0) then
       sum_mol_sb(1:naqcomp) = sum_mol_sb(1:naqcomp) + &
-        rt_auxvars(ghosted_id)%total_sorb_eq(:) * volume
+           rt_auxvars(ghosted_id)%total_sorb_eq(:) * volume
+      if (reaction%print_total_mass_kg) then
+        !sorbed species; [mol] * [g/mol] * [kg/g] = [kg]
+        sum_mol_sb(1:naqcomp) = sum_mol_sb(1:naqcomp) * &
+          reaction%primary_spec_molar_wt(:) * 1.0d-3
+      endif
     endif
-
+   
     ! kinetic multirate sorption (sum_mol_sb)
     do irxn = 1, reaction%surface_complexation%nkinmrsrfcplxrxn
       do irate = 1, reaction%surface_complexation%kinmr_nrate(irxn)
         sum_mol_sb(1:naqcomp) = sum_mol_sb(1:naqcomp) + &
           rt_auxvars(ghosted_id)%kinmr_total_sorb(:,irate,irxn) * &
           volume
+        if (reaction%print_total_mass_kg) then
+          sum_mol_sb(1:naqcomp) = sum_mol_sb(1:naqcomp) * &
+            reaction%primary_spec_molar_wt(:) * 1.0d-3
+        endif
       enddo
     enddo
 
@@ -530,12 +543,22 @@ subroutine RTComputeMassBalance(realization,num_cells,max_size,sum_mol,cell_ids)
           reaction%mineral%kinmnrlstoich(i,imnrl) * tempreal
       enddo
       sum_mol_by_mnrl(imnrl) = sum_mol_by_mnrl(imnrl) + tempreal
+      if (reaction%print_total_mass_kg) then
+        sum_mol_by_mnrl(imnrl) = sum_mol_by_mnrl(imnrl) * &
+          reaction%mineral%kinmnrl_molar_wt(imnrl) * 1.0d-3
+        sum_mol_mnrl(1:ncomp) = sum_mol_mnrl(1:ncomp) * &
+          reaction%mineral%kinmnrl_molar_wt(imnrl) * 1.0d-3
+      endif
     enddo
 
     ! immobile mass
     do i = 1, reaction%immobile%nimmobile
       sum_mol_by_im(i) = sum_mol_by_im(i) + &
         rt_auxvars(ghosted_id)%immobile(i) * volume
+      if (reaction%print_total_mass_kg) then
+        sum_mol_by_im(i) = sum_mol_by_im(i) * &
+          reaction%immobile%list%molar_weight * 1.0d-3
+      endif
     enddo
 
     ! gas mass
@@ -557,6 +580,13 @@ subroutine RTComputeMassBalance(realization,num_cells,max_size,sum_mol,cell_ids)
           rt_auxvars(ghosted_id)%gas_pp(i) * pp_to_mol_per_L * &
           (1.d0-liquid_saturation) * porosity * volume * 1.d3
       enddo
+      if (reaction%print_total_mass_kg) then
+         sum_mol_gas(1:naqcomp) = sum_mol_gas(1:naqcomp) * &
+           reaction%gas%list%molar_weight * 1.0d-3
+         sum_mol_by_gas(1:reaction%gas%nactive_gas) = &
+           sum_mol_by_gas(1:reaction%gas%nactive_gas) * &
+           reaction%gas%list%molar_weight * 1.0d-3
+      endif
     endif
   enddo
 
