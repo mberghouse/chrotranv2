@@ -74,7 +74,6 @@ STANDARD_CFG = \
 	default/steady/steady.cfg \
 	default/condition/condition.cfg \
 	default/condition/dataset/dataset.cfg \
-	default/multicontinuum/multicontinuum.cfg \
 	default/scco2/mphase/mphase.cfg \
 	default/scco2/flash2/flash2.cfg \
 	default/regions/regions.cfg \
@@ -102,6 +101,7 @@ STANDARD_CFG = \
 	towg/tl/towg_tl.cfg \
 	towg/bo/towg_bo.cfg \
 	default/integral_flux/integral_flux.cfg
+#	default/multicontinuum/multicontinuum.cfg \
 #	wipp/bragflo/wipp_flow/wipp_flow.cfg 
 
 ifneq ($(strip $(HYPRE_LIB)),)
@@ -136,13 +136,13 @@ GEOCHEMISTRY_CFG = \
 	default/anisothermal/anisothermal.cfg \
 	default/column/column.cfg \
 	default/batch/batch.cfg \
-	default/multicontinuum/multicontinuum.cfg \
 	geothermal_hpt/1D_Calcite/calcite_hpt.cfg\
 	ngee/ngee.cfg \
 	shortcourse/1D_Calcite/calcite.cfg \
 	shortcourse/copper_leaching/cu_leaching.cfg \
 	ufd/ufd.cfg \
 	wipp/nuts/nuts.cfg
+#	default/multicontinuum/multicontinuum.cfg \
 
 GEOMECHANICS_CFG = \
 	geomech/uniaxial_strain/uniaxial_strain.cfg \
@@ -171,10 +171,10 @@ TRANSPORT_CFG = \
 	default/543/543.cfg \
 	default/column/column.cfg \
 	default/dispersion/dispersion.cfg \
-	default/multicontinuum/multicontinuum.cfg \
 	default/velocity/velocity.cfg \
 	wipp/transport/batch/wipp_batch.cfg \
 	wipp/transport/wipp_regular.cfg
+#	default/multicontinuum/multicontinuum.cfg \
 
 MESH_CFG = \
 	default/discretization/discretization.cfg
@@ -191,7 +191,6 @@ NOHDF5_CFG = \
 	geothermal_hpt/1D_Calcite/calcite_hpt.cfg \
 	default/materials/soil_compressibility/soil_compressibility.cfg \
 	wipp/nuts/nuts.cfg \
-	default/multicontinuum/multicontinuum.cfg \
 	ufd/ufd.cfg \
 	ascem/1d/1d-calcite/1d-calcite.cfg \
 	default/materials/mineral_volume/mineral_volume.cfg \
@@ -205,6 +204,7 @@ NOHDF5_CFG = \
 	default/regions/regions.cfg \
 	shortcourse/1D_variably_saturated_flow/vsat_flow.cfg
 #	wipp/bragflo/wipp_flow/wipp_flow.cfg 
+#	default/multicontinuum/multicontinuum.cfg \
 
 WIPP_CFG = \
 	wipp/nuts/nuts.cfg \
