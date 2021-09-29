@@ -458,7 +458,7 @@ subroutine RTComputeMassBalance(realization,num_cells,max_size,sum_mol,cell_ids)
   PetscErrorCode :: ierr
   PetscInt :: local_id
   PetscInt :: ghosted_id
-  PetscInt :: i, icomp, imnrl, ncomp, irate, irxn, naqcomp,k
+  PetscInt :: i, icomp, imnrl, ncomp, irate, irxn, naqcomp, k
   PetscReal :: pp_to_mol_per_L
   PetscReal :: liquid_saturation, porosity, volume
   PetscReal :: tempreal
@@ -485,7 +485,7 @@ subroutine RTComputeMassBalance(realization,num_cells,max_size,sum_mol,cell_ids)
   sum_mol_by_gas = 0.d0
 
   naqcomp = reaction%naqcomp
-  !put in print kg
+
   do k=1, num_cells
     local_id = k
     if (present(cell_ids)) local_id = cell_ids(k)

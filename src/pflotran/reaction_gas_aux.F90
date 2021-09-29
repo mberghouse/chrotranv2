@@ -40,7 +40,7 @@ module Reaction_Gas_Aux_module
     character(len=MAXWORDLENGTH), pointer :: passive_names(:)
     PetscBool :: print_all
     PetscBool, pointer :: active_print_me(:)    
-    PetscBool, pointer :: passive_print_me(:)
+    PetscBool, pointer :: passive_print_me(:)    
     
     PetscInt, pointer :: acteqspecid(:,:)   ! (0:ncomp in rxn)
     PetscReal, pointer :: acteqstoich(:,:)

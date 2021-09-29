@@ -2040,7 +2040,7 @@ subroutine OutputIntegralFlux(realization_base)
       icol = 1
     else
       icol = -1
-      endif
+    endif
   
     if (integral_flux_first .or. .not.FileExists(filename)) then
       open(unit=fid,file=filename,action="write",status="replace")
@@ -2305,8 +2305,8 @@ subroutine OutputMassBalance(realization_base)
   PetscReal :: sum_kg_global(realization_base%option%nflowspec, &
                realization_base%option%nphase)
   PetscReal, allocatable :: sum_mol(:,:), sum_mol_global(:,:)
-  PetscReal,allocatable :: global_total_mass(:,:), total_mass(:,:)
-  PetscReal :: global_water_mass,global_total_mass_test
+  PetscReal, allocatable :: global_total_mass(:,:), total_mass(:,:)
+  PetscReal :: global_water_mass
 
   PetscReal :: sum_trapped(realization_base%option%nphase)
   PetscReal :: sum_trapped_global(realization_base%option%nphase)

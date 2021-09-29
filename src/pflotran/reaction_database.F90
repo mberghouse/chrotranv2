@@ -1297,11 +1297,11 @@ subroutine BasisInit(reaction,option)
   allocate(sec_matrix_inverse(ncomp_secondary,ncomp_secondary))
   sec_matrix_inverse = 0.d0
  
-  call ludcmp(sec_matrix,ncomp_secondary,indices,temp_int)
+  call LUDecomposition(sec_matrix,ncomp_secondary,indices,temp_int)
   do ispec = 1, ncomp_secondary
     unit_vector = 0.d0
     unit_vector(ispec) = 1.d0
-    call lubksb(sec_matrix,ncomp_secondary,indices,unit_vector)
+    call LUBackSubstitution(sec_matrix,ncomp_secondary,indices,unit_vector)
     sec_matrix_inverse(:,ispec) = unit_vector(:)
   enddo
 
@@ -1649,7 +1649,7 @@ subroutine BasisInit(reaction,option)
     reaction%primary_spec_molar_wt(ispec) = cur_pri_aq_spec%molar_weight
     reaction%primary_spec_a0(ispec) = cur_pri_aq_spec%a0
     reaction%primary_species_print(ispec) = cur_pri_aq_spec%print_me .or. &
-                                reaction%print_all_primary_species
+                                            reaction%print_all_primary_species
     reaction%kd_print(ispec) = (cur_pri_aq_spec%print_me .or. &
                                 reaction%print_all_primary_species) .and. &
                                 reaction%print_kd
@@ -1844,7 +1844,7 @@ subroutine BasisInit(reaction,option)
       temp_int = temp_int + 1
       immobile%names(temp_int) = cur_immobile_spec%name
       immobile%print_me(temp_int) = cur_immobile_spec%print_me .or. &
-                                    immobile%print_all
+                                   immobile%print_all
       cur_immobile_spec => cur_immobile_spec%next
     enddo
   endif
@@ -2227,7 +2227,7 @@ subroutine BasisInit(reaction,option)
       if (cur_mineral%itype == MINERAL_KINETIC) then
         mineral%kinmnrl_names(ikinmnrl) = mineral%mineral_names(imnrl)
         mineral%kinmnrl_print(ikinmnrl) = cur_mineral%print_me .or. &
-                                          reaction%mineral%print_all
+                                           reaction%mineral%print_all
         mineral%kinmnrlspecid(:,ikinmnrl) = mineral%mnrlspecid(:,imnrl)
         mineral%kinmnrlstoich(:,ikinmnrl) = mineral%mnrlstoich(:,imnrl)
         mineral%kinmnrlh2oid(ikinmnrl) = mineral%mnrlh2oid(imnrl)
@@ -4260,7 +4260,7 @@ subroutine ReactionDatabaseSetupGases(reaction,num_logKs,option,h2o_id, &
             gas_print(igas_spec) = PETSC_TRUE
           endif
         endif
-       
+
         ispec = 0
         do i = 1, cur_gas_spec%dbaserxn%nspec
           if (cur_gas_spec%dbaserxn%spec_ids(i) /= h2o_id) then

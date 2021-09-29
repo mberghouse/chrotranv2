@@ -47,7 +47,7 @@ module Reaction_Immobile_Aux_module
 
     ! immobile species
     character(len=MAXWORDLENGTH), pointer :: names(:)
-    PetscBool, pointer :: print_me(:)
+    PetscBool, pointer :: print_me(:)    
     
     ! decay rxn
     PetscInt :: ndecay_rxn
