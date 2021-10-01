@@ -3275,6 +3275,24 @@ subroutine GeneralAuxVarUpdateState4(x,gen_auxvar,global_auxvar, &
             write(state_change_string,'(''LGP Phase -> GP at Boundary Face '', &
                                       & i8)') natural_id
           endif
+        elseif (gen_auxvar%effective_porosity < 0.d0) then
+          global_auxvar%istate = P_STATE
+          istatechng = PETSC_TRUE
+#ifdef DEBUG_GENERAL_INFO
+          call GeneralPrintAuxVars(gen_auxvar,global_auxvar,material_auxvar, &
+               natural_id,'Before Update',option)
+#endif
+          if (option%iflag == GENERAL_UPDATE_FOR_ACCUM) then
+             write(state_change_string,'(''LGP Phase -> P at Cell '',i8)') &
+                  natural_id
+          else if (option%iflag == GENERAL_UPDATE_FOR_DERIVATIVE) then
+             write(state_change_string, &
+                  '(''LGP Phase -> P at Cell (due to perturbation) '',i8)') &
+                  natural_id
+          else
+             write(state_change_string,'(''LGP Phase -> P at Boundary Face '', &
+                  & i8)') natural_id
+          endif
         endif
       endif
   end select
@@ -3337,11 +3355,15 @@ subroutine GeneralAuxVarUpdateState4(x,gen_auxvar,global_auxvar, &
         x(GENERAL_LIQUID_STATE_S_MOLE_DOF) =  max(0.d0,gen_auxvar% &
              xmol(sid,lid))*(1.d0 + epsilon)
       case(P_STATE)
-        x(GENERAL_GAS_PRESSURE_DOF) = gen_auxvar%pres(gid) * (1.d0 - epsilon)
+        x(GENERAL_LIQUID_PRESSURE_DOF) = gen_auxvar%pres(lid) * (1.d0 - epsilon)
         x(GENERAL_LIQUID_STATE_X_MOLE_DOF) = max(0.d0,gen_auxvar% &
              xmol(acid,lid))*(1.d0 + epsilon)
         x(GENERAL_ENERGY_DOF) = gen_auxvar%temp*(1.d0-epsilon)
-        x(GENERAL_SOLUTE_INDEX) = max(0.d0,gen_auxvar%xmol(sid,lid)*(1.d0+epsilon))
+        if (.not. general_soluble_matrix) then
+          x(GENERAL_PRECIPITATE_SAT_INDEX) = 1.d0
+        elseif (general_soluble_matrix) then
+          x(GENERAL_POROSITY_INDEX) = 0.d0
+        endif
       case(LP_STATE)
         x(GENERAL_LIQUID_PRESSURE_DOF) = gen_auxvar%pres(lid) * (1.d0 - epsilon)
         x(GENERAL_LIQUID_STATE_X_MOLE_DOF) = max(0.d0,gen_auxvar% &
@@ -3486,7 +3508,6 @@ subroutine GeneralAuxVarPerturb(gen_auxvar,global_auxvar, &
   PetscReal, parameter :: min_mole_fraction_pert = 1.d-13
   PetscReal, parameter :: min_perturbation = 1.d-10
   PetscInt :: idof
-
 #ifdef DEBUG_GENERAL
   type(global_auxvar_type) :: global_auxvar_debug
   type(general_auxvar_type) :: general_auxvar_debug

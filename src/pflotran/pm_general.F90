@@ -185,19 +185,10 @@ subroutine PMGeneralSetFlowMode(pm,option)
     option%nflowspec = 3
     option%solute_id = 3
     option%energy_id = 4
-    ! if (general_soluble_matrix) then
-    !   option%nphase = 2
-    !   option%precipitate_phase = 3
-    !   general_max_states = 3
-    !   max_change_index = 7
-    !   transient_porosity = PETSC_TRUE
-    ! else
     option%nphase = 3
     option%precipitate_phase = 3
     general_max_states = 7
     max_change_index = 7
-    transient_porosity = PETSC_FALSE
-    !endif
   else
     write(option%io_buffer,*) option%nflowdof
     option%io_buffer = trim(adjustl(option%io_buffer)) // &
@@ -287,10 +278,11 @@ subroutine PMGeneralSetFlowMode(pm,option)
                1.d0 ! change to 0.d0 to zero tolerances
     residual_abs_inf_tol = [w_mass_abs_inf_tol,a_mass_abs_inf_tol,&
                             s_mass_abs_inf_tol,u_abs_inf_tol]
+    residual_scaled_inf_tol(:) = 1.d-6
     allocate(pm%max_change_ivar(7))
     pm%max_change_ivar = [LIQUID_PRESSURE, GAS_PRESSURE, AIR_PRESSURE, &
                           LIQUID_MOLE_FRACTION, TEMPERATURE, &
-                          GAS_SATURATION, PRECIPITATE_SATURATION]
+                          GAS_SATURATION, POROSITY]
     allocate(pm%max_change_isubvar(7))
     pm%max_change_isubvar = [0,0,0,3,0,0,0]
   endif
@@ -1055,6 +1047,16 @@ subroutine PMGeneralCheckUpdatePre(this,snes,X,dX,changed,ierr)
               changed = PETSC_TRUE
             endif
           endif
+        case(LGP_STATE)
+          pgas_index = offset + GENERAL_GAS_PRESSURE_DOF
+          if (X_p(pgas_index) - dX_p(pgas_index) < &
+               gen_auxvars(ZERO_INTEGER,ghosted_id)% &
+               pres(option%saturation_pressure_id)) then
+             dX_p(pgas_index) = X_p(pgas_index) - &
+                  gen_auxvars(ZERO_INTEGER,ghosted_id)% &
+                  pres(option%saturation_pressure_id)
+             changed = PETSC_TRUE
+          endif
       end select
     enddo
 
@@ -1741,8 +1743,6 @@ subroutine PMGeneralMaxChange(this)
 
   if (option%nflowdof == 3) then
     max_change_index = SIX_INTEGER
-  elseif (option%nflowdof == 4 .and. general_soluble_matrix) then
-    max_change_index = SEVEN_INTEGER
   elseif (option%nflowdof == 4) then
     max_change_index = SEVEN_INTEGER
   endif
@@ -1789,16 +1789,30 @@ subroutine PMGeneralMaxChange(this)
                       MPI_DOUBLE_PRECISION,MPI_MAX,option%mycomm,ierr)
   ! print them out
   if (option%print_screen_flag) then
-    write(*,'("  --> max chng: dpl= ",1pe12.4, " dpg= ",1pe12.4,&
-      & " dpa= ",1pe12.4,/,15x," dxa= ",1pe12.4,"  dt= ",1pe12.4,&
-      & " dsg= ",1pe12.4)') &
-      max_change_global(1:max_change_index)
+    if (option%nflowdof == 3) then
+      write(*,'("  --> max chng: dpl= ",1pe12.4, " dpg= ",1pe12.4,&
+        & " dpa= ",1pe12.4,/,15x," dxa= ",1pe12.4,"  dt= ",1pe12.4,&
+        & " dsg= ",1pe12.4)') &
+        max_change_global(1:max_change_index)
+    elseif (option%nflowdof == 4) then
+      write(*,'("  --> max chng: dpl= ",1pe12.4, " dpg= ",1pe12.4,&
+        & " dpa= ",1pe12.4,/,15x," dxa= ",1pe12.4,"  dt= ",1pe12.4,&
+        & " dsg= ",1pe12.4,/,15x," dpo= ",1pe12.4)') &
+        max_change_global(1:max_change_index)
+    endif
   endif
   if (option%print_file_flag) then
-    write(option%fid_out,'("  --> max chng: dpl= ",1pe12.4, " dpg= ",1pe12.4,&
-      & " dpa= ",1pe12.4,/,15x," dxa= ",1pe12.4,"  dt= ",1pe12.4, &
-      & " dsg= ",1pe12.4)') &
-      max_change_global(1:max_change_index)
+    if (option%nflowdof == 3) then
+      write(option%fid_out,'("  --> max chng: dpl= ",1pe12.4, " dpg= ",1pe12.4,&
+        & " dpa= ",1pe12.4,/,15x," dxa= ",1pe12.4,"  dt= ",1pe12.4, &
+        & " dsg= ",1pe12.4)') &
+        max_change_global(1:max_change_index)
+    elseif (option%nflowdof == 4) then
+      write(option%fid_out,'("  --> max chng: dpl= ",1pe12.4, " dpg= ",1pe12.4,&
+        & " dpa= ",1pe12.4,/,15x," dxa= ",1pe12.4,"  dt= ",1pe12.4,&
+        & " dsg= ",1pe12.4,/,15x," dpo= ",1pe12.4)') &
+        max_change_global(1:max_change_index)
+    endif
   endif
 
   ! max change variables: [LIQUID_PRESSURE, GAS_PRESSURE, AIR_PRESSURE, &
