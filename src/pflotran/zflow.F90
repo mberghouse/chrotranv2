@@ -1214,7 +1214,6 @@ subroutine ZFlowCalculateMatrixDerivatives(realization)
   implicit none
 
   type(realization_subsurface_type) :: realization
-  !PetscBool :: calculate_dA_dk, calculate_dB_dk, calculate_dc_dk
 
   class(material_auxvar_type), pointer :: material_auxvars(:)
   type(zflow_auxvar_type), pointer :: zflow_auxvars(:,:)
@@ -1234,6 +1233,7 @@ subroutine ZFlowCalculateMatrixDerivatives(realization)
   PetscInt :: local_id_dn, ghosted_id_dn
 
   PetscReal :: dAup, dAdn, dAdn_bc
+  PetscReal :: dcup, dcdn, dcdn_bc
   PetscReal :: dcoef_up, dcoef_dn
 
 
@@ -1244,7 +1244,6 @@ subroutine ZFlowCalculateMatrixDerivatives(realization)
   zflow_auxvars => patch%aux%ZFlow%auxvars
   zflow_auxvars_bc => patch%aux%ZFlow%auxvars_bc
 
-  !if (calculate_dA_dk)
   ! Setting matrix derivatives enteries for Internal Flux terms/connections
   connection_set_list => grid%internal_connection_set_list
   cur_connection_set => connection_set_list%first
@@ -1277,7 +1276,7 @@ subroutine ZFlowCalculateMatrixDerivatives(realization)
                                        option,                           &
                                        cur_connection_set%area(iconn),   &
                                        cur_connection_set%dist(:,iconn), &
-                                       dAup,dAdn)
+                                       dAup,dAdn,dcup,dcdn)
 
       if (local_id_up > 0) then
         num_neighbors_up = grid%cell_neighbors_local_ghosted(0,local_id_up)
@@ -1286,17 +1285,20 @@ subroutine ZFlowCalculateMatrixDerivatives(realization)
                                     num_neighbors_up,ghosted_id_dn)
 
         if (.not.associated(zflow_auxvars(ZERO_INTEGER, &
-                                          ghosted_id_up)%dA_dk)) then
+                                          ghosted_id_up)%dAdk)) then
           allocate(zflow_auxvars(ZERO_INTEGER, &
-                                 ghosted_id_up)%dA_dk(num_neighbors_up + 1))
-          zflow_auxvars(ZERO_INTEGER,ghosted_id_up)%dA_dk = 0.d0
+                                 ghosted_id_up)%dAdk(num_neighbors_up + 1))
+          zflow_auxvars(ZERO_INTEGER,ghosted_id_up)%dAdk = 0.d0
         endif
 
         ! Fill values to dA/dperm_up matrix for up cell
         dcoef_up = dAup
         dcoef_dn = - dcoef_up
         call FillDADkFlux(dcoef_up,dcoef_dn,num_neighbors_up,ineighbor, &
-                          zflow_auxvars(ZERO_INTEGER,ghosted_id_up)%dA_dk)
+                          zflow_auxvars(ZERO_INTEGER,ghosted_id_up)%dAdk)
+        ! Fill dcdk for up cell
+        zflow_auxvars(ZERO_INTEGER,ghosted_id_up)%dcdk = &
+                        zflow_auxvars(ZERO_INTEGER,ghosted_id_up)%dcdk + dcup
       endif
 
       if (local_id_dn > 0) then
@@ -1306,17 +1308,20 @@ subroutine ZFlowCalculateMatrixDerivatives(realization)
                                     num_neighbors_dn,ghosted_id_up)
 
         if (.not.associated(zflow_auxvars(ZERO_INTEGER,  &
-                                          ghosted_id_dn)%dA_dk)) then
+                                          ghosted_id_dn)%dAdk)) then
           allocate(zflow_auxvars(ZERO_INTEGER,  &
-                                 ghosted_id_dn)%dA_dk(num_neighbors_dn + 1))
-          zflow_auxvars(ZERO_INTEGER,ghosted_id_dn)%dA_dk = 0.d0
+                                 ghosted_id_dn)%dAdk(num_neighbors_dn + 1))
+          zflow_auxvars(ZERO_INTEGER,ghosted_id_dn)%dAdk = 0.d0
         endif
 
         ! Fill values to dA/dperm_dn matrix for dn cell
         dcoef_dn = dAdn
         dcoef_up = - dcoef_dn
         call FillDADkFlux(dcoef_dn,dcoef_up,num_neighbors_dn,ineighbor, &
-                          zflow_auxvars(ZERO_INTEGER,ghosted_id_dn)%dA_dk)
+                          zflow_auxvars(ZERO_INTEGER,ghosted_id_dn)%dAdk)
+        ! Fill dcdk for dn cell
+        zflow_auxvars(ZERO_INTEGER,ghosted_id_dn)%dcdk = &
+                        zflow_auxvars(ZERO_INTEGER,ghosted_id_dn)%dcdk + dcdn
       endif
     enddo
     cur_connection_set => cur_connection_set%next
@@ -1349,21 +1354,21 @@ subroutine ZFlowCalculateMatrixDerivatives(realization)
                                          option, &
                                          cur_connection_set%area(iconn), &
                                          cur_connection_set%dist(:,iconn), &
-                                         dAdn_bc)
+                                         dAdn_bc,dcdn_bc)
 
       num_neighbors = grid%cell_neighbors_local_ghosted(0,local_id)
       call FillDADkFluxBC(dAdn_bc,num_neighbors, &
-                          zflow_auxvars(ZERO_INTEGER,ghosted_id)%dA_dk)
+                          zflow_auxvars(ZERO_INTEGER,ghosted_id)%dAdk)
+      ! Fill dcdk
+      zflow_auxvars(ZERO_INTEGER,ghosted_id)%dcdk = &
+                      zflow_auxvars(ZERO_INTEGER,ghosted_id)%dcdk + dcdn_bc
     enddo
     boundary_condition => boundary_condition%next
   enddo
-  !endif !(calculate_dA_dk)
-  ! if (calculate_dB_dk)
-  ! if (calculate_dc_dk)
 
 contains
   subroutine FillDADkFlux(dcoef_self,dcoef_neighbor,num_neighbors, &
-                          ineighbor,dA_dk)
+                          ineighbor,dAdk)
     !
     ! Fills out upper traingle part of the dA/dk matrix for each cell
     !   Storing only first rows as other rows can easily be retrieved
@@ -1377,18 +1382,18 @@ contains
     PetscReal :: dcoef_self, dcoef_neighbor
     PetscInt :: num_neighbors
     PetscInt :: ineighbor
-    PetscReal :: dA_dk(num_neighbors + 1)
+    PetscReal :: dAdk(num_neighbors + 1)
 
     ! Add values for self
-    dA_dk(1) = dA_dk(1) + dcoef_self
+    dAdk(1) = dAdk(1) + dcoef_self
     ! insert values for neighbor
-    dA_dk(1+ineighbor) = dcoef_neighbor
+    dAdk(1+ineighbor) = dcoef_neighbor
 
   end subroutine FillDADkFlux
 
   ! ************************************************************************** !
 
-  subroutine FillDADkFluxBC(dcoef_self,num_neighbors,dA_dk)
+  subroutine FillDADkFluxBC(dcoef_self,num_neighbors,dAdk)
     !
     ! Fills out dA/dk for boundary flux coeffs
     !
@@ -1399,10 +1404,10 @@ contains
 
     PetscReal :: dcoef_self
     PetscInt :: num_neighbors
-    PetscReal :: dA_dk(num_neighbors + 1)
+    PetscReal :: dAdk(num_neighbors + 1)
 
     ! Add values for self for boundary coeffs
-    dA_dk(1) = dA_dk(1) + dcoef_self
+    dAdk(1) = dAdk(1) + dcoef_self
 
   end subroutine FillDADkFluxBC
 

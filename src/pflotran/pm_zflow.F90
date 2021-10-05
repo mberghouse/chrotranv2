@@ -604,6 +604,11 @@ subroutine PMZFlowSolveAdjoint(this)
   PetscReal, allocatable :: phi_sor(:), phi_rec(:)
   PetscErrorCode :: ierr
 
+  ! TEMP
+  PetscInt :: idata
+  PetscReal :: Pobs,Pcal,res,wd
+  PetscReal :: grad, hess
+
   Vec :: rhs
   Mat :: M
 
@@ -617,13 +622,13 @@ subroutine PMZFlowSolveAdjoint(this)
   zflow_auxvars => patch%aux%ZFlow%auxvars(ZERO_INTEGER,:)
   cell_neighbors => grid%cell_neighbors_local_ghosted
 
-  !call SNESGetJacobian(solver%snes,M,PETSC_NULL_MAT,PETSC_NULL_FUNCTION, &
-  !                     PETSC_NULL_INTEGER,ierr);CHKERRQ(ierr)
+  call SNESGetJacobian(solver%snes,M,PETSC_NULL_MAT,PETSC_NULL_FUNCTION, &
+                       PETSC_NULL_INTEGER,ierr);CHKERRQ(ierr)
 
   ! Get the adjoint matrix -> USE Jacobian for now as it's same for steady
   ! btw: solver%ksp already has M from SNES solve so can be used for steady
 
-  !call ZFlowCalculateAdjointMatrix(realization,M)
+  call ZFlowCalculateAdjointMatrix(realization,M)
 
   !call KSPSetOperators(solver%ksp,M,M,ierr);CHKERRQ(ierr)
 
@@ -632,17 +637,20 @@ subroutine PMZFlowSolveAdjoint(this)
 
   ! NOT BUILDING M as ksp already has the Jacobian matrix for Steady problem
 
+  ! index for data observation
+  idata = 225
+
   call VecDuplicate(field%work,rhs,ierr);CHKERRQ(ierr)
   call VecZeroEntries(rhs,ierr);CHKERRQ(ierr)
   call VecZeroEntries(field%work,ierr);CHKERRQ(ierr)
 
   ! Assign RHS values -> TEMP
   call VecGetArrayF90(rhs,vec_ptr,ierr);CHKERRQ(ierr)
-  vec_ptr(1) = 1.d0
+  vec_ptr(idata) = 1.d0
   call VecRestoreArrayF90(rhs,vec_ptr,ierr);CHKERRQ(ierr)
 
   call KSPSolveTranspose(solver%ksp,rhs,field%work,ierr);CHKERRQ(ierr)
-  call VecView(field%work,PETSC_VIEWER_STDOUT_WORLD,ierr);CHKERRQ(ierr)
+  !call VecView(field%work,PETSC_VIEWER_STDOUT_WORLD,ierr);CHKERRQ(ierr)
 
   ! Get dAdK
   call ZFlowCalculateMatrixDerivatives(realization)
@@ -651,41 +659,9 @@ subroutine PMZFlowSolveAdjoint(this)
   !                                 field%work_loc,ONEDOF)
   call VecGetArrayF90(field%work,vec_ptr,ierr);CHKERRQ(ierr)
 
-  print*,'lambda'
-  print*,vec_ptr
 
-  print*,'p^T * dA/dk * lambda'
 
-  do local_id=1,grid%nlmax
-    num_neighbors = cell_neighbors(0,local_id)
-    allocate(phi_sor(num_neighbors+1), phi_rec(num_neighbors+1))
-    phi_sor = 0.d0
-    phi_rec = 0.d0
-
-    phi_sor(1) = zflow_auxvars(local_id)%pres
-    phi_rec(1) = vec_ptr(local_id)
-
-    jacob = phi_sor(1) * zflow_auxvars(local_id)%dA_dK(1) * phi_rec(1)
-!print*,zflow_auxvars(local_id)%pres
-    do inbr = 1,num_neighbors
-      phi_sor(inbr+1) = zflow_auxvars(abs(cell_neighbors(inbr,local_id)))%pres
-
-      phi_rec(inbr+1) = vec_ptr(abs(cell_neighbors(inbr,local_id)))
-
-      jacob = jacob +                                                   &
-              phi_sor(1)*zflow_auxvars(local_id)%dA_dK(1+inbr)*         &
-              phi_rec(inbr+1) +                                         &
-              phi_sor(1+inbr) * (                                       &
-                zflow_auxvars(local_id)%dA_dk(1+inbr)*phi_rec(1) -      &
-                zflow_auxvars(local_id)%dA_dk(1+inbr)*phi_rec(1+inbr) )
-    enddo
-
-    print*,"i,jacob:",local_id,-jacob
-
-    deallocate(phi_sor, phi_rec)
-  enddo
-
-  call VecRestoreArrayF90(field%work_loc,vec_ptr,ierr);CHKERRQ(ierr)
+  call VecRestoreArrayF90(field%work,vec_ptr,ierr);CHKERRQ(ierr)
 
 end subroutine PMZFlowSolveAdjoint
 

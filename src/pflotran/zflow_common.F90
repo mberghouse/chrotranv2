@@ -658,7 +658,7 @@ end subroutine ZFlowSrcSinkDerivative
 
 subroutine ZFlowFluxDerivativeWithPerm(zflow_auxvar_up,material_auxvar_up, &
                                        zflow_auxvar_dn,material_auxvar_dn, &
-                                       option,area,dist,dAup,dAdn)
+                                       option,area,dist,dAup,dAdn,dcup,dcdn)
   !
   ! Computes internal flux derivatives w.r.t permeability
   !
@@ -678,6 +678,7 @@ subroutine ZFlowFluxDerivativeWithPerm(zflow_auxvar_up,material_auxvar_up, &
   PetscReal :: area
   PetscReal :: dist(-1:3)
   PetscReal :: dAup, dAdn  ! out -> A's coeff derivatives for up and down
+  PetscReal :: dcup, dcdn  ! out -> c's coeff derivatives for up and down
 
   ! Internal
   PetscReal :: dist_gravity  ! distance along gravity vector
@@ -696,6 +697,8 @@ subroutine ZFlowFluxDerivativeWithPerm(zflow_auxvar_up,material_auxvar_up, &
 
   dAup = 0.d0
   dAdn = 0.d0
+  dcup = 0.d0
+  dcdn = 0.d0
 
   if (zflow_auxvar_up%kr + zflow_auxvar_dn%kr > eps) then
 
@@ -733,8 +736,12 @@ subroutine ZFlowFluxDerivativeWithPerm(zflow_auxvar_up,material_auxvar_up, &
       ! get matrix derivative up coefficients for dn cell
       dcoef_dperm_dn = dperm_avg_dperm_dn_over_dist * tempreal
 
+      ! dA/dk -> coeffs
       dAup = dcoef_dperm_up
       dAdn = dcoef_dperm_dn
+      ! dc/dk -> coeffs
+      dcup = - dcoef_dperm_up * gravity_term
+      dcdn = - dcoef_dperm_dn * gravity_term
     endif
 
   endif
@@ -746,7 +753,7 @@ end subroutine ZFlowFluxDerivativeWithPerm
 subroutine ZFlowBCFluxDerivativeWithPerm(ibndtype,auxvar_mapping,auxvars, &
                                          zflow_auxvar_up, &
                                          zflow_auxvar_dn,material_auxvar_dn, &
-                                         option,area,dist,dAdn_bc)
+                                         option,area,dist,dAdn_bc,dcdn_bc)
   !
   ! Computes internal flux derivatives w.r.t permeability
   !
@@ -769,6 +776,7 @@ subroutine ZFlowBCFluxDerivativeWithPerm(ibndtype,auxvar_mapping,auxvars, &
   PetscReal :: area
   PetscReal :: dist(-1:3)
   PetscReal :: dAdn_bc
+  PetscReal :: dcdn_bc
 
   PetscInt :: bc_type
   PetscInt :: idof
@@ -784,6 +792,7 @@ subroutine ZFlowBCFluxDerivativeWithPerm(ibndtype,auxvar_mapping,auxvars, &
   PetscReal :: dist_visc
 
   dAdn_bc = 0.d0
+  dcdn_bc = 0.d0
 
   v_darcy = 0.d0
   kr = 0.d0
@@ -840,10 +849,12 @@ subroutine ZFlowBCFluxDerivativeWithPerm(ibndtype,auxvar_mapping,auxvars, &
       if (dabs(v_darcy(1)) > 0.d0 .or. kr > 0.d0) then
         dAdn_bc = zflow_density_kmol * kr * area * &
                   dperm_avg_dperm_dn_over_dist_visc
+        dcdn_bc = - dAdn_bc * gravity_term - dAdn_bc * boundary_pressure
       endif
 
     case(NEUMANN_BC)
       dAdn_bc = 0.d0
+      dcdn_bc = 0.d0
     case default
       option%io_buffer = &
         'Boundary condition type (' // trim(StringWrite(bc_type)) // &
