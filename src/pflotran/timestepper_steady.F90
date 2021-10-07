@@ -317,11 +317,11 @@ subroutine TimestepperSteadyStepDT(this,process_model,stop_flag)
             this%cumulative_linear_iterations
   endif
 
-  ! TEMP
-  !call process_model%PostSolve()
-
   option%time = this%target_time
   call process_model%FinalizeTimestep()
+
+  ! TEMP
+  !call process_model%PostSolve()
 
   if (this%print_ekg .and. OptionPrintToFile(option)) then
 100 format(a32," TIMESTEP ",i10,2es16.8,a,i3,i5,i3,i5,i5,i10)

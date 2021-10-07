@@ -56,7 +56,7 @@ module ZFlow_Aux_module
     PetscReal :: pert
     ! For inversion
     PetscReal, pointer :: dAdk(:)   ! System matrix derivative dA/dKin
-    PetscReal :: dcdk      ! RHS derivative dc/dKin
+    PetscReal, pointer :: dcdk(:)   ! RHS derivative dc/dKin
   end type zflow_auxvar_type
 
   type, public :: zflow_parameter_type
@@ -162,7 +162,7 @@ subroutine ZFlowAuxVarInit(auxvar,option)
   auxvar%dkr_dp = 0.d0
   auxvar%pert = 0.d0
   nullify(auxvar%dAdk)
-  auxvar%dcdk = 0.d0
+  nullify(auxvar%dcdk)
 
 end subroutine ZFlowAuxVarInit
 
@@ -519,6 +519,7 @@ subroutine ZFlowAuxVarStrip(auxvar)
   type(zflow_auxvar_type) :: auxvar
 
   call DeallocateArray(auxvar%dAdk)
+  call DeallocateArray(auxvar%dcdk)
 
 end subroutine ZFlowAuxVarStrip
 

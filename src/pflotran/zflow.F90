@@ -1288,17 +1288,24 @@ subroutine ZFlowCalculateMatrixDerivatives(realization)
                                           ghosted_id_up)%dAdk)) then
           allocate(zflow_auxvars(ZERO_INTEGER, &
                                  ghosted_id_up)%dAdk(num_neighbors_up + 1))
+          allocate(zflow_auxvars(ZERO_INTEGER, &
+                                 ghosted_id_up)%dcdk(num_neighbors_up + 1))
           zflow_auxvars(ZERO_INTEGER,ghosted_id_up)%dAdk = 0.d0
+          zflow_auxvars(ZERO_INTEGER,ghosted_id_up)%dcdk = 0.d0
         endif
 
         ! Fill values to dA/dperm_up matrix for up cell
-        dcoef_up = dAup
-        dcoef_dn = - dcoef_up
+        dcoef_up =   dAup
+        dcoef_dn = - dAup
         call FillDADkFlux(dcoef_up,dcoef_dn,num_neighbors_up,ineighbor, &
                           zflow_auxvars(ZERO_INTEGER,ghosted_id_up)%dAdk)
         ! Fill dcdk for up cell
-        zflow_auxvars(ZERO_INTEGER,ghosted_id_up)%dcdk = &
-                        zflow_auxvars(ZERO_INTEGER,ghosted_id_up)%dcdk + dcup
+        dcoef_up =   dcup
+        dcoef_dn = - dcup
+        call FillDADkFlux(dcoef_up,dcoef_dn,num_neighbors_up,ineighbor, &
+                          zflow_auxvars(ZERO_INTEGER,ghosted_id_up)%dcdk)
+        !zflow_auxvars(ZERO_INTEGER,ghosted_id_up)%dcdk = &
+        !                zflow_auxvars(ZERO_INTEGER,ghosted_id_up)%dcdk + dcup
       endif
 
       if (local_id_dn > 0) then
@@ -1311,17 +1318,24 @@ subroutine ZFlowCalculateMatrixDerivatives(realization)
                                           ghosted_id_dn)%dAdk)) then
           allocate(zflow_auxvars(ZERO_INTEGER,  &
                                  ghosted_id_dn)%dAdk(num_neighbors_dn + 1))
+          allocate(zflow_auxvars(ZERO_INTEGER,  &
+                                 ghosted_id_dn)%dcdk(num_neighbors_dn + 1))
           zflow_auxvars(ZERO_INTEGER,ghosted_id_dn)%dAdk = 0.d0
+          zflow_auxvars(ZERO_INTEGER,ghosted_id_dn)%dcdk = 0.d0
         endif
 
         ! Fill values to dA/dperm_dn matrix for dn cell
-        dcoef_dn = dAdn
-        dcoef_up = - dcoef_dn
+        dcoef_dn =   dAdn
+        dcoef_up = - dAdn
         call FillDADkFlux(dcoef_dn,dcoef_up,num_neighbors_dn,ineighbor, &
                           zflow_auxvars(ZERO_INTEGER,ghosted_id_dn)%dAdk)
         ! Fill dcdk for dn cell
-        zflow_auxvars(ZERO_INTEGER,ghosted_id_dn)%dcdk = &
-                        zflow_auxvars(ZERO_INTEGER,ghosted_id_dn)%dcdk + dcdn
+        dcoef_dn = - dcdn
+        dcoef_up =   dcdn
+        call FillDADkFlux(dcoef_dn,dcoef_up,num_neighbors_dn,ineighbor, &
+                          zflow_auxvars(ZERO_INTEGER,ghosted_id_dn)%dcdk)
+        !zflow_auxvars(ZERO_INTEGER,ghosted_id_dn)%dcdk = &
+        !                zflow_auxvars(ZERO_INTEGER,ghosted_id_dn)%dcdk + dcdn
       endif
     enddo
     cur_connection_set => cur_connection_set%next
@@ -1357,11 +1371,14 @@ subroutine ZFlowCalculateMatrixDerivatives(realization)
                                          dAdn_bc,dcdn_bc)
 
       num_neighbors = grid%cell_neighbors_local_ghosted(0,local_id)
+      ! Fill dAdk for boundary
       call FillDADkFluxBC(dAdn_bc,num_neighbors, &
                           zflow_auxvars(ZERO_INTEGER,ghosted_id)%dAdk)
-      ! Fill dcdk
-      zflow_auxvars(ZERO_INTEGER,ghosted_id)%dcdk = &
-                      zflow_auxvars(ZERO_INTEGER,ghosted_id)%dcdk + dcdn_bc
+      ! Fill dcdk for boundary
+      call FillDADkFluxBC(dcdn_bc,num_neighbors, &
+                          zflow_auxvars(ZERO_INTEGER,ghosted_id)%dcdk)
+      !zflow_auxvars(ZERO_INTEGER,ghosted_id)%dcdk = &
+      !                zflow_auxvars(ZERO_INTEGER,ghosted_id)%dcdk + dcdn_bc
     enddo
     boundary_condition => boundary_condition%next
   enddo

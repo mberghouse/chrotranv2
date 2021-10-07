@@ -599,7 +599,7 @@ subroutine PMZFlowSolveAdjoint(this)
   PetscInt :: local_id, ghosted_id
   PetscInt :: inbr, num_neighbors
   PetscInt, pointer :: cell_neighbors(:,:)
-  PetscReal :: jacob
+  PetscReal :: jacob_A, jacob_c, jacob
   PetscReal, pointer :: vec_ptr(:)
   PetscReal, allocatable :: phi_sor(:), phi_rec(:)
   PetscErrorCode :: ierr
@@ -638,7 +638,14 @@ subroutine PMZFlowSolveAdjoint(this)
   ! NOT BUILDING M as ksp already has the Jacobian matrix for Steady problem
 
   ! index for data observation
-  idata = 225
+  idata = 1 !9005 !1
+
+  print *, 'Press from field'
+  call VecView(this%realization%field%flow_xx,PETSC_VIEWER_STDOUT_WORLD, &
+               ierr);CHKERRQ(ierr)
+
+  ! Get dAdK and dcdk -> SHOULD WE COMPUTE BEFORE SNES SOLVE?
+  call ZFlowCalculateMatrixDerivatives(realization)
 
   call VecDuplicate(field%work,rhs,ierr);CHKERRQ(ierr)
   call VecZeroEntries(rhs,ierr);CHKERRQ(ierr)
@@ -651,9 +658,6 @@ subroutine PMZFlowSolveAdjoint(this)
 
   call KSPSolveTranspose(solver%ksp,rhs,field%work,ierr);CHKERRQ(ierr)
   !call VecView(field%work,PETSC_VIEWER_STDOUT_WORLD,ierr);CHKERRQ(ierr)
-
-  ! Get dAdK
-  call ZFlowCalculateMatrixDerivatives(realization)
 
   !call DiscretizationGlobalToLocal(discretization,field%work, &
   !                                 field%work_loc,ONEDOF)
