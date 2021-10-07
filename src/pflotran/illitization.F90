@@ -30,6 +30,7 @@ module Illitization_module
     PetscReal :: ilt_freq ! frequency term in L/mol-sec
     PetscReal :: ilt_K_conc ! molar concentration of potassium
     PetscReal :: ilt_shift_perm ! permeability shift factor for illite fraction
+    type(ilt_kd_effects_type), pointer :: ilt_shift_kd_list
   contains
     procedure, public :: Verify => ILTDefaultVerify
     procedure, public :: CalculateILT => ILTDefaultIllitization
@@ -55,6 +56,13 @@ module Illitization_module
   type, public :: illitization_ptr_type
     class(illitization_type), pointer :: ptr
   end type illitization_ptr_type
+  !---------------------------------------------------------------------------
+  type :: ilt_kd_effects_type
+    PetscInt :: num_elements
+    PetscReal, pointer :: f_kd(:) ! factor for modifying the kd value
+    character(len=MAXWORDLENGTH), pointer :: element_name(:) ! element affected
+    type(ilt_kd_effects_type), pointer :: next
+  end type
   !---------------------------------------------------------------------------
 
   public :: IllitizationCreate, &
@@ -266,6 +274,7 @@ function ILTDefaultCreate()
   ILTDefaultCreate%ilt_ea     = UNINITIALIZED_DOUBLE
   ILTDefaultCreate%ilt_freq   = UNINITIALIZED_DOUBLE
   ILTDefaultCreate%ilt_K_conc = UNINITIALIZED_DOUBLE
+  nullify(ILTDefaultCreate%ilt_shift_kd_list)
 
 end function ILTDefaultCreate
 
@@ -288,8 +297,31 @@ function ILTGeneralCreate()
   ILTGeneralCreate%ilt_K_conc = UNINITIALIZED_DOUBLE
   ILTGeneralCreate%ilt_K_exp  = UNINITIALIZED_DOUBLE
   ILTGeneralCreate%ilt_exp    = UNINITIALIZED_DOUBLE
+  nullify(ILTGeneralCreate%ilt_shift_kd_list)
 
 end function ILTGeneralCreate
+
+! ************************************************************************** !
+
+function ILTKdEffectsCreate()
+  ! 
+  ! Creates object for modifying Kd values from smectite/illite transition
+  ! 
+  ! Author: Alex Salazar III
+  ! Date: 10/06/2021
+
+  implicit none
+
+  class(ilt_kd_effects_type), pointer :: ILTKdEffectsCreate
+
+  allocate(ILTKdEffectsCreate)
+  
+  ILTKdEffectsCreate%num_elements = UNINITIALIZED_INTEGER
+  nullify(ILTKdEffectsCreate%f_kd)
+  nullify(ILTKdEffectsCreate%element_name)
+  nullify(ILTKdEffectsCreate%next)
+
+end function ILTKdEffectsCreate
 
 ! ************************************************************************** !
 
@@ -594,8 +626,14 @@ subroutine ILTRead(illitization_function,input,option)
   type(input_type), pointer :: input
   type(option_type) :: option
 
+  PetscInt :: i
   character(len=MAXWORDLENGTH) :: keyword
   character(len=MAXSTRINGLENGTH) :: error_string
+  character(len=MAXWORDLENGTH) :: word
+  PetscInt, parameter :: MAX_KD_SIZE = 100
+  type(ilt_kd_effects_type), pointer :: shift_kd_list, prev_shift_kd_list
+  PetscReal :: f_kd(MAX_KD_SIZE)
+  character(len=MAXWORDLENGTH) :: element_name(MAX_KD_SIZE)
 
   input%ierr = 0
   error_string = 'ILLITIZATION_FUNCTION,'
@@ -605,6 +643,8 @@ subroutine ILTRead(illitization_function,input,option)
   class is(ILT_general_type)
     error_string = trim(error_string) // 'GENERAL'
   end select
+  
+  nullify(prev_shift_kd_list)
 
   call InputPushBlock(input,option)
   do
@@ -645,6 +685,56 @@ subroutine ILTRead(illitization_function,input,option)
           call InputReadDouble(input,option,ilf%ilt_shift_perm)
           call InputErrorMsg(input,option,'permeability shift factor', &
                              'ILLITIZATION, DEFAULT')
+        case('SHIFT_KD')
+          ! Factors modifying selected kd values as function of illite fraction
+          shift_kd_list => ILTKdEffectsCreate()
+          i = 0
+          f_kd(:) = UNINITIALIZED_DOUBLE
+          element_name(:) = ''
+          call InputPushBlock(input,option)
+          do
+            call InputReadPflotranString(input,option)
+            if (InputError(input)) exit
+            if (InputCheckExit(input,option)) exit
+            i = i + 1
+            if (i > MAX_KD_SIZE) then
+              write(word,*) i-1
+              option%io_buffer = 'f_kd array in ILLITIZATION must be' &
+                //'allocated larger than ' // trim(adjustl(word)) &
+                //' under SHIFT_KD in' // trim(error_string) // '.'
+              call PrintErrMsg(option)
+            endif
+            call InputReadWord(input,option,word,PETSC_TRUE)
+            call InputErrorMsg(input,option,'f_kd element name', &
+                               error_string)
+            element_name(i) = word
+            call InputReadDouble(input,option,f_kd(i))
+            call InputErrorMsg(input,option,'f_kd',error_string)
+          enddo
+          
+          call InputPopBlock(input,option)
+          
+          if (i == 0) then
+            option%io_buffer = 'No f_kd/element combinations specified &
+              &under SHIFT_KD in ' // trim(error_string) // '.'
+            call PrintErrMsg(option)
+          endif
+          
+          allocate(shift_kd_list%f_kd(i))
+          shift_kd_list%f_kd = f_kd(1:i)
+          allocate(shift_kd_list%element_name(i))
+          shift_kd_list%element_name = element_name(1:i)
+          
+          shift_kd_list%num_elements = i
+          
+          if (associated(prev_shift_kd_list)) then
+            prev_shift_kd_list%next => shift_kd_list
+          else
+            ilf%ilt_shift_kd_list => shift_kd_list
+          endif
+          prev_shift_kd_list => shift_kd_list
+          nullify(shift_kd_list)
+          
         case default
           call ILTBaseRead(ilf,input,keyword,error_string,'default',option)
       end select
