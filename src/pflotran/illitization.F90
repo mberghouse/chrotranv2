@@ -777,6 +777,56 @@ subroutine ILTRead(illitization_function,input,option)
           call InputReadDouble(input,option,ilf%ilt_shift_perm)
           call InputErrorMsg(input,option,'permeability shift factor', &
                              'ILLITIZATION, GENERAL')
+        case('SHIFT_KD')
+        ! Factors modifying selected kd values as function of illite fraction
+        shift_kd_list => ILTKdEffectsCreate()
+        i = 0
+        f_kd(:) = UNINITIALIZED_DOUBLE
+        element_name(:) = ''
+        call InputPushBlock(input,option)
+        do
+          call InputReadPflotranString(input,option)
+          if (InputError(input)) exit
+          if (InputCheckExit(input,option)) exit
+          i = i + 1
+          if (i > MAX_KD_SIZE) then
+            write(word,*) i-1
+            option%io_buffer = 'f_kd array in ILLITIZATION must be' &
+              //'allocated larger than ' // trim(adjustl(word)) &
+              //' under SHIFT_KD in' // trim(error_string) // '.'
+            call PrintErrMsg(option)
+          endif
+          call InputReadWord(input,option,word,PETSC_TRUE)
+          call InputErrorMsg(input,option,'f_kd element name', &
+                             error_string)
+          element_name(i) = word
+          call InputReadDouble(input,option,f_kd(i))
+          call InputErrorMsg(input,option,'f_kd',error_string)
+        enddo
+        
+        call InputPopBlock(input,option)
+        
+        if (i == 0) then
+          option%io_buffer = 'No f_kd/element combinations specified &
+            &under SHIFT_KD in ' // trim(error_string) // '.'
+          call PrintErrMsg(option)
+        endif
+        
+        allocate(shift_kd_list%f_kd(i))
+        shift_kd_list%f_kd = f_kd(1:i)
+        allocate(shift_kd_list%element_name(i))
+        shift_kd_list%element_name = element_name(1:i)
+        
+        shift_kd_list%num_elements = i
+        
+        if (associated(prev_shift_kd_list)) then
+          prev_shift_kd_list%next => shift_kd_list
+        else
+          ilf%ilt_shift_kd_list => shift_kd_list
+        endif
+        prev_shift_kd_list => shift_kd_list
+        nullify(shift_kd_list)
+        
         case default
           call ILTBaseRead(ilf,input,keyword,error_string,'general',option)
       end select
