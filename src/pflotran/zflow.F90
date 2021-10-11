@@ -1300,12 +1300,10 @@ subroutine ZFlowCalculateMatrixDerivatives(realization)
         call FillDADkFlux(dcoef_up,dcoef_dn,num_neighbors_up,ineighbor, &
                           zflow_auxvars(ZERO_INTEGER,ghosted_id_up)%dAdk)
         ! Fill dcdk for up cell
-        dcoef_up =   dcup
-        dcoef_dn = - dcup
+        dcoef_up = - dcup
+        dcoef_dn =   dcup
         call FillDADkFlux(dcoef_up,dcoef_dn,num_neighbors_up,ineighbor, &
                           zflow_auxvars(ZERO_INTEGER,ghosted_id_up)%dcdk)
-        !zflow_auxvars(ZERO_INTEGER,ghosted_id_up)%dcdk = &
-        !                zflow_auxvars(ZERO_INTEGER,ghosted_id_up)%dcdk + dcup
       endif
 
       if (local_id_dn > 0) then
@@ -1330,12 +1328,10 @@ subroutine ZFlowCalculateMatrixDerivatives(realization)
         call FillDADkFlux(dcoef_dn,dcoef_up,num_neighbors_dn,ineighbor, &
                           zflow_auxvars(ZERO_INTEGER,ghosted_id_dn)%dAdk)
         ! Fill dcdk for dn cell
-        dcoef_dn = - dcdn
-        dcoef_up =   dcdn
+        dcoef_dn =   dcdn
+        dcoef_up = - dcdn
         call FillDADkFlux(dcoef_dn,dcoef_up,num_neighbors_dn,ineighbor, &
                           zflow_auxvars(ZERO_INTEGER,ghosted_id_dn)%dcdk)
-        !zflow_auxvars(ZERO_INTEGER,ghosted_id_dn)%dcdk = &
-        !                zflow_auxvars(ZERO_INTEGER,ghosted_id_dn)%dcdk + dcdn
       endif
     enddo
     cur_connection_set => cur_connection_set%next
@@ -1377,8 +1373,6 @@ subroutine ZFlowCalculateMatrixDerivatives(realization)
       ! Fill dcdk for boundary
       call FillDADkFluxBC(dcdn_bc,num_neighbors, &
                           zflow_auxvars(ZERO_INTEGER,ghosted_id)%dcdk)
-      !zflow_auxvars(ZERO_INTEGER,ghosted_id)%dcdk = &
-      !                zflow_auxvars(ZERO_INTEGER,ghosted_id)%dcdk + dcdn_bc
     enddo
     boundary_condition => boundary_condition%next
   enddo

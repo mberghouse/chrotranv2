@@ -663,7 +663,99 @@ subroutine PMZFlowSolveAdjoint(this)
   !                                 field%work_loc,ONEDOF)
   call VecGetArrayF90(field%work,vec_ptr,ierr);CHKERRQ(ierr)
 
+  print*,"====================================================="
+  !print*,'lambda'
+  !print*,vec_ptr
 
+  print*,"Cell Indx for data: ",idata
+  Pobs =  273187.17828522139  !153193.31430148278
+  Pobs = (Pobs)
+  print*,"Observed Pobs: ",Pobs
+  Pcal = zflow_auxvars(idata)%pres
+  Pcal = (Pcal)
+  print*,"Calculated Pcal: ",Pcal,zflow_auxvars(idata)%pres
+  res = (Pobs - Pcal)
+  print*,'Residual: ',res
+  wd = 1.d0 / abs(Pobs)
+  print*,'Wd: ',wd
+  print*,"====================================================="
+
+  !open(unit=557,file='g.txt',status='unknown')
+  open(unit=558,file='j.txt',status='unknown')
+  !open(unit=559,file='h.txt',status='unknown')
+  !open(unit=560,file='p.txt',status='unknown')
+
+  do local_id=1,grid%nlmax
+    jacob_A = 0.d0
+    jacob_c = 0.d0
+    jacob = 0.d0
+
+    num_neighbors = cell_neighbors(0,local_id)
+    allocate(phi_sor(num_neighbors+1), phi_rec(num_neighbors+1))
+    phi_sor = 0.d0
+    phi_rec = 0.d0
+
+    phi_sor(1) = zflow_auxvars(local_id)%pres
+    phi_rec(1) = vec_ptr(local_id)
+
+    jacob_A = phi_sor(1) * zflow_auxvars(local_id)%dAdK(1) * phi_rec(1)
+    jacob_c = vec_ptr(local_id) * zflow_auxvars(local_id)%dcdK(1)
+
+    do inbr = 1,num_neighbors
+      phi_sor(inbr+1) = zflow_auxvars(abs(cell_neighbors(inbr,local_id)))%pres
+
+      phi_rec(inbr+1) = vec_ptr(abs(cell_neighbors(inbr,local_id)))
+
+      jacob_A = jacob_A +                                                   &
+              phi_sor(1)*zflow_auxvars(local_id)%dAdK(1+inbr)*         &
+              phi_rec(inbr+1) +                                         &
+              phi_sor(1+inbr) * (                                       &
+                zflow_auxvars(local_id)%dAdk(1+inbr)*phi_rec(1) -      &
+                zflow_auxvars(local_id)%dAdk(1+inbr)*phi_rec(1+inbr) )
+
+      jacob_c = jacob_c + &
+                vec_ptr(abs(cell_neighbors(inbr,local_id))) * &
+                zflow_auxvars(local_id)%dcdK(1+inbr)
+    enddo
+
+    !print*
+    !print*,"Press: ",zflow_auxvars(local_id)%pres
+    !print*
+    !print*,"- p^T * dAdk * lambda: ", -jacob
+
+    ! jacobian = lambda^T * dc/dk - lambda^T * dA/dk * p -> -ve due to A and c
+    ! -ve signs
+    !jacob = - vec_ptr(local_id) * zflow_auxvars(local_id)%dcdk + jacob
+    jacob = - jacob_c + jacob_A
+
+    !print*,"lambda^T * dc/dk     : ", vec_ptr(local_id) * zflow_auxvars(local_id)%dcdk
+    !print*
+    ! DBG
+    !print*,"dAdK"
+    !print*,zflow_auxvars(local_id)%dAdK
+    !print*,"dcdk"
+    !print*,zflow_auxvars(local_id)%dcdK
+
+    ! jacob
+    if (jacob .gt. 0) then
+      write(558,*) local_id,jacob !log10(jacob)
+    elseif (jacob .lt. 0) then
+      write(558,*) local_id, jacob !-log10(abs(jacob))
+    else
+      write(558,*) local_id,jacob
+    endif
+
+    ! press
+    !write(560,*) local_id, log10(vec_ptr(local_id))
+    !write(560,*) local_id, log10(zflow_auxvars(local_id)%pres)
+
+    deallocate(phi_sor, phi_rec)
+  enddo
+
+  !close(557)
+  close(558)
+  !close(559)
+  !close(560)
 
   call VecRestoreArrayF90(field%work,vec_ptr,ierr);CHKERRQ(ierr)
 
@@ -711,6 +803,10 @@ subroutine PMZFlowBuildJacobian(this)
 
   ! PJ: All calculations for Jacobian building go bellow
   ! For all data at a current time step?
+
+
+
+
 
 
   call MPI_Barrier(option%mycomm,ierr)

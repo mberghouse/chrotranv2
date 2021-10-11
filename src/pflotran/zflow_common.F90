@@ -740,8 +740,8 @@ subroutine ZFlowFluxDerivativeWithPerm(zflow_auxvar_up,material_auxvar_up, &
       dAup = dcoef_dperm_up
       dAdn = dcoef_dperm_dn
       ! dc/dk -> coeffs
-      dcup = - dcoef_dperm_up * gravity_term
-      dcdn = - dcoef_dperm_dn * gravity_term
+      dcup = dcoef_dperm_up * gravity_term
+      dcdn = dcoef_dperm_dn * gravity_term
     endif
 
   endif
@@ -849,7 +849,7 @@ subroutine ZFlowBCFluxDerivativeWithPerm(ibndtype,auxvar_mapping,auxvars, &
       if (dabs(v_darcy(1)) > 0.d0 .or. kr > 0.d0) then
         dAdn_bc = zflow_density_kmol * kr * area * &
                   dperm_avg_dperm_dn_over_dist_visc
-        dcdn_bc = - dAdn_bc * gravity_term + dAdn_bc * boundary_pressure
+        dcdn_bc = dAdn_bc * gravity_term + dAdn_bc * boundary_pressure
       endif
 
     case(NEUMANN_BC)
