@@ -7,6 +7,7 @@ module PM_ZFlow_class
 
   use PFLOTRAN_Constants_module
   use ZFlow_Aux_module
+  use Inversion_Aux_module
 
   implicit none
 
@@ -22,6 +23,7 @@ module PM_ZFlow_class
     PetscReal :: liq_sat_change_ts_governor
     PetscInt :: convergence_flags(MAX_RES_LIQ)
     PetscReal :: convergence_reals(MAX_RES_LIQ)
+    type(inversion_aux_type), pointer :: inversion_aux
   contains
     procedure, public :: ReadSimulationOptionsBlock => &
                            PMZFlowReadSimOptionsBlock
@@ -116,6 +118,8 @@ subroutine PMZFlowInitObject(this)
   this%liq_sat_change_ts_governor = 1.d0
   this%convergence_flags = 0
   this%convergence_reals = 0.d0
+
+  nullify(this%inversion_aux)
 
   array(1) = zflow_density_kg ! dist is the aux array
   call EOSWaterSetDensity('CONSTANT',array)
@@ -1321,6 +1325,7 @@ subroutine PMZFlowDestroy(this)
   endif
 
   call DeallocateArray(this%max_change_ivar)
+  call InversionAuxDestroy(this%inversion_aux)
   call ZFlowDestroy(this%realization)
   call PMSubsurfaceFlowDestroy(this)
 

@@ -337,6 +337,7 @@ inlinesurface_aux.o : global_aux.o option.o utility.o
 input_aux.o : option.o pflotran_constants.o string.o units.o
 integral_flux.o : geometry.o input_aux.o option.o pflotran_constants.o \
                   string.o utility.o
+inversion_aux.o : option.o pflotran_constants.o utility.o
 inversion_base.o : driver.o input_aux.o option.o pflotran_constants.o string.o \
                    timer.o
 inversion_ert.o : dataset.o dataset_base.o discretization.o driver.o ert_aux.o \
@@ -345,12 +346,18 @@ inversion_ert.o : dataset.o dataset_base.o discretization.o driver.o ert_aux.o \
                   material.o material_aux.o option.o patch.o \
                   pflotran_constants.o string.o survey.o timer.o utility.o \
                   variables.o
-inversion_subsurface.o : driver.o input_aux.o inversion_base.o option.o \
+inversion_subsurface.o : discretization.o driver.o input_aux.o \
+                         inversion_base.o material.o option.o \
                          pflotran_constants.o realization_subsurface.o \
-                         simulation_subsurface.o string.o variables.o
+                         simulation_subsurface.o string.o utility.o \
+                         variables.o
 inversion_tao.o : driver.o factory_forward.o input_aux.o inversion_base.o \
                   inversion_subsurface.o option.o pflotran_constants.o \
                   string.o
+inversion_zflow.o : discretization.o driver.o factory_forward.o input_aux.o \
+                    inversion_aux.o inversion_base.o inversion_subsurface.o \
+                    material.o option.o pflotran_constants.o pm_zflow.o \
+                    string.o
 kdtree.o :
 logging.o : pflotran_constants.o
 lookup_table.o : input_aux.o option.o pflotran_constants.o units.o utility.o
@@ -586,14 +593,12 @@ pm_wipp_srcsink.o : data_mediator_vec.o eos_gas.o eos_water.o global_aux.o \
                     output_aux.o patch.o pflotran_constants.o pm_base.o \
                     realization_base.o realization_subsurface.o region.o \
                     string.o utility.o wipp_flow_aux.o
-pm_zflow.o : checkpoint.o convergence.o dataset.o dataset_base.o \
-             dataset_common_hdf5.o debug.o discretization.o eos_water.o \
-             field.o global.o global_aux.o grid.o hdf5.o input_aux.o \
-             material.o material_aux.o option.o patch.o pflotran_constants.o \
-             pm_base.o pm_subsurface_flow.o realization_base.o \
-             realization_subsurface.o region.o saturation_function.o solver.o \
-             string.o timer.o upwind_direction.o utility.o variables.o zflow.o \
-             zflow_aux.o
+pm_zflow.o : checkpoint.o convergence.o debug.o discretization.o eos_water.o \
+             field.o global.o grid.o input_aux.o inversion_aux.o \
+             material_aux.o option.o patch.o pflotran_constants.o pm_base.o \
+             pm_subsurface_flow.o realization_base.o realization_subsurface.o \
+             solver.o string.o timer.o upwind_direction.o utility.o \
+             variables.o zflow.o zflow_aux.o
 pmc_auxiliary.o : option.o pflotran_constants.o pm_auxiliary.o pmc_base.o \
                   realization_subsurface.o timestepper_base.o
 pmc_base.o : checkpoint.o hdf5_aux.o input_aux.o logging.o option.o output.o \
@@ -864,8 +869,8 @@ simulation_geomechanics.o : driver.o geomechanics_realization.o \
                             timestepper_steady.o utility.o waypoint.o
 simulation_inverse.o : communicator_aux.o driver.o input_aux.o \
                        inversion_base.o inversion_ert.o inversion_tao.o \
-                       option.o pflotran_constants.o simulation_base.o \
-                       string.o utility.o
+                       inversion_zflow.o option.o pflotran_constants.o \
+                       simulation_base.o string.o utility.o
 simulation_multirealization.o : communicator_aux.o driver.o factory_forward.o \
                                 input_aux.o option.o pflotran_constants.o \
                                 simulation_base.o simulation_subsurface.o \

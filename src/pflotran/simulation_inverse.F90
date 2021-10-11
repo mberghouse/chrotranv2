@@ -84,6 +84,7 @@ subroutine SimulationInverseRead(this,option)
   use Utility_module
   use Inversion_ERT_class
   use Inversion_Tao_class
+  use Inversion_ZFlow_class
 
   class(simulation_inverse_type) :: this
   type(option_type), pointer :: option
@@ -122,6 +123,8 @@ subroutine SimulationInverseRead(this,option)
             this%inversion => InversionERTCreate(this%driver)
           case('TAO')
             this%inversion => InversionTaoCreate(this%driver)
+          case('ZFLOW')
+            this%inversion => InversionZFlowCreate(this%driver)
           case default
             call InputKeywordUnrecognized(input,word,error_string,option)
         end select
