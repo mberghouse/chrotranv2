@@ -626,14 +626,8 @@ subroutine ILTRead(illitization_function,input,option)
   type(input_type), pointer :: input
   type(option_type) :: option
 
-  PetscInt :: i
   character(len=MAXWORDLENGTH) :: keyword
   character(len=MAXSTRINGLENGTH) :: error_string
-  character(len=MAXWORDLENGTH) :: word
-  PetscInt, parameter :: MAX_KD_SIZE = 100
-  type(ilt_kd_effects_type), pointer :: shift_kd_list, prev_shift_kd_list
-  PetscReal :: f_kd(MAX_KD_SIZE)
-  character(len=MAXWORDLENGTH) :: element_name(MAX_KD_SIZE)
 
   input%ierr = 0
   error_string = 'ILLITIZATION_FUNCTION,'
@@ -644,8 +638,6 @@ subroutine ILTRead(illitization_function,input,option)
     error_string = trim(error_string) // 'GENERAL'
   end select
   
-  nullify(prev_shift_kd_list)
-
   call InputPushBlock(input,option)
   do
     call InputReadPflotranString(input,option)
@@ -659,109 +651,12 @@ subroutine ILTRead(illitization_function,input,option)
     !------------------------------------------
     class is(ILT_default_type)
       select case(trim(keyword))
-        case('EA')
-          ! Activation energy in Arrhenius term
-          call InputReadDouble(input,option,ilf%ilt_ea)
-          call InputErrorMsg(input,option,'activation energy', &
-                             'ILLITIZATION, DEFAULT')
-          call InputReadAndConvertUnits(input,ilf%ilt_ea, &
-                      'J/mol','ILLITIZATION, DEFAULT, activation energy',option)
-        case('FREQ')
-          ! Frequency factor (scaling constant of Arrhenius term)
-          call InputReadDouble(input,option,ilf%ilt_freq)
-          call InputErrorMsg(input,option,'frequency term', &
-                             'ILLITIZATION, DEFAULT')
-          call InputReadAndConvertUnits(input,ilf%ilt_freq, &
-                       'L/s-mol','ILLITIZATION, DEFAULT, frequency term',option)
-        case('K_CONC')
-          ! Concentration of potassium cation
-          call InputReadDouble(input,option,ilf%ilt_K_conc)
-          call InputErrorMsg(input,option,'potassium concentration', &
-                             'ILLITIZATION, DEFAULT')
-          call InputReadAndConvertUnits(input,ilf%ilt_K_conc,&
-                    'M','ILLITIZATION, DEFAULT, potassium concentration',option)
-        case('SHIFT_PERM')
-          ! Factor modifying permeability per fraction illitized
-          call InputReadDouble(input,option,ilf%ilt_shift_perm)
-          call InputErrorMsg(input,option,'permeability shift factor', &
-                             'ILLITIZATION, DEFAULT')
-        case('SHIFT_KD')
-          ! Factors modifying selected kd values as function of illite fraction
-          shift_kd_list => ILTKdEffectsCreate()
-          i = 0
-          f_kd(:) = UNINITIALIZED_DOUBLE
-          element_name(:) = ''
-          call InputPushBlock(input,option)
-          do
-            call InputReadPflotranString(input,option)
-            if (InputError(input)) exit
-            if (InputCheckExit(input,option)) exit
-            i = i + 1
-            if (i > MAX_KD_SIZE) then
-              write(word,*) i-1
-              option%io_buffer = 'f_kd array in ILLITIZATION must be' &
-                //'allocated larger than ' // trim(adjustl(word)) &
-                //' under SHIFT_KD in' // trim(error_string) // '.'
-              call PrintErrMsg(option)
-            endif
-            call InputReadWord(input,option,word,PETSC_TRUE)
-            call InputErrorMsg(input,option,'f_kd element name', &
-                               error_string)
-            element_name(i) = word
-            call InputReadDouble(input,option,f_kd(i))
-            call InputErrorMsg(input,option,'f_kd',error_string)
-          enddo
-          
-          call InputPopBlock(input,option)
-          
-          if (i == 0) then
-            option%io_buffer = 'No f_kd/element combinations specified &
-              &under SHIFT_KD in ' // trim(error_string) // '.'
-            call PrintErrMsg(option)
-          endif
-          
-          allocate(shift_kd_list%f_kd(i))
-          shift_kd_list%f_kd = f_kd(1:i)
-          allocate(shift_kd_list%element_name(i))
-          shift_kd_list%element_name = element_name(1:i)
-          
-          shift_kd_list%num_elements = i
-          
-          if (associated(prev_shift_kd_list)) then
-            prev_shift_kd_list%next => shift_kd_list
-          else
-            ilf%ilt_shift_kd_list => shift_kd_list
-          endif
-          prev_shift_kd_list => shift_kd_list
-          nullify(shift_kd_list)
-          
         case default
-          call ILTBaseRead(ilf,input,keyword,error_string,'default',option)
+          call ILTDefaultRead(ilf,input,keyword,error_string,'DEFAULT',option)
       end select
     !------------------------------------------
     class is(ILT_general_type)
       select case(trim(keyword))
-        case('EA')
-          ! Activation energy in Arrhenius term
-          call InputReadDouble(input,option,ilf%ilt_ea)
-          call InputErrorMsg(input,option,'activation energy', &
-                             'ILLITIZATION, GENERAL')
-          call InputReadAndConvertUnits(input,ilf%ilt_ea, &
-                 'J/mol','ILLITIZATION, GENERAL, activation energy',option)
-        case('FREQ')
-          ! Frequency factor (scaling constant of Arrhenius term)
-          call InputReadDouble(input,option,ilf%ilt_freq)
-          call InputErrorMsg(input,option,'frequency term', &
-                             'ILLITIZATION, GENERAL')
-          call InputReadAndConvertUnits(input,ilf%ilt_freq, &
-                 'L/s-mol','ILLITIZATION, GENERAL, frequency term',option)
-        case('K_CONC')
-          ! Concentration of potassium cation
-          call InputReadDouble(input,option,ilf%ilt_K_conc)
-          call InputErrorMsg(input,option,'potassium concentration', &
-                             'ILLITIZATION, GENERAL')
-          call InputReadAndConvertUnits(input,ilf%ilt_K_conc,&
-                 'M','ILLITIZATION, GENERAL, potassium concentration',option)
         case('K_EXP')
           ! Exponent of potassium cation concentration
           call InputReadDouble(input,option,ilf%ilt_K_exp)
@@ -772,63 +667,8 @@ subroutine ILTRead(illitization_function,input,option)
           call InputReadDouble(input,option,ilf%ilt_exp)
           call InputErrorMsg(input,option,'smectite exponent', &
                              'ILLITIZATION, GENERAL')
-        case('SHIFT_PERM')
-          ! Factor modifying permeability per fraction illitized
-          call InputReadDouble(input,option,ilf%ilt_shift_perm)
-          call InputErrorMsg(input,option,'permeability shift factor', &
-                             'ILLITIZATION, GENERAL')
-        case('SHIFT_KD')
-        ! Factors modifying selected kd values as function of illite fraction
-        shift_kd_list => ILTKdEffectsCreate()
-        i = 0
-        f_kd(:) = UNINITIALIZED_DOUBLE
-        element_name(:) = ''
-        call InputPushBlock(input,option)
-        do
-          call InputReadPflotranString(input,option)
-          if (InputError(input)) exit
-          if (InputCheckExit(input,option)) exit
-          i = i + 1
-          if (i > MAX_KD_SIZE) then
-            write(word,*) i-1
-            option%io_buffer = 'f_kd array in ILLITIZATION must be' &
-              //'allocated larger than ' // trim(adjustl(word)) &
-              //' under SHIFT_KD in' // trim(error_string) // '.'
-            call PrintErrMsg(option)
-          endif
-          call InputReadWord(input,option,word,PETSC_TRUE)
-          call InputErrorMsg(input,option,'f_kd element name', &
-                             error_string)
-          element_name(i) = word
-          call InputReadDouble(input,option,f_kd(i))
-          call InputErrorMsg(input,option,'f_kd',error_string)
-        enddo
-        
-        call InputPopBlock(input,option)
-        
-        if (i == 0) then
-          option%io_buffer = 'No f_kd/element combinations specified &
-            &under SHIFT_KD in ' // trim(error_string) // '.'
-          call PrintErrMsg(option)
-        endif
-        
-        allocate(shift_kd_list%f_kd(i))
-        shift_kd_list%f_kd = f_kd(1:i)
-        allocate(shift_kd_list%element_name(i))
-        shift_kd_list%element_name = element_name(1:i)
-        
-        shift_kd_list%num_elements = i
-        
-        if (associated(prev_shift_kd_list)) then
-          prev_shift_kd_list%next => shift_kd_list
-        else
-          ilf%ilt_shift_kd_list => shift_kd_list
-        endif
-        prev_shift_kd_list => shift_kd_list
-        nullify(shift_kd_list)
-        
         case default
-          call ILTBaseRead(ilf,input,keyword,error_string,'general',option)
+          call ILTDefaultRead(ilf,input,keyword,error_string,'GENERAL',option)
       end select
     !------------------------------------------
     class default
@@ -853,7 +693,7 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
   use String_module
 
   class(illitization_base_type) :: ilf
-  type(input_type) :: input
+  type(input_type), pointer :: input
   character(len=MAXWORDLENGTH)   :: keyword
   character(len=MAXSTRINGLENGTH) :: error_string
   character(len=*)  :: kind
@@ -864,18 +704,134 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
       ! Initial fraction of smectite in the smectite/illite mixture
       call InputReadDouble(input,option,ilf%ilt_fs0)
       call InputErrorMsg(input,option,'initial smectite fraction', &
-                         'ILLITIZATION, BASE')
+                         'ILLITIZATION, '//trim(kind)//'')
     case('THRESHOLD_TEMPERATURE')
       ! Specifies the temperature threshold for activating illitization
       call InputReadDouble(input,option, &
                            ilf%ilt_threshold)
       call InputErrorMsg(input,option,'temperature threshold', &
-                         'ILLITIZATION, BASE')
-      call InputReadAndConvertUnits(input,ilf%ilt_threshold, &
-                  'C','ILLITIZATION, BASE, temperature threshold',option)
+                         'ILLITIZATION, '//trim(kind)//'')
+      call InputReadAndConvertUnits(input,ilf%ilt_threshold,'C', &
+                                    'ILLITIZATION, '//trim(kind)// &
+                                    ', temperature threshold',option)
     case default
        call InputKeywordUnrecognized(input,keyword, &
             'illitization function ('//trim(kind)//')',option)
+  end select
+
+end subroutine
+
+! ************************************************************************** !
+
+subroutine ILTDefaultRead(ilf,input,keyword,error_string,kind,option)
+  !
+  ! Reads in contents of ILLITIZATION_FUNCTION block for derived
+  ! types of illitization default class
+  !
+  use Option_module
+  use Input_Aux_module
+  use String_module
+
+  class(ILT_default_type) :: ilf
+  type(input_type), pointer :: input
+  character(len=MAXWORDLENGTH)   :: keyword
+  character(len=MAXSTRINGLENGTH) :: error_string
+  character(len=*)  :: kind
+  type(option_type) :: option
+  
+  PetscInt :: i
+  PetscInt, parameter :: MAX_KD_SIZE = 100
+  character(len=MAXWORDLENGTH) :: word
+  type(ilt_kd_effects_type), pointer :: shift_kd_list, prev_shift_kd_list
+  PetscReal :: f_kd(MAX_KD_SIZE)
+  character(len=MAXWORDLENGTH) :: element_name(MAX_KD_SIZE)
+
+  nullify(prev_shift_kd_list)
+  
+  select case(keyword)
+    case('EA')
+      ! Activation energy in Arrhenius term
+      call InputReadDouble(input,option,ilf%ilt_ea)
+      call InputErrorMsg(input,option,'activation energy', &
+                         'ILLITIZATION, '//trim(kind)//'')
+      call InputReadAndConvertUnits(input,ilf%ilt_ea, &
+                                    'J/mol','ILLITIZATION, '//trim(kind)// &
+                                    ', activation energy',option)
+    case('FREQ')
+      ! Frequency factor (scaling constant of Arrhenius term)
+      call InputReadDouble(input,option,ilf%ilt_freq)
+      call InputErrorMsg(input,option,'frequency term', &
+                         'ILLITIZATION, '//trim(kind)//'')
+      call InputReadAndConvertUnits(input,ilf%ilt_freq, &
+                                    'L/s-mol','ILLITIZATION, '//trim(kind)// &
+                                    ', frequency term',option)
+    case('K_CONC')
+      ! Concentration of potassium cation
+      call InputReadDouble(input,option,ilf%ilt_K_conc)
+      call InputErrorMsg(input,option,'potassium concentration', &
+                         'ILLITIZATION, '//trim(kind)//'')
+      call InputReadAndConvertUnits(input,ilf%ilt_K_conc,'M',&
+                                    'ILLITIZATION, ' //trim(kind)// &
+                                    ', potassium concentration',option)
+    case('SHIFT_PERM')
+      ! Factor modifying permeability per fraction illitized
+      call InputReadDouble(input,option,ilf%ilt_shift_perm)
+      call InputErrorMsg(input,option,'permeability shift factor', &
+                         'ILLITIZATION, '//trim(kind)//'')
+    case('SHIFT_KD')
+      ! Factors modifying selected kd values as function of illite fraction
+      shift_kd_list => ILTKdEffectsCreate()
+      i = 0
+      f_kd(:) = UNINITIALIZED_DOUBLE
+      element_name(:) = ''
+      
+      call InputPushBlock(input,option)
+      
+      do
+        call InputReadPflotranString(input,option)
+        if (InputError(input)) exit
+        if (InputCheckExit(input,option)) exit
+        i = i + 1
+        if (i > MAX_KD_SIZE) then
+          write(word,*) i-1
+          option%io_buffer = 'f_kd array in ILLITIZATION must be' &
+            //'allocated larger than ' // trim(adjustl(word)) &
+            //' under SHIFT_KD in' // trim(error_string) // '.'
+          call PrintErrMsg(option)
+        endif
+        call InputReadWord(input,option,word,PETSC_TRUE)
+        call InputErrorMsg(input,option,'f_kd element name', &
+                           error_string)
+        element_name(i) = word
+        call InputReadDouble(input,option,f_kd(i))
+        call InputErrorMsg(input,option,'f_kd',error_string)
+      enddo
+      
+      call InputPopBlock(input,option)
+      
+      if (i == 0) then
+        option%io_buffer = 'No f_kd/element combinations specified &
+          &under SHIFT_KD in ' // trim(error_string) // '.'
+        call PrintErrMsg(option)
+      endif
+      
+      allocate(shift_kd_list%f_kd(i))
+      shift_kd_list%f_kd = f_kd(1:i)
+      allocate(shift_kd_list%element_name(i))
+      shift_kd_list%element_name = element_name(1:i)
+      shift_kd_list%num_elements = i
+      
+      if (associated(prev_shift_kd_list)) then
+        prev_shift_kd_list%next => shift_kd_list
+      else
+        ilf%ilt_shift_kd_list => shift_kd_list
+      endif
+      
+      prev_shift_kd_list => shift_kd_list
+      nullify(shift_kd_list)
+      
+    case default
+      call ILTBaseRead(ilf,input,keyword,error_string,kind,option)
   end select
 
 end subroutine
