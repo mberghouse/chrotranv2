@@ -806,7 +806,7 @@ subroutine PMZFlowBuildJsensitivity(this)
   type(zflow_auxvar_type), pointer :: zflow_auxvars(:)
   class(timer_type), pointer ::timer
 
-  PetscInt :: idata
+  PetscInt :: idata, num_measurement
   PetscInt :: local_id
   PetscInt :: inbr, num_neighbors
   PetscInt, pointer :: cell_neighbors(:,:)
@@ -849,7 +849,10 @@ subroutine PMZFlowBuildJsensitivity(this)
   ! Get dAdK and dcdk
   call ZFlowCalculateMatrixDerivatives(realization)
 
-  do idata=1,1
+  open(unit=558,file='Jsensitivity_zflow.out',status='unknown')
+
+  num_measurement = size(this%inversion_aux%imeasurement)
+  do idata=1,num_measurement
 
     ! initialize lambda and rhs
     call VecZeroEntries(lambda,ierr);CHKERRQ(ierr)
@@ -857,7 +860,7 @@ subroutine PMZFlowBuildJsensitivity(this)
 
     ! Assign RHS values -> unit source at observation (TEMP)
     call VecGetArrayF90(rhs,rhs_ptr,ierr);CHKERRQ(ierr)
-    rhs_ptr(idata) = 1.d0
+    rhs_ptr(this%inversion_aux%imeasurement(idata)) = 1.d0
     call VecRestoreArrayF90(rhs,rhs_ptr,ierr);CHKERRQ(ierr)
 
     ! Solve Adjoint System
@@ -905,6 +908,8 @@ subroutine PMZFlowBuildJsensitivity(this)
       ! having -ve signs
       jacob = - jacob_c + jacob_A
 
+      write(558,*) local_id,jacob
+
       call MatSetValue(this%inversion_aux%Jsensitivity,idata-1,local_id-1, &
                        jacob,INSERT_VALUES,ierr);CHKERRQ(ierr)
 
@@ -914,6 +919,8 @@ subroutine PMZFlowBuildJsensitivity(this)
     call VecRestoreArrayF90(lambda,lambda_ptr,ierr);CHKERRQ(ierr)
   enddo ! idata
 
+  close(558)
+
   call VecDestroy(lambda,ierr);CHKERRQ(ierr)
   call VecDestroy(rhs,ierr);CHKERRQ(ierr)
   call MatAssemblyBegin(this%inversion_aux%Jsensitivity, &
@@ -921,8 +928,9 @@ subroutine PMZFlowBuildJsensitivity(this)
   call MatAssemblyEnd(this%inversion_aux%Jsensitivity, &
                       MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
 
-  print *, 'Jsensitivity Matrix'
-  call MatView(this%inversion_aux%Jsensitivity,PETSC_VIEWER_STDOUT_WORLD,ierr);CHKERRQ(ierr)
+  !print *, 'Jsensitivity Matrix'
+  !call MatView(this%inversion_aux%Jsensitivity,PETSC_VIEWER_STDOUT_WORLD, &
+  !             ierr);CHKERRQ(ierr)
 
   call MPI_Barrier(option%mycomm,ierr)
   call timer%Stop()
