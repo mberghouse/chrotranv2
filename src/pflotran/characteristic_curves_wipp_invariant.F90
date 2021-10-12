@@ -110,6 +110,7 @@ public  :: SFWIPPctor
 
 ! Implemented WIPP KPC procedures
 private :: SFWIPPKPC1Pc , &
+           SFWIPPKPC1Sw , &
            SFWIPPKPC1Swj, &
            SFWIPPKPC2Pc , &
            SFWIPPKPC2Sw , &
@@ -217,7 +218,7 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, expon, Pct_ignore, Pct_alpha, &
   select case(KPC)
   case (1) ! 0 at or below residual
     new%KPCPc  => SFWIPPKPC1Pc 
-    new%KPCSw  => new%KRPSW    ! KPC1 has no impact on Pc inverse
+    new%KPCSw  => SFWIPPKPC1Sw
     new%setSwj => SFWIPPKPC1Swj
   case (2) ! Pcmax at or below residual
     new%KPCPc  => SFWIPPKPC2Pc
@@ -310,13 +311,20 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, expon, Pct_ignore, Pct_alpha, &
     new%pct     = 1E6       ! Initialize to 1 MPa to permit test function. 
   end if
 
-  ! Initialize unsaturated extension
+  ! Initialize unsaturated extensions 
   error = new%setSwj(Swj)
+  ! Abort if error in unsaturated extension (e.g. Swj < Swr)
+  if (error /= 0) then
+    ! Potentally write which parameters were invalid to error stream
+    deallocate(new)
+    nullify(new)
+    return
+  end if
 
 end function
 
 ! **************************************************************************** !
-! WIPP Saturation Function Wrappers
+! WIPP Saturation Function Roots
 ! **************************************************************************** !
 
 subroutine SFWIPPCapillaryPressure(this, liquid_saturation, capillary_pressure,&
@@ -326,9 +334,11 @@ subroutine SFWIPPCapillaryPressure(this, liquid_saturation, capillary_pressure,&
   PetscReal, intent(out)           :: capillary_pressure, dpc_dsatl
   type(option_type), intent(inout) :: option
 
-  ! Calls the function pointer KPCPc
-  ! KPCPc in turn calls KRPPc as needed
-  call this%KPCPc(liquid_saturation, capillary_pressure, dpc_dsatl)
+  if (liquid_saturation <= this%Swj) then
+    call this%KPCPc(liquid_saturation, capillary_pressure, dpc_dsatl)
+  else
+    call this%KRPPc(liquid_saturation, capillary_pressure, dpc_dsatl)
+  end if
 end subroutine
 
 ! **************************************************************************** !
@@ -340,10 +350,12 @@ subroutine SFWIPPSaturation(this, capillary_pressure, liquid_saturation, &
   PetscReal, intent(out)           :: liquid_saturation, dsat_dpres
   type(option_type), intent(inout) :: option
 
-  ! Calls the function pointer KPCSw
-  ! KPCSw in turn calls KRPSw as needed
-  call this%KPCSw(capillary_pressure, liquid_saturation)
-  dsat_dpres = 0d0 ! analytic derivatives not avaialble for Richard's mode
+  if (capillary_pressure >= this%Pcj) then
+    call this%KPCSw(capillary_pressure, liquid_saturation)
+  else
+    call this%KRPSw(capillary_pressure, liquid_saturation)
+  end if
+  dsat_dpres = 0d0 ! analytic derivatives not yet available for Richard's mode
 end subroutine
 
 ! **************************************************************************** !
@@ -374,14 +386,17 @@ subroutine SFWIPPIgnorePct(this, permeability)
 end subroutine
 
 ! **************************************************************************** !
-! BRAGFLO KPC Subroutines
+! WIPP KPC Subroutines
 ! **************************************************************************** !
 
 function SFWIPPKPC1Swj(this,Swj) result (error)
   class (sf_WIPP_type), intent(inout) :: this
   PetscReal, intent(in) :: Swj
   PetscInt :: error
-  ! Return success code 0 as no error can occur for KPC 1
+
+  ! Ignore input, set Swj to Swr
+  this%Swj = this%Swr
+  this%Pcj = huge(this%Pcj)
   error = 0
 end function
 
@@ -392,12 +407,18 @@ pure subroutine SFWIPPKPC1Pc(this, Sw, Pc, dPc_dSw)
   PetscReal, intent(in)  :: Sw
   PetscReal, intent(out) :: Pc, dPc_dSw
 
-  if (Sw <= this%Swr) then ! Apply 0 below Swr
-    Pc = 0d0
-    dPc_dSw = 0d0
-  else
-    call this%KRPPc(Sw, Pc, dPc_dSw)
-  end if
+  Pc = 0d0
+  dPc_dSw = 0d0
+end subroutine
+
+! **************************************************************************** !
+
+pure subroutine SFWIPPKPC1Sw(this, Pc, Sw)
+ class(sf_WIPP_type), intent(in) :: this
+  PetscReal, intent(in)  :: Pc
+  PetscReal, intent(out) :: Sw
+
+  Sw = this%Swr
 end subroutine
 
 ! **************************************************************************** !
@@ -407,9 +428,10 @@ function SFWIPPKPC2Swj(this,Swj) result (error)
   PetscReal, intent(in) :: Swj
   PetscInt :: error
 
-  ! Ignore input, calculate new Swj based on Pcmax
+  ! Ignore input, calculate Swj based on Pcmax
   call this%KRPSw(this%Pcmax, this%Swj)
-  call this%KRPPc(this%Swj, this%Pcj, this%dPcj_dSwj)
+  this%Pcj = this%Pcmax
+
   error = 0
 end function
 
@@ -420,12 +442,8 @@ pure subroutine SFWIPPKPC2Pc(this, Sw, Pc, dPc_dSw)
   PetscReal, intent(in)  :: Sw
   PetscReal, intent(out) :: Pc, dPc_dSw
 
-  if (Sw <= this%Swj) then ! Apply Pcmax below Swj
-    Pc = this%Pcmax
-    dPc_dSw = 0d0
-  else
-    call this%KRPPc(Sw, Pc, dPc_dSw)
-  end if
+  Pc = this%Pcmax
+  dPc_dSw = 0d0
 end subroutine
 
 ! **************************************************************************** !
@@ -435,11 +453,7 @@ pure subroutine SFWIPPKPC2Sw(this, Pc, Sw)
   PetscReal, intent(in)  :: Pc
   PetscReal, intent(out) :: Sw
 
-  if (Pc >= this%Pcmax) then ! Apply Swr above Pcmax
-    Sw = this%Swj
-  else
-    call this%KRPSw(Pc, Sw)
-  end if
+  Sw = this%Swj
 end subroutine
 
 ! **************************************************************************** !
@@ -466,16 +480,12 @@ pure subroutine SFWIPPKPC6Pc(this, Sw, Pc, dPc_dSw)
   PetscReal, intent(in)  :: Sw
   PetscReal, intent(out) :: Pc, dPc_dSw
 
-  if (Sw <= this%Swj) then                            ! Linear region
-    dPc_dSw = this%dPcj_dSwj
-    if (Sw > 0d0) then                                  ! Linear interpolation
-      Pc = this%Pcmax + this%dPcj_dSwj*Sw
-    else                                                ! y-intercept
-      Pc = this%Pcmax
-    end if
-  else                                                ! Ordinary region
-    call this%KRPPc(Sw, Pc, dPc_dSw)
+  if (Sw > 0d0) then                                  ! Linear interpolation
+    Pc = this%Pcmax + this%dPcj_dSwj*Sw
+  else                                                ! y-intercept
+    Pc = this%Pcmax
   end if
+  dPc_dSw = this%dPcj_dSwj
 end subroutine
 
 ! **************************************************************************** !
@@ -485,14 +495,10 @@ pure subroutine SFWIPPKPC6Sw(this, Pc, Sw)
   PetscReal, intent(in)  :: Pc
   PetscReal, intent(out) :: Sw
 
-  if (Pc >= this%Pcj) then                            ! Linear region
-    if (Pc < this%Pcmax) then                           ! Linear interpolation
-      Sw = (this%Pcmax - Pc) / this%dPcj_dSwj
-    else                                                ! y-intercept
-      Sw = 0d0
-    end if
-  else                                                ! Ordinary region
-    call this%KRPSw(Pc, Sw)
+  if (Pc < this%Pcmax) then                           ! Linear interpolation
+    Sw = (Pc - this%Pcmax) / this%dPcj_dSwj
+  else                                                ! y-intercept
+    Sw = 0d0
   end if
 end subroutine
 
