@@ -845,7 +845,7 @@ end subroutine ILTRead
 
 subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
   !
-  ! Reads in contents of ILLITIZATION_FUNCTION block for dervived
+  ! Reads in contents of ILLITIZATION_FUNCTION block for derived
   ! types of illitization base class
   !
   use Option_module
@@ -864,15 +864,15 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
       ! Initial fraction of smectite in the smectite/illite mixture
       call InputReadDouble(input,option,ilf%ilt_fs0)
       call InputErrorMsg(input,option,'initial smectite fraction', &
-                         'ILLITIZATION, DEFAULT')
+                         'ILLITIZATION, BASE')
     case('THRESHOLD_TEMPERATURE')
       ! Specifies the temperature threshold for activating illitization
       call InputReadDouble(input,option, &
                            ilf%ilt_threshold)
       call InputErrorMsg(input,option,'temperature threshold', &
-                         'ILLITIZATION, DEFAULT')
+                         'ILLITIZATION, BASE')
       call InputReadAndConvertUnits(input,ilf%ilt_threshold, &
-                  'C','ILLITIZATION, DEFAULT, temperature threshold',option)
+                  'C','ILLITIZATION, BASE, temperature threshold',option)
     case default
        call InputKeywordUnrecognized(input,keyword, &
             'illitization function ('//trim(kind)//')',option)

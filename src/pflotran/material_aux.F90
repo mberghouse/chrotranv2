@@ -84,6 +84,8 @@ module Material_Aux_class
     PetscReal :: ilt_tst   ! track time of last change in smectite (test)
     PetscBool :: set_perm0 ! save initial permeability
     PetscReal, allocatable :: perm0(:) ! intiial permeability
+  contains
+    procedure, public :: ShiftPerm => MaterialShiftPermeability
   end type ilt_auxvar_type
 
   type, public :: fracture_auxvar_type
@@ -133,8 +135,7 @@ module Material_Aux_class
             MaterialCompressSoilPoroExp, &
             MaterialCompressSoilLeijnse, &
             MaterialCompressSoilLinear, &
-            MaterialCompressSoilQuadratic, &
-            MaterialIllitizePermeability
+            MaterialCompressSoilQuadratic
 
   public :: MaterialAuxCreate, &
             MaterialIlliteAuxCreate, &
@@ -986,7 +987,7 @@ end subroutine MaterialCompressSoilQuadratic
 
 ! ************************************************************************** !
 
-subroutine MaterialIllitizePermeability(auxvar,shift,option)
+subroutine MaterialShiftPermeability(this,auxvar,shift,option)
   !
   ! Modifies permeability based on shift from illitization model.
   !
@@ -998,6 +999,7 @@ subroutine MaterialIllitizePermeability(auxvar,shift,option)
 
   implicit none
 
+  class(ilt_auxvar_type) :: this
   class(material_auxvar_type), intent(inout) :: auxvar
   PetscReal, intent(in) :: shift
   class(option_type), intent(inout) :: option
@@ -1009,21 +1011,21 @@ subroutine MaterialIllitizePermeability(auxvar,shift,option)
   
   if (.not. associated(auxvar%iltf)) return
   
-  if (.not. auxvar%iltf%set_perm0) then
-    allocate(auxvar%iltf%perm0(ps))
-    auxvar%iltf%perm0 = UNINITIALIZED_DOUBLE
+  if (.not. this%set_perm0) then
+    allocate(this%perm0(ps))
+    this%perm0 = UNINITIALIZED_DOUBLE
     do i = 1, ps
-      auxvar%iltf%perm0(i) = auxvar%permeability(i)
+      this%perm0(i) = auxvar%permeability(i)
     enddo
-    auxvar%iltf%set_perm0 = PETSC_TRUE
+    this%set_perm0 = PETSC_TRUE
   endif
 
   do i = 1, ps
-    ki = auxvar%iltf%perm0(i) * (1.0d0 + shift)
+    ki = this%perm0(i) * (1.0d0 + shift)
     auxvar%permeability(i) = ki
   enddo
 
-end subroutine MaterialIllitizePermeability
+end subroutine MaterialShiftPermeability
 
 ! ************************************************************************** !
 

@@ -969,7 +969,7 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
                               material_auxvar%iltf%ilt_fit, &
                               shift_perm, &
                               option)
-          call MaterialIllitizePermeability(material_auxvar,shift_perm,option)
+          call material_auxvar%iltf%ShiftPerm(material_auxvar,shift_perm,option)
           material_auxvar%iltf%ilt_tst = option%time
         endif
       endif
