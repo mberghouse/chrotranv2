@@ -282,92 +282,51 @@ subroutine SFBaseTest(this,cc_name,option)
   type(option_type), intent(inout) :: option
   
   character(len=MAXSTRINGLENGTH) :: string
-  PetscInt, parameter :: num_values = 101
-  PetscReal :: pc, pc_increment
-  PetscReal :: capillary_pressure(num_values)
-  PetscReal :: liquid_saturation(num_values)
-  PetscReal :: dpc_dsatl(num_values)
-  PetscReal :: dpc_dsatl_numerical(num_values)
-  PetscReal :: dsat_dpres(num_values)
-  PetscReal :: dsat_dpres_numerical(num_values)
-  PetscReal :: capillary_pressure_pert
-  PetscReal :: liquid_saturation_pert
-  PetscReal :: perturbation
-  PetscReal :: pert
-  PetscReal :: dummy_real
-  PetscInt :: count, i
-  PetscBool :: ignore_permeability
- 
-  ! calculate saturation as a function of capillary pressure
-  ! start at 1 Pa up to maximum capillary pressure
-  pc = 1.d0
-  pc_increment = 1.d0
-  perturbation = 1.d-6
-  count = 0
+  PetscInt, parameter :: num_values = 1001
+  PetscReal :: pc, sl, increment, derivative
+  PetscReal :: npc, nsl, differential
+  PetscInt :: i
 
-  do
-    if (pc > this%pcmax) exit
-    count = count + 1
-    option%flow%pct_updated = .TRUE.
-    call this%Saturation(pc,liquid_saturation(count),dsat_dpres(count),option)
-    capillary_pressure(count) = pc
-    ! calculate numerical derivative dsat_dpres_numerical
-    capillary_pressure_pert = pc + pc*perturbation
-    option%flow%pct_updated = .TRUE.
-    call this%Saturation(capillary_pressure_pert,liquid_saturation_pert, &
-                         dummy_real,option)
-    dsat_dpres_numerical(count) = (liquid_saturation_pert - &
-         & liquid_saturation(count))/(pc*perturbation)*(-1.d0) ! dPc/dPres
-    ! get next value for pc
-    if (pc > 0.99d0*pc_increment*10.d0) pc_increment = pc_increment*10.d0
-    pc = pc + pc_increment
-  enddo
-
+  ! Saturation vs Capillary Pressure 
   write(string,*) cc_name
   string = trim(cc_name) // '_sat_from_pc.dat'
   open(unit=86,file=string)
   write(86,*) '"capillary pressure", "saturation", "dsat/dpres", &
               &"dsat/dpres_numerical"'
-  do i = 1, count
-    write(86,'(4es14.6)') capillary_pressure(i), liquid_saturation(i), &
-                          dsat_dpres(i), dsat_dpres_numerical(i)
-  enddo
+
+  pc = 1d0
+  increment = exp(log(this%Pcmax / pc) / (num_values - 1))
+
+  do i = 1, num_values
+    call this%Saturation(pc, sl, derivative, option)
+    npc = pc + 1d-6
+    call this%Saturation(npc , nsl, differential, option)
+    differential = (nsl - sl) / 1d-6
+    write(86,'(4es14.6)') pc, sl, derivative, differential
+    pc = pc * increment
+  end do
+
   close(86)
 
- ! calculate capillary pressure as a function of saturation
-  do i = 1, num_values
-    liquid_saturation(i) = dble(i-1)*0.01d0
-    if (liquid_saturation(i) < 1.d-7) then
-      liquid_saturation(i) = 1.d-7
-    else if (liquid_saturation(i) > (1.d0-1.d-7)) then
-      liquid_saturation(i) = 1.d0-1.d-7
-    endif
-    option%flow%pct_updated = .TRUE.
-    call this%CapillaryPressure(liquid_saturation(i), &
-                                capillary_pressure(i),dpc_dsatl(i),option)
-    ! calculate numerical derivative dpc_dsatl_numerical
-    pert = liquid_saturation(i) * perturbation
-    if (liquid_saturation(i) > 0.5d0) then
-      pert = -1.d0 * pert
-    endif
-    liquid_saturation_pert = liquid_saturation(i) + pert
-    option%flow%pct_updated = .TRUE.
-    call this%CapillaryPressure(liquid_saturation_pert, &
-                                capillary_pressure_pert,dummy_real,option)
-    dpc_dsatl_numerical(i) = (capillary_pressure_pert - &
-         & capillary_pressure(i))/pert 
-  enddo
-  count = num_values
-
+  ! Capillary pressure vs saturation
   write(string,*) cc_name
   string = trim(cc_name) // '_pc_from_sat.dat'
   open(unit=86,file=string)
   write(86,*) '"saturation", "capillary pressure", "dpc/dsat", &
               &dpc_dsat_numerical"'
-  do i = 1, count
-    write(86,'(4es14.6)') liquid_saturation(i), capillary_pressure(i), &
-                          dpc_dsatl(i), dpc_dsatl_numerical(i)
-  enddo
+
+  sl = 0d0
+  increment = 1d0 / (num_values - 1)
+
+  do i = 1, num_values
+    call this%CapillaryPressure(sl, pc, derivative, option)
+    nsl = sl + 1d-6
+    call this%CapillaryPressure(nsl, npc, differential, option)
+    differential = (npc - pc) / 1d-6
+
+    write(86,'(4es14.6)') sl, pc, derivative, differential
+    sl = sl + increment
+  end do
   close(86)
 
 end subroutine SFBaseTest

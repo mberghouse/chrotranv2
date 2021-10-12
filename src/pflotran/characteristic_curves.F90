@@ -816,7 +816,7 @@ function SaturationFunctionRead(saturation_function,input,option) &
             call InputErrorMsg(input,option,'lambda',error_string)
           case('S_MIN')
             call InputReadDouble(input,option,sf%s_min)
-            wipp_s_min = sf%s_min 
+            wipp_s_min = sf%s_min
             call InputErrorMsg(input,option,'s_min',error_string)
           case('S_EFFMIN')
             call InputReadDouble(input,option,sf%s_effmin)
@@ -878,7 +878,7 @@ function SaturationFunctionRead(saturation_function,input,option) &
     end if
   else
     if (alpha /= 0d0) then ! Error, pct_a must be specified
-      option%io_buffer = 'Must NOT specify ALPHA without IGNORE_PERMEABILITY option'
+      option%io_buffer = 'CANNOT specify ALPHA without IGNORE_PERMEABILITY option'
     end if
   end if
   
@@ -887,9 +887,15 @@ function SaturationFunctionRead(saturation_function,input,option) &
     if (Slj == 0d0) Slj = Sr + 5d-2*(1d0-Sr)
     ! Call constructor
     if (wipp_krp /= 0) then ! WIPP invariants flagged by wipp_krp
-      sf_swap => SFWIPPctor(wipp_krp, wipp_kpc, Sr, Srg, wipp_expon, &
-                           wipp_pct_ignore, wipp_pct_alpha, wipp_pct_expon, &
-                           Pcmax, Slj, wipp_s_min, wipp_s_effmin)
+      if (wipp_krp == 12) then ! wipp_s_min replaces Sr
+        sf_swap => SFWIPPctor(wipp_krp, wipp_kpc, wipp_s_min, Srg, wipp_expon, &
+                              wipp_pct_ignore, wipp_pct_alpha, wipp_pct_expon, &
+                              Pcmax, Slj, wipp_s_effmin)
+      else
+        sf_swap => SFWIPPctor(wipp_krp, wipp_kpc, Sr, Srg, wipp_expon, &
+                              wipp_pct_ignore, wipp_pct_alpha, wipp_pct_expon, &
+                              Pcmax, Slj, wipp_s_effmin)
+      end if
     else ! Old object type is used to identify common invariants
       select type (saturation_function)
       class is (sat_func_VG_type)
