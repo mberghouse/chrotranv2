@@ -23,6 +23,9 @@ module PM_ZFlow_class
     PetscReal :: liq_sat_change_ts_governor
     PetscInt :: convergence_flags(MAX_RES_LIQ)
     PetscReal :: convergence_reals(MAX_RES_LIQ)
+    ! For adjoint System
+    Vec :: lambda
+    Vec :: rhs
     type(inversion_aux_type), pointer :: inversion_aux
   contains
     procedure, public :: ReadSimulationOptionsBlock => &
@@ -118,6 +121,9 @@ subroutine PMZFlowInitObject(this)
   this%liq_sat_change_ts_governor = 1.d0
   this%convergence_flags = 0
   this%convergence_reals = 0.d0
+
+  this%lambda = PETSC_NULL_VEC
+  this%rhs = PETSC_NULL_VEC
 
   nullify(this%inversion_aux)
 
@@ -408,7 +414,7 @@ subroutine PMZFlowPostSolve(this)
 
   class(pm_zflow_type) :: this
 
-  call PMZFlowSolveAdjoint(this)
+  if (associated(this%inversion_aux)) call PMZFlowBuildJsensitivity(this)
 
 end subroutine PMZFlowPostSolve
 
@@ -626,13 +632,13 @@ subroutine PMZFlowSolveAdjoint(this)
   zflow_auxvars => patch%aux%ZFlow%auxvars(ZERO_INTEGER,:)
   cell_neighbors => grid%cell_neighbors_local_ghosted
 
-  call SNESGetJacobian(solver%snes,M,PETSC_NULL_MAT,PETSC_NULL_FUNCTION, &
-                       PETSC_NULL_INTEGER,ierr);CHKERRQ(ierr)
+  !call SNESGetJacobian(solver%snes,M,PETSC_NULL_MAT,PETSC_NULL_FUNCTION, &
+  !                     PETSC_NULL_INTEGER,ierr);CHKERRQ(ierr)
 
   ! Get the adjoint matrix -> USE Jacobian for now as it's same for steady
   ! btw: solver%ksp already has M from SNES solve so can be used for steady
 
-  call ZFlowCalculateAdjointMatrix(realization,M)
+  !call ZFlowCalculateAdjointMatrix(realization,M)
 
   !call KSPSetOperators(solver%ksp,M,M,ierr);CHKERRQ(ierr)
 
@@ -644,9 +650,9 @@ subroutine PMZFlowSolveAdjoint(this)
   ! index for data observation
   idata = 1 !9005 !1
 
-  print *, 'Press from field'
-  call VecView(this%realization%field%flow_xx,PETSC_VIEWER_STDOUT_WORLD, &
-               ierr);CHKERRQ(ierr)
+  !print *, 'Press from field'
+  !call VecView(this%realization%field%flow_xx,PETSC_VIEWER_STDOUT_WORLD, &
+  !             ierr);CHKERRQ(ierr)
 
   ! Get dAdK and dcdk -> SHOULD WE COMPUTE BEFORE SNES SOLVE?
   call ZFlowCalculateMatrixDerivatives(realization)
@@ -767,61 +773,166 @@ end subroutine PMZFlowSolveAdjoint
 
 ! ************************************************************************** !
 
-subroutine PMZFlowBuildJacobian(this)
+subroutine PMZFlowBuildJsensitivity(this)
   !
-  ! Builds ZFlow Jacobian Matrix distributed across processors
+  ! Builds ZFlow Jacobian/Sensitivity Matrix distributed across processors
   !
   ! Author: Piyoosh Jaysaval
-  ! Date: 09/22/21
+  ! Date: 10/12/21
   !
 
+  use Realization_Subsurface_class
   use Patch_module
   use Grid_module
   use Option_module
+  use Discretization_module
   !use Material_Aux_class
+  use Solver_module
   use Timer_class
   use String_module
+  use ZFlow_module, only : ZFlowCalculateAdjointMatrix, &
+                           ZFlowCalculateMatrixDerivatives
 
   implicit none
 
   class(pm_zflow_type) :: this
 
+  class(realization_subsurface_type), pointer :: realization
   type(patch_type), pointer :: patch
   type(grid_type), pointer :: grid
   type(option_type), pointer :: option
+  type(discretization_type), pointer :: discretization
+  type(solver_type), pointer :: solver
+  type(zflow_auxvar_type), pointer :: zflow_auxvars(:)
   class(timer_type), pointer ::timer
 
+  PetscInt :: idata
+  PetscInt :: local_id
+  PetscInt :: inbr, num_neighbors
+  PetscInt, pointer :: cell_neighbors(:,:)
+  PetscReal :: jacob_A, jacob_c, jacob
+  PetscReal, pointer :: rhs_ptr(:)
+  PetscReal, pointer :: lambda_ptr(:)
+  PetscReal, allocatable :: phi_sor(:), phi_rec(:)
   PetscErrorCode :: ierr
 
+  ! For Adjoint field
+  Vec :: work
+  Vec :: lambda
+  Vec :: rhs
+
   option => this%option
-  patch => this%realization%patch
+  solver => this%solver
+  realization => this%realization
+  discretization => realization%discretization
+  patch => realization%patch
   grid => patch%grid
+
+  zflow_auxvars => patch%aux%ZFlow%auxvars(ZERO_INTEGER,:)
+  cell_neighbors => grid%cell_neighbors_local_ghosted
 
   call MPI_Barrier(option%mycomm,ierr)
   timer => TimerCreate()
   call timer%Start()
 
   if (OptionPrintToScreen(this%option)) then
-    write(*,'(/," --> Building ZFLOW Jacobian matrix:")')
+    write(*,'(/," --> Building ZFLOW Jsensitivity matrix:")')
   endif
 
   ! PJ: All calculations for Jacobian building go bellow
   ! For all data at a current time step?
 
+  work = realization%field%work
+  call VecDuplicate(work,lambda,ierr);CHKERRQ(ierr)
+  call VecDuplicate(work,rhs,ierr);CHKERRQ(ierr)
 
+  ! Get dAdK and dcdk
+  call ZFlowCalculateMatrixDerivatives(realization)
 
+  do idata=1,1
 
+    ! initialize lambda and rhs
+    call VecZeroEntries(lambda,ierr);CHKERRQ(ierr)
+    call VecZeroEntries(rhs,ierr);CHKERRQ(ierr)
 
+    ! Assign RHS values -> unit source at observation (TEMP)
+    call VecGetArrayF90(rhs,rhs_ptr,ierr);CHKERRQ(ierr)
+    rhs_ptr(idata) = 1.d0
+    call VecRestoreArrayF90(rhs,rhs_ptr,ierr);CHKERRQ(ierr)
+
+    ! Solve Adjoint System
+    call KSPSolveTranspose(solver%ksp,rhs,lambda,ierr);CHKERRQ(ierr)
+
+    !call DiscretizationGlobalToLocal(discretization,lambda, &
+    !                                 realization%field%work_loc,ONEDOF)
+    call VecGetArrayF90(lambda,lambda_ptr,ierr);CHKERRQ(ierr)
+
+    do local_id=1,grid%nlmax
+      jacob_A = 0.d0
+      jacob_c = 0.d0
+      jacob = 0.d0
+
+      num_neighbors = cell_neighbors(0,local_id)
+      allocate(phi_sor(num_neighbors+1), phi_rec(num_neighbors+1))
+      phi_sor = 0.d0
+      phi_rec = 0.d0
+
+      phi_sor(1) = zflow_auxvars(local_id)%pres
+      phi_rec(1) = lambda_ptr(local_id)
+
+      ! jacob_A = lambda^T * dA/dk * p
+      jacob_A = phi_sor(1) * zflow_auxvars(local_id)%dAdK(1) * phi_rec(1)
+      ! jacob_c = lambda^T * dc/dk
+      jacob_c = phi_rec(1) * zflow_auxvars(local_id)%dcdK(1)
+
+      do inbr = 1,num_neighbors
+
+        phi_sor(inbr+1) = zflow_auxvars(abs(cell_neighbors(inbr,local_id)))%pres
+        phi_rec(inbr+1) = lambda_ptr(abs(cell_neighbors(inbr,local_id)))
+
+        jacob_A = jacob_A +                                                 &
+                  phi_sor(1)*zflow_auxvars(local_id)%dAdK(1+inbr)*          &
+                  phi_rec(inbr+1) +                                         &
+                  phi_sor(1+inbr) * (                                       &
+                    zflow_auxvars(local_id)%dAdk(1+inbr)*phi_rec(1) -       &
+                    zflow_auxvars(local_id)%dAdk(1+inbr)*phi_rec(1+inbr) )
+
+        jacob_c = jacob_c + &
+                  phi_rec(inbr+1) * zflow_auxvars(local_id)%dcdK(1+inbr)
+      enddo
+
+      ! jacobian = lambda^T * dc/dk - lambda^T * dA/dk * p -> -ve due to A and c
+      ! having -ve signs
+      jacob = - jacob_c + jacob_A
+
+      call MatSetValue(this%inversion_aux%Jsensitivity,idata-1,local_id-1, &
+                       jacob,INSERT_VALUES,ierr);CHKERRQ(ierr)
+
+      deallocate(phi_sor, phi_rec)
+
+    enddo ! local)id
+    call VecRestoreArrayF90(lambda,lambda_ptr,ierr);CHKERRQ(ierr)
+  enddo ! idata
+
+  call VecDestroy(lambda,ierr);CHKERRQ(ierr)
+  call VecDestroy(rhs,ierr);CHKERRQ(ierr)
+  call MatAssemblyBegin(this%inversion_aux%Jsensitivity, &
+                        MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
+  call MatAssemblyEnd(this%inversion_aux%Jsensitivity, &
+                      MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
+
+  print *, 'Jsensitivity Matrix'
+  call MatView(this%inversion_aux%Jsensitivity,PETSC_VIEWER_STDOUT_WORLD,ierr);CHKERRQ(ierr)
 
   call MPI_Barrier(option%mycomm,ierr)
   call timer%Stop()
   option%io_buffer = '    ' // &
     trim(StringWrite('(f20.1)',timer%GetCumulativeTime())) &
-    // ' seconds to build Jacobian.'
+    // ' seconds to build Jsensitivity.'
   call PrintMsg(option)
   call TimerDestroy(timer)
 
-end subroutine PMZFlowBuildJacobian
+end subroutine PMZFlowBuildJsensitivity
 
 ! ************************************************************************** !
 
@@ -1111,6 +1222,8 @@ subroutine PMZFlowUpdateSolution(this)
   call ZFlowUpdateSolution(this%realization)
   call ZFlowMapBCAuxVarsToGlobal(this%realization)
 
+  call this%PostSolve()
+
 end subroutine PMZFlowUpdateSolution
 
 ! ************************************************************************** !
@@ -1328,6 +1441,12 @@ subroutine PMZFlowDestroy(this)
   call InversionAuxDestroy(this%inversion_aux)
   call ZFlowDestroy(this%realization)
   call PMSubsurfaceFlowDestroy(this)
+  if (this%lambda /= PETSC_NULL_VEC) then
+    call VecDestroy(this%lambda,ierr);CHKERRQ(ierr)
+  endif
+  if (this%rhs /= PETSC_NULL_VEC) then
+    call VecDestroy(this%rhs,ierr);CHKERRQ(ierr)
+  endif
 
 end subroutine PMZFlowDestroy
 

@@ -320,9 +320,6 @@ subroutine TimestepperSteadyStepDT(this,process_model,stop_flag)
   option%time = this%target_time
   call process_model%FinalizeTimestep()
 
-  ! TEMP
-  !call process_model%PostSolve()
-
   if (this%print_ekg .and. OptionPrintToFile(option)) then
 100 format(a32," TIMESTEP ",i10,2es16.8,a,i3,i5,i3,i5,i5,i10)
     write(IUNIT_EKG,100) trim(this%name), this%steps, this%target_time/tconv, &
