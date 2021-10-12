@@ -112,7 +112,7 @@ end subroutine ILTBaseVerify
 ! ************************************************************************** !
 
 subroutine ILTBaseIllitization(this,fs,temperature,dt, &
-                               fi,shift,option)
+                               fi,scale,shift,option)
 
   use Option_module
 
@@ -123,10 +123,11 @@ subroutine ILTBaseIllitization(this,fs,temperature,dt, &
   PetscReal, intent(in) :: temperature
   PetscReal, intent(in) :: dt
   PetscReal, intent(out) :: fi
-  PetscReal, intent(out) :: shift
+  PetscReal, intent(out) :: scale, shift
   type(option_type), intent(inout) :: option
 
   fi = 0.0d+0
+  scale = 0.0d+0
   shift = 0.0d+0
 
 end subroutine ILTBaseIllitization
@@ -160,7 +161,7 @@ subroutine ILTBaseTest(this,ilt_name,option)
   PetscReal :: ilt_temp_pert
   PetscReal :: smec_min, smec_max
   PetscReal :: temp_min, temp_max
-  PetscReal :: dt,shift,fs0_original
+  PetscReal :: dt,scale,shift,fs0_original
   PetscReal :: fs, fsp
   PetscInt :: i,j,k
 
@@ -195,12 +196,12 @@ subroutine ILTBaseTest(this,ilt_name,option)
         ! base case with analytical derivatives
         fsp = fs
         call this%CalculateILT(fs,temp_vec(j),dt,ilt(i,j,k), &
-                               shift,option)
+                               scale,shift,option)
 
         ! calculate numerical derivatives via finite differences
         perturbed_temp = temp_vec(j) * (1.d0 + perturbation)
         call this%CalculateILT(fsp,perturbed_temp,dt,ilt_temp_pert, &
-                               shift,option)
+                               scale,shift,option)
 
         dilt_dtemp_numerical(i,j,k) = (ilt_temp_pert - ilt(i,j,k))/ &
                                       (temp_vec(j)*perturbation)
@@ -398,7 +399,7 @@ end subroutine ILTGeneralVerify
 ! ************************************************************************** !
 
 subroutine ILTDefaultIllitization(this,fs,temperature,dt, &
-                                  fi,shift,option)
+                                  fi,scale,shift,option)
 
   use Option_module
 
@@ -409,7 +410,7 @@ subroutine ILTDefaultIllitization(this,fs,temperature,dt, &
   PetscReal, intent(in) :: temperature
   PetscReal, intent(in) :: dt
   PetscReal, intent(out) :: fi
-  PetscReal, intent(out) :: shift
+  PetscReal, intent(out) :: scale, shift
   type(option_type), intent(inout) :: option
 
   PetscReal :: ds   ! change in smectite
@@ -449,14 +450,15 @@ subroutine ILTDefaultIllitization(this,fs,temperature,dt, &
   fi = 1.0d0 - fs
   
   ! Shift permeability
-  shift = ((fi - (1.0d+0 - this%ilt_fs0)) / this%ilt_fs0) * this%ilt_shift_perm
+  scale = ((fi - (1.0d+0 - this%ilt_fs0)) / this%ilt_fs0)
+  shift = scale * this%ilt_shift_perm
 
 end subroutine ILTDefaultIllitization
 
 ! ************************************************************************** !
 
 subroutine ILTGeneralIllitization(this,fs,temperature,dt, &
-                                  fi,shift,option)
+                                  fi,scale,shift,option)
 
   use Option_module
 
@@ -467,7 +469,7 @@ subroutine ILTGeneralIllitization(this,fs,temperature,dt, &
   PetscReal, intent(in) :: temperature
   PetscReal, intent(in) :: dt
   PetscReal, intent(out) :: fi
-  PetscReal, intent(out) :: shift
+  PetscReal, intent(out) :: scale, shift
   type(option_type), intent(inout) :: option
 
   PetscReal :: T    ! temperature in Kelvin
@@ -510,7 +512,8 @@ subroutine ILTGeneralIllitization(this,fs,temperature,dt, &
   fi = 1.0d0 - fs
   
   ! Shift permeability
-  shift = ((fi - (1.0d+0 - this%ilt_fs0)) / this%ilt_fs0) * this%ilt_shift_perm
+  scale = ((fi - (1.0d+0 - this%ilt_fs0)) / this%ilt_fs0)
+  shift = scale * this%ilt_shift_perm
 
 end subroutine ILTGeneralIllitization
 
