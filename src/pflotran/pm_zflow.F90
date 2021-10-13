@@ -786,7 +786,7 @@ subroutine PMZFlowBuildJsensitivity(this)
   use Grid_module
   use Option_module
   use Discretization_module
-  !use Material_Aux_class
+  use Material_Aux_class
   use Solver_module
   use Timer_class
   use String_module
@@ -804,13 +804,15 @@ subroutine PMZFlowBuildJsensitivity(this)
   type(discretization_type), pointer :: discretization
   type(solver_type), pointer :: solver
   type(zflow_auxvar_type), pointer :: zflow_auxvars(:)
-  class(timer_type), pointer ::timer
+  class(material_auxvar_type), pointer :: material_auxvars(:)
+  class(timer_type), pointer :: timer
 
   PetscInt :: idata, num_measurement
-  PetscInt :: local_id
+  PetscInt :: local_id, ghosted_id
   PetscInt :: inbr, num_neighbors
   PetscInt, pointer :: cell_neighbors(:,:)
   PetscReal :: jacob_A, jacob_c, jacob
+  PetscReal :: perm_x
   PetscReal, pointer :: rhs_ptr(:)
   PetscReal, pointer :: lambda_ptr(:)
   PetscReal, allocatable :: phi_sor(:), phi_rec(:)
@@ -829,6 +831,7 @@ subroutine PMZFlowBuildJsensitivity(this)
   grid => patch%grid
 
   zflow_auxvars => patch%aux%ZFlow%auxvars(ZERO_INTEGER,:)
+  material_auxvars => patch%aux%Material%auxvars
   cell_neighbors => grid%cell_neighbors_local_ghosted
 
   call MPI_Barrier(option%mycomm,ierr)
@@ -836,7 +839,7 @@ subroutine PMZFlowBuildJsensitivity(this)
   call timer%Start()
 
   if (OptionPrintToScreen(this%option)) then
-    write(*,'(/," --> Building ZFLOW Jsensitivity matrix:")')
+    write(*,'(/," --> Building ZFlow Jsensitivity matrix:")')
   endif
 
   ! PJ: All calculations for Jacobian building go bellow
@@ -850,6 +853,7 @@ subroutine PMZFlowBuildJsensitivity(this)
   call ZFlowCalculateMatrixDerivatives(realization)
 
   open(unit=558,file='Jsensitivity_zflow.out',status='unknown')
+  open(unit=559,file='Jhessian_zflow.out',status='unknown')
 
   num_measurement = size(this%inversion_aux%imeasurement)
   do idata=1,num_measurement
@@ -874,6 +878,9 @@ subroutine PMZFlowBuildJsensitivity(this)
       jacob_A = 0.d0
       jacob_c = 0.d0
       jacob = 0.d0
+
+      ghosted_id = grid%nL2G(local_id)
+      if (patch%imat(ghosted_id) <= 0) cycle
 
       num_neighbors = cell_neighbors(0,local_id)
       allocate(phi_sor(num_neighbors+1), phi_rec(num_neighbors+1))
@@ -908,7 +915,13 @@ subroutine PMZFlowBuildJsensitivity(this)
       ! having -ve signs
       jacob = - jacob_c + jacob_A
 
+      ! Jacobian wrt m=ln(perm) -> dP/dm = perm * dP/dperm
+      ! Only implemented for Kx
+      perm_x = material_auxvars(ghosted_id)%permeability(perm_xx_index)
+      jacob = jacob * perm_x
+
       write(558,*) local_id,jacob
+      write(559,*) local_id, jacob*jacob
 
       call MatSetValue(this%inversion_aux%Jsensitivity,idata-1,local_id-1, &
                        jacob,INSERT_VALUES,ierr);CHKERRQ(ierr)
@@ -920,6 +933,7 @@ subroutine PMZFlowBuildJsensitivity(this)
   enddo ! idata
 
   close(558)
+  close(559)
 
   call VecDestroy(lambda,ierr);CHKERRQ(ierr)
   call VecDestroy(rhs,ierr);CHKERRQ(ierr)
@@ -928,7 +942,7 @@ subroutine PMZFlowBuildJsensitivity(this)
   call MatAssemblyEnd(this%inversion_aux%Jsensitivity, &
                       MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
 
-  !print *, 'Jsensitivity Matrix'
+  !print *, 'Jsensitivity Matrix1'
   !call MatView(this%inversion_aux%Jsensitivity,PETSC_VIEWER_STDOUT_WORLD, &
   !             ierr);CHKERRQ(ierr)
 
