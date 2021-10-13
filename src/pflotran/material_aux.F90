@@ -196,8 +196,8 @@ function MaterialIlliteAuxCreate()
 
   implicit none
 
-  class(ilt_auxvar_type), pointer :: MaterialIlliteAuxCreate
-  class(ilt_auxvar_type), pointer :: ilt_aux
+  type(ilt_auxvar_type), pointer :: MaterialIlliteAuxCreate
+  type(ilt_auxvar_type), pointer :: ilt_aux
 
   allocate(ilt_aux)
   

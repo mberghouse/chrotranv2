@@ -447,7 +447,7 @@ subroutine RestartFlowProcessModelBinary(viewer,realization)
   type(field_type), pointer :: field
   type(discretization_type), pointer :: discretization
   type(grid_type), pointer :: grid
-  type(material_auxvar_type), pointer :: material_auxvars(:)
+  class(material_auxvar_type), pointer :: material_auxvars(:)
   Vec :: global_vec
   PetscInt :: local_id, ghosted_id, ps, i
   
@@ -1208,7 +1208,7 @@ subroutine RestartFlowProcessModelHDF5(pm_grp_id, realization)
   type(field_type), pointer :: field
   type(discretization_type), pointer :: discretization
   type(grid_type), pointer :: grid
-  type(material_auxvar_type), pointer :: material_auxvars(:)
+  class(material_auxvar_type), pointer :: material_auxvars(:)
   Vec :: global_vec
   Vec :: natural_vec
   character(len=MAXSTRINGLENGTH) :: dataset_name

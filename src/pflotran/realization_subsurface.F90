@@ -1684,7 +1684,7 @@ subroutine RealizationRevertFlowParameters(realization)
   type(option_type), pointer :: option
   type(discretization_type), pointer :: discretization
   type(material_type), pointer :: Material
-  type(material_auxvar_type), pointer :: material_auxvars(:)
+  class(material_auxvar_type), pointer :: material_auxvars(:)
   type(grid_type), pointer :: grid
   
   PetscInt :: local_id, ghosted_id, ps, i

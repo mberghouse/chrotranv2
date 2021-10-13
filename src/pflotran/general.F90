@@ -293,7 +293,7 @@ subroutine GeneralUpdateSolution(realization)
   type(field_type), pointer :: field
   type(general_auxvar_type), pointer :: gen_auxvars(:,:)
   type(global_auxvar_type), pointer :: global_auxvars(:)  
-  type(material_auxvar_type), pointer :: material_auxvars(:)  
+  class(material_auxvar_type), pointer :: material_auxvars(:)  
   PetscInt :: local_id, ghosted_id
   PetscErrorCode :: ierr
   
@@ -354,7 +354,7 @@ subroutine GeneralTimeCut(realization)
   type(grid_type), pointer :: grid
   type(global_auxvar_type), pointer :: global_auxvars(:)  
   type(general_auxvar_type), pointer :: gen_auxvars(:,:)
-  type(material_auxvar_type), pointer :: material_auxvars(:)
+  class(material_auxvar_type), pointer :: material_auxvars(:)
   
   PetscInt :: local_id, ghosted_id
   PetscErrorCode :: ierr

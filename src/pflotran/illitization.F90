@@ -30,7 +30,7 @@ module Illitization_module
     PetscReal :: ilt_freq ! frequency term in L/mol-sec
     PetscReal :: ilt_K_conc ! molar concentration of potassium
     PetscReal :: ilt_shift_perm ! permeability shift factor for illite fraction
-    type(ilt_kd_effects_type), pointer :: ilt_shift_kd_list
+    class(ilt_kd_effects_type), pointer :: ilt_shift_kd_list
   contains
     procedure, public :: Verify => ILTDefaultVerify
     procedure, public :: CalculateILT => ILTDefaultIllitization
@@ -61,7 +61,7 @@ module Illitization_module
     PetscInt :: num_elements
     PetscReal, pointer :: f_kd(:) ! factor for modifying the kd value
     character(len=MAXWORDLENGTH), pointer :: element_name(:) ! element affected
-    type(ilt_kd_effects_type), pointer :: next
+    class(ilt_kd_effects_type), pointer :: next
   end type
   !---------------------------------------------------------------------------
 
@@ -753,7 +753,7 @@ subroutine ILTDefaultRead(ilf,input,keyword,error_string,kind,option)
   PetscInt :: i
   PetscInt, parameter :: MAX_KD_SIZE = 100
   character(len=MAXWORDLENGTH) :: word
-  type(ilt_kd_effects_type), pointer :: shift_kd_list, prev_shift_kd_list
+  class(ilt_kd_effects_type), pointer :: shift_kd_list, prev_shift_kd_list
   PetscReal :: f_kd(MAX_KD_SIZE)
   character(len=MAXWORDLENGTH) :: element_name(MAX_KD_SIZE)
 
