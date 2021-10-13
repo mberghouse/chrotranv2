@@ -104,7 +104,6 @@ subroutine SimSubsurfInit(this,driver,option)
   use Waypoint_module
   use Driver_module
   use Option_module
-  use EOS_module
 
   implicit none
 
@@ -117,7 +116,6 @@ subroutine SimSubsurfInit(this,driver,option)
 #endif
 
   call SimulationBaseInit(this,driver)
-  call EOSInit()
   this%option => option
   this%output_option => OutputOptionCreate()
   nullify(this%checkpoint_option)
@@ -310,6 +308,8 @@ subroutine SimSubsurfInputRecord(this)
       write(id,'(a)') 'richards'
     case(ZFLOW_MODE)
       write(id,'(a)') 'zflow'
+    case(PNF_MODE)
+      write(id,'(a)') 'pore network flow'
     case(RICHARDS_TS_MODE)
       write(id,'(a)') 'richards_ts'
     case(G_MODE)
