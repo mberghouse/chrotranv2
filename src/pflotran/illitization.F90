@@ -271,7 +271,7 @@ function ILTDefaultCreate()
   ILTDefaultCreate%ilt_threshold  = 0.0d0
   ILTDefaultCreate%ilt_fs0        = 1.0d0
   
-  ILTDefaultCreate%ilt_shift_perm = 1.0d0
+  ILTDefaultCreate%ilt_shift_perm = 0.0d0
   ILTDefaultCreate%ilt_ea     = UNINITIALIZED_DOUBLE
   ILTDefaultCreate%ilt_freq   = UNINITIALIZED_DOUBLE
   ILTDefaultCreate%ilt_K_conc = UNINITIALIZED_DOUBLE
