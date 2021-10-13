@@ -292,7 +292,7 @@ function ILTGeneralCreate()
   ILTGeneralCreate%ilt_threshold  = 0.0d0
   ILTGeneralCreate%ilt_fs0        = 1.0d0
   
-  ILTGeneralCreate%ilt_shift_perm = 1.0d0
+  ILTGeneralCreate%ilt_shift_perm = 0.0d0
   ILTGeneralCreate%ilt_freq       = 1.0d0 ! Default of 1.0 in general model
   ILTGeneralCreate%ilt_ea     = UNINITIALIZED_DOUBLE
   ILTGeneralCreate%ilt_K_conc = UNINITIALIZED_DOUBLE
@@ -358,6 +358,14 @@ subroutine ILTDefaultVerify(this,name,option)
     option%io_buffer = 'Illitization potassium concentration must be ' &
                      //'specified in function "'//trim(string)//'".'
     call PrintErrMsg(option)
+  endif
+  if (Initialized(this%ilt_shift_perm)) then
+    if (this%ilt_shift_perm <= -1.0d0) then
+      option%io_buffer = 'If negative, the illitization permeability shift ' &
+                       //'factor must be greater than -1 ' &
+                       //'in function "'//trim(string)//'".'
+      call PrintErrMsg(option)
+    endif
   endif
 
 end subroutine ILTDefaultVerify
