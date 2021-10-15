@@ -15,7 +15,17 @@ module Inversion_ZFlow_class
     PetscInt :: start_iteration          ! Starting iteration number
     PetscInt :: miniter,maxiter          ! min/max CGLS iterations
 
+    PetscReal :: beta                    ! regularization parameter
+    PetscReal :: beta_red_factor         ! beta reduction factor
     PetscReal :: minperm,maxperm         ! min/max permeability
+    PetscReal :: target_chi2             ! target CHI^2 norm
+    PetscReal :: current_chi2
+
+    ! Cost/objective functions
+    PetscReal :: min_phi_red             ! min change in cost function
+    PetscReal :: phi_total_0,phi_total
+    PetscReal :: phi_data_0,phi_data
+    PetscReal :: phi_model_0,phi_model
 
     ! arrays for CGLS algorithm
     PetscReal, pointer :: b(:)           ! vector for CGLS RHS
@@ -30,6 +40,10 @@ module Inversion_ZFlow_class
     procedure, public :: ReadBlock => InversionZFlowReadBlock
     procedure, public :: Initialize => InversionZFlowInitialize
     procedure, public :: Step => InversionZFlowStep
+    procedure, public :: UpdateParameters => InversionZFlowUpdateParameters
+    procedure, public :: CalculateUpdate => InversionZFlowCalculateUpdate
+    procedure, public :: CheckConvergence => InversionZFlowCheckConvergence
+    procedure, public :: EvaluateCostFunction => InvZFlowEvaluateCostFunction
     procedure, public :: Finalize => InversionZFlowFinalize
     procedure, public :: Strip => InversionZFlowStrip
   end type inversion_zflow_type
@@ -87,10 +101,23 @@ subroutine InversionZFlowInit(this,driver)
   this%miniter = 10
   this%maxiter = 50
 
-  this%start_iteration = 1
-
+  this%beta = 100.d0
+  this%beta_red_factor = 0.5d0
   this%minperm = 1d-25
   this%maxperm = 1d-02
+  this%target_chi2 = 1.d0
+  this%min_phi_red = 0.2d0
+
+  this%start_iteration = 1
+  this%maximum_iteration = 20
+
+  this%current_chi2 = UNINITIALIZED_DOUBLE
+  this%phi_total_0 = UNINITIALIZED_DOUBLE
+  this%phi_data_0 = UNINITIALIZED_DOUBLE
+  this%phi_model_0 = UNINITIALIZED_DOUBLE
+  this%phi_total = UNINITIALIZED_DOUBLE
+  this%phi_data = UNINITIALIZED_DOUBLE
+  this%phi_model = UNINITIALIZED_DOUBLE
 
   nullify(this%b)
   nullify(this%p)
@@ -212,6 +239,7 @@ subroutine InversionZFlowReadBlock(this,input,option)
     if (found) cycle
 
     select case(trim(keyword))
+
       case default
         call InputKeywordUnrecognized(input,keyword,error_string,option)
     end select
@@ -230,9 +258,33 @@ subroutine InversionZFlowInitialize(this)
   ! Author: Piyoosh Jaysaval
   ! Date: 10/11/21
   !
+  use Discretization_module
+  use Material_module
+  use Option_module
+  use Variables_module, only : PERMEABILITY
+
+  implicit none
+
   class(inversion_zflow_type) :: this
 
-  PetscInt :: num_measurements
+  PetscBool :: exists
+  character(len=MAXWORDLENGTH) :: word
+  character(len=MAXSTRINGLENGTH) :: string
+  PetscErrorCode :: ierr
+
+  ! theck to ensure that quantity of interest exists
+  exists = PETSC_FALSE
+  select case(this%iqoi)
+    case(PERMEABILITY)
+      if (this%realization%option%iflowmode /= NULL_MODE) exists = PETSC_TRUE
+      word = 'PERMEABILITY'
+    case default
+  end select
+  if (.not.exists) then
+    this%realization%option%io_buffer = 'Inversion for ' // trim(word) // &
+      &' cannot be performed with the specified process models.'
+    call PrintErrMsg(this%realization%option)
+  endif
 
   call InversionBaseInitialize(this)
 
@@ -273,10 +325,14 @@ subroutine InversionZFlowSetup(this)
       pm%inversion_aux => InversionAuxCreate()
       pm%inversion_aux%Jsensitivity = this%Jsensitivity
       pm%inversion_aux%imeasurement => this%imeasurement
+      pm%inversion_aux%measurement => this%measurement
     class default
       call this%driver%PrintErrMsg('Unsupported process model in &
                                    &InversionZFlowSetup.')
   end select
+
+  ! Build Wm matrix
+  !call InversionZFlowBuildWm(this)
 
 end subroutine InversionZFlowSetup
 
@@ -309,8 +365,10 @@ subroutine InversionZFlowStep(this)
   if (option%status == PROCEED) then
     call this%forward_simulation%ExecuteRun()
   endif
-  !call InversionZFlowInvert(this)
-  call InversionZFlowCalculateUpdate(this)
+  call this%CheckConvergence()
+print*,"PHI DATA: ", this%phi_data
+  call this%CalculateUpdate()
+  call this%UpdateParameters()
   call this%forward_simulation%FinalizeRun()
   call this%forward_simulation%Strip()
   deallocate(this%forward_simulation)
@@ -320,6 +378,112 @@ subroutine InversionZFlowStep(this)
   if (this%iteration > this%maximum_iteration) this%converg_flag = PETSC_TRUE
 
 end subroutine InversionZFlowStep
+
+! ************************************************************************** !
+
+subroutine InversionZFlowCheckConvergence(this)
+  !
+  ! Check Inversion convergence
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 10/15/21
+
+  implicit none
+
+  class(inversion_zflow_type) :: this
+
+  this%converg_flag = PETSC_FALSE
+  call this%EvaluateCostFunction()
+  if ((this%current_chi2 <= this%target_chi2) .or. &
+      (this%iteration > this%maximum_iteration)) this%converg_flag = PETSC_TRUE
+
+end subroutine InversionZFlowCheckConvergence
+
+! ************************************************************************** !
+
+subroutine InvZFlowEvaluateCostFunction(this)
+  !
+  ! Evaluates cost functions for inversion
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 10/15/21
+
+  use Variables_module, only : LIQUID_PRESSURE
+  use Realization_Base_class
+  use Option_module
+
+  implicit none
+
+  class(inversion_zflow_type) :: this
+
+  type(option_type), pointer :: option
+
+  PetscInt :: icell
+  PetscInt :: idata,num_measurement
+  PetscReal :: wd,tempreal
+  PetscReal, pointer :: vec_ptr(:)
+  PetscErrorCode :: ierr
+
+  num_measurement = size(this%measurement)
+
+  call RealizationGetVariable(this%realization, &
+                              this%realization%field%work, &
+                              LIQUID_PRESSURE,ZERO_INTEGER)
+
+  call VecGetArrayF90(this%realization%field%work,vec_ptr,ierr);CHKERRQ(ierr)
+
+  ! Data part
+  this%phi_data = 0.d0
+  do idata=1,num_measurement
+
+    wd = 0.05 * this%measurement(idata)
+    wd = 1/wd
+
+    icell = this%imeasurement(idata)
+    tempreal = wd * (this%measurement(idata) - vec_ptr(icell))
+    this%phi_data = this%phi_data + tempreal * tempreal
+!print*,icell,vec_ptr(icell)
+  enddo
+
+  this%current_chi2 = this%phi_data
+
+  call VecRestoreArrayF90(this%realization%field%work,vec_ptr,ierr);CHKERRQ(ierr)
+
+end subroutine InvZFlowEvaluateCostFunction
+
+! ************************************************************************** !
+
+subroutine InversionZFlowUpdateParameters(this)
+  !
+  ! Updates input parameters
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 10/14/21
+  !
+
+  use Material_module
+  use Discretization_module
+  use Field_module
+
+  class(inversion_zflow_type) :: this
+
+  type(field_type), pointer :: field
+  type(discretization_type), pointer :: discretization
+
+  PetscInt :: local_id,ghosted_id
+  PetscReal, pointer :: vec_ptr(:)
+  PetscErrorCode :: ierr
+
+  field => this%realization%field
+  discretization => this%realization%discretization
+
+  call DiscretizationGlobalToLocal(discretization, &
+                                   this%quantity_of_interest, &
+                                   field%work_loc,ONEDOF)
+  call MaterialSetAuxVarVecLoc(this%realization%patch%aux%Material, &
+                               field%work_loc,this%iqoi,ZERO_INTEGER)
+
+end subroutine InversionZFlowUpdateParameters
 
 ! ************************************************************************** !
 
@@ -360,12 +524,14 @@ subroutine InversionZFlowCalculateUpdate(this)
     call VecGetArrayF90(this%quantity_of_interest,vec_ptr,ierr);CHKERRQ(ierr)
     do local_id=1,grid%nlmax
      vec_ptr(local_id) = exp(log(vec_ptr(local_id)) + this%del_perm(local_id))
+!print*,local_id,exp(this%del_perm(local_id))
      if (vec_ptr(local_id) > this%maxperm) vec_ptr(local_id) = this%maxperm
      if (vec_ptr(local_id) < this%minperm) vec_ptr(local_id) = this%minperm
     enddo
     call VecRestoreArrayF90(this%quantity_of_interest,vec_ptr, &
                                                           ierr);CHKERRQ(ierr)
     call InversionZFlowDeallocateWorkArrays(this)
+
   endif
 
 end subroutine InversionZFlowCalculateUpdate
@@ -399,8 +565,8 @@ subroutine InversionZFlowCGLSSolve(this)
   PetscBool :: exit_info,indefinite
   PetscErrorCode :: ierr
 
-  PetscReal, parameter :: delta_initer = 1e-3
-  PetscReal, parameter :: initer_conv  = 1e-4
+  PetscReal, parameter :: delta_initer = 1e-23
+  PetscReal, parameter :: initer_conv  = 1e-24
 
   option => this%realization%option
 
@@ -469,6 +635,8 @@ subroutine InversionZFlowCGLSSolve(this)
     gbeta = gamma / gamma1
     this%p = this%s + gbeta * this%p
 
+!print*,norm2(this%r),gamma
+
     normx = dot_product(this%del_perm,this%del_perm)
     call MPI_Allreduce(MPI_IN_PLACE,normx,ONE_INTEGER_MPI, &
                        MPI_DOUBLE_PRECISION,MPI_SUM,option%mycomm,ierr)
@@ -485,8 +653,8 @@ subroutine InversionZFlowCGLSSolve(this)
 
   enddo
 
-print*,this%del_perm
-stop
+!print*,this%del_perm
+!stop
 
   call timer%Stop()
   option%io_buffer = '    ' // &
@@ -523,6 +691,7 @@ subroutine InversionZFlowCGLSRhs(this)
 
   PetscInt :: icell
   PetscInt :: idata,num_measurement
+  PetscReal :: wd
   PetscReal, pointer :: vec_ptr(:)
   PetscErrorCode :: ierr
 
@@ -540,8 +709,12 @@ subroutine InversionZFlowCGLSRhs(this)
 
   ! Data part
   do idata=1,num_measurement
+
+    wd = 0.05 * this%measurement(idata)
+    wd = 1/wd
+
     icell = this%imeasurement(idata)
-    this%b(idata) = this%measurement(idata) - vec_ptr(icell)
+    this%b(idata) = wd * (this%measurement(idata) - vec_ptr(icell))
   enddo
 
   call VecRestoreArrayF90(this%realization%field%work,vec_ptr,ierr);CHKERRQ(ierr)

@@ -812,7 +812,7 @@ subroutine PMZFlowBuildJsensitivity(this)
   PetscInt :: inbr, num_neighbors
   PetscInt, pointer :: cell_neighbors(:,:)
   PetscReal :: jacob_A, jacob_c, jacob
-  PetscReal :: perm_x
+  PetscReal :: perm_x,wd
   PetscReal, pointer :: rhs_ptr(:)
   PetscReal, pointer :: lambda_ptr(:)
   PetscReal, allocatable :: phi_sor(:), phi_rec(:)
@@ -857,6 +857,9 @@ subroutine PMZFlowBuildJsensitivity(this)
 
   num_measurement = size(this%inversion_aux%imeasurement)
   do idata=1,num_measurement
+
+    wd = 0.05 * this%inversion_aux%measurement(idata)
+    wd = 1/wd
 
     ! initialize lambda and rhs
     call VecZeroEntries(lambda,ierr);CHKERRQ(ierr)
@@ -918,13 +921,13 @@ subroutine PMZFlowBuildJsensitivity(this)
       ! Jacobian wrt m=ln(perm) -> dP/dm = perm * dP/dperm
       ! Only implemented for Kx
       perm_x = material_auxvars(ghosted_id)%permeability(perm_xx_index)
-      jacob = jacob * perm_x
+      jacob = jacob * perm_x * wd
 
-      write(558,*) local_id,jacob
-      write(559,*) local_id, jacob*jacob
+      !write(558,*) local_id,jacob
+      !write(559,*) local_id, jacob*jacob
 
       call MatSetValue(this%inversion_aux%Jsensitivity,idata-1,local_id-1, &
-                       jacob,INSERT_VALUES,ierr);CHKERRQ(ierr)
+                       -jacob,INSERT_VALUES,ierr);CHKERRQ(ierr)
 
       deallocate(phi_sor, phi_rec)
 

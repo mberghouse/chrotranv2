@@ -14,6 +14,7 @@ module Inversion_Aux_module
 
   type, public :: inversion_aux_type
     PetscInt, pointer :: imeasurement(:)
+    PetscReal, pointer :: measurement(:)
     Mat :: Jsensitivity
     PetscInt :: num_aux
     class(inversion_auxvar_type), pointer :: auxvars(:)
@@ -49,6 +50,7 @@ function InversionAuxCreate()
 
   aux%num_aux = 0
   nullify(aux%imeasurement)
+  nullify(aux%measurement)
 
   aux%Jsensitivity = PETSC_NULL_MAT
 
@@ -120,6 +122,7 @@ subroutine InversionAuxDestroy(aux)
 
   ! these objects are destroyed elsewhere, do not destroy
   nullify(aux%imeasurement)
+  nullify(aux%measurement)
   aux%Jsensitivity = PETSC_NULL_MAT
 
   deallocate(aux)
