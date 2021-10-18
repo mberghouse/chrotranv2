@@ -103,8 +103,8 @@ subroutine InversionZFlowInit(this,driver)
 
   this%beta = 100.d0
   this%beta_red_factor = 0.5d0
-  this%minperm = 1d-25
-  this%maxperm = 1d-02
+  this%minperm = 1d-17
+  this%maxperm = 1d-07
   this%target_chi2 = 1.d0
   this%min_phi_red = 0.2d0
 
