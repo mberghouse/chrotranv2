@@ -1755,10 +1755,14 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
       endif
     case(P_STATE)
       gen_auxvar%pres(gid) = x(GENERAL_GAS_PRESSURE_DOF)
-      x(GENERAL_LIQUID_STATE_X_MOLE_DOF) = 1.d0
-      gen_auxvar%xmol(acid,lid) = x(GENERAL_LIQUID_STATE_X_MOLE_DOF)
+      !x(GENERAL_LIQUID_STATE_X_MOLE_DOF) = 1.d0
+      gen_auxvar%xmol(acid,lid) = 0.d0!x(GENERAL_LIQUID_STATE_X_MOLE_DOF)
       gen_auxvar%temp = x(GENERAL_ENERGY_DOF)
-      gen_auxvar%sat(pid) = x(GENERAL_PRECIPITATE_SAT_DOF)
+      if (.not. general_soluble_matrix) then
+        gen_auxvar%sat(pid) = 1.d0
+      elseif (general_soluble_matrix) then
+        gen_auxvar%effective_porosity = 0.d0
+      endif
 
       gen_auxvar%sat(lid) = 0.d0
       gen_auxvar%sat(gid) = 0.d0
@@ -1997,7 +2001,7 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
       if (.not.general_soluble_matrix) then
         gen_auxvar%sat(pid) = x(GENERAL_PRECIPITATE_SAT_DOF)
       else
-        gen_auxvar%effective_porosity = x(GENERAL_POROSITY_DOF)
+        gen_auxvar%effective_porosity = max(0.0001d0,x(GENERAL_POROSITY_DOF))
         call GeneralAuxNaClSolubility(gen_auxvar%temp,NaClSolubility,solubility_function)
         gen_auxvar%xmol(sid,lid) = NaClSolubility
       endif
@@ -2395,7 +2399,8 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
   
   if (global_auxvar%istate == LIQUID_STATE .or. &
       global_auxvar%istate == TWO_PHASE_STATE .or. &
-      global_auxvar%istate == LP_STATE) then
+      global_auxvar%istate == LP_STATE .or. &
+      global_auxvar%istate == LGP_STATE) then
     ! this does not need to be calculated for LIQUID_STATE (=1)
     call characteristic_curves%liq_rel_perm_function% &
            RelativePermeability(gen_auxvar%sat(lid),krl,dkrl_dsatl,option)
@@ -2437,7 +2442,9 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
   endif
 
   if (global_auxvar%istate == GAS_STATE .or. &
-      global_auxvar%istate == TWO_PHASE_STATE) then
+      global_auxvar%istate == TWO_PHASE_STATE .or. &
+      global_auxvar%istate == GP_STATE .or. &
+      global_auxvar%istate == LGP_STATE) then
     ! this does not need to be calculated for GAS_STATE (=1)
     call characteristic_curves%gas_rel_perm_function% &
            RelativePermeability(gen_auxvar%sat(lid),krg,dkrg_dsatl,option)                            
@@ -3075,7 +3082,8 @@ subroutine GeneralAuxVarUpdateState4(x,gen_auxvar,global_auxvar, &
       endif
     case(P_STATE)
       Sp_new = x(GENERAL_PRECIPITATE_SAT_DOF)
-      if (Sp_new < 1.d0) then
+      if ((Sp_new > 0.d0 .and. general_soluble_matrix) .or. &
+           (Sp_new < 1.d0 .and. .not. general_soluble_matrix)) then
         istatechng = PETSC_TRUE
         global_auxvar%istate = LP_STATE
         if (option%iflag == GENERAL_UPDATE_FOR_ACCUM) then
@@ -3355,9 +3363,9 @@ subroutine GeneralAuxVarUpdateState4(x,gen_auxvar,global_auxvar, &
         x(GENERAL_LIQUID_STATE_S_MOLE_DOF) =  max(0.d0,gen_auxvar% &
              xmol(sid,lid))*(1.d0 + epsilon)
       case(P_STATE)
-        x(GENERAL_LIQUID_PRESSURE_DOF) = gen_auxvar%pres(lid) * (1.d0 - epsilon)
-        x(GENERAL_LIQUID_STATE_X_MOLE_DOF) = max(0.d0,gen_auxvar% &
-             xmol(acid,lid))*(1.d0 + epsilon)
+        x(GENERAL_GAS_PRESSURE_DOF) = gen_auxvar%pres(gid) * (1.d0 - epsilon)
+        x(GENERAL_LIQUID_STATE_X_MOLE_DOF) = 0.d0!max(0.d0,gen_auxvar% &
+             !xmol(acid,lid))*(1.d0 + epsilon)
         x(GENERAL_ENERGY_DOF) = gen_auxvar%temp*(1.d0-epsilon)
         if (.not. general_soluble_matrix) then
           x(GENERAL_PRECIPITATE_SAT_INDEX) = 1.d0
@@ -4401,14 +4409,21 @@ subroutine GeneralAuxVarPerturb4(gen_auxvar,global_auxvar, &
         pert(GENERAL_GAS_SATURATION_DOF) = perturbation_tolerance * &
                         x(GENERAL_GAS_SATURATION_DOF)+min_perturbation
       endif
-      if (.not. general_soluble_matrix) then
-        if (x(GENERAL_LIQUID_STATE_S_MOLE_DOF) > &
-             1.d3 * perturbation_tolerance) then
-           pert(GENERAL_LIQUID_STATE_S_MOLE_DOF) = -1.d0 * perturbation_tolerance
-        else
-           pert(GENERAL_LIQUID_STATE_S_MOLE_DOF) = perturbation_tolerance
-        endif
+      if (x(GENERAL_PRECIPITATE_SAT_DOF) > 0.5d0) then
+        pert(GENERAL_PRECIPITATE_SAT_DOF) = -1.D0*(perturbation_tolerance* &
+                     x(GENERAL_PRECIPITATE_SAT_DOF)+min_perturbation)
+      else
+        pert(GENERAL_PRECIPITATE_SAT_DOF) = perturbation_tolerance * &
+                     x(GENERAL_PRECIPITATE_SAT_DOF)+min_perturbation
       endif
+      ! if (.not. general_soluble_matrix) then
+      !   if (x(GENERAL_PRECIPITATE_SAT_DOF) > &
+      !        1.d3 * perturbation_tolerance) then
+      !      pert(GENERAL_LIQUID_STATE_S_MOLE_DOF) = -1.d0 * perturbation_tolerance
+      !   else
+      !      pert(GENERAL_LIQUID_STATE_S_MOLE_DOF) = perturbation_tolerance
+      !   endif
+      ! endif
 #endif
 #endif
   end select

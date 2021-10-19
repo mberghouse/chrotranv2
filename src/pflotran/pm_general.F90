@@ -232,29 +232,6 @@ subroutine PMGeneralSetFlowMode(pm,option)
                                      ! pressures not represented in phase
                                          ! 2 = air in xmol(air,liquid)
     pm%max_change_isubvar = [0,0,0,2,0,0]
-  ! elseif (option%nflowdof == 4 .and. general_soluble_matrix) then
-  !   rel_update_inf_tol = &
-  !     reshape([pres_rel_inf_tol,xmol_rel_inf_tol,temp_rel_inf_tol,por_rel_inf_tol, &
-  !              pres_rel_inf_tol,pres_rel_inf_tol,temp_rel_inf_tol,por_rel_inf_tol, &
-  !              pres_rel_inf_tol,sat_rel_inf_tol,temp_rel_inf_tol,por_rel_inf_tol], &
-  !              shape(rel_update_inf_tol))*1.d0 ! change to 0.d0 to zero tolerances
-  !   abs_update_inf_tol = &
-  !     reshape([pres_abs_inf_tol,xmol_abs_inf_tol,temp_abs_inf_tol,por_abs_inf_tol, &
-  !              pres_abs_inf_tol,pres_abs_inf_tol,temp_abs_inf_tol,por_abs_inf_tol, &
-  !              pres_abs_inf_tol,sat_abs_inf_tol,temp_abs_inf_tol,por_abs_inf_tol], &
-  !              shape(abs_update_inf_tol))*1.d0 ! change to 0.d0 to zero tolerances
-  !   residual_abs_inf_tol(:) = [w_mass_abs_inf_tol,a_mass_abs_inf_tol,&
-  !                              s_mass_abs_inf_tol,u_abs_inf_tol]
-  !   residual_scaled_inf_tol(:) = 1.d-6
-  !   allocate(pm%max_change_ivar(7))
-  !   pm%max_change_ivar = [LIQUID_PRESSURE, GAS_PRESSURE, AIR_PRESSURE, &
-  !                         LIQUID_MOLE_FRACTION, TEMPERATURE, &
-  !                         GAS_SATURATION, POROSITY]
-  !   allocate(pm%max_change_isubvar(7))
-  !                                    ! UNINITIALIZED_INTEGER avoids zeroing of 
-  !                                    ! pressures not represented in phase
-  !                                        ! 2 = air in xmol(air,liquid)
-  !   pm%max_change_isubvar = [0,0,0,2,0,0,0]
   elseif (option%nflowdof == 4) then
     rel_update_inf_tol = &
       reshape([pres_rel_inf_tol,xmol_rel_inf_tol,temp_rel_inf_tol,xmol_rel_inf_tol,&

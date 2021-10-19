@@ -443,10 +443,7 @@ subroutine CondControlAssignFlowInitCond(realization)
                     general%mole_fraction%dataset%rarray(1)
                   xx_p(ibegin+GENERAL_ENERGY_DOF) = &
                     general%temperature%dataset%rarray(1)
-                  if (option%nflowdof == 4 .and. general_soluble_matrix) then
-                    xx_p(ibegin+GENERAL_POROSITY_DOF) = &
-                      general%porosity%dataset%rarray(1)
-                  elseif (option%nflowdof == 4) then
+                  if (option%nflowdof == 4) then
                     xx_p(ibegin+GENERAL_LIQUID_STATE_S_MOLE_DOF) = &
                       general%solute_fraction%dataset%rarray(1)
                   endif
@@ -466,28 +463,41 @@ subroutine CondControlAssignFlowInitCond(realization)
                     general%temperature%dataset%rarray(1)
                 case(P_STATE)
                 case(LP_STATE)
-                   xx_p(ibegin+GENERAL_LIQUID_PRESSURE_DOF) = &
-                        general%liquid_pressure%dataset%rarray(1)
-                   if (option%nflowdof == 4 .and. .not. general_soluble_matrix) then
-                     xx_p(ibegin+GENERAL_PRECIPITATE_SAT_DOF) = &
-                          general%precipitate_saturation%dataset%rarray(1)
-                   elseif (option%nflowdof == 4 .and. general_soluble_matrix) then
-                      xx_p(ibegin+GENERAL_POROSITY_DOF) = &
-                           general%porosity%dataset%rarray(1)
-                   endif
-                   temperature = general%temperature%dataset%rarray(1)
-                   if (general_2ph_energy_dof == GENERAL_TEMPERATURE_INDEX) then
-                      xx_p(ibegin+GENERAL_ENERGY_DOF) = temperature
-                   else
-                      call EOSWaterSaturationPressure(temperature,p_sat,ierr)
-                      ! p_a = p_g - p_s(T)
-                      xx_p(ibegin+GENERAL_2PH_STATE_AIR_PRESSURE_DOF) = &
-                           general%gas_pressure%dataset%rarray(1) - &
-                           p_sat
-                   endif
-                   xx_p(ibegin+GENERAL_LIQUID_STATE_X_MOLE_DOF) = &
-                      general%mole_fraction%dataset%rarray(1)
+                  !DF: fix general_2ph_energy_dof
+                  xx_p(ibegin+GENERAL_LIQUID_PRESSURE_DOF) = &
+                       general%liquid_pressure%dataset%rarray(1)
+                  if (option%nflowdof == 4 .and. .not. general_soluble_matrix) then
+                    xx_p(ibegin+GENERAL_PRECIPITATE_SAT_DOF) = &
+                         general%precipitate_saturation%dataset%rarray(1)
+                  elseif (option%nflowdof == 4 .and. general_soluble_matrix) then
+                     xx_p(ibegin+GENERAL_POROSITY_DOF) = &
+                          general%porosity%dataset%rarray(1)
+                  endif
+                  xx_p(ibegin+GENERAL_ENERGY_DOF) = &
+                       general%temperature%dataset%rarray(1)
+                  xx_p(ibegin+GENERAL_LIQUID_STATE_X_MOLE_DOF) = &
+                     general%mole_fraction%dataset%rarray(1)
                 case(GP_STATE)
+                  xx_p(ibegin+GENERAL_GAS_PRESSURE_DOF) = &
+                       general%gas_pressure%dataset%rarray(1)
+                  if (general_gas_air_mass_dof == &
+                       GENERAL_AIR_PRESSURE_INDEX) then
+                     xx_p(ibegin+GENERAL_GAS_STATE_AIR_PRESSURE_DOF) = &
+                          general%gas_pressure%dataset%rarray(1) * &
+                          general%mole_fraction%dataset%rarray(1)
+                  else
+                     xx_p(ibegin+GENERAL_GAS_STATE_AIR_PRESSURE_DOF) = &
+                          general%mole_fraction%dataset%rarray(1)
+                  endif
+                  xx_p(ibegin+GENERAL_ENERGY_DOF) = &
+                       general%temperature%dataset%rarray(1)
+                  if (option%nflowdof == 4 .and. .not. general_soluble_matrix) then
+                    xx_p(ibegin+GENERAL_PRECIPITATE_SAT_DOF) = &
+                         general%precipitate_saturation%dataset%rarray(1)
+                  elseif (option%nflowdof == 4 .and. general_soluble_matrix) then
+                    xx_p(ibegin+GENERAL_POROSITY_DOF) = &
+                         general%porosity%dataset%rarray(1)
+                  endif
               end select
               cur_patch%aux%Global%auxvars(ghosted_id)%istate = &
                 initial_condition%flow_condition%iphase

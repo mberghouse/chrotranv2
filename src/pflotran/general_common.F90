@@ -4035,8 +4035,10 @@ subroutine GeneralAuxVarComputeAndSrcSink(option,qsrc,flow_src_sink_type, &
                      liquid_phase:option%gas_phase))
   xxss(2) = gen_auxvar_ss%sat(gid)
   xxss(3) = gen_auxvar_ss%temp
-  if (option%nflowdof == 4) then
+  if (option%nflowdof == 4 .and..not. general_soluble_matrix) then
     xxss(4) = gen_auxvar_ss%sat(pid)
+  elseif (option%nflowdof == 4 .and. general_soluble_matrix) then
+    xxss(4) = gen_auxvar_ss%effective_porosity
   endif
 
   cell_pressure = maxval(gen_auxvar%pres(option%liquid_phase: &
@@ -4091,8 +4093,16 @@ subroutine GeneralAuxVarComputeAndSrcSink(option,qsrc,flow_src_sink_type, &
         else
           xxss(THREE_INTEGER) = gen_auxvar_ss%pres(apid)
         endif
-        if (option%nflowdof == 4) then
+        if (option%nflowdof == 4 .and..not. general_soluble_matrix) then
           xxss(FOUR_INTEGER) = gen_auxvar_ss%xmol(solute_comp_id,wat_comp_id)
+        elseif (option%nflowdof == 4 .and. general_soluble_matrix) then
+          xxss(FOUR_INTEGER) = gen_auxvar_ss%effective_porosity
+        endif
+      case(LGP_STATE)
+        if (option%nflowdof == 4 .and..not. general_soluble_matrix) then
+           xxss(FOUR_INTEGER) = gen_auxvar_ss%xmol(solute_comp_id,wat_comp_id)
+        elseif (option%nflowdof == 4 .and. general_soluble_matrix) then
+           xxss(FOUR_INTEGER) = gen_auxvar_ss%effective_porosity
         endif
     end select
   endif
@@ -4105,7 +4115,7 @@ subroutine GeneralAuxVarComputeAndSrcSink(option,qsrc,flow_src_sink_type, &
                               material_auxvar, characteristic_curves, &
                               natural_id,option)
   elseif (option%nflowdof == 4) then
-    call GeneralAuxVarCompute(xxss,gen_auxvar_ss, global_auxvar_ss, &
+    call GeneralAuxVarCompute4(xxss,gen_auxvar_ss, global_auxvar_ss, &
                               material_auxvar, characteristic_curves, &
                               natural_id,option)
   endif

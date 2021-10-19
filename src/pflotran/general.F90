@@ -1033,11 +1033,26 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
         gen_auxvars_ss(ZERO_INTEGER,sum_connection)%pres(air_comp_id) = &
           gen_auxvars(ZERO_INTEGER,ghosted_id)%pres(option%gas_phase)
       endif
-    
+
+      ! Check if porosity is set if 4 dof
+      if (option%nflowdof == 4 .and. general_soluble_matrix) then
+        ! if (associated(source_sink%flow_condition%general%porosity)) then
+        !   gen_auxvars_ss(ZERO_INTEGER,sum_connection)%effective_porosity = &
+        !     source_sink%flow_condition%general%effective_porosity%dataset%rarray(1)
+        ! else
+        gen_auxvars_ss(ZERO_INTEGER,sum_connection)%effective_porosity = &
+          gen_auxvars(ZERO_INTEGER,sum_connection)%effective_porosity
+        !endif
+      endif
       xxss(1) = maxval(gen_auxvars_ss(ZERO_INTEGER,sum_connection)%pres(option% &
                      liquid_phase:option%gas_phase))
       xxss(2) = 5.d-1
       xxss(3) = gen_auxvars_ss(ZERO_INTEGER,sum_connection)%temp
+      if (option%nflowdof == 4 .and..not. general_soluble_matrix) then
+        xxss(4) = gen_auxvars_ss(ZERO_INTEGER,sum_connection)%xmol(option%solute_id,option%liquid_phase)
+      elseif (option%nflowdof == 4 .and. general_soluble_matrix) then
+        xxss(4) = gen_auxvars_ss(ZERO_INTEGER,sum_connection)%effective_porosity
+      endif
 
     
       cell_pressure = maxval(gen_auxvars(ZERO_INTEGER,ghosted_id)% &
@@ -1053,11 +1068,19 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
           dabs(qsrc(air_comp_id)) > 0.d0) then
         global_auxvars_ss(sum_connection)%istate = TWO_PHASE_STATE
       elseif (dabs(qsrc(wat_comp_id)) > 0.d0) then
-        global_auxvars_ss(sum_connection)%istate = LIQUID_STATE
+        if (option%nflowdof == 4 .and. .not. general_soluble_matrix) then
+          global_auxvars_ss(sum_connection)%istate = LIQUID_STATE
+        elseif (option%nflowdof == 4 .and. general_soluble_matrix) then
+          global_auxvars_ss(sum_connection)%istate = LP_STATE
+        endif
       elseif (dabs(qsrc(air_comp_id)) > 0.d0) then
         global_auxvars_ss(sum_connection)%istate = GAS_STATE
       else
-        global_auxvars_ss(sum_connection)%istate = TWO_PHASE_STATE
+        if (option%nflowdof == 4 .and. .not. general_soluble_matrix) then
+          global_auxvars_ss(sum_connection)%istate = TWO_PHASE_STATE
+        elseif (option%nflowdof == 4 .and. general_soluble_matrix) then
+          global_auxvars_ss(sum_connection)%istate = LGP_STATE
+        endif
       endif
     
       if (global_auxvars_ss(sum_connection)%istate /= &
