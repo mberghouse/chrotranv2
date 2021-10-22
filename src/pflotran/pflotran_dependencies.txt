@@ -306,7 +306,8 @@ hydrostatic.o : condition.o connection.o coupler.o dataset_ascii.o \
                 general_aux.o grid.o grid_structured.o hydrate_aux.o option.o \
                 pflotran_constants.o region.o string.o utility.o \
                 wipp_flow_aux.o
-illitization.o : input_aux.o option.o pflotran_constants.o string.o
+illitization.o : input_aux.o material_aux.o option.o pflotran_constants.o \
+                 string.o
 init_common.o : condition.o connection.o coupler.o discretization.o field.o \
                 grid.o hdf5.o hdf5_aux.o input_aux.o logging.o option.o \
                 output.o output_aux.o output_tecplot.o patch.o \
