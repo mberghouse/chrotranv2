@@ -83,6 +83,7 @@ module Material_Aux_class
     PetscReal :: ilt_fit   ! fraction of illite in material (test)
     PetscReal :: ilt_tst   ! track time of last change in smectite (test)
     PetscBool :: set_perm0 ! save initial permeability
+    PetscReal :: ilt_scale ! scale factor
     PetscReal, allocatable :: perm0(:) ! intiial permeability
   contains
     procedure, public :: ShiftPerm => MaterialShiftPermeability
@@ -219,6 +220,9 @@ function MaterialIlliteAuxCreate()
   ! Save original permeability tensor
   ilt_aux%set_perm0 = PETSC_FALSE ! one-time assignment of initial permeability
 
+  ! Output values
+  ilt_aux%ilt_scale = UNINITIALIZED_DOUBLE ! scale factor (output)
+  
   MaterialIlliteAuxCreate => ilt_aux
 
 end function MaterialIlliteAuxCreate

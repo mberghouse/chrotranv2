@@ -1038,6 +1038,7 @@ subroutine PMUFDDecaySolve(this,time,ierr)
   use Reactive_Transport_Aux_module
   use Global_Aux_module
   use Material_Aux_class
+  use Illitization_module
   use Utility_module
   
   implicit none
@@ -1130,6 +1131,8 @@ subroutine PMUFDDecaySolve(this,time,ierr)
   type(reactive_transport_auxvar_type), pointer :: rt_auxvars(:)
   type(global_auxvar_type), pointer :: global_auxvars(:)
   class(material_auxvar_type), pointer :: material_auxvars(:)
+  class(illitization_type), pointer :: illitization
+  class(illitization_base_type), pointer :: ilf
   PetscInt :: local_id
   PetscInt :: ghosted_id
   PetscInt :: iele, i, p, g, ip, ig, iiso, ipri, imnrl, imat
@@ -1160,6 +1163,8 @@ subroutine PMUFDDecaySolve(this,time,ierr)
   PetscReal, parameter :: tolerance = 1.d-6
   PetscInt :: idaughter
   PetscInt :: it
+  PetscReal :: scale, shift_perm
+  character(len=MAXWORDLENGTH) :: kdmode
 ! -----------------------------------------------------------------------
 
   ierr = 0
@@ -1189,6 +1194,9 @@ subroutine PMUFDDecaySolve(this,time,ierr)
     por = material_auxvars(ghosted_id)%porosity
     sat = global_auxvars(ghosted_id)%sat(1)
     vps = vol * por * sat ! m^3 water
+    
+    illitization => &
+      patch%illitization_function_array(patch%ilt_id(ghosted_id))%ptr
     
     ! sum up mass of each isotope across phases and decay
     do iele = 1, this%num_elements
@@ -1357,6 +1365,25 @@ subroutine PMUFDDecaySolve(this,time,ierr)
 
       ! split mass between phases
       kd_kgw_m3b = this%element_Kd(iele,imat)
+
+      ! modify kd if needed
+      if (associated(material_auxvars(ghosted_id)%iltf)) then
+        if (material_auxvars(ghosted_id)%iltf%ilt)then
+          if (option%time > material_auxvars(ghosted_id)%iltf%ilt_tst .and. &
+              option%dt > 0.d0) then
+            select type(ilf => illitization%illitization_function) 
+              type is (ILT_default_type)
+                if (associated(ilf%ilt_shift_kd_list)) then
+                  call ilf%ShiftKd(kd_kgw_m3b, &
+                                   this%element_name(iele), &
+                                   material_auxvars(ghosted_id), &
+                                   option)
+                endif
+            end select
+          endif
+        endif
+      endif
+
       conc_ele_aq1 = mass_ele_tot1 / (1.d0+kd_kgw_m3b/(den_w_kg*por*sat)) / &
                          (vps*1.d3)
       above_solubility = conc_ele_aq1 > this%element_solubility(iele)

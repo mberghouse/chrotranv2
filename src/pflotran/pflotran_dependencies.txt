@@ -562,9 +562,9 @@ pm_ufd_biosphere.o : coupler.o global_aux.o grid.o input_aux.o material_aux.o \
                      option.o output_aux.o pflotran_constants.o pm_base.o \
                      reaction_aux.o reactive_transport_aux.o \
                      realization_subsurface.o region.o string.o utility.o
-pm_ufd_decay.o : field.o global.o global_aux.o grid.o input_aux.o material.o \
-                 material_aux.o option.o output_aux.o patch.o \
-                 pflotran_constants.o pm_base.o reaction_aux.o \
+pm_ufd_decay.o : field.o global.o global_aux.o grid.o illitization.o \
+                 input_aux.o material.o material_aux.o option.o output_aux.o \
+                 patch.o pflotran_constants.o pm_base.o reaction_aux.o \
                  reaction_mineral_aux.o reactive_transport_aux.o \
                  realization_subsurface.o string.o utility.o
 pm_waste_form.o : checkpoint.o condition.o data_mediator_vec.o dataset.o \

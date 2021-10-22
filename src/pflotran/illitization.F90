@@ -34,6 +34,7 @@ module Illitization_module
   contains
     procedure, public :: Verify => ILTDefaultVerify
     procedure, public :: CalculateILT => ILTDefaultIllitization
+    procedure, public :: ShiftKd => ILTShiftSorption
   end type ILT_default_type
   !---------------------------------------------------------------------------
   type, public, extends(ILT_default_type) :: ILT_general_type
@@ -59,8 +60,9 @@ module Illitization_module
   !---------------------------------------------------------------------------
   type :: ilt_kd_effects_type
     PetscInt :: num_elements
-    PetscReal, pointer :: f_kd(:) ! factor for modifying the kd value
-    character(len=MAXWORDLENGTH), pointer :: element_name(:) ! element affected
+    PetscReal, pointer :: f_kd(:,:) ! factors for modifying the kd value
+    character(len=MAXWORDLENGTH), pointer :: f_kd_mode(:) ! function type
+    character(len=MAXWORDLENGTH), pointer :: f_kd_element(:) ! element affected
     class(ilt_kd_effects_type), pointer :: next
   end type
   !---------------------------------------------------------------------------
@@ -319,7 +321,7 @@ function ILTKdEffectsCreate()
   
   ILTKdEffectsCreate%num_elements = UNINITIALIZED_INTEGER
   nullify(ILTKdEffectsCreate%f_kd)
-  nullify(ILTKdEffectsCreate%element_name)
+  nullify(ILTKdEffectsCreate%f_kd_element)
   nullify(ILTKdEffectsCreate%next)
 
 end function ILTKdEffectsCreate
@@ -524,6 +526,81 @@ subroutine ILTGeneralIllitization(this,fs,temperature,dt, &
   shift = scale * this%ilt_shift_perm
 
 end subroutine ILTGeneralIllitization
+
+! ************************************************************************** !
+
+subroutine ILTShiftSorption(this,kd0,ele,material_auxvar,option)
+
+  use Option_module
+  use Input_Aux_module
+  use Material_Aux_class
+
+  implicit none
+
+  class(ILT_default_type) :: this
+  PetscReal, intent(inout) :: kd0
+  character(len=MAXWORDLENGTH), intent(in) :: ele
+  class(material_auxvar_type), intent(in) :: material_auxvar
+  type(option_type), intent(inout) :: option
+  
+  class(ilt_kd_effects_type), pointer :: kdl
+  character(len=MAXWORDLENGTH) :: fkdele
+  character(len=MAXWORDLENGTH) :: fkdmode
+  PetscReal, allocatable :: fkd(:)
+  PetscInt :: i, j, k
+  PetscReal :: scale
+  
+  if (.not. associated(this%ilt_shift_kd_list)) return
+  if (.not. associated(material_auxvar%iltf)) return
+
+  ! Find element and functional properties
+  kdl => this%ilt_shift_kd_list
+  do
+    if (.not. associated(kdl)) exit
+    do i = 1, kdl%num_elements
+      fkdele = kdl%f_kd_element(i)
+      ! If elements match, proceed
+      if (trim(fkdele) == trim(ele)) then
+        ! Identify function
+        fkdmode = kdl%f_kd_mode(i)
+        ! Allocate vector of function values
+        select case(fkdmode)
+        case ('DEFAULT')
+          j = 1
+        case default
+          option%io_buffer = 'Sorption modification function "'//trim(fkdmode) &
+                           //'" was not found among the available options, so' &
+                           //' the kd was not modified.'
+          call PrintErrMsgByRank(option)
+        end select
+        allocate(fkd(j))
+        ! Populate local vector of function values
+        do k = 1, j
+          fkd(k) = kdl%f_kd(i,k)
+        enddo
+        ! Done
+        exit
+      endif
+    enddo
+    kdl => kdl%next
+  enddo
+  
+  ! Apply function to modify kd
+  select case(fkdmode)
+    case ('DEFAULT')
+      scale = material_auxvar%iltf%ilt_scale
+      
+      kd0 = kd0 * (1.0d0 + scale*fkd(1))
+    case default
+      option%io_buffer = 'Sorption modification function "'//trim(fkdmode) &
+                       //'" was not found among the available options, so' &
+                       //' the kd was not modified.'
+      call PrintErrMsgByRank(option)
+  end select
+  
+  if (allocated(fkd)) deallocate(fkd)
+
+end subroutine ILTShiftSorption
 
 ! ************************************************************************** !
 
@@ -750,12 +827,14 @@ subroutine ILTDefaultRead(ilf,input,keyword,error_string,kind,option)
   character(len=*)  :: kind
   type(option_type) :: option
   
-  PetscInt :: i
+  PetscInt :: i,j,jmax
   PetscInt, parameter :: MAX_KD_SIZE = 100
   character(len=MAXWORDLENGTH) :: word
   class(ilt_kd_effects_type), pointer :: shift_kd_list, prev_shift_kd_list
-  PetscReal :: f_kd(MAX_KD_SIZE)
-  character(len=MAXWORDLENGTH) :: element_name(MAX_KD_SIZE)
+  PetscReal :: f_kd(MAX_KD_SIZE,10)
+  PetscInt :: f_kd_mode_size(MAX_KD_SIZE)
+  character(len=MAXWORDLENGTH) :: f_kd_element(MAX_KD_SIZE)
+  character(len=MAXWORDLENGTH) :: f_kd_mode(MAX_KD_SIZE)
 
   nullify(prev_shift_kd_list)
   
@@ -793,8 +872,11 @@ subroutine ILTDefaultRead(ilf,input,keyword,error_string,kind,option)
       ! Factors modifying selected kd values as function of illite fraction
       shift_kd_list => ILTKdEffectsCreate()
       i = 0
-      f_kd(:) = UNINITIALIZED_DOUBLE
-      element_name(:) = ''
+      j = 0
+      f_kd_mode_size(:) = 0
+      f_kd(:,:) = UNINITIALIZED_DOUBLE
+      f_kd_mode(:) = ''
+      f_kd_element(:) = ''
       
       call InputPushBlock(input,option)
       
@@ -810,12 +892,34 @@ subroutine ILTDefaultRead(ilf,input,keyword,error_string,kind,option)
             //' under SHIFT_KD in' // trim(error_string) // '.'
           call PrintErrMsg(option)
         endif
+        
+        ! Element
         call InputReadWord(input,option,word,PETSC_TRUE)
-        call InputErrorMsg(input,option,'f_kd element name', &
+        call InputErrorMsg(input,option,'f_kd element symbol', &
                            error_string)
-        element_name(i) = word
-        call InputReadDouble(input,option,f_kd(i))
-        call InputErrorMsg(input,option,'f_kd',error_string)
+        f_kd_element(i) = word
+        
+        ! Function type
+        call InputReadWord(input,option,word,PETSC_TRUE)
+        call InputErrorMsg(input,option,'f_kd function type', &
+                           error_string)
+        f_kd_mode(i) = word
+        
+        ! Function parameters
+        select case(f_kd_mode(i))
+          case('DEFAULT')
+            j = 1
+            f_kd_mode_size(i) = j
+            call InputReadDouble(input,option,f_kd(i,1))
+            call InputErrorMsg(input,option,'f_kd, LINEAR',error_string)
+          case default
+            option%io_buffer = 'Sorption modification function "' &
+                             // trim(f_kd_mode(i)) // '" for element "'&
+                             // trim(f_kd_element(i)) &
+                             //'" was not found among the available options ' &
+                             //'in ILLITIZATION, '//trim(kind)//'.'
+            call PrintErrMsg(option)
+        end select
       enddo
       
       call InputPopBlock(input,option)
@@ -826,10 +930,13 @@ subroutine ILTDefaultRead(ilf,input,keyword,error_string,kind,option)
         call PrintErrMsg(option)
       endif
       
-      allocate(shift_kd_list%f_kd(i))
-      shift_kd_list%f_kd = f_kd(1:i)
-      allocate(shift_kd_list%element_name(i))
-      shift_kd_list%element_name = element_name(1:i)
+      jmax = maxval(f_kd_mode_size)
+      allocate(shift_kd_list%f_kd(i,jmax))
+      shift_kd_list%f_kd = f_kd(1:i,1:jmax)
+      allocate(shift_kd_list%f_kd_element(i))
+      shift_kd_list%f_kd_element = f_kd_element(1:i)
+      allocate(shift_kd_list%f_kd_mode(i))
+      shift_kd_list%f_kd_mode = f_kd_mode(1:i)
       shift_kd_list%num_elements = i
       
       if (associated(prev_shift_kd_list)) then

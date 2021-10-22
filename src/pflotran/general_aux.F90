@@ -562,7 +562,7 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
   PetscReal :: dh_water_vapor_dpv, dh_water_vapor_dT
   PetscReal :: du_water_vapor_dpv, du_water_vapor_dT
   PetscReal :: dpc_dsatl
-  PetscReal :: scale, shift_perm
+  PetscReal :: shift_perm
   character(len=8) :: state_char
   PetscErrorCode :: ierr
   PetscErrorCode :: eos_henry_ierr
@@ -967,7 +967,8 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
                               gen_auxvar%temp, &
                               option%flow_dt, &
                               material_auxvar%iltf%ilt_fit, &
-                              scale, shift_perm, &
+                              material_auxvar%iltf%ilt_scale, &
+                              shift_perm, &
                               option)
           call material_auxvar%iltf%ShiftPerm(material_auxvar,shift_perm,option)
           material_auxvar%iltf%ilt_tst = option%time
