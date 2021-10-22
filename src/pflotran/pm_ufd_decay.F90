@@ -1195,8 +1195,10 @@ subroutine PMUFDDecaySolve(this,time,ierr)
     sat = global_auxvars(ghosted_id)%sat(1)
     vps = vol * por * sat ! m^3 water
     
-    illitization => &
-      patch%illitization_function_array(patch%ilt_id(ghosted_id))%ptr
+    if (associated(patch%ilt_id)) then
+      illitization => &
+        patch%illitization_function_array(patch%ilt_id(ghosted_id))%ptr
+    endif
     
     ! sum up mass of each isotope across phases and decay
     do iele = 1, this%num_elements
