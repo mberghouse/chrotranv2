@@ -1064,7 +1064,6 @@ subroutine SolverReadNewtonSelectCase(solver,input,keyword,found, &
 
   found = PETSC_TRUE
   select case(trim(keyword))
-
     case ('INEXACT_NEWTON')
       solver%inexact_newton = PETSC_TRUE
 

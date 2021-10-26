@@ -236,7 +236,7 @@ subroutine PMSubsurfaceFlowReadTSSelectCase(this,input,keyword,found, &
     case('CFL_GOVERNOR')
       call InputReadDouble(input,option,this%cfl_governor)
       call InputErrorMsg(input,option,keyword,error_string)
-
+      
     case default
       found = PETSC_FALSE
   end select  
@@ -262,10 +262,11 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
   
   class(pm_subsurface_flow_type) :: this
   type(input_type), pointer :: input
-  character(len=MAXWORDLENGTH) :: keyword
+  character(len=MAXWORDLENGTH) :: keyword, word
   PetscBool :: found
-  character(len=MAXSTRINGLENGTH) :: error_string
+  character(len=MAXSTRINGLENGTH) :: error_string, string
   type(option_type), pointer :: option
+  PetscErrorCode :: ierr
 
 !  found = PETSC_FALSE
 !  call PMBaseReadNewtonSelectCase(this,input,keyword,found,error_string,option)
@@ -273,7 +274,132 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
 
   found = PETSC_TRUE
   select case(trim(keyword))
-  
+
+    case ('NEWTONTRD','NEWTON_TRUST_REGION_DOGLEG','NEWTON_TRD')
+      this%option%flow%using_newtontrd = PETSC_TRUE
+      string = '-flow_snes_type'
+      call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
+                                trim(string),trim('newtontrdc'), &
+                                ierr);CHKERRQ(ierr)
+      input%ierr = 0
+      call InputPushBlock(input,option)
+      do
+        call InputReadPflotranString(input,option)
+        if (InputCheckExit(input,option)) exit
+
+        call InputReadCard(input,option,keyword)
+        call InputErrorMsg(input,option,'keyword','NEWTON_TRUST_REGION_DOGLEG')
+        call StringToUpper(keyword)
+
+        select case(trim(keyword))
+          case('TR_TOL')
+            call InputReadWord(input,option,word,PETSC_TRUE)
+            call InputErrorMsg(input,option, &
+                               'trust region tolerance ', &
+                               'NEWTON TRD options')
+            string = '-flow_snes_trdc_tol'
+            call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
+                                      trim(string),trim(word), &
+                                      ierr);CHKERRQ(ierr)
+          case('ETA1') ! 0 =< ETA1 <= ETA2, ETA3 = 0.75
+            call InputReadWord(input,option,word,PETSC_TRUE)
+            call InputErrorMsg(input,option, &
+                               'rho > eta1 trust region satisfactory value', &
+                               'NEWTON TRD options')
+            string = '-flow_snes_trdc_eta1'
+            call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
+                                      trim(string),trim(word), &
+                                      ierr);CHKERRQ(ierr)
+          case('ETA2')
+            call InputReadWord(input,option,word,PETSC_TRUE)
+            call InputErrorMsg(input,option, &
+                               'rho =< eta2, shrink trust region ', &
+                               'NEWTON TRD options')
+            string = '-flow_snes_trdc_eta2'
+            call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
+                                      trim(string),trim(word), &
+                                      ierr);CHKERRQ(ierr)
+          case('ETA3')
+            call InputReadWord(input,option,word,PETSC_TRUE)
+            call InputErrorMsg(input,option, &
+                               'rho > eta3, expand trust region', &
+                               'NEWTON TRD options')
+            string = '-flow_snes_trdc_eta3'
+            call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
+                                      trim(string),trim(word), &
+                                      ierr);CHKERRQ(ierr)
+          case('T1') ! SHRINK BY THIS FACTOR 0.25
+            call InputReadWord(input,option,word,PETSC_TRUE)
+            call InputErrorMsg(input,option, &
+                               'shrink trust region by t1', &
+                               'NEWTON TRD options')
+            string = '-flow_snes_trdc_t1'
+            call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
+                                      trim(string),trim(word), &
+                                      ierr);CHKERRQ(ierr)
+          case('T2') ! EXPAND BY THIS FACTOR 2.00
+            call InputReadWord(input,option,word,PETSC_TRUE)
+            call InputErrorMsg(input,option, &
+                               'expand trust region by t2', &
+                               'NEWTON TRD options')
+            string = '-flow_snes_trdc_t2'
+            call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
+                                      trim(string),trim(word), &
+                                      ierr);CHKERRQ(ierr)
+          case('DELTA_M','DELTAM')
+            call InputReadWord(input,option,word,PETSC_TRUE)
+            call InputErrorMsg(input,option, &
+                               'maximum trust region size, Delta_M*xnorm', &
+                               'NEWTON TRD options')
+            string = '-flow_snes_trdc_deltaM'
+            call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
+                                      trim(string),trim(word), &
+                                      ierr);CHKERRQ(ierr)
+          case('DELTA_0','DELTA0')
+            call InputReadWord(input,option,word,PETSC_TRUE)
+            call InputErrorMsg(input,option, &
+                               'initial trust region size', &
+                               'NEWTON TRD options')
+            string = '-flow_snes_trdc_delta0'
+            call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
+                                      trim(string),trim(word), &
+                                      ierr);CHKERRQ(ierr)
+          case('USE_CAUCHY','CAUCHY')
+            call InputReadWord(input,option,word,PETSC_TRUE)
+            call InputErrorMsg(input,option, &
+                               'USE_CAUCHY TRUE or FALSE', &
+                               'NEWTON TRD options')
+            string = '-flow_snes_trdc_use_cauchy'
+            call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
+                                      trim(string),trim(word), &
+                                      ierr);CHKERRQ(ierr)
+          case('AUTO_SCALE_UNKNOWNS','AUTO_SCALE')
+            call InputReadWord(input,option,word,PETSC_TRUE)
+            call InputErrorMsg(input,option, &
+                               'auto scale multiphase flow modes', &
+                               'NEWTON TRD options')
+            string = '-flow_snes_trdc_auto_scale_multiphase'
+            call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
+                                      trim(string),trim(word), &
+                                      ierr);CHKERRQ(ierr)
+          case('AUTO_SCALE_MAX')
+            call InputReadWord(input,option,word,PETSC_TRUE)
+            call InputErrorMsg(input,option, &
+                               'initial trust region size', &
+                               'NEWTON TRD options')
+            string = '-flow_snes_trdc_auto_scale_max'
+            call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
+                                      trim(string),trim(word), &
+                                      ierr);CHKERRQ(ierr)
+          case default
+            option%io_buffer  = 'NEWTON_TRUST_REGION option: ' // trim(word) // &
+                              ' unknown.'
+            call PrintErrMsg(option)
+        end select
+      enddo
+      call InputPopBlock(input,option)
+
+
     case('PRESSURE_DAMPENING_FACTOR')
       call InputReadDouble(input,option,this%pressure_dampening_factor)
       call InputErrorMsg(input,option,keyword,error_string)
@@ -389,6 +515,7 @@ subroutine PMSubsurfaceFlowSetRealization(this,realization)
   ! Date: 04/21/14
 
   use Realization_Subsurface_class
+  use Option_module
   use Grid_module
 
   implicit none
@@ -399,7 +526,12 @@ subroutine PMSubsurfaceFlowSetRealization(this,realization)
   this%realization => realization
   this%realization_base => realization
 
-  this%solution_vec = realization%field%flow_xx
+  ! scale pressures down to the range near saturation (0 to 1)
+  if (this%option%flow%scale_all_pressure) then 
+    this%solution_vec = realization%field%flow_scaled_xx
+  else
+    this%solution_vec = realization%field%flow_xx
+  endif
   this%residual_vec = realization%field%flow_r
   
 end subroutine PMSubsurfaceFlowSetRealization
@@ -742,12 +874,24 @@ subroutine PMSubsurfaceFlowPreSolve(this)
 
   use Global_module
   use Data_Mediator_module
+  use Option_module
 
   implicit none
   
   class(pm_subsurface_flow_type) :: this
 
-  this%norm_history = 0.d0
+  PetscErrorCode :: ierr
+  PetscReal :: inverse_factor
+
+  if (this%option%flow%scale_all_pressure) then
+    call VecCopy(this%realization%field%flow_xx, &
+                 this%realization%field%flow_scaled_xx,ierr);CHKERRQ(ierr)
+    inverse_factor = this%option%flow%pressure_scaling_factor**(-1.d0)
+    call VecStrideScale(this%realization%field%flow_scaled_xx,ZERO_INTEGER, &
+                        inverse_factor, ierr);CHKERRQ(ierr)
+  endif
+  
+  this%norm_history = 0.d0  
   call DataMediatorUpdate(this%realization%flow_data_mediator_list, &
                           this%realization%field%flow_mass_transfer, &
                           this%realization%option)

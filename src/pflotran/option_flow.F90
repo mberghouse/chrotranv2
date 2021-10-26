@@ -28,6 +28,11 @@ module Option_Flow_module
     PetscBool :: numerical_derivatives
     PetscBool :: numerical_derivatives_compare
     PetscBool :: only_energy_eq
+
+    PetscBool :: scale_all_pressure
+    PetscReal :: pressure_scaling_factor
+    PetscBool :: using_newtontrd
+
     PetscBool :: full_perm_tensor
     PetscBool :: steady_state
 
@@ -143,6 +148,9 @@ subroutine OptionFlowInitRealization(option)
   option%numerical_derivatives = PETSC_FALSE
   option%numerical_derivatives_compare = petsc_false
   option%only_energy_eq = PETSC_FALSE
+  option%scale_all_pressure = PETSC_FALSE
+  option%pressure_scaling_factor = 1.d7
+  option%using_newtontrd = PETSC_FALSE
   option%full_perm_tensor = PETSC_FALSE
 
   option%set_secondary_init_temp = PETSC_FALSE
@@ -158,6 +166,9 @@ subroutine OptionFlowInitRealization(option)
   option%steady_state = PETSC_FALSE
 
   option%store_darcy_vel = PETSC_FALSE
+  option%scale_all_pressure = PETSC_FALSE
+  option%pressure_scaling_factor = 1.d7
+  option%using_newtontrd = PETSC_FALSE
 
 end subroutine OptionFlowInitRealization
 
