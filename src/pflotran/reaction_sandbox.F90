@@ -8,6 +8,7 @@ module Reaction_Sandbox_module
   use Reaction_Sandbox_UFD_WP_class
   use Reaction_Sandbox_Example_class
   use Reaction_Sandbox_Simple_class
+  use Reaction_Sandbox_Kinetics_class
   use Reaction_Sandbox_Cyber_class
   use Reaction_Sandbox_Gas_class
   use Reaction_Sandbox_BioHill_class
@@ -165,6 +166,8 @@ subroutine RSandboxRead2(local_sandbox_list,input,option)
         new_sandbox => EXAMPLECreate()
       case('SIMPLE')
         new_sandbox => SimpleCreate()
+      case('KINETICS')
+        new_sandbox => KineticsCreate()
       case('CYBERNETIC')
         new_sandbox => CyberCreate()
       case('GAS')

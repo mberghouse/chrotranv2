@@ -1,0 +1,465 @@
+module Reaction_Sandbox_Kinetics_class
+
+#include "petsc/finclude/petscsys.h"
+  use petscsys
+
+  use Reaction_Sandbox_Base_class
+  use PFLOTRAN_Constants_module
+  
+  use Global_Aux_module
+  use Reactive_Transport_Aux_module
+
+  implicit none
+  
+  private
+  
+  type, public, &
+    extends(reaction_sandbox_base_type) :: reaction_sandbox_kinetics_type
+    ! Aqueous species
+    PetscInt :: species_Aaq_id
+    PetscInt :: species_Baq_id
+    PetscInt :: species_Caq_id
+    PetscInt :: species_Daq_id
+    PetscInt :: species_Eaq_id
+    PetscInt :: species_Faq_id
+
+    PetscInt :: species_na_id
+    PetscInt :: species_cl_id
+    PetscInt :: species_fe2_id
+    PetscInt :: species_fe3_id
+    PetscInt :: species_cro4_id
+    PetscInt :: species_h_id
+    PetscInt :: species_o2_id
+
+! Immobile species (e.g. biomass)
+    PetscInt :: species_Xim_id
+    PetscInt :: species_Yim_id
+    character(len=MAXWORDLENGTH) :: species_name
+    PetscInt :: species_id
+    PetscReal :: rate_constant
+    character(len=MAXWORDLENGTH) :: model
+  contains
+    procedure, public :: ReadInput => KineticsRead
+    procedure, public :: Setup => KineticsSetup
+    procedure, public :: Evaluate => KineticsEvaluate
+!   procedure, public :: Destroy => KineticsDestroy
+  end type reaction_sandbox_kinetics_type
+
+  public :: KineticsCreate
+
+contains
+
+! ************************************************************************** !
+
+function KineticsCreate()
+  ! 
+  ! Allocates kinetics reaction object.
+  ! 
+  ! Author: Peter Lichtner
+  ! Date: 10/24/2021
+
+  implicit none
+  
+  class(reaction_sandbox_kinetics_type), pointer :: KineticsCreate
+
+  allocate(KineticsCreate)
+  KineticsCreate%species_name = ''
+  KineticsCreate%species_id = 0
+  KineticsCreate%rate_constant = 0.d0
+  KineticsCreate%model = ''
+  nullify(KineticsCreate%next)
+      
+end function KineticsCreate
+
+! ************************************************************************** !
+
+!#if 0
+
+subroutine KineticsRead(this,input,option)
+  !
+  ! Reads input deck for kinetics reaction parameters (if any)
+  !
+  ! Author: Peter Lichtner
+  ! Date: 10/24/2021
+  !
+  use Option_module
+  use String_module
+  use Input_Aux_module
+  use Units_module, only : UnitsConvertToInternal
+  
+  implicit none
+  
+  class(reaction_sandbox_kinetics_type) :: this
+  type(input_type), pointer :: input
+  type(option_type) :: option
+
+  PetscInt :: i
+  character(len=MAXWORDLENGTH) :: word, internal_units
+  
+  call InputPushBlock(input,option)
+  do
+    call InputReadPflotranString(input,option)
+    if (InputError(input)) exit
+    if (InputCheckExit(input,option)) exit
+
+    call InputReadCard(input,option,word)
+    call InputErrorMsg(input,option,'keyword', &
+                       'CHEMISTRY,REACTION_SANDBOX,KINETICS')
+    call StringToUpper(word)
+
+    select case(trim(word))
+
+      ! Example Input:
+
+      ! CHEMISTRY
+      !   ...
+      !   REACTION_SANDBOX
+      !   : begin user-defined input
+      !     EXAMPLE
+      !       EXAMPLE_INTEGER 1
+      !       EXAMPLE_INTEGER_ARRAY 2 3 4
+      !     END
+      !   : end user defined input
+      !   END
+      !   ...
+      ! END
+
+! 5. Add case statement for reading variables.
+      case('SPECIES_NAME')
+! 6. Read the variable
+        ! Read the character string indicating which of the primary species
+        ! is being decayed.
+        call InputReadWord(input,option,this%species_name,PETSC_TRUE)
+! 7. Inform the user of any errors if not read correctly.
+        call InputErrorMsg(input,option,'species_name', &
+                           'CHEMISTRY,REACTION_SANDBOX,KINETICS')
+! 8. Repeat for other variables
+      case('RATE_CONSTANT')
+        ! Read the double precision rate constant
+        call InputReadDouble(input,option,this%rate_constant)
+        call InputErrorMsg(input,option,'rate_constant', &
+                           'CHEMISTRY,REACTION_SANDBOX,KINETICS')
+        ! Read the units
+        call InputReadWord(input,option,word,PETSC_TRUE)
+        if (InputError(input)) then
+          ! If units do not exist, assume default units of 1/s which are the
+          ! standard internal PFLOTRAN units for this rate constant.
+          input%err_buf = 'REACTION_SANDBOX,KINETICS,RATE CONSTANT UNITS'
+          call InputDefaultMsg(input,option)
+        else
+          ! If units exist, convert to internal units of 1/s
+          internal_units = 'unitless/sec'
+          this%rate_constant = this%rate_constant * &
+            UnitsConvertToInternal(word,internal_units,option)
+        endif
+
+      case('MODEL')
+        call InputReadWord(input,option,this%model,PETSC_TRUE)
+        call InputErrorMsg(input,option,'model', &
+                          'CHEMISTRY,REACTION_SANDBOX,KINETICS')
+      case default
+        call InputKeywordUnrecognized(input,word, &
+                     'CHEMISTRY,REACTION_SANDBOX,KINETICS',option)
+    end select
+  enddo
+  call InputPopBlock(input,option)
+  
+end subroutine KineticsRead
+!#endif
+
+! ************************************************************************** !
+
+subroutine KineticsSetup(this,reaction,option)
+  ! 
+  ! Sets up the kinetics reaction with hardwired parameters
+  ! 
+  ! Author: Peter Lichtner
+  ! Date: 10/24/2021
+
+  use Reaction_Aux_module, only : reaction_rt_type, GetPrimarySpeciesIDFromName
+  use Reaction_Immobile_Aux_module, only : GetImmobileSpeciesIDFromName
+  use Option_module
+
+  implicit none
+  
+  class(reaction_sandbox_kinetics_type) :: this
+  class(reaction_rt_type) :: reaction
+  type(option_type) :: option
+  
+  character(len=MAXWORDLENGTH) :: word
+
+  ! Aqueous species
+  word = 'Aaq'
+  this%species_Aaq_id = &
+    GetPrimarySpeciesIDFromName(word,reaction,option)
+  word = 'Baq'
+  this%species_Baq_id = &
+    GetPrimarySpeciesIDFromName(word,reaction,option)
+  word = 'Caq'
+  this%species_Caq_id = &
+    GetPrimarySpeciesIDFromName(word,reaction,option)
+  word = 'Daq'
+  this%species_Daq_id = &
+    GetPrimarySpeciesIDFromName(word,reaction,option)
+  word = 'Eaq'
+  this%species_Eaq_id = &
+    GetPrimarySpeciesIDFromName(word,reaction,option)
+  word = 'Faq'
+  this%species_Faq_id = &
+    GetPrimarySpeciesIDFromName(word,reaction,option)
+
+  word = 'Na+'
+  this%species_na_id = &
+    GetPrimarySpeciesIDFromName(word,reaction,option)
+  word = 'Cl-'
+  this%species_cl_id = &
+    GetPrimarySpeciesIDFromName(word,reaction,option)
+  word = 'Fe++'
+  this%species_fe2_id = &
+    GetPrimarySpeciesIDFromName(word,reaction,option)
+  word = 'Fe+++'
+  this%species_fe3_id = &
+    GetPrimarySpeciesIDFromName(word,reaction,option)
+  word = 'CrO4--'
+  this%species_cro4_id = &
+    GetPrimarySpeciesIDFromName(word,reaction,option)
+  word = 'H+'
+  this%species_h_id = &
+    GetPrimarySpeciesIDFromName(word,reaction,option)
+  word = 'O2(aq)'
+  this%species_o2_id = &
+    GetPrimarySpeciesIDFromName(word,reaction,option)
+
+  ! Immobile species
+  word = 'Xim'
+  this%species_Xim_id = &
+    GetImmobileSpeciesIDFromName(word,reaction%immobile,option)
+  word = 'Yim'
+  this%species_Yim_id = &
+    GetImmobileSpeciesIDFromName(word,reaction%immobile,option)
+
+end subroutine KineticsSetup
+
+! ************************************************************************** !
+
+subroutine KineticsEvaluate(this,Residual,Jacobian,compute_derivative, &
+                          rt_auxvar,global_auxvar,material_auxvar,reaction, &
+                          option)
+  ! 
+  ! Evaluates reaction storing residual and/or Jacobian
+  ! 
+  ! Author: Peter Lichtner
+  ! Date: 10/24/2021
+  ! 
+  use Option_module
+
+  use String_module
+  use Input_Aux_module
+
+  use Reaction_Aux_module
+  use Reactive_Transport_Aux_module
+  use Global_Aux_module
+  use Material_Aux_class
+  
+  implicit none
+  
+  class(reaction_sandbox_kinetics_type) :: this
+
+  type(option_type) :: option
+  class(reaction_rt_type) :: reaction
+  PetscBool :: compute_derivative
+
+  ! the following arrays must be declared after reaction
+  PetscReal :: Residual(reaction%ncomp)
+  PetscReal :: Jacobian(reaction%ncomp,reaction%ncomp)
+  type(reactive_transport_auxvar_type) :: rt_auxvar
+  type(global_auxvar_type) :: global_auxvar
+  class(material_auxvar_type) :: material_auxvar
+
+  PetscInt, parameter :: iphase = 1
+  PetscReal :: volume                 ! m^3 bulk volume
+  PetscReal :: porosity               ! m^3 pore / m^3 bulk volume
+  PetscReal :: liquid_saturation      ! m^3 water / m^3 pore space
+  PetscReal :: L_water                ! L water
+  
+  PetscReal :: Aaq, Baq, Caq, Daq, Eaq, Faq  ! mol/L water
+  PetscReal :: Xim, Yim  ! mol/m^3 bulk volume
+  PetscReal :: Rate,Rate1,Rate2
+  PetscReal :: RateA, RateB, RateC, RateD, RateE, RateF, RateX, RateY  ! mol/sec
+  PetscReal :: stoichA, stoichB, stoichC, stoichD, stoichE, stoichF
+  PetscReal :: stoichX, stoichY
+  PetscReal :: k0, k, kr, k1, k2  ! units are problem specific
+  PetscReal :: K_Aaq, K_Baq ! [mol/L water]
+
+  PetscReal :: kfe,kcr,n,pO2,oh,ph,RateFe,RateCr
+  PetscReal :: na,cl,fe2,fe3,cro4,h
+  PetscReal :: Cna, Ccl, Cfe2, Cfe3, Ccro4, Ch, Co2
+  PetscReal :: gh ! activity coefficients
+  PetscReal :: stoichfe2, stoichfe3, stoichh, stoicho2
+  PetscReal :: Koh, Ko2
+  PetscReal :: Ratefe2, Ratefe3, Rateh, Rateo2
+ 
+  character(len=MAXWORDLENGTH) :: word
+
+  porosity = material_auxvar%porosity               ! [m^3 pore/m^3 bulk volume]
+  liquid_saturation = global_auxvar%sat(iphase)     ! [m^3 water/m^3 pore]
+  volume = material_auxvar%volume                   ! [m^3 bulk volume]
+            ! multiply by 1.d3 to convert m^3 water -> L water
+  L_water = porosity*liquid_saturation*volume*1.d3  
+  
+  Aaq = rt_auxvar%pri_molal(this%species_Aaq_id) ! [mol/L water]
+  Baq = rt_auxvar%pri_molal(this%species_Baq_id) ! [mol/L water]
+  Caq = rt_auxvar%pri_molal(this%species_Caq_id) ! [mol/L water]
+  Daq = rt_auxvar%pri_molal(this%species_Daq_id) ! [mol/L water]
+  Eaq = rt_auxvar%pri_molal(this%species_Eaq_id) ! [mol/L water]
+  Faq = rt_auxvar%pri_molal(this%species_Faq_id) ! [mol/L water]
+
+  Cna = rt_auxvar%pri_molal(this%species_na_id) ! [mol/L water]
+  Ccl = rt_auxvar%pri_molal(this%species_cl_id) ! [mol/L water]
+  Cfe2 = rt_auxvar%pri_molal(this%species_fe2_id) ! [mol/L water]
+  Cfe3 = rt_auxvar%pri_molal(this%species_fe3_id) ! [mol/L water]
+  Ccro4 = rt_auxvar%pri_molal(this%species_cro4_id) ! [mol/L water]
+  Ch = rt_auxvar%pri_molal(this%species_h_id) ! [mol/L water]
+  Co2 = rt_auxvar%pri_molal(this%species_o2_id) ! [mol/L water]
+
+  gh = rt_auxvar%pri_act_coef(this%species_h_id) ! [mol/L water]
+! print *,'pH = ',-log10(Ch*gh)
+  
+  Xim = rt_auxvar%immobile(this%species_Xim_id)     ! [mol/m^3 bulk volume]
+  Yim = rt_auxvar%immobile(this%species_Yim_id)     ! [mol/m^3 bulk volume]
+
+  ! initialize all rates to zero
+  Rate = 0.d0
+  RateA = 0.d0
+  RateB = 0.d0
+  RateC = 0.d0
+  RateD = 0.d0
+  RateE = 0.d0
+  RateF = 0.d0
+  RateX = 0.d0
+  RateY = 0.d0
+
+  Ratefe2 = 0.d0
+  Ratefe3 = 0.d0
+  Rateh = 0.d0
+  Rateo2 = 0.d0
+
+  ! stoichiometries
+  ! reactants have negative stoichiometry
+  ! products have positive stoichiometry
+  stoichA = 0.d0
+  stoichB = 0.d0
+  stoichC = 0.d0
+  stoichD = 0.d0
+  stoichE = 0.d0
+  stoichF = 0.d0
+  stoichX = 0.d0
+  stoichY = 0.d0
+  
+  ! kinetic rate constants
+  k = 0.d0
+  kr = 0.d0
+
+  ! Monod half-saturation constants
+  K_Aaq = 0.d0
+  K_Baq = 0.d0
+
+  word = this%model
+! print *,'word = ',word
+
+  select case(trim(word))
+! models: Cr, Fe, Cr-Fe, Cu, Cu-Fe, Cr-Cu-Fe
+
+    case('Cr')
+
+    case('Fe')
+ 
+  !++++++++++++++++++++++++++++++++++++++++++
+  ! Oxidation of Fe(II) Phreeqc ex9
+  ! Fe2+ + H+ + 0.25 O2 = Fe3+ + 0.5 H2O
+  !++++++++++++++++++++++++++++++++++++++++++
+
+      k0 = 2.91e-9
+      k1 = 1.33e12
+      pO2 = 0.2
+      Ko2 = 10.d0**(2.8983d0)
+      Koh = 10.d0**(-13.9951)
+      oh = Koh / Ch
+      pO2 = Ko2 * Co2
+      RateFe = (k0 + k1 * oh**2 * pO2) * Cfe2 * 365
+      stoichfe2 = -1.d0
+      stoichfe3 =  1.d0
+      stoichh = -1.d0
+      stoicho2 = -0.25d0
+      Ratefe2 = stoichfe2 * RateFe
+      Ratefe3 = stoichfe3 * RateFe
+      Rateh = stoichh * RateFe
+      Rateo2 = stoicho2 * RateFe
+
+! print *,'kinetics: ',RateFe,oh,Ch,Cfe2,Ratefe2,Ratefe3,Rateh,Rateo2
+
+    case('Cr-Fe')
+  
+  !++++++++++++++++++++++++++++++++++++++++++
+  ! Cr(VI) reduction by Fe(II)
+  !++++++++++++++++++++++++++++++++++++++++++
+
+      ph = 6.d0
+      oh = 10.d0**(ph-14.d0)
+      pO2 = 0.2d0
+      kfe = 8.e13 * oh**2 * pO2 / 60.d0
+
+      n = 0.6
+      kcr = 58.9e0 * 10.d0**(3.d0*n) / 60.d0
+
+      RateFe = kfe * Aaq * L_water  ! [mol/sec]
+      RateCr = kcr * Aaq**n * Baq * L_water  ! [mol/sec]
+
+      stoichA = -1.d0
+      stoichB = -1.d0
+      RateA = stoichA * RateFe
+      RateB = stoichB * RateCr
+!  print *,'kinetics: ',RateA,RateB,Aaq,Baq,kfe,kcr
+
+    case('Cu')
+
+    case('Cu-Fe')
+
+    case('Cr-Cu-Fe')
+
+    case default
+      print *,'Kinetics error msg.: ', this%model, ' Model not recognized.'
+  end select
+
+  ! NOTES
+  ! 1. Always subtract contribution from residual
+  ! 2. Units of residual are moles/second  
+  Residual(this%species_Aaq_id) = Residual(this%species_Aaq_id) - RateA
+  Residual(this%species_Baq_id) = Residual(this%species_Baq_id) - RateB
+  Residual(this%species_Caq_id) = Residual(this%species_Caq_id) - RateC
+  !Residual(this%species_Daq_id) = Residual(this%species_Daq_id) - RateD
+  !Residual(this%species_Eaq_id) = Residual(this%species_Eaq_id) - RateE
+  !Residual(this%species_Faq_id) = Residual(this%species_Faq_id) - RateF
+
+  !Residual(this%species_na_id) = Residual(this%species_na_id) - RateC
+  !Residual(this%species_cl_id) = Residual(this%species_cl_id) - RateC
+  Residual(this%species_fe2_id) = Residual(this%species_fe2_id) - Ratefe2
+  Residual(this%species_fe3_id) = Residual(this%species_fe3_id) - Ratefe3
+  !Residual(this%species_cro4_id) = Residual(this%species_cro4_id) - Ratecr
+  Residual(this%species_h_id) = Residual(this%species_h_id) - Rateh
+  Residual(this%species_o2_id) = Residual(this%species_o2_id) - Rateo2
+
+  Residual(this%species_Xim_id + reaction%offset_immobile) = &
+    Residual(this%species_Xim_id + reaction%offset_immobile) - RateX
+  Residual(this%species_Yim_id + reaction%offset_immobile) = &
+    Residual(this%species_Yim_id + reaction%offset_immobile) - RateY
+
+  if (compute_derivative) then
+    option%io_buffer = 'Reaction Sandbox Kinetics does not support analytical &
+                       &derivatives.'
+    call PrintErrMsg(option)
+  endif
+  
+end subroutine KineticsEvaluate
+
+end module Reaction_Sandbox_Kinetics_class
