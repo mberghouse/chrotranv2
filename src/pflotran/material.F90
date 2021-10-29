@@ -1870,6 +1870,7 @@ subroutine MaterialSetAuxVarVecLoc(Material,vec_loc,ivar,isubvar)
             1.0d+0 - Material%auxvars(ghosted_id)%iltf%ilt_fs
           Material%auxvars(ghosted_id)%iltf%ilt_fit = &
             1.0d+0 - Material%auxvars(ghosted_id)%iltf%ilt_fst
+          call Material%auxvars(ghosted_id)%iltf%GetScale
         endif
       enddo
   end select
