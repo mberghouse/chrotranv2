@@ -87,7 +87,7 @@ module Material_Aux_class
     PetscReal, allocatable :: perm0(:) ! intiial permeability
   contains
     procedure, public :: ShiftPerm => MaterialShiftPermeability
-    procedure, public :: GetScale => MaterialGetScaleFactor
+    procedure, public :: GetScale => MaterialAuxGetScaleFactor
   end type ilt_auxvar_type
 
   type, public :: fracture_auxvar_type
@@ -799,6 +799,7 @@ subroutine MaterialAuxVarSetValue(material_auxvar,ivar,value)
         material_auxvar%iltf%ilt_fst = value
         material_auxvar%iltf%ilt_fi = 1.0d+0 - material_auxvar%iltf%ilt_fs
         material_auxvar%iltf%ilt_fit = 1.0d+0 - material_auxvar%iltf%ilt_fst
+        call material_auxvar%iltf%GetScale
       endif
   end select
 
@@ -1034,7 +1035,7 @@ end subroutine MaterialShiftPermeability
 
 ! ************************************************************************** !
 
-subroutine MaterialGetScaleFactor(this)
+subroutine MaterialAuxGetScaleFactor(this)
   !
   ! Derives the scale factor from the illitization model.
   !
@@ -1048,7 +1049,7 @@ subroutine MaterialGetScaleFactor(this)
   
   this%ilt_scale = ((this%ilt_fi - (1.0d+0 - this%ilt_fs0)) / this%ilt_fs0)
   
-end subroutine MaterialGetScaleFactor
+end subroutine MaterialAuxGetScaleFactor
 
 ! ************************************************************************** !
 

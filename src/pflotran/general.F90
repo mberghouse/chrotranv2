@@ -320,6 +320,7 @@ subroutine GeneralUpdateSolution(realization)
         material_auxvars(ghosted_id)%iltf%ilt_fst
       material_auxvars(ghosted_id)%iltf%ilt_fi = & ! illite fraction
         material_auxvars(ghosted_id)%iltf%ilt_fit
+      call material_auxvars(ghosted_id)%iltf%GetScale ! scale factor
     endif
   enddo
  
@@ -377,6 +378,7 @@ subroutine GeneralTimeCut(realization)
         material_auxvars(ghosted_id)%iltf%ilt_fs
       material_auxvars(ghosted_id)%iltf%ilt_fit = & ! illite fraction
         1.0d+0 - material_auxvars(ghosted_id)%iltf%ilt_fs
+      call material_auxvars(ghosted_id)%iltf%GetScale ! scale factor
     endif
   enddo
 

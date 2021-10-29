@@ -1638,6 +1638,7 @@ subroutine MaterialAssignPropertyToAux(material_auxvar,material_property, &
     material_auxvar%iltf%ilt_fi  = 1.0d+0 - material_auxvar%iltf%ilt_fs
     material_auxvar%iltf%ilt_fst = material_auxvar%iltf%ilt_fs
     material_auxvar%iltf%ilt_fit = 1.0d+0 - material_auxvar%iltf%ilt_fst
+    call material_auxvar%iltf%GetScale
   endif
     
 !  if (soil_heat_capacity_index > 0) then
@@ -1746,6 +1747,7 @@ subroutine MaterialSetAuxVarScalar(Material,value,ivar,isubvar)
             Material%auxvars(i)%iltf%ilt_fs
           Material%auxvars(i)%iltf%ilt_fit = 1.0d+0 - &
             Material%auxvars(i)%iltf%ilt_fst
+          call Material%auxvars(i)%iltf%GetScale
         endif
       enddo
   end select
