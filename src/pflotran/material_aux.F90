@@ -87,6 +87,9 @@ module Material_Aux_class
     PetscReal, allocatable :: perm0(:) ! intiial permeability
   contains
     procedure, public :: ShiftPerm => MaterialShiftPermeability
+    procedure, public :: Update => MaterialAuxUpdateSmectite
+    procedure, public :: Restore => MaterialAuxRestoreSmectite
+    procedure, public :: Set => MaterialAuxSetSmectite
     procedure, public :: GetScale => MaterialAuxGetScaleFactor
   end type ilt_auxvar_type
 
@@ -795,10 +798,7 @@ subroutine MaterialAuxVarSetValue(material_auxvar,ivar,value)
       material_auxvar%electrical_conductivity(1) = value
     case(ILT_SMECTITE)
       if (associated(material_auxvar%iltf)) then
-        material_auxvar%iltf%ilt_fs = value
-        material_auxvar%iltf%ilt_fst = value
-        material_auxvar%iltf%ilt_fi = 1.0d+0 - material_auxvar%iltf%ilt_fs
-        material_auxvar%iltf%ilt_fit = 1.0d+0 - material_auxvar%iltf%ilt_fst
+        call material_auxvar%iltf%Set(value)
         call material_auxvar%iltf%GetScale
       endif
   end select
@@ -1050,6 +1050,75 @@ subroutine MaterialAuxGetScaleFactor(this)
   this%ilt_scale = ((this%ilt_fi - (1.0d+0 - this%ilt_fs0)) / this%ilt_fs0)
   
 end subroutine MaterialAuxGetScaleFactor
+
+! ************************************************************************** !
+
+subroutine MaterialAuxUpdateSmectite(this)
+  !
+  ! Updates the smectite fraction from the test value.
+  !
+  ! Author: Alex Salazar III
+  ! Date: 10/29/2021
+  !
+  
+  implicit none
+  
+  class(ilt_auxvar_type) :: this
+
+  this%ilt_ts = this%ilt_tst ! time of illitization
+
+  this%ilt_fs = this%ilt_fst ! smectite fraction
+
+  this%ilt_fi = this%ilt_fit ! illite fraction
+
+end subroutine MaterialAuxUpdateSmectite
+
+! ************************************************************************** !
+
+subroutine MaterialAuxRestoreSmectite(this)
+  !
+  ! Restores the smectite fraction from the stored value.
+  !
+  ! Author: Alex Salazar III
+  ! Date: 10/29/2021
+  !
+  
+  implicit none
+  
+  class(ilt_auxvar_type) :: this
+
+  this%ilt_tst = this%ilt_ts ! time of illitization
+
+  this%ilt_fst = this%ilt_fs ! smectite fraction
+
+  this%ilt_fit = this%ilt_fi ! illite fraction
+
+end subroutine MaterialAuxRestoreSmectite
+
+! ************************************************************************** !
+
+subroutine MaterialAuxSetSmectite(this,new)
+  !
+  ! Sets the smectite fraction and modifies related values.
+  !
+  ! Author: Alex Salazar III
+  ! Date: 10/29/2021
+  !
+  
+  implicit none
+  
+  class(ilt_auxvar_type) :: this
+  PetscReal, intent(in) :: new
+
+  this%ilt_fs = new ! stored smectite fraction
+
+  this%ilt_fst = new ! test smectite fraction
+
+  this%ilt_fi = 1.0d+0 - new ! stored illite fraction
+
+  this%ilt_fit = 1.0d+0 - new ! test illite fraction
+
+end subroutine MaterialAuxSetSmectite
 
 ! ************************************************************************** !
 

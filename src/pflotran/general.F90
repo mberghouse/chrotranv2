@@ -314,12 +314,7 @@ subroutine GeneralUpdateSolution(realization)
     gen_auxvars(ZERO_INTEGER,ghosted_id)%istate_store(PREV_TS) = &
       global_auxvars(ghosted_id)%istate
     if (associated(material_auxvars(ghosted_id)%iltf)) then
-      material_auxvars(ghosted_id)%iltf%ilt_ts = & ! time of illitization
-        material_auxvars(ghosted_id)%iltf%ilt_tst
-      material_auxvars(ghosted_id)%iltf%ilt_fs = & ! smectite fraction
-        material_auxvars(ghosted_id)%iltf%ilt_fst
-      material_auxvars(ghosted_id)%iltf%ilt_fi = & ! illite fraction
-        material_auxvars(ghosted_id)%iltf%ilt_fit
+      call material_auxvars(ghosted_id)%iltf%Update
       call material_auxvars(ghosted_id)%iltf%GetScale ! scale factor
     endif
   enddo
@@ -372,12 +367,7 @@ subroutine GeneralTimeCut(realization)
     global_auxvars(ghosted_id)%istate = &
       gen_auxvars(ZERO_INTEGER,ghosted_id)%istate_store(PREV_TS)
     if (associated(material_auxvars(ghosted_id)%iltf)) then
-      material_auxvars(ghosted_id)%iltf%ilt_tst = & ! time of illitization
-        material_auxvars(ghosted_id)%iltf%ilt_ts
-      material_auxvars(ghosted_id)%iltf%ilt_fst = & ! smectite fraction
-        material_auxvars(ghosted_id)%iltf%ilt_fs
-      material_auxvars(ghosted_id)%iltf%ilt_fit = & ! illite fraction
-        1.0d+0 - material_auxvars(ghosted_id)%iltf%ilt_fs
+      call material_auxvars(ghosted_id)%iltf%Restore
       call material_auxvars(ghosted_id)%iltf%GetScale ! scale factor
     endif
   enddo
