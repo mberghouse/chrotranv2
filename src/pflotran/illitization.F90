@@ -565,8 +565,8 @@ subroutine ILTShiftSorption(this,kd0,ele,material_auxvar,option)
         fkdmode = kdl%f_kd_mode(i)
         ! Allocate vector of function values
         select case(fkdmode)
-        case ('DEFAULT')
-          j = 1
+          case ('DEFAULT')
+            j = 1
         case default
           option%io_buffer = 'Sorption modification function "'//trim(fkdmode) &
                            //'" was not found among the available options, so' &
@@ -1088,6 +1088,9 @@ subroutine IllitizationInputRecord(illitization_list)
   class(illitization_type), pointer :: cur_ilf
   character(len=MAXWORDLENGTH) :: word1
   PetscInt :: id = INPUT_RECORD_UNIT
+  
+  class(ilt_kd_effects_type), pointer :: kdl
+  PetscInt :: i, j, k
 
   write(id,'(a)') ' '
   write(id,'(a)') '---------------------------------------------------------&
@@ -1133,6 +1136,30 @@ subroutine IllitizationInputRecord(illitization_list)
         write(id,'(a29)',advance='no') 'shift (permeability): '
         write(word1,'(es12.5)') ilf%ilt_shift_perm
         write(id,'(a)') adjustl(trim(word1))
+        if (associated(ilf%ilt_shift_kd_list)) then
+          write(id,'(a29)') 'shift (kd): '
+          kdl => ilf%ilt_shift_kd_list
+          do
+            if (.not. associated(kdl)) exit
+            do i = 1, kdl%num_elements
+              write(id,'(a29)',advance='no') " "
+              write(word1,'(a)') kdl%f_kd_element(i)
+              write(id,'(a)',advance='no') adjustl(trim(word1))//" "
+              write(word1,'(a)') kdl%f_kd_mode(i)
+              write(id,'(a)',advance='no') adjustl(trim(word1))//" "
+              select case(kdl%f_kd_mode(i))
+                case ('DEFAULT')
+                  j = 1
+              end select
+              do k = 1, j
+                write(word1,'(es12.5)') kdl%f_kd(i,k)
+                write(id,'(a)',advance='no') adjustl(trim(word1))//" "
+              enddo
+              write(id,'(a)')
+            enddo
+            kdl => kdl%next
+          enddo
+        endif
       !---------------------------------
       class is (ILT_general_type)
         write(id,'(a)') 'Cuadros and Linares, 1996'
@@ -1160,6 +1187,30 @@ subroutine IllitizationInputRecord(illitization_list)
         write(id,'(a29)',advance='no') 'shift (permeability): '
         write(word1,'(es12.5)') ilf%ilt_shift_perm
         write(id,'(a)') adjustl(trim(word1))
+        if (associated(ilf%ilt_shift_kd_list)) then
+          write(id,'(a29)') 'shift (kd): '
+          kdl => ilf%ilt_shift_kd_list
+          do
+            if (.not. associated(kdl)) exit
+            do i = 1, kdl%num_elements
+              write(id,'(a29)',advance='no') " "
+              write(word1,'(a)') kdl%f_kd_element(i)
+              write(id,'(a)',advance='no') adjustl(trim(word1))//" "
+              write(word1,'(a)') kdl%f_kd_mode(i)
+              write(id,'(a)',advance='no') adjustl(trim(word1))//" "
+              select case(kdl%f_kd_mode(i))
+                case ('DEFAULT')
+                  j = 1
+              end select
+              do k = 1, j
+                write(word1,'(es12.5)') kdl%f_kd(i,k)
+                write(id,'(a)',advance='no') adjustl(trim(word1))//" "
+              enddo
+              write(id,'(a)')
+            enddo
+            kdl => kdl%next
+          enddo
+        endif
       end select
     endif
 
