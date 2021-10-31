@@ -73,8 +73,6 @@ end function KineticsCreate
 
 ! ************************************************************************** !
 
-!#if 0
-
 subroutine KineticsRead(this,input,option)
   !
   ! Reads input deck for kinetics reaction parameters (if any)
@@ -165,7 +163,6 @@ subroutine KineticsRead(this,input,option)
   call InputPopBlock(input,option)
   
 end subroutine KineticsRead
-!#endif
 
 ! ************************************************************************** !
 
@@ -265,6 +262,7 @@ subroutine KineticsEvaluate(this,Residual,Jacobian,compute_derivative, &
   
   class(reaction_sandbox_kinetics_type) :: this
 
+  type(input_type) :: input
   type(option_type) :: option
   class(reaction_rt_type) :: reaction
   PetscBool :: compute_derivative
@@ -293,7 +291,8 @@ subroutine KineticsEvaluate(this,Residual,Jacobian,compute_derivative, &
 
   PetscReal :: kfe,kcr,n,pO2,oh,ph,RateFe,RateCr
   PetscReal :: na,cl,fe2,fe3,cro4,h
-  PetscReal :: Cna, Ccl, Cfe2, Cfe3, Ccro4, Ch, Co2
+  PetscReal :: m_na, m_cl, m_fe2, m_fe3, m_cro4, m_h, m_o2
+  PetscReal :: Totalfe2
   PetscReal :: gh ! activity coefficients
   PetscReal :: stoichfe2, stoichfe3, stoichh, stoicho2
   PetscReal :: Koh, Ko2
@@ -314,16 +313,15 @@ subroutine KineticsEvaluate(this,Residual,Jacobian,compute_derivative, &
   Eaq = rt_auxvar%pri_molal(this%species_Eaq_id) ! [mol/L water]
   Faq = rt_auxvar%pri_molal(this%species_Faq_id) ! [mol/L water]
 
-  Cna = rt_auxvar%pri_molal(this%species_na_id) ! [mol/L water]
-  Ccl = rt_auxvar%pri_molal(this%species_cl_id) ! [mol/L water]
-  Cfe2 = rt_auxvar%pri_molal(this%species_fe2_id) ! [mol/L water]
-  Cfe3 = rt_auxvar%pri_molal(this%species_fe3_id) ! [mol/L water]
-  Ccro4 = rt_auxvar%pri_molal(this%species_cro4_id) ! [mol/L water]
-  Ch = rt_auxvar%pri_molal(this%species_h_id) ! [mol/L water]
-  Co2 = rt_auxvar%pri_molal(this%species_o2_id) ! [mol/L water]
+  m_na = rt_auxvar%pri_molal(this%species_na_id) ! [mol/L water]
+  m_cl = rt_auxvar%pri_molal(this%species_cl_id) ! [mol/L water]
+  m_fe2 = rt_auxvar%pri_molal(this%species_fe2_id) ! [mol/L water]
+  m_fe3 = rt_auxvar%pri_molal(this%species_fe3_id) ! [mol/L water]
+  m_cro4 = rt_auxvar%pri_molal(this%species_cro4_id) ! [mol/L water]
+  m_h = rt_auxvar%pri_molal(this%species_h_id) ! [mol/L water]
+  m_o2 = rt_auxvar%pri_molal(this%species_o2_id) ! [mol/L water]
 
-  gh = rt_auxvar%pri_act_coef(this%species_h_id) ! [mol/L water]
-! print *,'pH = ',-log10(Ch*gh)
+  Totalfe2 = rt_auxvar%total(this%species_fe2_id,iphase) ! [mol/L water]
   
   Xim = rt_auxvar%immobile(this%species_Xim_id)     ! [mol/m^3 bulk volume]
   Yim = rt_auxvar%immobile(this%species_Yim_id)     ! [mol/m^3 bulk volume]
@@ -368,9 +366,11 @@ subroutine KineticsEvaluate(this,Residual,Jacobian,compute_derivative, &
 ! print *,'word = ',word
 
   select case(trim(word))
-! models: Cr, Fe, Cr-Fe, Cu, Cu-Fe, Cr-Cu-Fe
+! models: Cr, Fe, Cr-Fe, Cu, Cu-Fe, Cr-Cu-Fe, Fe-CO2
 
     case('Cr')
+
+      print *,'Model Cr not implemented'
 
     case('Fe')
  
@@ -384,9 +384,15 @@ subroutine KineticsEvaluate(this,Residual,Jacobian,compute_derivative, &
       pO2 = 0.2
       Ko2 = 10.d0**(2.8983d0)
       Koh = 10.d0**(-13.9951)
-      oh = Koh / Ch
-      pO2 = Ko2 * Co2
-      RateFe = (k0 + k1 * oh**2 * pO2) * Cfe2 * 365
+      gh = rt_auxvar%pri_act_coef(this%species_h_id) ! [mol/L water]
+
+!     oh = Koh / (gh * m_h)
+      oh = Koh / m_h
+
+      pO2 = Ko2 * m_o2
+!     RateFe = (k0 + k1 * oh**2 * pO2) * Totalfe2 * 365
+      RateFe = (k0 + k1 * oh**2 * pO2) * m_fe2 * 365
+
       stoichfe2 = -1.d0
       stoichfe3 =  1.d0
       stoichh = -1.d0
@@ -396,7 +402,7 @@ subroutine KineticsEvaluate(this,Residual,Jacobian,compute_derivative, &
       Rateh = stoichh * RateFe
       Rateo2 = stoicho2 * RateFe
 
-! print *,'kinetics: ',RateFe,oh,Ch,Cfe2,Ratefe2,Ratefe3,Rateh,Rateo2
+! print *,'kinetics: ',RateFe,oh,m_h,m_fe2,Ratefe2,Ratefe3,Rateh,Rateo2
 
     case('Cr-Fe')
   
@@ -419,13 +425,19 @@ subroutine KineticsEvaluate(this,Residual,Jacobian,compute_derivative, &
       stoichB = -1.d0
       RateA = stoichA * RateFe
       RateB = stoichB * RateCr
-!  print *,'kinetics: ',RateA,RateB,Aaq,Baq,kfe,kcr
+!     print *,'kinetics: ',RateA,RateB,Aaq,Baq,kfe,kcr
 
     case('Cu')
 
+      print *,'Model Cu not implemented'
+
     case('Cu-Fe')
 
+      print *,'Model Cu-Fe not implemented'
+
     case('Cr-Cu-Fe')
+
+      print *,'Model Cr-Cu-Fe not implemented'
 
     case default
       print *,'Kinetics error msg.: ', this%model, ' Model not recognized.'
