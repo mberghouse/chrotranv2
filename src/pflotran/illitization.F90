@@ -567,10 +567,11 @@ subroutine ILTShiftSorption(this,kd0,ele,material_auxvar,option)
         select case(fkdmode)
           case ('DEFAULT')
             j = 1
-        case default
-          option%io_buffer = 'Sorption modification function "'//trim(fkdmode) &
-                           //'" was not found among the available options, so' &
-                           //' the kd was not modified.'
+          case default
+            option%io_buffer = 'Sorption modification function "' &
+                             // trim(fkdmode) &
+                             //'" was not found among the available options, ' &
+                             //'so the kd was not modified.'
           call PrintErrMsgByRank(option)
         end select
         allocate(fkd(j))
@@ -656,31 +657,31 @@ subroutine IllitizationRead(this,input,option)
     call StringToUpper(keyword)
 
     select case(trim(keyword))
-    !------------------------------------------
-    case('ILLITIZATION_FUNCTION')
-      call InputReadCard(input,option,word)
-      call InputErrorMsg(input,option, &
-           'ILLITIZATION_FUNCTION',error_string)
-      call StringToUpper(word)
-      select case(word)
-        !-------------------------------------
-        case('DEFAULT','HUANG')
-          this%illitization_function => ILTDefaultCreate()
-        !-------------------------------------
-        case('GENERAL','CUADROS_AND_LINARES')
-          this%illitization_function => ILTGeneralCreate()
-        !-------------------------------------
-        case default
-          call InputKeywordUnrecognized(input,word, &
-               'ILLITIZATION_FUNCTION',option)
-      end select
-      call ILTRead(this%illitization_function,input,option)
-    !------------------------------------------
-    case('TEST')
-      this%test = PETSC_TRUE
-    !------------------------------------------
-    case default
-      call InputKeywordUnrecognized(input,keyword,'ILLITIZATION',option)
+      !------------------------------------------
+      case('ILLITIZATION_FUNCTION')
+        call InputReadCard(input,option,word)
+        call InputErrorMsg(input,option, &
+             'ILLITIZATION_FUNCTION',error_string)
+        call StringToUpper(word)
+        select case(word)
+          !-------------------------------------
+          case('DEFAULT','HUANG')
+            this%illitization_function => ILTDefaultCreate()
+          !-------------------------------------
+          case('GENERAL','CUADROS_AND_LINARES')
+            this%illitization_function => ILTGeneralCreate()
+          !-------------------------------------
+          case default
+            call InputKeywordUnrecognized(input,word, &
+                 'ILLITIZATION_FUNCTION',option)
+        end select
+        call ILTRead(this%illitization_function,input,option)
+      !------------------------------------------
+      case('TEST')
+        this%test = PETSC_TRUE
+      !------------------------------------------
+      case default
+        call InputKeywordUnrecognized(input,keyword,'ILLITIZATION',option)
     end select
   enddo
   call InputPopBlock(input,option)
@@ -720,10 +721,10 @@ subroutine ILTRead(illitization_function,input,option)
   input%ierr = 0
   error_string = 'ILLITIZATION_FUNCTION,'
   select type(ilf => illitization_function)
-  class is(ILT_default_type)
-    error_string = trim(error_string) // 'DEFAULT'
-  class is(ILT_general_type)
-    error_string = trim(error_string) // 'GENERAL'
+    class is(ILT_default_type)
+      error_string = trim(error_string) // 'DEFAULT'
+    class is(ILT_general_type)
+      error_string = trim(error_string) // 'GENERAL'
   end select
   
   call InputPushBlock(input,option)
@@ -736,33 +737,33 @@ subroutine ILTRead(illitization_function,input,option)
     call StringToUpper(keyword)
 
     select type(ilf => illitization_function)
-    !------------------------------------------
-    class is(ILT_default_type)
-      select case(trim(keyword))
-        case default
-          call ILTDefaultRead(ilf,input,keyword,error_string,'DEFAULT',option)
-      end select
-    !------------------------------------------
-    class is(ILT_general_type)
-      select case(trim(keyword))
-        case('K_EXP')
-          ! Exponent of potassium cation concentration
-          call InputReadDouble(input,option,ilf%ilt_K_exp)
-          call InputErrorMsg(input,option,'potassium concentration exponent', &
-                             'ILLITIZATION, GENERAL')
-        case('SMECTITE_EXP')
-          ! Exponent of smectite fraction
-          call InputReadDouble(input,option,ilf%ilt_exp)
-          call InputErrorMsg(input,option,'smectite exponent', &
-                             'ILLITIZATION, GENERAL')
-        case default
-          call ILTDefaultRead(ilf,input,keyword,error_string,'GENERAL',option)
-      end select
-    !------------------------------------------
-    class default
-      option%io_buffer = 'Read routine not implemented for ' &
-           // trim(error_string) // '.'
-      call PrintErrMsg(option)
+      !------------------------------------------
+      class is(ILT_default_type)
+        select case(trim(keyword))
+          case default
+            call ILTDefaultRead(ilf,input,keyword,error_string,'DEFAULT',option)
+        end select
+      !------------------------------------------
+      class is(ILT_general_type)
+        select case(trim(keyword))
+          case('K_EXP')
+            ! Exponent of potassium cation concentration
+            call InputReadDouble(input,option,ilf%ilt_K_exp)
+            call InputErrorMsg(input,option,'potassium concentration exponent',&
+                               'ILLITIZATION, GENERAL')
+          case('SMECTITE_EXP')
+            ! Exponent of smectite fraction
+            call InputReadDouble(input,option,ilf%ilt_exp)
+            call InputErrorMsg(input,option,'smectite exponent', &
+                               'ILLITIZATION, GENERAL')
+          case default
+            call ILTDefaultRead(ilf,input,keyword,error_string,'GENERAL',option)
+        end select
+      !------------------------------------------
+      class default
+        option%io_buffer = 'Read routine not implemented for ' &
+             // trim(error_string) // '.'
+        call PrintErrMsg(option)
     end select
   enddo
   call InputPopBlock(input,option)
@@ -803,8 +804,8 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
                                     'ILLITIZATION, '//trim(kind)// &
                                     ', temperature threshold',option)
     case default
-       call InputKeywordUnrecognized(input,keyword, &
-            'illitization function ('//trim(kind)//')',option)
+      call InputKeywordUnrecognized(input,keyword, &
+           'illitization function ('//trim(kind)//')',option)
   end select
 
 end subroutine
@@ -1104,9 +1105,9 @@ subroutine IllitizationInputRecord(illitization_list)
     
     if (associated(cur_ilf%illitization_function)) then
       select type (ilf => cur_ilf%illitization_function)
-      type is (illitization_base_type)
+        type is (illitization_base_type)
           exit
-      end select
+        end select
     endif
 
     write(id,'(a29)',advance='no') 'illitization function name: '
@@ -1115,102 +1116,102 @@ subroutine IllitizationInputRecord(illitization_list)
     if (associated(cur_ilf%illitization_function)) then
       write(id,'(a29)',advance='no') 'model: '
       select type (ilf => cur_ilf%illitization_function)
-      !---------------------------------
-      class is (ILT_default_type)
-        write(id,'(a)') 'Huang et al., 1993'
-        write(id,'(a29)',advance='no') 'initial smectite: '
-        write(word1,'(es12.5)') ilf%ilt_fs0
-        write(id,'(a)') adjustl(trim(word1))
-        write(id,'(a29)',advance='no') 'frequency: '
-        write(word1,'(es12.5)') ilf%ilt_freq
-        write(id,'(a)') adjustl(trim(word1))//' L/mol-s'
-        write(id,'(a29)',advance='no') 'activation energy: '
-        write(word1,'(es12.5)') ilf%ilt_ea
-        write(id,'(a)') adjustl(trim(word1))//' J/mol'
-        write(id,'(a29)',advance='no') 'K+ concentration: '
-        write(word1,'(es12.5)') ilf%ilt_K_conc
-        write(id,'(a)') adjustl(trim(word1))//' M'
-        write(id,'(a29)',advance='no') 'temperature threshold: '
-        write(word1,'(es12.5)') ilf%ilt_threshold
-        write(id,'(a)') adjustl(trim(word1))//' C'
-        write(id,'(a29)',advance='no') 'shift (permeability): '
-        write(word1,'(es12.5)') ilf%ilt_shift_perm
-        write(id,'(a)') adjustl(trim(word1))
-        if (associated(ilf%ilt_shift_kd_list)) then
-          write(id,'(a29)') 'shift (kd): '
-          kdl => ilf%ilt_shift_kd_list
-          do
-            if (.not. associated(kdl)) exit
-            do i = 1, kdl%num_elements
-              write(id,'(a29)',advance='no') " "
-              write(word1,'(a)') kdl%f_kd_element(i)
-              write(id,'(a)',advance='no') adjustl(trim(word1))//" "
-              write(word1,'(a)') kdl%f_kd_mode(i)
-              write(id,'(a)',advance='no') adjustl(trim(word1))//" "
-              select case(kdl%f_kd_mode(i))
-                case ('DEFAULT')
-                  j = 1
-              end select
-              do k = 1, j
-                write(word1,'(es12.5)') kdl%f_kd(i,k)
+        !---------------------------------
+        class is (ILT_default_type)
+          write(id,'(a)') 'Huang et al., 1993'
+          write(id,'(a29)',advance='no') 'initial smectite: '
+          write(word1,'(es12.5)') ilf%ilt_fs0
+          write(id,'(a)') adjustl(trim(word1))
+          write(id,'(a29)',advance='no') 'frequency: '
+          write(word1,'(es12.5)') ilf%ilt_freq
+          write(id,'(a)') adjustl(trim(word1))//' L/mol-s'
+          write(id,'(a29)',advance='no') 'activation energy: '
+          write(word1,'(es12.5)') ilf%ilt_ea
+          write(id,'(a)') adjustl(trim(word1))//' J/mol'
+          write(id,'(a29)',advance='no') 'K+ concentration: '
+          write(word1,'(es12.5)') ilf%ilt_K_conc
+          write(id,'(a)') adjustl(trim(word1))//' M'
+          write(id,'(a29)',advance='no') 'temperature threshold: '
+          write(word1,'(es12.5)') ilf%ilt_threshold
+          write(id,'(a)') adjustl(trim(word1))//' C'
+          write(id,'(a29)',advance='no') 'shift (permeability): '
+          write(word1,'(es12.5)') ilf%ilt_shift_perm
+          write(id,'(a)') adjustl(trim(word1))
+          if (associated(ilf%ilt_shift_kd_list)) then
+            write(id,'(a29)') 'shift (kd): '
+            kdl => ilf%ilt_shift_kd_list
+            do
+              if (.not. associated(kdl)) exit
+              do i = 1, kdl%num_elements
+                write(id,'(a29)',advance='no') " "
+                write(word1,'(a)') kdl%f_kd_element(i)
                 write(id,'(a)',advance='no') adjustl(trim(word1))//" "
-              enddo
-              write(id,'(a)')
-            enddo
-            kdl => kdl%next
-          enddo
-        endif
-      !---------------------------------
-      class is (ILT_general_type)
-        write(id,'(a)') 'Cuadros and Linares, 1996'
-        write(id,'(a29)',advance='no') 'initial smectite: '
-        write(word1,'(es12.5)') ilf%ilt_fs0
-        write(id,'(a)') adjustl(trim(word1))
-        write(id,'(a29)',advance='no') 'smectite exponent: '
-        write(word1,'(es12.5)') ilf%ilt_exp
-        write(id,'(a)') adjustl(trim(word1))
-        write(id,'(a29)',advance='no') 'frequency: '
-        write(word1,'(es12.5)') ilf%ilt_freq
-        write(id,'(a)') adjustl(trim(word1))//' L/mol-s'
-        write(id,'(a29)',advance='no') 'activation energy: '
-        write(word1,'(es12.5)') ilf%ilt_ea
-        write(id,'(a)') adjustl(trim(word1))//' J/mol'
-        write(id,'(a29)',advance='no') 'K+ concentration: '
-        write(word1,'(es12.5)') ilf%ilt_K_conc
-        write(id,'(a)') adjustl(trim(word1))//' M'
-        write(id,'(a29)',advance='no') 'K+ conc. exponent: '
-        write(word1,'(es12.5)') ilf%ilt_K_exp
-        write(id,'(a)') adjustl(trim(word1))
-        write(id,'(a29)',advance='no') 'temperature threshold: '
-        write(word1,'(es12.5)') ilf%ilt_threshold
-        write(id,'(a)') adjustl(trim(word1))//' C'
-        write(id,'(a29)',advance='no') 'shift (permeability): '
-        write(word1,'(es12.5)') ilf%ilt_shift_perm
-        write(id,'(a)') adjustl(trim(word1))
-        if (associated(ilf%ilt_shift_kd_list)) then
-          write(id,'(a29)') 'shift (kd): '
-          kdl => ilf%ilt_shift_kd_list
-          do
-            if (.not. associated(kdl)) exit
-            do i = 1, kdl%num_elements
-              write(id,'(a29)',advance='no') " "
-              write(word1,'(a)') kdl%f_kd_element(i)
-              write(id,'(a)',advance='no') adjustl(trim(word1))//" "
-              write(word1,'(a)') kdl%f_kd_mode(i)
-              write(id,'(a)',advance='no') adjustl(trim(word1))//" "
-              select case(kdl%f_kd_mode(i))
-                case ('DEFAULT')
-                  j = 1
-              end select
-              do k = 1, j
-                write(word1,'(es12.5)') kdl%f_kd(i,k)
+                write(word1,'(a)') kdl%f_kd_mode(i)
                 write(id,'(a)',advance='no') adjustl(trim(word1))//" "
+                select case(kdl%f_kd_mode(i))
+                  case ('DEFAULT')
+                    j = 1
+                end select
+                do k = 1, j
+                  write(word1,'(es12.5)') kdl%f_kd(i,k)
+                  write(id,'(a)',advance='no') adjustl(trim(word1))//" "
+                enddo
+                write(id,'(a)')
               enddo
-              write(id,'(a)')
+              kdl => kdl%next
             enddo
-            kdl => kdl%next
-          enddo
-        endif
+          endif
+        !---------------------------------
+        class is (ILT_general_type)
+          write(id,'(a)') 'Cuadros and Linares, 1996'
+          write(id,'(a29)',advance='no') 'initial smectite: '
+          write(word1,'(es12.5)') ilf%ilt_fs0
+          write(id,'(a)') adjustl(trim(word1))
+          write(id,'(a29)',advance='no') 'smectite exponent: '
+          write(word1,'(es12.5)') ilf%ilt_exp
+          write(id,'(a)') adjustl(trim(word1))
+          write(id,'(a29)',advance='no') 'frequency: '
+          write(word1,'(es12.5)') ilf%ilt_freq
+          write(id,'(a)') adjustl(trim(word1))//' L/mol-s'
+          write(id,'(a29)',advance='no') 'activation energy: '
+          write(word1,'(es12.5)') ilf%ilt_ea
+          write(id,'(a)') adjustl(trim(word1))//' J/mol'
+          write(id,'(a29)',advance='no') 'K+ concentration: '
+          write(word1,'(es12.5)') ilf%ilt_K_conc
+          write(id,'(a)') adjustl(trim(word1))//' M'
+          write(id,'(a29)',advance='no') 'K+ conc. exponent: '
+          write(word1,'(es12.5)') ilf%ilt_K_exp
+          write(id,'(a)') adjustl(trim(word1))
+          write(id,'(a29)',advance='no') 'temperature threshold: '
+          write(word1,'(es12.5)') ilf%ilt_threshold
+          write(id,'(a)') adjustl(trim(word1))//' C'
+          write(id,'(a29)',advance='no') 'shift (permeability): '
+          write(word1,'(es12.5)') ilf%ilt_shift_perm
+          write(id,'(a)') adjustl(trim(word1))
+          if (associated(ilf%ilt_shift_kd_list)) then
+            write(id,'(a29)') 'shift (kd): '
+            kdl => ilf%ilt_shift_kd_list
+            do
+              if (.not. associated(kdl)) exit
+              do i = 1, kdl%num_elements
+                write(id,'(a29)',advance='no') " "
+                write(word1,'(a)') kdl%f_kd_element(i)
+                write(id,'(a)',advance='no') adjustl(trim(word1))//" "
+                write(word1,'(a)') kdl%f_kd_mode(i)
+                write(id,'(a)',advance='no') adjustl(trim(word1))//" "
+                select case(kdl%f_kd_mode(i))
+                  case ('DEFAULT')
+                    j = 1
+                end select
+                do k = 1, j
+                  write(word1,'(es12.5)') kdl%f_kd(i,k)
+                  write(id,'(a)',advance='no') adjustl(trim(word1))//" "
+                enddo
+                write(id,'(a)')
+              enddo
+              kdl => kdl%next
+            enddo
+          endif
       end select
     endif
 
