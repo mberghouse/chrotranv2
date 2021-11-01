@@ -261,7 +261,7 @@ subroutine InitSubsurfAssignMatProperties(realization)
                                PERMEABILITY_Z, PERMEABILITY_XY, &
                                PERMEABILITY_YZ, PERMEABILITY_XZ, &
                                TORTUOSITY, POROSITY, SOIL_COMPRESSIBILITY, &
-                               EPSILON, ELECTRICAL_CONDUCTIVITY, ILT_SMECTITE
+                               EPSILON, ELECTRICAL_CONDUCTIVITY, SMECTITE
 
   use HDF5_module
   use Utility_module, only : DeallocateArray
@@ -614,7 +614,7 @@ subroutine InitSubsurfAssignMatProperties(realization)
   call DiscretizationGlobalToLocal(discretization,field%smectite, &
                                    field%work_loc,ONEDOF)
   call MaterialSetAuxVarVecLoc(patch%aux%Material,field%work_loc, &
-                               ILT_SMECTITE,ZERO_INTEGER)
+                               SMECTITE,ZERO_INTEGER)
 
   ! copy rock properties to neighboring ghost cells
   do i = 1, max_material_index

@@ -158,7 +158,7 @@ module Variables_module
 
   PetscInt, parameter, public :: EPSILON = 129
   
-  PetscInt, parameter, public :: ILT_SMECTITE            = 130
+  PetscInt, parameter, public :: SMECTITE            = 130
 
   PetscInt, parameter, public :: DARCY_VELOCITY          = 141
 end module Variables_module

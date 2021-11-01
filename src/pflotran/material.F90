@@ -1738,7 +1738,7 @@ subroutine MaterialSetAuxVarScalar(Material,value,ivar,isubvar)
       do i=1, Material%num_aux
         Material%auxvars(i)%electrical_conductivity(1) = value
       enddo
-    case(ILT_SMECTITE)
+    case(SMECTITE)
       do i=1, Material%num_aux
         if (associated(Material%auxvars(i)%iltf)) then
           call Material%auxvars(i)%iltf%Set(value)
@@ -1858,7 +1858,7 @@ subroutine MaterialSetAuxVarVecLoc(Material,vec_loc,ivar,isubvar)
         Material%auxvars(ghosted_id)%electrical_conductivity(1) = &
           vec_loc_p(ghosted_id)
       enddo
-    case(ILT_SMECTITE)
+    case(SMECTITE)
       do ghosted_id=1, Material%num_aux
         if (associated(Material%auxvars(ghosted_id)%iltf)) then
           call Material%auxvars(ghosted_id)%iltf%Set(vec_loc_p(ghosted_id))
@@ -1980,7 +1980,7 @@ subroutine MaterialGetAuxVarVecLoc(Material,vec_loc,ivar,isubvar)
         vec_loc_p(ghosted_id) = &
           Material%auxvars(ghosted_id)%electrical_conductivity(1)
       enddo
-    case(ILT_SMECTITE)
+    case(SMECTITE)
       do ghosted_id=1, Material%num_aux
         if (associated(Material%auxvars(ghosted_id)%iltf)) then
           vec_loc_p(ghosted_id) = Material%auxvars(ghosted_id)%iltf%ilt_fs

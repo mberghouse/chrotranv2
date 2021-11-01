@@ -6037,7 +6037,7 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
     case(PERMEABILITY,PERMEABILITY_X,PERMEABILITY_Y, PERMEABILITY_Z, &
          PERMEABILITY_XY,PERMEABILITY_XZ,PERMEABILITY_YZ, &
          GAS_PERMEABILITY,GAS_PERMEABILITY_X,GAS_PERMEABILITY_Y, &
-         GAS_PERMEABILITY_Z,ILT_SMECTITE)
+         GAS_PERMEABILITY_Z,SMECTITE)
       ivar_temp = ivar
       ! only liquid permeabilities in x, y, z are stored.
       select case(ivar)
@@ -7007,7 +7007,7 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
     case(PERMEABILITY,PERMEABILITY_X,PERMEABILITY_Y, PERMEABILITY_Z, &
          PERMEABILITY_XY,PERMEABILITY_XZ,PERMEABILITY_YZ, &
          GAS_PERMEABILITY,GAS_PERMEABILITY_X,GAS_PERMEABILITY_Y, &
-         GAS_PERMEABILITY_Z,ILT_SMECTITE)
+         GAS_PERMEABILITY_Z,SMECTITE)
       ivar_temp = ivar
       ! only liquid permeabilities in x, y, z are stored.
       select case(ivar)

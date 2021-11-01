@@ -737,7 +737,7 @@ function MaterialAuxVarGetValue(material_auxvar,ivar)
     case(ELECTRICAL_CONDUCTIVITY)
       MaterialAuxVarGetValue = material_auxvar%electrical_conductivity(1)
 
-    case(ILT_SMECTITE)
+    case(SMECTITE)
       if (associated(material_auxvar%iltf)) then
         MaterialAuxVarGetValue = material_auxvar%iltf%ilt_fs
       else
@@ -796,7 +796,7 @@ subroutine MaterialAuxVarSetValue(material_auxvar,ivar,value)
       material_auxvar%soil_properties(soil_reference_pressure_index) = value
     case(ELECTRICAL_CONDUCTIVITY)
       material_auxvar%electrical_conductivity(1) = value
-    case(ILT_SMECTITE)
+    case(SMECTITE)
       if (associated(material_auxvar%iltf)) then
         call material_auxvar%iltf%Set(value)
         call material_auxvar%iltf%GetScale

@@ -1137,11 +1137,11 @@ subroutine OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
       name = 'Electrical Jacobian'
       category = OUTPUT_GENERIC
       id = ELECTRICAL_JACOBIAN      
-    case ('ILT_SMECTITE')
+    case ('SMECTITE')
       units = ''
       name = 'Smectite'
       category = OUTPUT_GENERIC
-      id = ILT_SMECTITE
+      id = SMECTITE
   end select
 
 end subroutine OutputVariableToID

@@ -338,7 +338,7 @@ subroutine CheckpointFlowProcessModelBinary(viewer,realization)
   use Material_module
   use Material_Aux_class, only : POROSITY_BASE
   use Variables_module, only : POROSITY, PERMEABILITY_X, PERMEABILITY_Y, &
-                               PERMEABILITY_Z, STATE, ILT_SMECTITE
+                               PERMEABILITY_Z, STATE, SMECTITE
   
   implicit none
 
@@ -406,7 +406,7 @@ subroutine CheckpointFlowProcessModelBinary(viewer,realization)
                                       global_vec,ONEDOF)
     call VecView(global_vec,viewer,ierr);CHKERRQ(ierr)
     call MaterialGetAuxVarVecLoc(realization%patch%aux%Material, &
-                                  field%work_loc,ILT_SMECTITE,ZERO_INTEGER)
+                                  field%work_loc,SMECTITE,ZERO_INTEGER)
     call DiscretizationLocalToGlobal(discretization,field%work_loc, &
                                       global_vec,ONEDOF)
     call VecView(global_vec,viewer,ierr);CHKERRQ(ierr)
@@ -438,7 +438,7 @@ subroutine RestartFlowProcessModelBinary(viewer,realization)
   use Material_module
   use Material_Aux_class, only : material_auxvar_type, POROSITY_BASE
   use Variables_module, only : POROSITY, PERMEABILITY_X, PERMEABILITY_Y, &
-                               PERMEABILITY_Z, STATE, ILT_SMECTITE
+                               PERMEABILITY_Z, STATE, SMECTITE
   
   implicit none
 
@@ -519,7 +519,7 @@ subroutine RestartFlowProcessModelBinary(viewer,realization)
     call DiscretizationGlobalToLocal(discretization,global_vec, &
                                       field%work_loc,ONEDOF)
     call MaterialSetAuxVarVecLoc(realization%patch%aux%Material, &
-                                  field%work_loc,ILT_SMECTITE,ZERO_INTEGER)
+                                  field%work_loc,SMECTITE,ZERO_INTEGER)
   endif
   
   if (global_vec /= PETSC_NULL_VEC) then
@@ -1062,7 +1062,7 @@ subroutine CheckpointFlowProcessModelHDF5(pm_grp_id, realization)
   use Material_module
   use Material_Aux_class, only : POROSITY_BASE
   use Variables_module, only : POROSITY, PERMEABILITY_X, PERMEABILITY_Y, &
-                               PERMEABILITY_Z, STATE, ILT_SMECTITE
+                               PERMEABILITY_Z, STATE, SMECTITE
   use hdf5
   use HDF5_module, only : HDF5WriteDataSetFromVec
 
@@ -1164,7 +1164,7 @@ subroutine CheckpointFlowProcessModelHDF5(pm_grp_id, realization)
                                              pm_grp_id, H5T_NATIVE_DOUBLE)
 
     call MaterialGetAuxVarVecLoc(realization%patch%aux%Material, &
-                                 field%work_loc,ILT_SMECTITE,ZERO_INTEGER)
+                                 field%work_loc,SMECTITE,ZERO_INTEGER)
     call DiscretizationLocalToGlobal(discretization,field%work_loc, &
                                      global_vec,ONEDOF)
     call DiscretizationGlobalToNatural(discretization, global_vec, &
@@ -1197,7 +1197,7 @@ subroutine RestartFlowProcessModelHDF5(pm_grp_id, realization)
   use Material_module
   use Material_Aux_class, only : material_auxvar_type, POROSITY_BASE
   use Variables_module, only : POROSITY, PERMEABILITY_X, PERMEABILITY_Y, &
-                               PERMEABILITY_Z, STATE, ILT_SMECTITE
+                               PERMEABILITY_Z, STATE, SMECTITE
   use hdf5
   use HDF5_module, only : HDF5ReadDataSetInVec
 
@@ -1328,7 +1328,7 @@ subroutine RestartFlowProcessModelHDF5(pm_grp_id, realization)
     call DiscretizationGlobalToLocal(discretization, global_vec,field%work_loc,&
                                      ONEDOF)
     call MaterialSetAuxVarVecLoc(realization%patch%aux%Material, &
-                                 field%work_loc,ILT_SMECTITE,ZERO_INTEGER)
+                                 field%work_loc,SMECTITE,ZERO_INTEGER)
 
     call VecDestroy(global_vec, ierr);CHKERRQ(ierr)
     call VecDestroy(natural_vec, ierr);CHKERRQ(ierr)

@@ -1682,7 +1682,7 @@ subroutine RealizationRevertFlowParameters(realization)
                               POROSITY_CURRENT, POROSITY_BASE, POROSITY_INITIAL
   use Variables_module, only : PERMEABILITY_X, PERMEABILITY_Y, PERMEABILITY_Z, &
                                PERMEABILITY_XY, PERMEABILITY_XZ, &
-                               PERMEABILITY_YZ, POROSITY, ILT_SMECTITE
+                               PERMEABILITY_YZ, POROSITY, SMECTITE
 
   implicit none
 
@@ -1762,7 +1762,7 @@ subroutine RealizationRevertFlowParameters(realization)
 
   call DiscretizationGlobalToLocal(discretization,field%smectite, &
                                  field%work_loc,ONEDOF)
-  call MaterialSetAuxVarVecLoc(Material,field%work_loc,ILT_SMECTITE, &
+  call MaterialSetAuxVarVecLoc(Material,field%work_loc,SMECTITE, &
                                ZERO_INTEGER)
 
 end subroutine RealizationRevertFlowParameters
@@ -1826,7 +1826,7 @@ subroutine RealizStoreRestartFlowParams(realization)
                                        field%perm0_yz,ONEDOF)
     endif
   endif
-  call MaterialGetAuxVarVecLoc(Material,field%work_loc,ILT_SMECTITE, &
+  call MaterialGetAuxVarVecLoc(Material,field%work_loc,SMECTITE, &
                                ZERO_INTEGER)
   call DiscretizationLocalToGlobal(discretization,field%work_loc, &
                                    field%smectite,ONEDOF)                                     
@@ -2087,7 +2087,7 @@ subroutine RealizationUpdatePropertiesTS(realization)
   use Variables_module, only : POROSITY, TORTUOSITY, PERMEABILITY_X, &
                                PERMEABILITY_Y, PERMEABILITY_Z, &
                                PERMEABILITY_XY, PERMEABILITY_XZ, &
-                               PERMEABILITY_YZ, ILT_SMECTITE
+                               PERMEABILITY_YZ, SMECTITE
 
   implicit none
 
@@ -2796,7 +2796,7 @@ subroutine RealizUnInitializedVarsFlow(realization)
   use Variables_module, only : VOLUME, BASE_POROSITY, PERMEABILITY_X, &
                                PERMEABILITY_Y, PERMEABILITY_Z, &
                                PERMEABILITY_XY, PERMEABILITY_XZ, &
-                               PERMEABILITY_YZ, ILT_SMECTITE
+                               PERMEABILITY_YZ, SMECTITE
 
   implicit none
 
@@ -2811,7 +2811,7 @@ subroutine RealizUnInitializedVarsFlow(realization)
   call RealizUnInitializedVar1(realization,PERMEABILITY_X,'permeability X')
   call RealizUnInitializedVar1(realization,PERMEABILITY_Y,'permeability Y')
   call RealizUnInitializedVar1(realization,PERMEABILITY_Z,'permeability Z')
-  call RealizUnInitializedVar1(realization,ILT_SMECTITE,'smectite')
+  call RealizUnInitializedVar1(realization,SMECTITE,'smectite')
   if (realization%option%flow%full_perm_tensor) then
     call RealizUnInitializedVar1(realization,PERMEABILITY_XY,'permeability XY')
     call RealizUnInitializedVar1(realization,PERMEABILITY_XZ,'permeability XZ')
