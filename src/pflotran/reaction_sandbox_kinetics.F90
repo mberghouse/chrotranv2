@@ -27,7 +27,8 @@ module Reaction_Sandbox_Kinetics_class
     PetscInt :: species_cl_id
     PetscInt :: species_fe2_id
     PetscInt :: species_fe3_id
-    PetscInt :: species_cro4_id
+    PetscInt :: species_cr6_id
+    PetscInt :: species_cr3_id
     PetscInt :: species_h_id
     PetscInt :: species_o2_id
 
@@ -218,7 +219,10 @@ subroutine KineticsSetup(this,reaction,option)
   this%species_fe3_id = &
     GetPrimarySpeciesIDFromName(word,reaction,option)
   word = 'CrO4--'
-  this%species_cro4_id = &
+  this%species_cr6_id = &
+    GetPrimarySpeciesIDFromName(word,reaction,option)
+  word = 'Cr+++'
+  this%species_cr3_id = &
     GetPrimarySpeciesIDFromName(word,reaction,option)
   word = 'H+'
   this%species_h_id = &
@@ -290,13 +294,13 @@ subroutine KineticsEvaluate(this,Residual,Jacobian,compute_derivative, &
   PetscReal :: K_Aaq, K_Baq ! [mol/L water]
 
   PetscReal :: kfe,kcr,n,pO2,oh,ph,RateFe,RateCr
-  PetscReal :: na,cl,fe2,fe3,cro4,h
-  PetscReal :: m_na, m_cl, m_fe2, m_fe3, m_cro4, m_h, m_o2
+  PetscReal :: na,cl,fe2,fe3,cro4,cr,h
+  PetscReal :: m_na, m_cl, m_fe2, m_fe3, m_cr6, m_cr3, m_h, m_o2
   PetscReal :: Totalfe2
   PetscReal :: gh ! activity coefficients
-  PetscReal :: stoichfe2, stoichfe3, stoichh, stoicho2
+  PetscReal :: stoichfe2, stoichfe3, stoichh, stoicho2, stoichcr, stoichcro4
   PetscReal :: Koh, Ko2
-  PetscReal :: Ratefe2, Ratefe3, Rateh, Rateo2
+  PetscReal :: Ratefe2, Ratefe3, Rateh, Rateo2, Ratecr6, Ratecr3
  
   character(len=MAXWORDLENGTH) :: word
 
@@ -317,7 +321,8 @@ subroutine KineticsEvaluate(this,Residual,Jacobian,compute_derivative, &
   m_cl = rt_auxvar%pri_molal(this%species_cl_id) ! [mol/L water]
   m_fe2 = rt_auxvar%pri_molal(this%species_fe2_id) ! [mol/L water]
   m_fe3 = rt_auxvar%pri_molal(this%species_fe3_id) ! [mol/L water]
-  m_cro4 = rt_auxvar%pri_molal(this%species_cro4_id) ! [mol/L water]
+  m_cr6 = rt_auxvar%pri_molal(this%species_cr6_id) ! [mol/L water]
+  m_cr3 = rt_auxvar%pri_molal(this%species_cr3_id) ! [mol/L water]
   m_h = rt_auxvar%pri_molal(this%species_h_id) ! [mol/L water]
   m_o2 = rt_auxvar%pri_molal(this%species_o2_id) ! [mol/L water]
 
@@ -365,8 +370,10 @@ subroutine KineticsEvaluate(this,Residual,Jacobian,compute_derivative, &
   word = this%model
 ! print *,'word = ',word
 
+  gh = rt_auxvar%pri_act_coef(this%species_h_id) ! [mol/L water]
+
   select case(trim(word))
-! models: Cr, Fe, Cr-Fe, Cu, Cu-Fe, Cr-Cu-Fe, Fe-CO2
+! models: Cr, Fe, Cr-Fe, Cu, Cu-Fe, Cr-Cu-Fe, Fe-CO2, Fe-Cr-CO2
 
     case('Cr')
 
@@ -379,53 +386,97 @@ subroutine KineticsEvaluate(this,Residual,Jacobian,compute_derivative, &
   ! Fe2+ + H+ + 0.25 O2 = Fe3+ + 0.5 H2O
   !++++++++++++++++++++++++++++++++++++++++++
 
-      k0 = 2.91e-9
-      k1 = 1.33e12
+      k0 = 2.91d-9
+      k1 = 1.33d12
       pO2 = 0.2
       Ko2 = 10.d0**(2.8983d0)
-      Koh = 10.d0**(-13.9951)
-      gh = rt_auxvar%pri_act_coef(this%species_h_id) ! [mol/L water]
+      Koh = 10.d0**(-13.9951d0)
+ 
+      ph = -log10(gh * m_h)
 
 !     oh = Koh / (gh * m_h)
       oh = Koh / m_h
 
+      kfe = k0 + k1 * oh**2 * pO2
+
       pO2 = Ko2 * m_o2
-!     RateFe = (k0 + k1 * oh**2 * pO2) * Totalfe2 * 365
-      RateFe = (k0 + k1 * oh**2 * pO2) * m_fe2 * 365
+!     RateFe = (k0 + k1 * oh**2 * pO2) * Totalfe2 * 365.d0
+      RateFe = (k0 + k1 * oh**2 * pO2) * m_fe2 * 365.d0
 
       stoichfe2 = -1.d0
       stoichfe3 =  1.d0
       stoichh = -1.d0
       stoicho2 = -0.25d0
+
       Ratefe2 = stoichfe2 * RateFe
       Ratefe3 = stoichfe3 * RateFe
       Rateh = stoichh * RateFe
       Rateo2 = stoicho2 * RateFe
 
-! print *,'kinetics: ',RateFe,oh,m_h,m_fe2,Ratefe2,Ratefe3,Rateh,Rateo2
+!     print *,'kinetics1: ',ph,oh,RateFe,m_fe2,m_fe3,m_cro4,kfe
+
+  
+  ! NOTES
+  ! 1. Always subtract contribution from residual
+  ! 2. Units of residual are moles/second
+
+  !Residual(this%species_na_id) = Residual(this%species_na_id)
+  !Residual(this%species_cl_id) = Residual(this%species_cl_id)
+  Residual(this%species_fe2_id) = Residual(this%species_fe2_id) - Ratefe2
+  Residual(this%species_fe3_id) = Residual(this%species_fe3_id) - Ratefe3
+  !Residual(this%species_cr6_id) = Residual(this%species_cr6_id) - Ratecr6
+  !Residual(this%species_cr3_id) = Residual(this%species_cr3_id) - Ratecr3
+  Residual(this%species_h_id) = Residual(this%species_h_id) - Rateh
+  Residual(this%species_o2_id) = Residual(this%species_o2_id) - Rateo2
+
 
     case('Cr-Fe')
   
   !++++++++++++++++++++++++++++++++++++++++++
-  ! Cr(VI) reduction by Fe(II)
+  ! Cr(VI) reduction by Fe(II): Fendorf & Li
   !++++++++++++++++++++++++++++++++++++++++++
 
-      ph = 6.d0
-      oh = 10.d0**(ph-14.d0)
+      ph = -log10(gh * m_h)
+      oh = 10.d0**(ph-13.9951d0)
       pO2 = 0.2d0
-      kfe = 8.e13 * oh**2 * pO2 / 60.d0
+
+!     kfe = 8.e13 * oh**2 * pO2 / 60.d0
+      kfe = (k0 + k1 * oh**2 * pO2) / 60.d0
 
       n = 0.6
       kcr = 58.9e0 * 10.d0**(3.d0*n) / 60.d0
 
-      RateFe = kfe * Aaq * L_water  ! [mol/sec]
-      RateCr = kcr * Aaq**n * Baq * L_water  ! [mol/sec]
+      RateFe = kfe * m_fe2 * L_water  ! [mol/sec]
+      RateCr = kcr * m_fe2**n * m_cr6 * L_water  ! [mol/sec]
 
-      stoichA = -1.d0
-      stoichB = -1.d0
-      RateA = stoichA * RateFe
-      RateB = stoichB * RateCr
-!     print *,'kinetics: ',RateA,RateB,Aaq,Baq,kfe,kcr
+!     following stoichiometries not used
+      stoichfe2 = -1.d0
+      stoichfe3 = 1.d0
+      stoichcro4 = -1.d0
+      stoichcr = 1.d0
+      stoichh = -1.d0
+      stoicho2 = -0.25d0
+
+      Ratefe2 = -1.d0 * RateFe
+      Ratefe3 = 1.d0 * RateFe
+      Ratecr6 = -1.d0 * RateCr
+      Ratecr3 = 1.d0 * RateCr
+      Rateh = -1.d0 * RateFe - 5.d0 * RateCr
+      Rateo2 = -0.25d0 * RateFe + 0.75d0 * RateCr
+
+
+  ! NOTES
+  ! 1. Always subtract contribution from residual
+  ! 2. Units of residual are moles/second
+
+  !Residual(this%species_na_id) = Residual(this%species_na_id)
+  !Residual(this%species_cl_id) = Residual(this%species_cl_id)
+  Residual(this%species_fe2_id) = Residual(this%species_fe2_id) - Ratefe2
+  Residual(this%species_fe3_id) = Residual(this%species_fe3_id) - Ratefe3
+  Residual(this%species_cr6_id) = Residual(this%species_cr6_id) - Ratecr6
+  Residual(this%species_cr3_id) = Residual(this%species_cr3_id) - Ratecr3
+  !Residual(this%species_h_id) = Residual(this%species_h_id) - Rateh
+  !Residual(this%species_o2_id) = Residual(this%species_o2_id) - Rateo2
 
     case('Cu')
 
@@ -452,14 +503,6 @@ subroutine KineticsEvaluate(this,Residual,Jacobian,compute_derivative, &
   !Residual(this%species_Daq_id) = Residual(this%species_Daq_id) - RateD
   !Residual(this%species_Eaq_id) = Residual(this%species_Eaq_id) - RateE
   !Residual(this%species_Faq_id) = Residual(this%species_Faq_id) - RateF
-
-  !Residual(this%species_na_id) = Residual(this%species_na_id) - RateC
-  !Residual(this%species_cl_id) = Residual(this%species_cl_id) - RateC
-  Residual(this%species_fe2_id) = Residual(this%species_fe2_id) - Ratefe2
-  Residual(this%species_fe3_id) = Residual(this%species_fe3_id) - Ratefe3
-  !Residual(this%species_cro4_id) = Residual(this%species_cro4_id) - Ratecr
-  Residual(this%species_h_id) = Residual(this%species_h_id) - Rateh
-  Residual(this%species_o2_id) = Residual(this%species_o2_id) - Rateo2
 
   Residual(this%species_Xim_id + reaction%offset_immobile) = &
     Residual(this%species_Xim_id + reaction%offset_immobile) - RateX
