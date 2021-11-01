@@ -953,6 +953,12 @@ recursive subroutine PMUFDDecayInitializeRun(this)
     if (associated(patch%ilt_id)) then
       illitization => &
         patch%illitization_function_array(patch%ilt_id(ghosted_id))%ptr
+      select type(ilf => illitization%illitization_function)
+        class is (ILT_default_type)
+          call ilf%CheckElements(this%element_name, &
+                                 this%num_elements, &
+                                 this%option)
+      end select
     endif
     
     do iele = 1, this%num_elements
@@ -964,13 +970,11 @@ recursive subroutine PMUFDDecayInitializeRun(this)
           if (this%option%time > material_auxvars(ghosted_id)%iltf%ilt_tst) then
             if (this%option%dt > 0.d0 .or. this%option%restart_flag) then
               select type(ilf => illitization%illitization_function)
-                type is (ILT_default_type)
-                  if (associated(ilf%ilt_shift_kd_list)) then
-                    call ilf%ShiftKd(kd_kgw_m3b, &
-                                     this%element_name(iele), &
-                                     material_auxvars(ghosted_id), &
-                                     this%option)
-                  endif
+                class is (ILT_default_type)
+                  call ilf%ShiftKd(kd_kgw_m3b, &
+                                   this%element_name(iele), &
+                                   material_auxvars(ghosted_id), &
+                                   this%option)
               end select
             endif
           endif
@@ -1406,13 +1410,11 @@ subroutine PMUFDDecaySolve(this,time,ierr)
           if (option%time > material_auxvars(ghosted_id)%iltf%ilt_tst .and. &
               option%dt > 0.d0) then
             select type(ilf => illitization%illitization_function)
-              type is (ILT_default_type)
-                if (associated(ilf%ilt_shift_kd_list)) then
-                  call ilf%ShiftKd(kd_kgw_m3b, &
-                                   this%element_name(iele), &
-                                   material_auxvars(ghosted_id), &
-                                   option)
-                endif
+              class is (ILT_default_type)
+                call ilf%ShiftKd(kd_kgw_m3b, &
+                                 this%element_name(iele), &
+                                 material_auxvars(ghosted_id), &
+                                 option)
             end select
           endif
         endif

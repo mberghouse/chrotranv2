@@ -35,6 +35,7 @@ module Illitization_module
     procedure, public :: Verify => ILTDefaultVerify
     procedure, public :: CalculateILT => ILTDefaultIllitization
     procedure, public :: ShiftKd => ILTShiftSorption
+    procedure, public :: CheckElements => ILTCheckElements
   end type ILT_default_type
   !---------------------------------------------------------------------------
   type, public, extends(ILT_default_type) :: ILT_general_type
@@ -532,7 +533,6 @@ end subroutine ILTGeneralIllitization
 subroutine ILTShiftSorption(this,kd0,ele,material_auxvar,option)
 
   use Option_module
-  use Input_Aux_module
   use Material_Aux_class
 
   implicit none
@@ -602,6 +602,54 @@ subroutine ILTShiftSorption(this,kd0,ele,material_auxvar,option)
   if (allocated(fkd)) deallocate(fkd)
 
 end subroutine ILTShiftSorption
+
+! ************************************************************************** !
+
+subroutine ILTCheckElements(this,pm_ufd_elements,num,option)
+
+  use Option_module
+
+  implicit none
+
+  class(ILT_default_type) :: this
+  PetscInt, intent(in) :: num
+  character(len=MAXWORDLENGTH), dimension(num), intent(in) :: pm_ufd_elements
+  type(option_type), intent(inout) :: option
+  
+  class(ilt_kd_effects_type), pointer :: kdl
+  character(len=MAXWORDLENGTH) :: fkdele1, fkdele2
+  PetscInt :: i, j
+  PetscBool :: found
+  
+  if (.not. associated(this%ilt_shift_kd_list)) return
+  
+  kdl => this%ilt_shift_kd_list
+  do
+    if (.not. associated(kdl)) exit
+    do i = 1, kdl%num_elements
+      ! Element specified in illitization function
+      fkdele1 = kdl%f_kd_element(i)
+      found = PETSC_FALSE
+      do j = 1, num
+        ! Element specified in UFD Decay
+        fkdele2 = pm_ufd_elements(j)
+        ! If elements match, proceed to next in list
+        if (trim(fkdele1) == trim(fkdele2)) then
+          found = PETSC_TRUE
+          exit
+        endif
+      enddo
+      if (.not. found) then
+        option%io_buffer = 'Element "'// trim(fkdele1) &
+                         //'" listed for kd modification was not found among ' &
+                         //'the elements in UFD Decay.'
+        call PrintErrMsgByRank(option)
+      endif
+    enddo
+    kdl => kdl%next
+  enddo
+  
+end subroutine ILTCheckElements
 
 ! ************************************************************************** !
 
