@@ -43,7 +43,7 @@ module Reaction_Sandbox_Kinetics_class
     procedure, public :: ReadInput => KineticsRead
     procedure, public :: Setup => KineticsSetup
     procedure, public :: Evaluate => KineticsEvaluate
-!   procedure, public :: Destroy => KineticsDestroy
+    procedure, public :: Destroy => KineticsDestroy
   end type reaction_sandbox_kinetics_type
 
   public :: KineticsCreate
@@ -516,5 +516,28 @@ subroutine KineticsEvaluate(this,Residual,Jacobian,compute_derivative, &
   endif
   
 end subroutine KineticsEvaluate
+
+! ************************************************************************** !
+
+subroutine KineticsDestroy(this)
+  !
+  ! Destroys allocatable or pointer objects created in this
+  ! module
+  !
+  ! Author: Peter Lichtner
+  ! Date: 10/11/2021
+  !
+  use Utility_module
+  
+  implicit none
+  
+  class(reaction_sandbox_kinetics_type) :: this
+
+! call DeallocateArray(this%nrow)
+! call DeallocateArray(this%irow)
+! call DeallocateArray(this%icol)
+! call DeallocateArray(this%stoich_row)
+
+end subroutine KineticsDestroy
 
 end module Reaction_Sandbox_Kinetics_class
