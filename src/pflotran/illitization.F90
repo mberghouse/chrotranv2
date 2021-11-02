@@ -27,7 +27,7 @@ module Illitization_module
   type, public, extends(illitization_base_type) :: ILT_default_type
     ! Model by W-L Huang, J.M. Longo, & D.R. Pevear, 1993
     PetscReal :: ilt_ea   ! activation energy in J/mol
-    PetscReal :: ilt_freq ! frequency term in L/mol-sec
+    PetscReal :: ilt_freq ! frequency term (in L/mol-sec for default)
     PetscReal :: ilt_K_conc ! molar concentration of potassium
     PetscReal :: ilt_shift_perm ! permeability shift factor for illite fraction
     class(ilt_kd_effects_type), pointer :: ilt_shift_kd_list
@@ -570,8 +570,7 @@ subroutine ILTShiftSorption(this,kd0,ele,material_auxvar,option)
           case default
             option%io_buffer = 'Sorption modification function "' &
                              // trim(fkdmode) &
-                             //'" was not found among the available options, ' &
-                             //'so the kd was not modified.'
+                             //'" was not found among the available options.'
           call PrintErrMsgByRank(option)
         end select
         allocate(fkd(j))
@@ -593,10 +592,7 @@ subroutine ILTShiftSorption(this,kd0,ele,material_auxvar,option)
       
       kd0 = kd0 * (1.0d0 + scale*fkd(1))
     case default
-      option%io_buffer = 'Sorption modification function "'//trim(fkdmode) &
-                       //'" was not found among the available options, so' &
-                       //' the kd was not modified.'
-      call PrintErrMsgByRank(option)
+      kd0 = kd0
   end select
   
   if (allocated(fkd)) deallocate(fkd)
@@ -961,6 +957,17 @@ subroutine ILTDefaultRead(ilf,input,keyword,error_string,kind,option)
             f_kd_mode_size(i) = j
             call InputReadDouble(input,option,f_kd(i,1))
             call InputErrorMsg(input,option,'f_kd, LINEAR',error_string)
+            
+            ! Check user values
+            if (f_kd(i,1) < -1.0d+0) then
+              option%io_buffer = 'Functional parameter #1 in "' &
+                               // trim(f_kd_mode(i)) // '" for element "'&
+                               // trim(f_kd_element(i)) &
+                               //'" must not be less than -1 in ' &
+                               //'in ILLITIZATION, '//trim(kind)//'.'
+              call PrintErrMsg(option)
+              
+            endif
           case default
             option%io_buffer = 'Sorption modification function "' &
                              // trim(f_kd_mode(i)) // '" for element "'&

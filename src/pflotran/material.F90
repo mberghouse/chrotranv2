@@ -1632,12 +1632,7 @@ subroutine MaterialAssignPropertyToAux(material_auxvar,material_property, &
     material_auxvar%iltf%ilt = material_property%ilt
     material_auxvar%iltf%ilt_fn_id = material_property%illitization_function_id
     material_auxvar%iltf%ilt_fs0 = material_property%ilt_fs0
-    if (Uninitialized(material_auxvar%iltf%ilt_fs)) then
-      material_auxvar%iltf%ilt_fs  = material_property%ilt_fs0
-    endif
-    material_auxvar%iltf%ilt_fi  = 1.0d+0 - material_auxvar%iltf%ilt_fs
-    material_auxvar%iltf%ilt_fst = material_auxvar%iltf%ilt_fs
-    material_auxvar%iltf%ilt_fit = 1.0d+0 - material_auxvar%iltf%ilt_fst
+    call material_auxvar%iltf%Set(material_property%ilt_fs0)
     call material_auxvar%iltf%GetScale
   endif
     
