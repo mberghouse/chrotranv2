@@ -292,7 +292,7 @@ subroutine KineticsEvaluate(this,Residual,Jacobian,compute_derivative, &
   PetscReal :: stoichX, stoichY
   PetscReal :: k0, k, kr, k1, k2, kTST, kf, kb  ! units are problem specific
   PetscReal :: K_Aaq, K_Baq ! [mol/L water]
-  PetscReal :: kfe, kcr, n, pO2, oh, ph, RateFe, RateCr, RateFeCr
+  PetscReal :: kfe, kcr0, kcr, n, pO2, oh, ph, RateFe, RateCr, RateFeCr
   PetscReal :: na,cl,fe2,fe3,cro4,cr,h
   PetscReal :: m_na, m_cl, m_fe2, m_fe3, m_cr6, m_cr3, m_h, m_o2
   PetscReal :: Totalfe2
@@ -447,7 +447,7 @@ subroutine KineticsEvaluate(this,Residual,Jacobian,compute_derivative, &
       kfe = (k0 + k1 * oh**2 * pO2) / 60.d0
 
       n = 0.6
-      kcr = 58.9e0 * 10.d0**(3.d0*n) / 60.d0
+      kcr = 56.3d0 * 10.d0**(3.d0*n) / 60.d0
 
       RateFe = kfe * m_fe2 * L_water             ! [mol/sec]
       RateCr = kcr * m_fe2**n * m_cr6 * L_water  ! [mol/sec]
@@ -481,7 +481,7 @@ subroutine KineticsEvaluate(this,Residual,Jacobian,compute_derivative, &
   !Residual(this%species_h_id) = Residual(this%species_h_id) - Rateh
   !Residual(this%species_o2_id) = Residual(this%species_o2_id) - Rateo2
 
-case('Cr-Fe-H')
+    case('Cr-Fe-H')
 
 !++++++++++++++++++++++++++++++++++++++++++
 ! Cr(VI) reduction by Fe(II): Fendorf & Li (1996)
@@ -495,14 +495,20 @@ case('Cr-Fe-H')
 ! kfe = 8.e13 * oh**2 * pO2 / 60.d0
 ! kfe = (k0 + k1 * oh**2 * pO2) / 60.d0
 
-  n = 0.6
-! kcr = 58.9e0 * 10.d0**(3.d0*n) / 60.d0
-  kcr = 59.204830823724784
+  n = 0.6d0
+
+  kcr0 = 56.3
+  kcr  = kcr0 * (10.d0**(3.d0*n))/60.d0
+! print *,'kcr= ',kcr,kcr0 ! crashes when print statement turned on
+
+! kcr = 59.204830823724784 ! calculated using mathematica
 
 ! RateFe = kfe * m_fe2 * L_water             ! [mol/sec]
   RateFeCr = kcr * m_fe2**n * m_cr6 * L_water  ! [mol/sec]
 
-!     following stoichiometries are not used
+! print *, 'params2: ',L_water,porosity,liquid_saturation,volume,kcr,kcr0,RateFeCr
+
+! following stoichiometries are not used
   stoichfe2 = -1.d0
   stoichfe3 = 1.d0
   stoichcro4 = -1.d0
@@ -515,7 +521,7 @@ case('Cr-Fe-H')
   Ratecr6 = -1.d0 * RateFeCr
   Ratecr3 = 1.d0 * RateFeCr
   Rateh = -8.d0 * RateFeCr
-  Rateo2 = 0.d0 * RateCr
+  Rateo2 = 0.d0 * RateFeCr
 
 
 ! NOTES
