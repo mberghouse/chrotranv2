@@ -485,7 +485,7 @@ subroutine KineticsEvaluate(this,Residual,Jacobian,compute_derivative, &
 
 !++++++++++++++++++++++++++++++++++++++++++
 ! Cr(VI) reduction by Fe(II): Fendorf & Li (1996)
-! 3 Fe2+ + CrO2− + 8 H+ → Cr3+ + 3 Fe3+ + 4 H2O
+! 3 Fe2+ + CrO42− + 8 H+ → Cr3+ + 3 Fe3+ + 4 H2O
 !++++++++++++++++++++++++++++++++++++++++++
 
   ph = -log10(gh * m_h)
@@ -499,7 +499,10 @@ subroutine KineticsEvaluate(this,Residual,Jacobian,compute_derivative, &
 
   kcr0 = 56.3
   kcr  = kcr0 * (10.d0**(3.d0*n))/60.d0
-! print *,'kcr= ',kcr,kcr0 ! crashes when print statement turned on
+
+! print *,'kcr= ',kcr,kcr0 ! times out at first step when print statement turned on
+
+! print *,'kcr= ',kcr0
 
 ! kcr = 59.204830823724784 ! calculated using mathematica
 
@@ -509,12 +512,12 @@ subroutine KineticsEvaluate(this,Residual,Jacobian,compute_derivative, &
 ! print *, 'params2: ',L_water,porosity,liquid_saturation,volume,kcr,kcr0,RateFeCr
 
 ! following stoichiometries are not used
-  stoichfe2 = -1.d0
-  stoichfe3 = 1.d0
+  stoichfe2 = -3.d0
+  stoichfe3 = 3.d0
   stoichcro4 = -1.d0
   stoichcr = 1.d0
-  stoichh = -1.d0
-  stoicho2 = -0.25d0
+  stoichh = -8.d0
+  stoicho2 = 0.d0
 
   Ratefe2 = -3.d0 * RateFeCr
   Ratefe3 = 3.d0 * RateFeCr
