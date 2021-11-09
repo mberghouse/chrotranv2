@@ -44,8 +44,8 @@ module Material_module
     character(len=MAXWORDLENGTH) :: saturation_function_name
     PetscInt :: thermal_conductivity_function_id
     character(len=MAXWORDLENGTH) :: thermal_conductivity_function_name
-    PetscInt :: illitization_function_id
-    character(len=MAXWORDLENGTH) :: illitization_function_name
+    PetscInt :: material_transform_id
+    character(len=MAXWORDLENGTH) :: material_transform_name
     PetscBool :: ilt ! model illitization in material
     PetscReal :: ilt_fs0 ! initial smectite fraction
     PetscReal :: rock_density ! kg/m^3
@@ -201,7 +201,7 @@ function MaterialPropertyCreate(option)
   material_property%saturation_function_id = 0
   material_property%thermal_conductivity_function_id = UNINITIALIZED_INTEGER
   material_property%ilt = PETSC_FALSE
-  material_property%illitization_function_id = UNINITIALIZED_INTEGER
+  material_property%material_transform_id = UNINITIALIZED_INTEGER
   material_property%saturation_function_name = ''
   material_property%rock_density = UNINITIALIZED_DOUBLE
   material_property%specific_heat = UNINITIALIZED_DOUBLE
@@ -340,9 +340,9 @@ subroutine MaterialPropertyRead(material_property,input,option)
       case('THERMAL_CHARACTERISTIC_CURVES')
         call InputReadWord(input,option, &
              material_property%thermal_conductivity_function_name,PETSC_TRUE)
-      case('ILLITIZATION')
+      case('MATERIAL_TRANSFORM')
         call InputReadWord(input,option, &
-             material_property%illitization_function_name,PETSC_TRUE)
+             material_property%material_transform_name,PETSC_TRUE)
         material_property%ilt = PETSC_TRUE
       case('ROCK_DENSITY')
         call InputReadDouble(input,option,material_property%rock_density)
@@ -967,7 +967,7 @@ subroutine MaterialPropertyRead(material_property,input,option)
   
   if (.not. material_property%ilt) then
     write(ilt_name,*)material_property%external_id
-    material_property%illitization_function_name = "_ILT_"// &
+    material_property%material_transform_name = "_MTF_"// &
       trim(adjustl(ilt_name))
   endif
 
@@ -1630,7 +1630,7 @@ subroutine MaterialAssignPropertyToAux(material_auxvar,material_property, &
   if (material_property%ilt) then
     material_auxvar%iltf => MaterialIlliteAuxCreate()
     material_auxvar%iltf%ilt = material_property%ilt
-    material_auxvar%iltf%ilt_fn_id = material_property%illitization_function_id
+    material_auxvar%iltf%ilt_fn_id = material_property%material_transform_id
     material_auxvar%iltf%ilt_fs0 = material_property%ilt_fs0
     call material_auxvar%iltf%Set(material_property%ilt_fs0)
     call material_auxvar%iltf%GetScale
@@ -2350,8 +2350,8 @@ subroutine MaterialPropInputRecord(material_property_list)
     end if
 
     if (cur_matprop%ilt) then
-      write(id,'(a29)',advance='no') 'illitization function: '
-      write(id,'(a)') adjustl(trim(cur_matprop%illitization_function_name))
+      write(id,'(a29)',advance='no') 'material transform function: '
+      write(id,'(a)') adjustl(trim(cur_matprop%material_transform_name))
     endif
   
     write(id,'(a29)') '---------------------------: '

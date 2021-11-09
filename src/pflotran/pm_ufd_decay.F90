@@ -900,7 +900,7 @@ recursive subroutine PMUFDDecayInitializeRun(this)
   use Grid_module
   use Reactive_Transport_Aux_module
   use Material_Aux_class
-  use Illitization_module
+  use Material_Transform_module
   
   implicit none
 
@@ -932,8 +932,8 @@ recursive subroutine PMUFDDecayInitializeRun(this)
   type(grid_type), pointer :: grid
   type(reactive_transport_auxvar_type), pointer :: rt_auxvars(:)
   class(material_auxvar_type), pointer :: material_auxvars(:)
-  class(illitization_type), pointer :: illitization
-  class(illitization_base_type), pointer :: ilf
+  class(material_transform_type), pointer :: material_transform
+  class(illitization_base_type), pointer :: mtf
   PetscReal :: kd_kgw_m3b
   PetscInt :: local_id, ghosted_id
   PetscInt :: iele, iiso, ipri, i, imat
@@ -950,12 +950,12 @@ recursive subroutine PMUFDDecayInitializeRun(this)
     imat = patch%imat(ghosted_id) 
     if (imat <= 0) cycle
     
-    if (associated(patch%ilt_id)) then
-      illitization => &
-        patch%illitization_function_array(patch%ilt_id(ghosted_id))%ptr
-      select type(ilf => illitization%illitization_function)
+    if (associated(patch%mtf_id)) then
+      material_transform => &
+        patch%material_transform_array(patch%mtf_id(ghosted_id))%ptr
+      select type(mtf => material_transform%illitization_function)
         class is (ILT_default_type)
-          call ilf%CheckElements(this%element_name, &
+          call mtf%CheckElements(this%element_name, &
                                  this%num_elements, &
                                  this%option)
       end select
@@ -969,9 +969,9 @@ recursive subroutine PMUFDDecayInitializeRun(this)
         if (material_auxvars(ghosted_id)%iltf%ilt)then
           if (this%option%time > material_auxvars(ghosted_id)%iltf%ilt_tst) then
             if (this%option%dt > 0.d0 .or. this%option%restart_flag) then
-              select type(ilf => illitization%illitization_function)
+              select type(mtf => material_transform%illitization_function)
                 class is (ILT_default_type)
-                  call ilf%ShiftKd(kd_kgw_m3b, &
+                  call mtf%ShiftKd(kd_kgw_m3b, &
                                    this%element_name(iele), &
                                    material_auxvars(ghosted_id), &
                                    this%option)
@@ -1074,7 +1074,7 @@ subroutine PMUFDDecaySolve(this,time,ierr)
   use Reactive_Transport_Aux_module
   use Global_Aux_module
   use Material_Aux_class
-  use Illitization_module
+  use Material_Transform_module
   use Utility_module
   
   implicit none
@@ -1167,8 +1167,8 @@ subroutine PMUFDDecaySolve(this,time,ierr)
   type(reactive_transport_auxvar_type), pointer :: rt_auxvars(:)
   type(global_auxvar_type), pointer :: global_auxvars(:)
   class(material_auxvar_type), pointer :: material_auxvars(:)
-  class(illitization_type), pointer :: illitization
-  class(illitization_base_type), pointer :: ilf
+  class(material_transform_type), pointer :: material_transform
+  class(illitization_base_type), pointer :: mtf
   PetscInt :: local_id
   PetscInt :: ghosted_id
   PetscInt :: iele, i, p, g, ip, ig, iiso, ipri, imnrl, imat
@@ -1231,9 +1231,9 @@ subroutine PMUFDDecaySolve(this,time,ierr)
     sat = global_auxvars(ghosted_id)%sat(1)
     vps = vol * por * sat ! m^3 water
     
-    if (associated(patch%ilt_id)) then
-      illitization => &
-        patch%illitization_function_array(patch%ilt_id(ghosted_id))%ptr
+    if (associated(patch%mtf_id)) then
+      material_transform => &
+        patch%material_transform_array(patch%mtf_id(ghosted_id))%ptr
     endif
     
     ! sum up mass of each isotope across phases and decay
@@ -1409,9 +1409,9 @@ subroutine PMUFDDecaySolve(this,time,ierr)
         if (material_auxvars(ghosted_id)%iltf%ilt)then
           if (option%time > material_auxvars(ghosted_id)%iltf%ilt_tst .and. &
               option%dt > 0.d0) then
-            select type(ilf => illitization%illitization_function)
+            select type(mtf => material_transform%illitization_function)
               class is (ILT_default_type)
-                call ilf%ShiftKd(kd_kgw_m3b, &
+                call mtf%ShiftKd(kd_kgw_m3b, &
                                  this%element_name(iele), &
                                  material_auxvars(ghosted_id), &
                                  option)

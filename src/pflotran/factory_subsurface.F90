@@ -2120,7 +2120,7 @@ subroutine SubsurfaceReadInput(simulation,input)
   use Saturation_Function_module
   use Characteristic_Curves_module
   use Characteristic_Curves_Thermal_module
-  use Illitization_module
+  use Material_Transform_module
   use Creep_Closure_module
   use Dataset_Base_class
   use Dataset_Ascii_class
@@ -2233,7 +2233,7 @@ subroutine SubsurfaceReadInput(simulation,input)
   type(saturation_function_type), pointer :: saturation_function
   class(characteristic_curves_type), pointer :: characteristic_curves
   class(cc_thermal_type), pointer :: characteristic_curves_thermal
-  class(illitization_type), pointer :: illitization
+  class(material_transform_type), pointer :: material_transform
   class(creep_closure_type), pointer :: creep_closure
 
   class(realization_subsurface_type), pointer :: realization
@@ -2920,15 +2920,16 @@ subroutine SubsurfaceReadInput(simulation,input)
 
 !....................
 
-      case ('ILLITIZATION')
-        illitization => IllitizationCreate()
-        call InputReadWord(input,option,illitization%name,PETSC_TRUE)
-        call InputErrorMsg(input,option,'name','ILLITIZATION')
-        option%io_buffer = '  Name :: ' // trim(illitization%name)
+      case ('MATERIAL_TRANSFORM')
+        material_transform => MaterialTransformCreate()
+        call InputReadWord(input,option,material_transform%name,PETSC_TRUE)
+        call InputErrorMsg(input,option,'name','MATERIAL_TRANSFORM')
+        option%io_buffer = '  Name :: ' // trim(material_transform%name)
         call PrintMsg(option)
-        call IllitizationRead(illitization,input,option)
-        call IllitizationAddToList(illitization,realization%illitization)
-        nullify(illitization)
+        call IllitizationRead(material_transform,input,option)
+        call MaterialTransformAddToList(material_transform, &
+                                   realization%material_transform)
+        nullify(material_transform)
 
 !....................
 

@@ -497,7 +497,7 @@ end subroutine GeneralAuxSetAirMassDOF
 ! ************************************************************************** !
 
 subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
-                                characteristic_curves,illitization, &
+                                characteristic_curves,material_transform, &
                                 natural_id,option)
   ! 
   ! Computes auxiliary variables for each grid cell
@@ -511,7 +511,7 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
   use EOS_Water_module
   use EOS_Gas_module
   use Characteristic_Curves_module
-  use Illitization_module
+  use Material_Transform_module
   use Material_Aux_class
   use Creep_Closure_module
   use Fracture_module
@@ -521,7 +521,7 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
 
   type(option_type) :: option
   class(characteristic_curves_type) :: characteristic_curves
-  class(illitization_type) :: illitization
+  class(material_transform_type) :: material_transform
   PetscReal :: x(option%nflowdof)
   type(general_auxvar_type) :: gen_auxvar
   type(global_auxvar_type) :: global_auxvar
@@ -962,7 +962,7 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
       if (material_auxvar%iltf%ilt) then
         if (option%time > material_auxvar%iltf%ilt_tst .and. &
             option%dt > 0.d0) then
-          call illitization%illitization_function% &
+          call material_transform%illitization_function% &
                  CalculateILT(material_auxvar%iltf%ilt_fst, &
                               gen_auxvar%temp, &
                               option%flow_dt, &
@@ -1359,7 +1359,7 @@ end subroutine GeneralEOSGasError
 subroutine GeneralAuxVarUpdateState(x,gen_auxvar,global_auxvar, &
                                     material_auxvar, &
                                     characteristic_curves, &
-                                    illitization, natural_id, option)
+                                    material_transform, natural_id, option)
   !
   ! GeneralUpdateState: Updates the state and swaps primary variables
   !
@@ -1373,7 +1373,7 @@ subroutine GeneralAuxVarUpdateState(x,gen_auxvar,global_auxvar, &
   use Global_Aux_module
   use EOS_Water_module
   use Characteristic_Curves_module
-  use Illitization_module
+  use Material_Transform_module
   use Material_Aux_class
 
   implicit none
@@ -1381,7 +1381,7 @@ subroutine GeneralAuxVarUpdateState(x,gen_auxvar,global_auxvar, &
   type(option_type) :: option
   PetscInt :: natural_id
   class(characteristic_curves_type) :: characteristic_curves
-  class(illitization_type) :: illitization
+  class(material_transform_type) :: material_transform
   type(general_auxvar_type) :: gen_auxvar
   type(global_auxvar_type) :: global_auxvar
   class(material_auxvar_type) :: material_auxvar
@@ -1580,7 +1580,7 @@ subroutine GeneralAuxVarUpdateState(x,gen_auxvar,global_auxvar, &
     end select
 
     call GeneralAuxVarCompute(x,gen_auxvar, global_auxvar,material_auxvar, &
-          characteristic_curves,illitization,natural_id,option)
+          characteristic_curves,material_transform,natural_id,option)
     state_change_string = 'State Transition: ' // trim(state_change_string)
     if (general_print_state_transition) then
       call PrintMsgByRank(option,state_change_string)
@@ -1600,7 +1600,7 @@ end subroutine GeneralAuxVarUpdateState
 
 subroutine GeneralAuxVarPerturb(gen_auxvar,global_auxvar, &
                                 material_auxvar, &
-                                characteristic_curves,illitization, &
+                                characteristic_curves,material_transform, &
                                 natural_id, &
                                 option)
   ! 
@@ -1612,7 +1612,7 @@ subroutine GeneralAuxVarPerturb(gen_auxvar,global_auxvar, &
 
   use Option_module
   use Characteristic_Curves_module
-  use Illitization_module
+  use Material_Transform_module
   use Global_Aux_module
   use Material_Aux_class
 
@@ -1624,7 +1624,7 @@ subroutine GeneralAuxVarPerturb(gen_auxvar,global_auxvar, &
   type(global_auxvar_type) :: global_auxvar
   class(material_auxvar_type) :: material_auxvar
   class(characteristic_curves_type) :: characteristic_curves
-  class(illitization_type) :: illitization
+  class(material_transform_type) :: material_transform
      
   PetscReal :: x(option%nflowdof), x_pert(option%nflowdof), &
                pert(option%nflowdof), x_pert_save(option%nflowdof)
@@ -1953,7 +1953,7 @@ subroutine GeneralAuxVarPerturb(gen_auxvar,global_auxvar, &
     x_pert_save = x_pert
     call GeneralAuxVarCompute(x_pert,gen_auxvar(idof),global_auxvar, &
                               material_auxvar, &
-                              characteristic_curves,illitization, &
+                              characteristic_curves,material_transform, &
                               natural_id,option)
 #ifdef DEBUG_GENERAL
     call GlobalAuxVarCopy(global_auxvar,global_auxvar_debug,option)

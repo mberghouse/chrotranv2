@@ -98,8 +98,8 @@ subroutine SubsurfAllocMatPropDataStructs(realization)
           cur_patch%cc_id = UNINITIALIZED_INTEGER
           allocate(cur_patch%cct_id(grid%ngmax))
           cur_patch%cct_id = UNINITIALIZED_INTEGER
-          allocate(cur_patch%ilt_id(grid%ngmax)) 
-          cur_patch%ilt_id = UNINITIALIZED_INTEGER
+          allocate(cur_patch%mtf_id(grid%ngmax)) 
+          cur_patch%mtf_id = UNINITIALIZED_INTEGER
       end select
     endif
 
@@ -422,9 +422,9 @@ subroutine InitSubsurfAssignMatProperties(realization)
         patch%cct_id(ghosted_id) = &
           material_property%thermal_conductivity_function_id
       endif
-      if (associated(patch%ilt_id)) then
-        patch%ilt_id(ghosted_id) = &  
-          material_property%illitization_function_id
+      if (associated(patch%mtf_id)) then
+        patch%mtf_id(ghosted_id) = &  
+          material_property%material_transform_id
       endif
       perm_xx_p(local_id) = material_property%permeability(1,1)
       perm_yy_p(local_id) = material_property%permeability(2,2)
@@ -573,8 +573,8 @@ subroutine InitSubsurfAssignMatProperties(realization)
     if (associated(patch%cct_id)) then
       call RealLocalToLocalWithArray(realization,CCT_ID_ARRAY)
     endif
-    if (associated(patch%ilt_id)) then
-      call RealLocalToLocalWithArray(realization,ILT_ID_ARRAY)
+    if (associated(patch%mtf_id)) then
+      call RealLocalToLocalWithArray(realization,MTF_ID_ARRAY)
     endif
     
     if (soil_compressibility_index > 0) then

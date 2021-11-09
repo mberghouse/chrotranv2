@@ -124,7 +124,7 @@ function FieldCreate()
   ! Geophysics
   field%electrical_conductivity = PETSC_NULL_VEC
   
-  ! Illitization
+  ! Material transform - illitization
   field%smectite = PETSC_NULL_VEC
 
   field%flow_r = PETSC_NULL_VEC

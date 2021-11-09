@@ -275,7 +275,7 @@ subroutine SimSubsurfInputRecord(this)
   use Material_module
   use Characteristic_Curves_module
   use Characteristic_Curves_Thermal_module
-  use Illitization_module
+  use Material_Transform_module
   use Patch_module
   use Condition_module
   use EOS_module
@@ -349,8 +349,8 @@ subroutine SimSubsurfInputRecord(this)
   call CharCurvesThermalInputRecord( &
        this%realization%patch%characteristic_curves_thermal)
 
-  ! print illitization function info
-  call IllitizationInputRecord(this%realization%patch%illitization)
+  ! print material transform function info
+  call MaterialTransformInputRecord(this%realization%patch%material_transform)
 
   ! print chemistry and reactive transport information
   call ReactionInputRecord(this%realization%reaction)

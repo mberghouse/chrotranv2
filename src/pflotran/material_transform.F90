@@ -1,6 +1,6 @@
-module Illitization_module
+module Material_Transform_module
   !
-  ! Illitization models
+  ! Models to transform material properties
   !
   ! Author: Alex Salazar III
   ! Date: 02/25/21
@@ -47,17 +47,17 @@ module Illitization_module
     procedure, public :: CalculateILT => ILTGeneralIllitization
   end type ILT_general_type
   !---------------------------------------------------------------------------
-  type, public :: illitization_type
+  type, public :: material_transform_type
     character(len=MAXWORDLENGTH) :: name
     PetscBool :: print_me
     PetscBool :: test
     class(illitization_base_type), pointer :: illitization_function
-    class(illitization_type), pointer :: next
-  end type illitization_type
+    class(material_transform_type), pointer :: next
+  end type material_transform_type
   !---------------------------------------------------------------------------
-  type, public :: illitization_ptr_type
-    class(illitization_type), pointer :: ptr
-  end type illitization_ptr_type
+  type, public :: material_transform_ptr_type
+    class(material_transform_type), pointer :: ptr
+  end type material_transform_ptr_type
   !---------------------------------------------------------------------------
   type :: ilt_kd_effects_type
     PetscInt :: num_elements
@@ -68,13 +68,13 @@ module Illitization_module
   end type
   !---------------------------------------------------------------------------
 
-  public :: IllitizationCreate, &
-            IllitizationGetID, &
+  public :: MaterialTransformCreate, &
+            MaterialTransformGetID, &
+            MaterialTransformAddToList, &
+            MaterialTransformConvertListToArray, &
+            MaterialTransformDestroy, &
+            MaterialTransformInputRecord, &
             IllitizationRead, &
-            IllitizationAddToList, &
-            IllitizationConvertListToArray, &
-            IllitizationInputRecord, &
-            IllitizationDestroy, &
             ILTBaseCreate, &
             ILTDefaultCreate, &
             ILTGeneralCreate
@@ -649,12 +649,12 @@ end subroutine ILTCheckElements
 
 ! ************************************************************************** !
 
-function IllitizationCreate()
+function MaterialTransformCreate()
 
   implicit none
 
-  class(illitization_type), pointer :: IllitizationCreate
-  class(illitization_type), pointer :: illitization_function
+  class(material_transform_type), pointer :: MaterialTransformCreate
+  class(material_transform_type), pointer :: illitization_function
 
   allocate(illitization_function)
   illitization_function%name = ''
@@ -663,9 +663,9 @@ function IllitizationCreate()
   nullify(illitization_function%illitization_function)
   nullify(illitization_function%next)
 
-  IllitizationCreate => illitization_function
+  MaterialTransformCreate => illitization_function
 
-end function IllitizationCreate
+end function MaterialTransformCreate
 
 ! ************************************************************************** !
 
@@ -677,7 +677,7 @@ subroutine IllitizationRead(this,input,option)
 
   implicit none
 
-  class(illitization_type) :: this
+  class(material_transform_type) :: this
   type(input_type), pointer :: input
   type(option_type) :: option
 
@@ -1012,102 +1012,102 @@ end subroutine
 
 ! ************************************************************************** !
 
-subroutine IllitizationAddToList(new_ilf,list)
+subroutine MaterialTransformAddToList(new_mtf,list)
 
   implicit none
 
-  class(illitization_type), pointer :: new_ilf
-  class(illitization_type), pointer :: list
+  class(material_transform_type), pointer :: new_mtf
+  class(material_transform_type), pointer :: list
 
-  class(illitization_type), pointer :: cur_ilf
+  class(material_transform_type), pointer :: cur_mtf
 
   if (associated(list)) then
-    cur_ilf => list
+    cur_mtf => list
     ! loop to end of list
     do
-      if (.not.associated(cur_ilf%next)) exit
-      cur_ilf => cur_ilf%next
+      if (.not.associated(cur_mtf%next)) exit
+      cur_mtf => cur_mtf%next
     enddo
-    cur_ilf%next => new_ilf
+    cur_mtf%next => new_mtf
   else
-    list => new_ilf
+    list => new_mtf
   endif
 
-end subroutine IllitizationAddToList
+end subroutine MaterialTransformAddToList
 
 ! ************************************************************************** !
 
-subroutine IllitizationConvertListToArray(list,array,option)
+subroutine MaterialTransformConvertListToArray(list,array,option)
 
   use String_module
   use Option_module
 
   implicit none
 
-  class(illitization_type), pointer :: list
-  type(illitization_ptr_type), pointer :: array(:)
+  class(material_transform_type), pointer :: list
+  type(material_transform_ptr_type), pointer :: array(:)
   type(option_type) :: option
 
-  class(illitization_type), pointer :: cur_ilf
+  class(material_transform_type), pointer :: cur_mtf
   PetscInt :: count
 
   count = 0
-  cur_ilf => list
+  cur_mtf => list
   do
-    if (.not.associated(cur_ilf)) exit
+    if (.not.associated(cur_mtf)) exit
     count = count + 1
-    cur_ilf => cur_ilf%next
+    cur_mtf => cur_mtf%next
   enddo
 
   if (associated(array)) deallocate(array)
   allocate(array(count))
 
   count = 0
-  cur_ilf => list
+  cur_mtf => list
   do
-    if (.not.associated(cur_ilf)) exit
+    if (.not.associated(cur_mtf)) exit
     count = count + 1
-    array(count)%ptr => cur_ilf
-    if (cur_ilf%test) then
+    array(count)%ptr => cur_mtf
+    if (cur_mtf%test) then
       call OptionSetBlocking(option,PETSC_FALSE)
       if (OptionIsIORank(option)) then
-        if (associated(cur_ilf%illitization_function)) then
-          call cur_ilf%illitization_function%Test( &
-               cur_ilf%name,option)
+        if (associated(cur_mtf%illitization_function)) then
+          call cur_mtf%illitization_function%Test( &
+               cur_mtf%name,option)
         endif
       endif
       call OptionSetBlocking(option,PETSC_TRUE)
       call OptionCheckNonBlockingError(option)
     endif
-    cur_ilf => cur_ilf%next
+    cur_mtf => cur_mtf%next
   enddo
 
-end subroutine IllitizationConvertListToArray
+end subroutine MaterialTransformConvertListToArray
 
 ! ************************************************************************** !
 
-function IllitizationGetID(illitization_array, &
-     illitization_name, material_property_name, option)
+function MaterialTransformGetID(material_transform_array, &
+           material_transform_name, material_property_name, option)
 
   use Option_module
   use String_module
 
-  type(illitization_ptr_type), pointer :: illitization_array(:)
-  character(len=MAXWORDLENGTH) :: illitization_name
+  type(material_transform_ptr_type), pointer :: material_transform_array(:)
+  character(len=MAXWORDLENGTH) :: material_transform_name
   character(len=MAXWORDLENGTH) :: test1, test2
   character(len=MAXWORDLENGTH) :: material_property_name
   type(option_type) :: option
 
-  PetscInt :: iid, IllitizationGetID
+  PetscInt :: iid, MaterialTransformGetID
   PetscInt :: i, j
 
-  do i = 1, size(illitization_array)
-      test1 = illitization_array(i)%ptr%name
-      do j = 1, size(illitization_array)
+  do i = 1, size(material_transform_array)
+      test1 = material_transform_array(i)%ptr%name
+      do j = 1, size(material_transform_array)
         if (i == j) cycle
-        test2 = illitization_array(j)%ptr%name
+        test2 = material_transform_array(j)%ptr%name
         if (test1 == test2) then
-          option%io_buffer = 'Duplicate illitization function '//&
+          option%io_buffer = 'Duplicate material transform function '//&
                              trim(test2)//&
                              ' has been detected.'
           call PrintErrMsg(option)
@@ -1115,33 +1115,34 @@ function IllitizationGetID(illitization_array, &
       enddo
   enddo
 
-  IllitizationGetID = 0
-  do iid = 1, size(illitization_array)
-    if (StringCompare(illitization_name,illitization_array(iid)%ptr%name)) then
-      IllitizationGetID = iid
+  MaterialTransformGetID = 0
+  do iid = 1, size(material_transform_array)
+    if (StringCompare(material_transform_name, &
+                      material_transform_array(iid)%ptr%name)) then
+      MaterialTransformGetID = iid
       return
     endif
   enddo
 
-  ! IllitizationGetID = UNINITIALIZED_INTEGER
-  option%io_buffer = 'Illitization function "' // &
-       trim(illitization_name) // &
-       '" in material property "' // &
+  ! MaterialTransformGetID = UNINITIALIZED_INTEGER
+  option%io_buffer = 'Material transform function "' // &
+       trim(material_transform_name) // &
+       '" specified in material property "' // &
        trim(material_property_name) // &
-       '" not found among available illitization functions.'
+       '" not found among available functions.'
   call PrintErrMsg(option)
 
-end function IllitizationGetID
+end function MaterialTransformGetID
 
 ! ************************************************************************** !
 
-subroutine IllitizationInputRecord(illitization_list)
+subroutine MaterialTransformInputRecord(material_transform_list)
 
   implicit none
 
-  class(illitization_type), pointer :: illitization_list
+  class(material_transform_type), pointer :: material_transform_list
 
-  class(illitization_type), pointer :: cur_ilf
+  class(material_transform_type), pointer :: cur_mtf
   character(len=MAXWORDLENGTH) :: word1
   PetscInt :: id = INPUT_RECORD_UNIT
   
@@ -1152,25 +1153,26 @@ subroutine IllitizationInputRecord(illitization_list)
   write(id,'(a)') '---------------------------------------------------------&
        &-----------------------'
   write(id,'(a29)',advance='no') '---------------------------: '
-  write(id,'(a)') 'ILLITIZATION FUNCTIONS'
+  write(id,'(a)') 'MATERIAL TRANSFORM FUNCTIONS'
 
-  cur_ilf => illitization_list
+  cur_mtf => material_transform_list
   do
-    if (.not.associated(cur_ilf)) exit
+    if (.not.associated(cur_mtf)) exit
     
-    if (associated(cur_ilf%illitization_function)) then
-      select type (ilf => cur_ilf%illitization_function)
+    if (associated(cur_mtf%illitization_function)) then
+      select type (ilf => cur_mtf%illitization_function)
         type is (illitization_base_type)
           exit
         end select
     endif
 
-    write(id,'(a29)',advance='no') 'illitization function name: '
-    write(id,'(a)') adjustl(trim(cur_ilf%name))
+    write(id,'(a29)',advance='no') 'material transform name: '
+    write(id,'(a)') adjustl(trim(cur_mtf%name))
+    write(id,'(a29)') '--------------: '
 
-    if (associated(cur_ilf%illitization_function)) then
-      write(id,'(a29)',advance='no') 'model: '
-      select type (ilf => cur_ilf%illitization_function)
+    if (associated(cur_mtf%illitization_function)) then
+      write(id,'(a29)',advance='no') 'illitization model: '
+      select type (ilf => cur_mtf%illitization_function)
         !---------------------------------
         class is (ILT_default_type)
           write(id,'(a)') 'Huang et al., 1993'
@@ -1271,28 +1273,30 @@ subroutine IllitizationInputRecord(illitization_list)
     endif
 
     write(id,'(a29)') '---------------------------: '
-    cur_ilf => cur_ilf%next
+    cur_mtf => cur_mtf%next
   enddo
 
-end subroutine IllitizationInputRecord
+end subroutine MaterialTransformInputRecord
 
 ! ************************************************************************** !
 
-recursive subroutine IllitizationDestroy(ilt)
+recursive subroutine MaterialTransformDestroy(mtf)
 
   implicit none
 
-  class(illitization_type), pointer :: ilt
+  class(material_transform_type), pointer :: mtf
 
-  if (.not.associated(ilt)) return
+  if (.not.associated(mtf)) return
 
-  call IllitizationDestroy(ilt%next)
+  call MaterialTransformDestroy(mtf%next)
 
-  call ILTDestroy(ilt%illitization_function)
+  if (associated(mtf%illitization_function)) then
+    call ILTDestroy(mtf%illitization_function)
+  endif
 
-  deallocate(ilt)
-  nullify(ilt)
+  deallocate(mtf)
+  nullify(mtf)
 
-end subroutine IllitizationDestroy
+end subroutine MaterialTransformDestroy
 
-end module Illitization_module
+end module Material_Transform_module

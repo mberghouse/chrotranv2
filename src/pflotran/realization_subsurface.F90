@@ -15,7 +15,7 @@ module Realization_Subsurface_class
   use Saturation_Function_module
   use Characteristic_Curves_module
   use Characteristic_Curves_Thermal_module
-  use Illitization_module
+  use Material_Transform_module
   use Dataset_Base_class
   use Fluid_module
   use Patch_module
@@ -43,7 +43,7 @@ private
     type(saturation_function_type), pointer :: saturation_functions
     class(characteristic_curves_type), pointer :: characteristic_curves
     class(cc_thermal_type), pointer :: characteristic_curves_thermal
-    class(illitization_type), pointer :: illitization
+    class(material_transform_type), pointer :: material_transform
     class(dataset_base_type), pointer :: datasets
 
     class(dataset_base_type), pointer :: uniform_velocity_dataset
@@ -163,7 +163,7 @@ function RealizationCreate2(option)
   nullify(realization%saturation_functions)
   nullify(realization%characteristic_curves)
   nullify(realization%characteristic_curves_thermal)
-  nullify(realization%illitization)
+  nullify(realization%material_transform)
   nullify(realization%datasets)
   nullify(realization%uniform_velocity_dataset)
   nullify(realization%sec_transport_constraint)
@@ -372,7 +372,7 @@ subroutine RealizationCreateDiscretization(realization)
                                        field%electrical_conductivity)
   endif
 
-  ! illitization
+  ! material transform - illitization
   call DiscretizationDuplicateVector(discretization,field%work, &
                                      field%smectite)
 
@@ -764,7 +764,7 @@ subroutine RealProcessMatPropAndSatFunc(realization)
   use Dataset_Common_HDF5_class
   use Dataset_module
   use Characteristic_Curves_Thermal_module
-  use Illitization_module
+  use Material_Transform_module
   use TH_Aux_module, only : th_ice_model
 
 
@@ -781,7 +781,7 @@ subroutine RealProcessMatPropAndSatFunc(realization)
   character(len=MAXSTRINGLENGTH) :: string, verify_string, mat_string
   class(dataset_base_type), pointer :: dataset
   class(cc_thermal_type), pointer :: thermal_cc
-  class(illitization_type), pointer :: illitization
+  class(material_transform_type), pointer :: material_transform
 
   option => realization%option
   patch => realization%patch
@@ -918,18 +918,20 @@ subroutine RealProcessMatPropAndSatFunc(realization)
     if (associated(patch%material_property_array(i)%ptr)) then
       if (.not. patch%material_property_array(i)%ptr%ilt) then
         ! Create a base type function for materials with no illitization
-        illitization => IllitizationCreate()
-        illitization%illitization_function => ILTBaseCreate()
-        illitization%name = patch%material_property_array(i)%ptr% &
-                              illitization_function_name
-        call IllitizationAddToList(illitization,realization%illitization)
+        material_transform => MaterialTransformCreate()
+        material_transform%illitization_function => ILTBaseCreate()
+        material_transform%name = patch%material_property_array(i)%ptr% &
+                                    material_transform_name
+        call MaterialTransformAddToList(material_transform, &
+                                        realization%material_transform)
       endif
     endif
   enddo
-  if (associated(realization%illitization)) then
-    patch%illitization => realization%illitization
-    call IllitizationConvertListToArray(patch%illitization, &
-         patch%illitization_function_array, option)
+  if (associated(realization%material_transform)) then
+    patch%material_transform => realization%material_transform
+    call MaterialTransformConvertListToArray(patch%material_transform, &
+                                             patch%material_transform_array, &
+                                             option)
   endif
   
   ! create mapping of internal to external material id
@@ -982,24 +984,24 @@ subroutine RealProcessMatPropAndSatFunc(realization)
     endif
     
     ! illitization function id 
-    if (associated(patch%illitization_function_array)) then
-      if (Uninitialized(cur_material_property%illitization_function_id)) then
-        cur_material_property%illitization_function_id = &
-           IllitizationGetID( &
-           patch%illitization_function_array, &
-           cur_material_property%illitization_function_name, &
+    if (associated(patch%material_transform_array)) then
+      if (Uninitialized(cur_material_property%material_transform_id)) then
+        cur_material_property%material_transform_id = &
+           MaterialTransformGetID( &
+           patch%material_transform_array, &
+           cur_material_property%material_transform_name, &
            cur_material_property%name,option)
         ! Pass other properties of illitization function to material property
-        if (cur_material_property%illitization_function_id > 0) then
+        if (cur_material_property%material_transform_id > 0) then
           cur_material_property%ilt_fs0 = patch% &
-            illitization_function_array(cur_material_property% &
-              illitization_function_id)%ptr%illitization_function%ilt_fs0
+            material_transform_array(cur_material_property% &
+              material_transform_id)%ptr%illitization_function%ilt_fs0
         endif
       endif
     endif
-    if (cur_material_property%illitization_function_id == 0) then
+    if (cur_material_property%material_transform_id == 0) then
       option%io_buffer = 'Illitization function "' // &
-        trim(cur_material_property%illitization_function_name) // &
+        trim(cur_material_property%material_transform_name) // &
         '" not found in material "'//trim(cur_material_property%name)//'."'
       call PrintErrMsg(option)
     endif
@@ -1704,7 +1706,7 @@ subroutine RealizationRevertFlowParameters(realization)
   material_auxvars => Material%auxvars
   grid => realization%patch%grid
   
-  ! Save original permeability for illitization
+  ! Save original permeability for illitization (material transform)
   do local_id = 1, grid%nlmax
     ghosted_id = grid%nL2G(local_id)
     if (associated(material_auxvars(ghosted_id)%iltf)) then
@@ -2488,8 +2490,8 @@ subroutine RealLocalToLocalWithArray(realization,array_id)
     case(CCT_ID_ARRAY)
       call GridCopyIntegerArrayToVec(grid,patch%cct_id, &
                                      field%work_loc, grid%ngmax)
-    case(ILT_ID_ARRAY)
-      call GridCopyIntegerArrayToVec(grid,patch%ilt_id, &
+    case(MTF_ID_ARRAY)
+      call GridCopyIntegerArrayToVec(grid,patch%mtf_id, &
                                      field%work_loc, grid%ngmax)
   end select
 
@@ -2506,8 +2508,8 @@ subroutine RealLocalToLocalWithArray(realization,array_id)
     case(CCT_ID_ARRAY)
       call GridCopyVecToIntegerArray(grid,patch%cct_id, &
                                       field%work_loc, grid%ngmax)
-    case(ILT_ID_ARRAY)
-      call GridCopyVecToIntegerArray(grid,patch%ilt_id, &
+    case(MTF_ID_ARRAY)
+      call GridCopyVecToIntegerArray(grid,patch%mtf_id, &
                                       field%work_loc, grid%ngmax)
   end select
 
@@ -3051,8 +3053,8 @@ subroutine RealizationStrip(this)
     call CharCurvesThermalDestroy(this%characteristic_curves_thermal)
   endif
 
-  if (associated(this%illitization)) then
-    call IllitizationDestroy(this%illitization)
+  if (associated(this%material_transform)) then
+    call MaterialTransformDestroy(this%material_transform)
   endif
   
   call DatasetDestroy(this%datasets)
