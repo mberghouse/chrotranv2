@@ -1263,7 +1263,7 @@ subroutine RestartFlowProcessModelHDF5(pm_grp_id, realization)
                                    ZERO_INTEGER)
     end select
 
-    ! Save original permeability for illitization
+    ! Save original permeability for illitization (material transform)
     do local_id = 1, grid%nlmax
       ghosted_id = grid%nL2G(local_id)
       if (associated(material_auxvars(ghosted_id)%iltf)) then

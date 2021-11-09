@@ -1962,7 +1962,7 @@ subroutine GeneralAuxVarPerturb(gen_auxvar,global_auxvar, &
                                   global_auxvar_debug, &
                                   material_auxvar, &
                                   characteristic_curves, &
-                                  illitization_function, &
+                                  material_transform, &
                                   natural_id,option)
     if (global_auxvar%istate /= global_auxvar_debug%istate) then
       write(option%io_buffer, &

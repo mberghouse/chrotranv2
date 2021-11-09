@@ -810,7 +810,7 @@ subroutine PMUFDDecayInit(this)
     do d = 1, this%isotope_daughters(0,iisotope)
       id = this%isotope_daughters(d,iisotope)
       if (Uninitialized(this%isotope_daughter_stoich(d,iisotope))) then
-        option%io_buffer = 'A stoichiomtry must be defined for isotope ' // &
+        option%io_buffer = 'A stoichiometry must be defined for isotope ' // &
           trim(this%isotope_name(iisotope)) // "'s daughter " // '"' // &
           trim(this%isotope_name(id)) // '".'
         call PrintErrMsg(option)

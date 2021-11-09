@@ -74,7 +74,7 @@ module Material_Transform_module
             MaterialTransformConvertListToArray, &
             MaterialTransformDestroy, &
             MaterialTransformInputRecord, &
-            IllitizationRead, &
+            MaterialTransformRead, &
             ILTBaseCreate, &
             ILTDefaultCreate, &
             ILTGeneralCreate
@@ -654,18 +654,63 @@ function MaterialTransformCreate()
   implicit none
 
   class(material_transform_type), pointer :: MaterialTransformCreate
-  class(material_transform_type), pointer :: illitization_function
+  class(material_transform_type), pointer :: material_transform
 
-  allocate(illitization_function)
-  illitization_function%name = ''
-  illitization_function%print_me = PETSC_FALSE
-  illitization_function%test = PETSC_FALSE
-  nullify(illitization_function%illitization_function)
-  nullify(illitization_function%next)
+  allocate(material_transform)
+  material_transform%name = ''
+  material_transform%print_me = PETSC_FALSE
+  material_transform%test = PETSC_FALSE
+  nullify(material_transform%illitization_function)
+  nullify(material_transform%next)
 
-  MaterialTransformCreate => illitization_function
+  MaterialTransformCreate => material_transform
 
 end function MaterialTransformCreate
+
+! ************************************************************************** !
+
+subroutine MaterialTransformRead(this,input,option)
+
+  use Option_module
+  use Input_Aux_module
+  use String_module
+
+  implicit none
+
+  class(material_transform_type) :: this
+  type(input_type), pointer :: input
+  type(option_type) :: option
+
+  character(len=MAXWORDLENGTH) :: keyword
+  character(len=MAXSTRINGLENGTH) :: error_string
+
+  input%ierr = 0
+  error_string = 'MATERIAL_TRANSFORM "'//trim(this%name)//'"'
+  call InputPushBlock(input,option)
+  do
+    call InputReadPflotranString(input,option)
+
+    if (InputCheckExit(input,option)) exit
+
+    call InputReadCard(input,option,keyword)
+    call InputErrorMsg(input,option,'keyword',error_string)
+    call StringToUpper(keyword)
+
+    select case(trim(keyword))
+      !------------------------------------------
+      case('ILLITIZATION')
+        call IllitizationRead(this,input,option)
+      !------------------------------------------
+      case default
+        call InputKeywordUnrecognized(input,keyword, &
+               'MATERIAL_TRANSFORM "'//trim(this%name)//'"',option)
+    end select
+    
+  enddo
+  
+  call InputPopBlock(input,option)
+
+end subroutine MaterialTransformRead
 
 ! ************************************************************************** !
 
@@ -689,6 +734,14 @@ subroutine IllitizationRead(this,input,option)
 
   input%ierr = 0
   error_string = 'ILLITIZATION'
+  
+  if (associated(this%illitization_function)) then
+    option%io_buffer = 'There may only be one instance of '// &
+                       trim(error_string) // &
+                       ' in MATERIAL_TRANSFORM "'//trim(this%name)//'".'
+    call PrintErrMsg(option)
+  endif
+  
   call InputPushBlock(input,option)
   do
 
@@ -1168,9 +1221,9 @@ subroutine MaterialTransformInputRecord(material_transform_list)
 
     write(id,'(a29)',advance='no') 'material transform name: '
     write(id,'(a)') adjustl(trim(cur_mtf%name))
-    write(id,'(a29)') '--------------: '
-
+    
     if (associated(cur_mtf%illitization_function)) then
+      write(id,'(a29)') '--------------: '
       write(id,'(a29)',advance='no') 'illitization model: '
       select type (ilf => cur_mtf%illitization_function)
         !---------------------------------

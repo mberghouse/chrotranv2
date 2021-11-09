@@ -917,7 +917,7 @@ subroutine RealProcessMatPropAndSatFunc(realization)
   do i = 1, num_mat_prop
     if (associated(patch%material_property_array(i)%ptr)) then
       if (.not. patch%material_property_array(i)%ptr%ilt) then
-        ! Create a base type function for materials with no illitization
+        ! create base type functions for materials with transformations
         material_transform => MaterialTransformCreate()
         material_transform%illitization_function => ILTBaseCreate()
         material_transform%name = patch%material_property_array(i)%ptr% &
@@ -983,7 +983,7 @@ subroutine RealProcessMatPropAndSatFunc(realization)
         call PrintErrMsg(option)
     endif
     
-    ! illitization function id 
+    ! material transform function id 
     if (associated(patch%material_transform_array)) then
       if (Uninitialized(cur_material_property%material_transform_id)) then
         cur_material_property%material_transform_id = &
@@ -991,7 +991,7 @@ subroutine RealProcessMatPropAndSatFunc(realization)
            patch%material_transform_array, &
            cur_material_property%material_transform_name, &
            cur_material_property%name,option)
-        ! Pass other properties of illitization function to material property
+        ! pass properties of function to material property
         if (cur_material_property%material_transform_id > 0) then
           cur_material_property%ilt_fs0 = patch% &
             material_transform_array(cur_material_property% &
@@ -1000,7 +1000,7 @@ subroutine RealProcessMatPropAndSatFunc(realization)
       endif
     endif
     if (cur_material_property%material_transform_id == 0) then
-      option%io_buffer = 'Illitization function "' // &
+      option%io_buffer = 'Material transform function "' // &
         trim(cur_material_property%material_transform_name) // &
         '" not found in material "'//trim(cur_material_property%name)//'."'
       call PrintErrMsg(option)

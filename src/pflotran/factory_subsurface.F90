@@ -2926,7 +2926,7 @@ subroutine SubsurfaceReadInput(simulation,input)
         call InputErrorMsg(input,option,'name','MATERIAL_TRANSFORM')
         option%io_buffer = '  Name :: ' // trim(material_transform%name)
         call PrintMsg(option)
-        call IllitizationRead(material_transform,input,option)
+        call MaterialTransformRead(material_transform,input,option)
         call MaterialTransformAddToList(material_transform, &
                                    realization%material_transform)
         nullify(material_transform)
