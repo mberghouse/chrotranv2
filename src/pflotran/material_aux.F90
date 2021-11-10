@@ -74,7 +74,7 @@ module Material_Aux_class
 
   type, public :: ilt_auxvar_type
     PetscBool :: ilt       ! model illitization in material
-    PetscInt  :: ilt_fn_id ! illitization function id
+    PetscInt  :: mtf_fn_id ! illitization function id
     PetscReal :: ilt_fs0   ! initial fraction of smectite in material
     PetscReal :: ilt_fs    ! fraction of smectite in material (final)
     PetscReal :: ilt_fi    ! fraction of illite in material (final)
@@ -207,8 +207,8 @@ function MaterialIlliteAuxCreate()
   allocate(ilt_aux)
   
   ! Model values
+  ilt_aux%mtf_fn_id = UNINITIALIZED_INTEGER ! material transform function id
   ilt_aux%ilt       = PETSC_FALSE ! model illitization in material
-  ilt_aux%ilt_fn_id = UNINITIALIZED_INTEGER ! illitization function id
   ilt_aux%ilt_fs0   = 1.0d+0 ! initial fraction of smectite in material
   
   ! Solution values

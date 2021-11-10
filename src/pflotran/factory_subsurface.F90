@@ -2928,7 +2928,7 @@ subroutine SubsurfaceReadInput(simulation,input)
         call PrintMsg(option)
         call MaterialTransformRead(material_transform,input,option)
         call MaterialTransformAddToList(material_transform, &
-                                   realization%material_transform)
+                                        realization%material_transform)
         nullify(material_transform)
 
 !....................

@@ -76,8 +76,7 @@ module Material_Transform_module
             MaterialTransformInputRecord, &
             MaterialTransformRead, &
             ILTBaseCreate, &
-            ILTDefaultCreate, &
-            ILTGeneralCreate
+            ILTDefaultCreate
 
 contains
 
@@ -1179,10 +1178,10 @@ function MaterialTransformGetID(material_transform_array, &
 
   ! MaterialTransformGetID = UNINITIALIZED_INTEGER
   option%io_buffer = 'Material transform function "' // &
-       trim(material_transform_name) // &
-       '" specified in material property "' // &
-       trim(material_property_name) // &
-       '" not found among available functions.'
+                     trim(material_transform_name) // &
+                     '" specified in material property "' // &
+                     trim(material_property_name) // &
+                     '" not found among available functions.'
   call PrintErrMsg(option)
 
 end function MaterialTransformGetID
@@ -1282,7 +1281,7 @@ subroutine MaterialTransformInputRecord(material_transform_list)
           write(id,'(a)') adjustl(trim(word1))
           write(id,'(a29)',advance='no') 'frequency: '
           write(word1,'(es12.5)') ilf%ilt_freq
-          write(id,'(a)') adjustl(trim(word1))//' L/mol-s'
+          write(id,'(a)') adjustl(trim(word1))//' '
           write(id,'(a29)',advance='no') 'activation energy: '
           write(word1,'(es12.5)') ilf%ilt_ea
           write(id,'(a)') adjustl(trim(word1))//' J/mol'

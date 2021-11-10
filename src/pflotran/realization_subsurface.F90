@@ -916,8 +916,8 @@ subroutine RealProcessMatPropAndSatFunc(realization)
   ! set up mapping for illitization functions
   do i = 1, num_mat_prop
     if (associated(patch%material_property_array(i)%ptr)) then
-      if (.not. patch%material_property_array(i)%ptr%ilt) then
-        ! create base type functions for materials with transformations
+      if (.not. patch%material_property_array(i)%ptr%mtf) then
+        ! create base type functions for materials without transformations
         material_transform => MaterialTransformCreate()
         material_transform%illitization_function => ILTBaseCreate()
         material_transform%name = patch%material_property_array(i)%ptr% &
@@ -1002,7 +1002,7 @@ subroutine RealProcessMatPropAndSatFunc(realization)
     if (cur_material_property%material_transform_id == 0) then
       option%io_buffer = 'Material transform function "' // &
         trim(cur_material_property%material_transform_name) // &
-        '" not found in material "'//trim(cur_material_property%name)//'."'
+        '" not found for material "'//trim(cur_material_property%name)//'."'
       call PrintErrMsg(option)
     endif
 

@@ -337,7 +337,9 @@ subroutine InitSubsurfAssignMatProperties(realization)
   if (option%ngeopdof > 0) then
     call VecGetArrayF90(field%electrical_conductivity,cond_p, &
       ierr);CHKERRQ(ierr)
-  endif  
+  endif
+
+  ! material transform - illitization
   call VecGetArrayF90(field%smectite,smectite_p,ierr);CHKERRQ(ierr)
         
   ! have to use Material%auxvars() and not material_auxvars() due to memory
@@ -479,7 +481,8 @@ subroutine InitSubsurfAssignMatProperties(realization)
   if (option%ngeopdof > 0) then
     call VecRestoreArrayF90(field%electrical_conductivity,cond_p, &
       ierr);CHKERRQ(ierr)
-  endif 
+  endif
+
   call VecRestoreArrayF90(field%smectite,smectite_p,ierr);CHKERRQ(ierr)
 
   ! read in any user-defined property fields
@@ -610,7 +613,8 @@ subroutine InitSubsurfAssignMatProperties(realization)
                      field%electrical_conductivity,field%work_loc,ONEDOF)
      call MaterialSetAuxVarVecLoc(patch%aux%Material,field%work_loc, &
                                ELECTRICAL_CONDUCTIVITY,ZERO_INTEGER)
-  endif                                                        
+  endif
+
   call DiscretizationGlobalToLocal(discretization,field%smectite, &
                                    field%work_loc,ONEDOF)
   call MaterialSetAuxVarVecLoc(patch%aux%Material,field%work_loc, &
