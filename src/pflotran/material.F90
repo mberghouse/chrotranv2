@@ -46,7 +46,8 @@ module Material_module
     character(len=MAXWORDLENGTH) :: thermal_conductivity_function_name
     PetscInt :: material_transform_id
     character(len=MAXWORDLENGTH) :: material_transform_name
-    PetscBool :: mtf ! material transform is active
+    PetscBool :: mtf ! material transform is specified
+    PetscBool :: ilt ! material transform - illitization is active
     PetscReal :: ilt_fs0 ! initial smectite fraction
     PetscReal :: rock_density ! kg/m^3
     PetscReal :: specific_heat ! J/kg-K
@@ -201,6 +202,7 @@ function MaterialPropertyCreate(option)
   material_property%saturation_function_id = 0
   material_property%thermal_conductivity_function_id = UNINITIALIZED_INTEGER
   material_property%mtf = PETSC_FALSE
+  material_property%ilt = PETSC_FALSE
   material_property%material_transform_id = UNINITIALIZED_INTEGER
   material_property%saturation_function_name = ''
   material_property%rock_density = UNINITIALIZED_DOUBLE
@@ -1627,10 +1629,10 @@ subroutine MaterialAssignPropertyToAux(material_auxvar,material_property, &
     endif
   endif
   
-  if (material_property%mtf) then
+  ! material transform - illitization 
+  if (material_property%ilt) then
     material_auxvar%iltf => MaterialIlliteAuxCreate()
     material_auxvar%iltf%mtf_fn_id = material_property%material_transform_id
-    material_auxvar%iltf%ilt = material_property%mtf
     material_auxvar%iltf%ilt_fs0 = material_property%ilt_fs0
     call material_auxvar%iltf%Set(material_property%ilt_fs0)
     call material_auxvar%iltf%GetScale

@@ -70,6 +70,7 @@ module Material_Transform_module
 
   public :: MaterialTransformCreate, &
             MaterialTransformGetID, &
+            MaterialTransformCheckILT, &
             MaterialTransformAddToList, &
             MaterialTransformConvertListToArray, &
             MaterialTransformDestroy, &
@@ -608,7 +609,7 @@ subroutine ILTCheckElements(this,pm_ufd_elements,num,option)
 
   class(ILT_default_type) :: this
   PetscInt, intent(in) :: num
-  character(len=MAXWORDLENGTH), dimension(num), intent(in) :: pm_ufd_elements
+  character(len=MAXWORDLENGTH), intent(in) :: pm_ufd_elements(num)
   type(option_type), intent(inout) :: option
   
   class(ilt_kd_effects_type), pointer :: kdl
@@ -1185,6 +1186,28 @@ function MaterialTransformGetID(material_transform_array, &
   call PrintErrMsg(option)
 
 end function MaterialTransformGetID
+
+! ************************************************************************** !
+
+function MaterialTransformCheckILT(material_transform_array,id)
+  
+  type(material_transform_ptr_type), pointer :: material_transform_array(:)
+  PetscInt, intent(in) :: id
+
+  PetscBool :: MaterialTransformCheckILT
+  type(illitization_base_type), pointer :: ilt
+  
+  MaterialTransformCheckILT = PETSC_FALSE
+  
+  if (associated(material_transform_array(id)%ptr%illitization_function)) then
+    select type(ilt => material_transform_array(id)%ptr%illitization_function)
+      ! Type must be extended
+      class is(ILT_default_type)
+        MaterialTransformCheckILT = PETSC_TRUE
+    end select
+  endif
+
+end function MaterialTransformCheckILT
 
 ! ************************************************************************** !
 

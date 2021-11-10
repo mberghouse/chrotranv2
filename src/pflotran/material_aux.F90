@@ -64,7 +64,7 @@ module Material_Aux_class
     type(fracture_auxvar_type), pointer :: fracture
     PetscReal, pointer :: geomechanics_subsurface_prop(:)
     PetscInt :: creep_closure_id
-    type(ilt_auxvar_type), pointer :: iltf
+    type(ilt_auxvar_type), pointer :: iltf ! material transform - illitization
 
 !    procedure(SaturationFunction), nopass, pointer :: SaturationFunction
   contains
@@ -73,8 +73,7 @@ module Material_Aux_class
   end type material_auxvar_type
 
   type, public :: ilt_auxvar_type
-    PetscBool :: ilt       ! model illitization in material
-    PetscInt  :: mtf_fn_id ! illitization function id
+    PetscInt  :: mtf_fn_id ! material transform function id
     PetscReal :: ilt_fs0   ! initial fraction of smectite in material
     PetscReal :: ilt_fs    ! fraction of smectite in material (final)
     PetscReal :: ilt_fi    ! fraction of illite in material (final)
@@ -208,7 +207,6 @@ function MaterialIlliteAuxCreate()
   
   ! Model values
   ilt_aux%mtf_fn_id = UNINITIALIZED_INTEGER ! material transform function id
-  ilt_aux%ilt       = PETSC_FALSE ! model illitization in material
   ilt_aux%ilt_fs0   = 1.0d+0 ! initial fraction of smectite in material
   
   ! Solution values
@@ -1213,7 +1211,9 @@ subroutine MaterialAuxVarStrip(auxvar)
   call DeallocateArray(auxvar%sat_func_prop)
   call DeallocateArray(auxvar%soil_properties)
   call MaterialAuxVarFractureStrip(auxvar%fracture)
-  call MaterialAuxVarIlliteStrip(auxvar%iltf)
+  if (associated(auxvar%iltf)) then
+    call MaterialAuxVarIlliteStrip(auxvar%iltf)
+  endif
   if (associated(auxvar%geomechanics_subsurface_prop)) then
     call DeallocateArray(auxvar%geomechanics_subsurface_prop)
   endif

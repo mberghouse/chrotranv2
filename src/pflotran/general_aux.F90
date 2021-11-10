@@ -959,20 +959,18 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
                                 gen_auxvar%effective_porosity,dpor_dp)
     endif
     if (associated(material_auxvar%iltf)) then
-      if (material_auxvar%iltf%ilt) then
-        if (option%time > material_auxvar%iltf%ilt_tst .and. &
-            option%dt > 0.d0) then
-          call material_transform%illitization_function% &
-                 CalculateILT(material_auxvar%iltf%ilt_fst, &
-                              gen_auxvar%temp, &
-                              option%flow_dt, &
-                              material_auxvar%iltf%ilt_fit, &
-                              material_auxvar%iltf%ilt_scale, &
-                              shift_perm, &
-                              option)
-          call material_auxvar%iltf%ShiftPerm(material_auxvar,shift_perm,option)
-          material_auxvar%iltf%ilt_tst = option%time
-        endif
+      if (option%time > material_auxvar%iltf%ilt_tst .and. &
+          option%dt > 0.d0) then
+        call material_transform%illitization_function% &
+               CalculateILT(material_auxvar%iltf%ilt_fst, &
+                            gen_auxvar%temp, &
+                            option%flow_dt, &
+                            material_auxvar%iltf%ilt_fit, &
+                            material_auxvar%iltf%ilt_scale, &
+                            shift_perm, &
+                            option)
+        call material_auxvar%iltf%ShiftPerm(material_auxvar,shift_perm,option)
+        material_auxvar%iltf%ilt_tst = option%time
       endif
     endif
     
