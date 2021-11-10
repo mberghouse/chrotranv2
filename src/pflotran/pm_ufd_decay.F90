@@ -933,7 +933,6 @@ recursive subroutine PMUFDDecayInitializeRun(this)
   type(reactive_transport_auxvar_type), pointer :: rt_auxvars(:)
   class(material_auxvar_type), pointer :: material_auxvars(:)
   class(material_transform_type), pointer :: material_transform
-  class(illitization_base_type), pointer :: ilt
   PetscReal :: kd_kgw_m3b
   PetscInt :: local_id, ghosted_id
   PetscInt :: iele, iiso, ipri, i, imat
@@ -953,13 +952,11 @@ recursive subroutine PMUFDDecayInitializeRun(this)
     if (associated(patch%mtf_id)) then
       material_transform => &
         patch%material_transform_array(patch%mtf_id(ghosted_id))%ptr
-      if (associated(material_transform%illitization_function)) then
-        select type(ilt => material_transform%illitization_function)
-          class is (ILT_default_type)
-            call ilt%CheckElements(this%element_name, &
-                                   this%num_elements, &
-                                   this%option)
-        end select
+      if (associated(material_auxvars(ghosted_id)%iltf)) then
+        call material_transform%illitization_function% &
+               CheckElements(this%element_name, &
+                             this%num_elements, &
+                             this%option)
       endif
     endif
     
@@ -970,13 +967,11 @@ recursive subroutine PMUFDDecayInitializeRun(this)
       if (associated(material_auxvars(ghosted_id)%iltf)) then
         if (this%option%time > material_auxvars(ghosted_id)%iltf%ilt_tst) then
           if (this%option%dt > 0.d0 .or. this%option%restart_flag) then
-            select type(ilt => material_transform%illitization_function)
-              class is (ILT_default_type)
-                call ilt%ShiftKd(kd_kgw_m3b, &
-                                 this%element_name(iele), &
-                                 material_auxvars(ghosted_id), &
-                                 this%option)
-            end select
+            call material_transform%illitization_function% &
+                   ShiftKd(kd_kgw_m3b, &
+                           this%element_name(iele), &
+                           material_auxvars(ghosted_id), &
+                           this%option)
           endif
         endif
       endif
@@ -1168,7 +1163,6 @@ subroutine PMUFDDecaySolve(this,time,ierr)
   type(global_auxvar_type), pointer :: global_auxvars(:)
   class(material_auxvar_type), pointer :: material_auxvars(:)
   class(material_transform_type), pointer :: material_transform
-  class(illitization_base_type), pointer :: ilt
   PetscInt :: local_id
   PetscInt :: ghosted_id
   PetscInt :: iele, i, p, g, ip, ig, iiso, ipri, imnrl, imat
@@ -1408,13 +1402,11 @@ subroutine PMUFDDecaySolve(this,time,ierr)
       if (associated(material_auxvars(ghosted_id)%iltf)) then
         if (option%time > material_auxvars(ghosted_id)%iltf%ilt_tst .and. &
             option%dt > 0.d0) then
-          select type(ilt => material_transform%illitization_function)
-            class is (ILT_default_type)
-              call ilt%ShiftKd(kd_kgw_m3b, &
-                               this%element_name(iele), &
-                               material_auxvars(ghosted_id), &
-                               option)
-          end select
+          call material_transform%illitization_function% &
+                 ShiftKd(kd_kgw_m3b, &
+                         this%element_name(iele), &
+                         material_auxvars(ghosted_id), &
+                         option)
         endif
       endif
 

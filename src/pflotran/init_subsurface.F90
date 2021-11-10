@@ -579,7 +579,7 @@ subroutine InitSubsurfAssignMatProperties(realization)
     if (associated(patch%mtf_id)) then
       call RealLocalToLocalWithArray(realization,MTF_ID_ARRAY)
     endif
-    
+
     if (soil_compressibility_index > 0) then
       call DiscretizationGlobalToLocal(discretization,field%compressibility0, &
                                        field%work_loc,ONEDOF)

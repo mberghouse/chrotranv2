@@ -22,6 +22,8 @@ module Material_Transform_module
     procedure, public :: Verify => ILTBaseVerify
     procedure, public :: Test => ILTBaseTest
     procedure, public :: CalculateILT => ILTBaseIllitization
+    procedure, public :: ShiftKd => ILTBaseShiftSorption
+    procedure, public :: CheckElements => ILTBaseCheckElements
   end type illitization_base_type
   !---------------------------------------------------------------------------
   type, public, extends(illitization_base_type) :: ILT_default_type
@@ -530,6 +532,27 @@ end subroutine ILTGeneralIllitization
 
 ! ************************************************************************** !
 
+subroutine ILTBaseShiftSorption(this,kd0,ele,material_auxvar,option)
+
+  use Option_module
+  use Material_Aux_class
+
+  implicit none
+
+  class(illitization_base_type) :: this
+  PetscReal, intent(inout) :: kd0
+  character(len=MAXWORDLENGTH), intent(in) :: ele
+  class(material_auxvar_type), intent(in) :: material_auxvar
+  type(option_type), intent(inout) :: option
+  
+  option%io_buffer = 'Illitization function must be extended to modify ' &
+                   //'the kd values of elements in UFD Decay.'
+  call PrintErrMsgByRank(option)
+  
+end subroutine ILTBaseShiftSorption
+
+! ************************************************************************** !
+
 subroutine ILTShiftSorption(this,kd0,ele,material_auxvar,option)
 
   use Option_module
@@ -598,6 +621,23 @@ subroutine ILTShiftSorption(this,kd0,ele,material_auxvar,option)
   if (allocated(fkd)) deallocate(fkd)
 
 end subroutine ILTShiftSorption
+
+! ************************************************************************** !
+
+subroutine ILTBaseCheckElements(this,pm_ufd_elements,num,option)
+
+  use Option_module
+
+  implicit none
+
+  class(illitization_base_type) :: this
+  PetscInt, intent(in) :: num
+  character(len=MAXWORDLENGTH), intent(in) :: pm_ufd_elements(num)
+  type(option_type), intent(inout) :: option
+  
+  return
+  
+end subroutine ILTBaseCheckElements
 
 ! ************************************************************************** !
 
