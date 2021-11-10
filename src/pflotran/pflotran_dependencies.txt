@@ -360,6 +360,8 @@ inversion_subsurface.o : connection.o coupler.o debug.o discretization.o \
 inversion_tao.o : driver.o factory_forward.o input_aux.o inversion_base.o \
                   inversion_subsurface.o option.o pflotran_constants.o \
                   string.o
+inversion_zflow.o : inversion_base.o inversion_subsurface.o \
+                    pflotran_constants.o
 kdtree.o :
 logging.o : pflotran_constants.o
 lookup_table.o : input_aux.o option.o pflotran_constants.o units.o utility.o
