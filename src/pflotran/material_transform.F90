@@ -1263,6 +1263,24 @@ subroutine MaterialTransformInputRecord(material_transform_list)
   
   class(ilt_kd_effects_type), pointer :: kdl
   PetscInt :: i, j, k
+  PetscBool :: inactive
+  
+  inactive = PETSC_TRUE
+  
+  cur_mtf => material_transform_list
+  do
+    if (.not.associated(cur_mtf)) exit
+    if (associated(cur_mtf%illitization_function)) then
+      select type (ilf => cur_mtf%illitization_function)
+        class is (ILT_default_type)
+          inactive = PETSC_FALSE
+          exit
+        end select
+    endif
+    cur_mtf => cur_mtf%next
+  enddo
+
+  if (inactive) return
 
   write(id,'(a)') ' '
   write(id,'(a)') '---------------------------------------------------------&
