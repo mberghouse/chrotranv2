@@ -18,8 +18,8 @@ module Material_Transform_module
   type, public :: illitization_base_type
     PetscReal :: ilt_threshold ! temperature threshold to begin illitization
     PetscReal :: ilt_fs0 ! initial fraction of smectite in material
-    PetscReal :: ilt_shift_perm ! permeability shift factor for illite fraction
-    class(ilt_kd_effects_type), pointer :: ilt_shift_kd_list
+    class(ilt_perm_effects_type), pointer :: ilt_shift_perm ! shift permeability
+    class(ilt_kd_effects_type), pointer :: ilt_shift_kd_list ! shift sorption
   contains
     procedure, public :: Verify => ILTBaseVerify
     procedure, public :: Test => ILTBaseTest
@@ -60,6 +60,11 @@ module Material_Transform_module
   type, public :: material_transform_ptr_type
     class(material_transform_type), pointer :: ptr
   end type material_transform_ptr_type
+  !---------------------------------------------------------------------------
+  type :: ilt_perm_effects_type
+    PetscReal, pointer :: f_perm(:) ! factors for modifying the permeability
+    character(len=MAXWORDLENGTH), pointer :: f_perm_mode ! function type
+  end type
   !---------------------------------------------------------------------------
   type :: ilt_kd_effects_type
     PetscInt :: num_elements
@@ -110,13 +115,23 @@ subroutine ILTBaseVerify(this,name,option)
       call PrintErrMsg(option)
     endif
   endif
-  if (Initialized(this%ilt_shift_perm)) then
-    if (this%ilt_shift_perm <= -1.0d0) then
-      option%io_buffer = 'If negative, the illitization permeability shift ' &
-                       //'factor must be greater than -1 ' &
-                       //'in function "'//trim(name)//'".'
-      call PrintErrMsg(option)
-    endif
+  if (associated(this%ilt_shift_perm)) then
+    select case(this%ilt_shift_perm%f_perm_mode)
+      case('DEFAULT')
+        if (this%ilt_shift_perm%f_perm(1) < -1.0d+0) then
+          option%io_buffer = 'Functional parameter #1 in "' &
+                           // trim(this%ilt_shift_perm%f_perm_mode) &
+                           //'" must not be less than -1 for ' &
+                           //'SHIFT_PERM in function, '//trim(name)//'.'
+          call PrintErrMsg(option)
+        endif
+      case default
+        option%io_buffer = 'Permeability modification function "' &
+                         // trim(this%ilt_shift_perm%f_perm_mode) &
+                         //'" was not found among the available options ' &
+                         //'for SHIFT_PERM in function, '//trim(name)//'.'
+        call PrintErrMsg(option)
+    end select
   endif
 
 end subroutine ILTBaseVerify
@@ -263,7 +278,7 @@ function ILTBaseCreate()
 
   ILTBaseCreate%ilt_threshold  = 0.0d0
   ILTBaseCreate%ilt_fs0        = 0.0d0
-  ILTBaseCreate%ilt_shift_perm = 0.0d0
+  nullify(ILTBaseCreate%ilt_shift_perm)
   nullify(ILTBaseCreate%ilt_shift_kd_list)
 
 end function ILTBaseCreate
@@ -280,10 +295,10 @@ function ILTDefaultCreate()
 
   ILTDefaultCreate%ilt_threshold  = 0.0d0
   ILTDefaultCreate%ilt_fs0        = 1.0d0
-  ILTDefaultCreate%ilt_shift_perm = 0.0d0
   ILTDefaultCreate%ilt_ea     = UNINITIALIZED_DOUBLE
   ILTDefaultCreate%ilt_freq   = UNINITIALIZED_DOUBLE
   ILTDefaultCreate%ilt_K_conc = UNINITIALIZED_DOUBLE
+  nullify(ILTDefaultCreate%ilt_shift_perm)
   nullify(ILTDefaultCreate%ilt_shift_kd_list)
 
 end function ILTDefaultCreate
@@ -300,15 +315,35 @@ function ILTGeneralCreate()
 
   ILTGeneralCreate%ilt_threshold  = 0.0d0
   ILTGeneralCreate%ilt_fs0        = 1.0d0
-  ILTGeneralCreate%ilt_shift_perm = 0.0d0
   ILTGeneralCreate%ilt_freq       = 1.0d0 ! Default of 1.0 in general model
   ILTGeneralCreate%ilt_ea     = UNINITIALIZED_DOUBLE
   ILTGeneralCreate%ilt_K_conc = UNINITIALIZED_DOUBLE
   ILTGeneralCreate%ilt_K_exp  = UNINITIALIZED_DOUBLE
   ILTGeneralCreate%ilt_exp    = UNINITIALIZED_DOUBLE
+  nullify(ILTGeneralCreate%ilt_shift_perm)
   nullify(ILTGeneralCreate%ilt_shift_kd_list)
 
 end function ILTGeneralCreate
+
+! ************************************************************************** !
+
+function ILTPermEffectsCreate()
+  ! 
+  ! Creates object for modifying permeability from smectite/illite transition
+  ! 
+  ! Author: Alex Salazar III
+  ! Date: 11/11/2021
+
+  implicit none
+
+  class(ilt_perm_effects_type), pointer :: ILTPermEffectsCreate
+
+  allocate(ILTPermEffectsCreate)
+  
+  nullify(ILTPermEffectsCreate%f_perm)
+  nullify(ILTPermEffectsCreate%f_perm_mode)
+
+end function ILTPermEffectsCreate
 
 ! ************************************************************************** !
 
@@ -327,6 +362,7 @@ function ILTKdEffectsCreate()
   
   ILTKdEffectsCreate%num_elements = UNINITIALIZED_INTEGER
   nullify(ILTKdEffectsCreate%f_kd)
+  nullify(ILTKdEffectsCreate%f_kd_mode)
   nullify(ILTKdEffectsCreate%f_kd_element)
 
 end function ILTKdEffectsCreate
@@ -911,10 +947,11 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
   PetscInt, parameter :: MAX_KD_SIZE = 100
   character(len=MAXWORDLENGTH) :: word
   class(ilt_kd_effects_type), pointer :: shift_kd_list
-  PetscReal :: f_kd(MAX_KD_SIZE,10)
-  PetscInt :: f_kd_mode_size(MAX_KD_SIZE)
+  class(ilt_perm_effects_type), pointer :: shift_perm
+  PetscReal :: f_kd(MAX_KD_SIZE,10), f_perm(10)
+  PetscInt :: f_kd_mode_size(MAX_KD_SIZE), f_perm_mode_size
   character(len=MAXWORDLENGTH) :: f_kd_element(MAX_KD_SIZE)
-  character(len=MAXWORDLENGTH) :: f_kd_mode(MAX_KD_SIZE)
+  character(len=MAXWORDLENGTH) :: f_kd_mode(MAX_KD_SIZE), f_perm_mode
 
   select case(keyword)
     case('SMECTITE_INITIAL')
@@ -932,13 +969,61 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
                                     'ILLITIZATION, '//trim(kind)// &
                                     ', temperature threshold',option)
     case('SHIFT_PERM')
-      ! Factor modifying permeability as a function of the illite fraction
-      call InputReadDouble(input,option,ilf%ilt_shift_perm)
-      call InputErrorMsg(input,option,'permeability shift factor', &
-                         'ILLITIZATION, '//trim(kind)//'')
+      ! Functions and parameters modifying the permeability using elements
+      !   from the illitization model
+      shift_perm => ILTPermEffectsCreate()
+      j = 0
+      f_perm_mode = ''
+      f_perm_mode_size = 0
+      f_perm(:) = UNINITIALIZED_DOUBLE
+      
+      ! Function type
+      call InputReadWord(input,option,word,PETSC_TRUE)
+      call InputErrorMsg(input,option,'f_perm function type', &
+                         error_string)
+      f_perm_mode = word
+      
+      ! Function parameters
+      select case(f_perm_mode)
+        case('DEFAULT')
+          j = 1
+          f_perm_mode_size = j
+          call InputReadDouble(input,option,f_perm(1))
+          call InputErrorMsg(input,option,'f_perm, DEFAULT',error_string)
+          ! Check user values
+          if (f_perm(1) < -1.0d+0) then
+            option%io_buffer = 'Functional parameter #1 in "' &
+                             // trim(f_perm_mode) &
+                             //'" must not be less than -1 for ' &
+                             //'SHIFT_PERM in ILLITIZATION, '//trim(kind)//'.'
+            call PrintErrMsg(option)
+          endif
+        case default
+          option%io_buffer = 'Permeability modification function "' &
+                           // trim(f_perm_mode) &
+                           //'" was not found among the available options ' &
+                           //'for SHIFT_PERM in ILLITIZATION, '//trim(kind)//'.'
+          call PrintErrMsg(option)
+      end select
+      
+      if (f_perm_mode_size == 0) then
+        option%io_buffer = 'No function parameters were specified &
+          &for SHIFT_PERM in ' // trim(error_string) // '.'
+        call PrintErrMsg(option)
+      endif
+      
+      allocate(shift_perm%f_perm(f_perm_mode_size))
+      shift_perm%f_perm = f_perm(1:f_perm_mode_size)
+      allocate(shift_perm%f_perm_mode)
+      shift_perm%f_perm_mode = f_perm_mode
+      
+      ilf%ilt_shift_perm => shift_perm
+      
+      nullify(shift_perm)
+      
     case('SHIFT_KD')
-      ! Factors modifying selected kd values as a function of the
-      !   illite fraction
+      ! Functions and parameters modifying selected kd values using elements
+      !   from the illitization model
       shift_kd_list => ILTKdEffectsCreate()
       i = 0
       j = 0
@@ -980,15 +1065,15 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
             j = 1
             f_kd_mode_size(i) = j
             call InputReadDouble(input,option,f_kd(i,1))
-            call InputErrorMsg(input,option,'f_kd, LINEAR',error_string)
+            call InputErrorMsg(input,option,'f_kd, DEFAULT',error_string)
             
             ! Check user values
             if (f_kd(i,1) < -1.0d+0) then
               option%io_buffer = 'Functional parameter #1 in "' &
                                // trim(f_kd_mode(i)) // '" for element "'&
                                // trim(f_kd_element(i)) &
-                               //'" must not be less than -1 in ' &
-                               //'in ILLITIZATION, '//trim(kind)//'.'
+                               //'" must not be less than -1 for ' &
+                               //'SHIFT_KD in ILLITIZATION, '//trim(kind)//'.'
               call PrintErrMsg(option)
               
             endif
@@ -997,7 +1082,7 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
                              // trim(f_kd_mode(i)) // '" for element "'&
                              // trim(f_kd_element(i)) &
                              //'" was not found among the available options ' &
-                             //'in ILLITIZATION, '//trim(kind)//'.'
+                             //'for SHIFT_KD in ILLITIZATION, '//trim(kind)//'.'
             call PrintErrMsg(option)
         end select
       enddo
@@ -1005,12 +1090,19 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
       call InputPopBlock(input,option)
       
       if (i == 0) then
-        option%io_buffer = 'No f_kd/element combinations specified &
-          &under SHIFT_KD in ' // trim(error_string) // '.'
+        option%io_buffer = 'No element/function parameter combinations &
+          &specified under SHIFT_KD in ' // trim(error_string) // '.'
         call PrintErrMsg(option)
       endif
       
       jmax = maxval(f_kd_mode_size)
+      
+      if (jmax == 0) then
+        option%io_buffer = 'No function parameters were &
+          &specified under SHIFT_KD in ' // trim(error_string) // '.'
+        call PrintErrMsg(option)
+      endif
+      
       allocate(shift_kd_list%f_kd(i,jmax))
       shift_kd_list%f_kd = f_kd(1:i,1:jmax)
       allocate(shift_kd_list%f_kd_element(i))
@@ -1022,6 +1114,7 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
       ilf%ilt_shift_kd_list => shift_kd_list
       
       nullify(shift_kd_list)
+      
     case default
       call InputKeywordUnrecognized(input,keyword, &
            'illitization function ('//trim(kind)//')',option)
@@ -1237,6 +1330,7 @@ subroutine MaterialTransformInputRecord(material_transform_list)
   PetscInt :: id = INPUT_RECORD_UNIT
   
   class(ilt_kd_effects_type), pointer :: kdl
+  class(ilt_perm_effects_type), pointer :: perm
   PetscInt :: i, j, k
   PetscBool :: inactive
   
@@ -1299,9 +1393,21 @@ subroutine MaterialTransformInputRecord(material_transform_list)
           write(id,'(a29)',advance='no') 'temperature threshold: '
           write(word1,'(es12.5)') ilf%ilt_threshold
           write(id,'(a)') adjustl(trim(word1))//' C'
-          write(id,'(a29)',advance='no') 'shift (permeability): '
-          write(word1,'(es12.5)') ilf%ilt_shift_perm
-          write(id,'(a)') adjustl(trim(word1))
+          if (associated(ilf%ilt_shift_perm)) then
+            write(id,'(a29)',advance='no') 'shift (permeability): '
+            perm => ilf%ilt_shift_perm
+            write(word1,'(a)') perm%f_perm_mode
+            write(id,'(a)',advance='no') adjustl(trim(word1))
+            select case(perm%f_perm_mode)
+              case ('DEFAULT')
+                j = 1
+            end select
+            do k = 1, j
+              write(word1,'(es12.5)') perm%f_perm(k)
+              write(id,'(a)',advance='no') " "//adjustl(trim(word1))
+            enddo
+            write(id,'(a)')
+          endif
           if (associated(ilf%ilt_shift_kd_list)) then
             write(id,'(a29)') 'shift (kd): '
             kdl => ilf%ilt_shift_kd_list
@@ -1310,14 +1416,14 @@ subroutine MaterialTransformInputRecord(material_transform_list)
               write(word1,'(a)') kdl%f_kd_element(i)
               write(id,'(a)',advance='no') adjustl(trim(word1))//" "
               write(word1,'(a)') kdl%f_kd_mode(i)
-              write(id,'(a)',advance='no') adjustl(trim(word1))//" "
+              write(id,'(a)',advance='no') adjustl(trim(word1))
               select case(kdl%f_kd_mode(i))
                 case ('DEFAULT')
                   j = 1
               end select
               do k = 1, j
                 write(word1,'(es12.5)') kdl%f_kd(i,k)
-                write(id,'(a)',advance='no') adjustl(trim(word1))//" "
+                write(id,'(a)',advance='no') " "//adjustl(trim(word1))
               enddo
               write(id,'(a)')
             enddo
@@ -1346,9 +1452,21 @@ subroutine MaterialTransformInputRecord(material_transform_list)
           write(id,'(a29)',advance='no') 'temperature threshold: '
           write(word1,'(es12.5)') ilf%ilt_threshold
           write(id,'(a)') adjustl(trim(word1))//' C'
-          write(id,'(a29)',advance='no') 'shift (permeability): '
-          write(word1,'(es12.5)') ilf%ilt_shift_perm
-          write(id,'(a)') adjustl(trim(word1))
+          if (associated(ilf%ilt_shift_perm)) then
+            write(id,'(a29)',advance='no') 'shift (permeability): '
+            perm => ilf%ilt_shift_perm
+            write(word1,'(a)') perm%f_perm_mode
+            write(id,'(a)',advance='no') adjustl(trim(word1))
+            select case(perm%f_perm_mode)
+              case ('DEFAULT')
+                j = 1
+            end select
+            do k = 1, j
+              write(word1,'(es12.5)') perm%f_perm(k)
+              write(id,'(a)',advance='no') " "//adjustl(trim(word1))
+            enddo
+            write(id,'(a)')
+          endif
           if (associated(ilf%ilt_shift_kd_list)) then
             write(id,'(a29)') 'shift (kd): '
             kdl => ilf%ilt_shift_kd_list
@@ -1357,14 +1475,14 @@ subroutine MaterialTransformInputRecord(material_transform_list)
               write(word1,'(a)') kdl%f_kd_element(i)
               write(id,'(a)',advance='no') adjustl(trim(word1))//" "
               write(word1,'(a)') kdl%f_kd_mode(i)
-              write(id,'(a)',advance='no') adjustl(trim(word1))//" "
+              write(id,'(a)',advance='no') adjustl(trim(word1))
               select case(kdl%f_kd_mode(i))
                 case ('DEFAULT')
                   j = 1
               end select
               do k = 1, j
                 write(word1,'(es12.5)') kdl%f_kd(i,k)
-                write(id,'(a)',advance='no') adjustl(trim(word1))//" "
+                write(id,'(a)',advance='no') " "//adjustl(trim(word1))
               enddo
               write(id,'(a)')
             enddo

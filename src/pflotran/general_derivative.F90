@@ -315,7 +315,6 @@ subroutine GeneralDerivativeSetup(general_parameter, &
     ilt%ilt_ea = 1.2d5
     ilt%ilt_freq = 8.0d4
     ilt%ilt_K_conc = 2.2d-3
-    ilt%ilt_shift_perm = 0.0d0
     material_transform%illitization_function => ilt
   end if
     
