@@ -968,12 +968,8 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
                             material_auxvar%iltf%ilt_fit, &
                             material_auxvar%iltf%ilt_scale, &
                             option)
-        if (associated(material_transform%illitization_function% &
-                       ilt_shift_perm)) then
-          shift_perm = &
-            material_transform%illitization_function%ilt_shift_perm%f_perm(1)
-          call material_auxvar%ShiftPerm(shift_perm,option)
-        endif
+        call material_transform%illitization_function% &
+               ShiftPerm(material_auxvar,option)
       endif
     endif
     

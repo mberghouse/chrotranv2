@@ -25,6 +25,7 @@ module Material_Transform_module
     procedure, public :: Test => ILTBaseTest
     procedure, public :: CalculateILT => ILTBaseIllitization
     procedure, public :: ShiftKd => ILTBaseShiftSorption
+    procedure, public :: ShiftPerm => ILTBaseShiftPerm
     procedure, public :: CheckElements => ILTBaseCheckElements
   end type illitization_base_type
   !---------------------------------------------------------------------------
@@ -37,6 +38,7 @@ module Material_Transform_module
     procedure, public :: Verify => ILTDefaultVerify
     procedure, public :: CalculateILT => ILTDefaultIllitization
     procedure, public :: ShiftKd => ILTShiftSorption
+    procedure, public :: ShiftPerm => ILTShiftPerm
     procedure, public :: CheckElements => ILTCheckElements
   end type ILT_default_type
   !---------------------------------------------------------------------------
@@ -90,7 +92,12 @@ contains
 ! ************************************************************************** !
 
 subroutine ILTBaseVerify(this,name,option)
-
+  ! 
+  ! Checks parameters in the illitization_base_type class
+  ! 
+  ! Author: Alex Salazar III
+  ! Date: 02/26/2021
+  !
   use Option_module
 
   implicit none
@@ -160,7 +167,13 @@ end subroutine ILTBaseIllitization
 ! ************************************************************************** !
 
 subroutine ILTBaseTest(this,name,option)
-
+  !
+  ! Tests illitization functions using a range of initial smectite contents and
+  !   temperatures over geological time
+  !
+  ! Author: Alex Salazar III
+  ! Date: 02/26/2021
+  !
   use Option_module
 
   implicit none
@@ -370,7 +383,12 @@ end function ILTKdEffectsCreate
 ! ************************************************************************** !
 
 subroutine ILTDefaultVerify(this,name,option)
-
+  ! 
+  ! Checks parameters in the ILT_default_type class
+  ! 
+  ! Author: Alex Salazar III
+  ! Date: 02/26/2021
+  !
   use Option_module
 
   implicit none
@@ -408,7 +426,12 @@ end subroutine ILTDefaultVerify
 ! ************************************************************************** !
 
 subroutine ILTGeneralVerify(this,name,option)
-
+  ! 
+  ! Checks parameters in the ILT_general_type class
+  ! 
+  ! Author: Alex Salazar III
+  ! Date: 06/16/2021
+  !
   use Option_module
 
   implicit none
@@ -580,7 +603,13 @@ end subroutine ILTBaseShiftSorption
 ! ************************************************************************** !
 
 subroutine ILTShiftSorption(this,kd0,ele,material_auxvar,option)
-
+  !
+  ! Modifies the kd of selected elements using results from the
+  !   illitization model and a user-specified functional form.
+  !
+  ! Author: Alex Salazar III
+  ! Date: 10/21/2021
+  !
   use Option_module
   use Material_Aux_class
 
@@ -618,7 +647,7 @@ subroutine ILTShiftSorption(this,kd0,ele,material_auxvar,option)
           option%io_buffer = 'Sorption modification function "' &
                            // trim(fkdmode) &
                            //'" was not found among the available options.'
-        call PrintErrMsgByRank(option)
+          call PrintErrMsgByRank(option)
       end select
       allocate(fkd(j))
       ! Populate local vector of function values
@@ -664,7 +693,13 @@ end subroutine ILTBaseCheckElements
 ! ************************************************************************** !
 
 subroutine ILTCheckElements(this,pm_ufd_elements,num,option)
-
+  !
+  ! Ensures that the elements specified for kd modification in ILLITIZATION are
+  !   present in the reference list (UFD Decay)
+  !
+  ! Author: Alex Salazar III
+  ! Date: 11/01/2021
+  !
   use Option_module
 
   implicit none
@@ -707,8 +742,109 @@ end subroutine ILTCheckElements
 
 ! ************************************************************************** !
 
-function MaterialTransformCreate()
+subroutine ILTBaseShiftPerm(this,material_auxvar,option)
 
+  use Option_module
+  use Material_Aux_class
+
+  implicit none
+
+  class(illitization_base_type), intent(inout) :: this
+  class(material_auxvar_type), intent(inout) :: material_auxvar
+  class(option_type), intent(inout) :: option
+
+  if (.not. associated(this%ilt_shift_perm)) return
+  if (.not. associated(material_auxvar%iltf)) return
+
+end subroutine ILTBaseShiftPerm
+
+! ************************************************************************** !
+
+subroutine ILTShiftPerm(this,material_auxvar,option)
+  !
+  ! Modifies the permeability tensor using results from the
+  !   illitization model and a user-specified functional form.
+  !
+  ! Author: Alex Salazar III
+  ! Date: 11/11/2021
+  !
+
+  use Option_module
+  use Material_Aux_class
+
+  implicit none
+
+  class(ILT_default_type), intent(inout) :: this
+  class(material_auxvar_type), intent(inout) :: material_auxvar
+  class(option_type), intent(inout) :: option
+
+  PetscInt  :: ps, i, j, k
+  PetscReal :: ki
+  PetscReal, allocatable :: fperm(:)
+  character(len=MAXWORDLENGTH) :: fpermmode
+  class(ilt_perm_effects_type), pointer :: perm
+
+  ps = size(material_auxvar%permeability)
+
+  ! Check whether illitization and permeability modification are active
+  if (.not. associated(this%ilt_shift_perm)) return
+  if (.not. associated(material_auxvar%iltf)) return
+
+  ! Assess whether original permeability was saved in the auxvar
+  if (.not. material_auxvar%iltf%set_perm0) then
+    allocate(material_auxvar%iltf%perm0(ps))
+    material_auxvar%iltf%perm0 = UNINITIALIZED_DOUBLE
+    do i = 1, ps
+      material_auxvar%iltf%perm0(i) = material_auxvar%permeability(i)
+    enddo
+    material_auxvar%iltf%set_perm0 = PETSC_TRUE
+  endif
+
+  ! Find functional properties
+  perm => this%ilt_shift_perm
+  fpermmode = perm%f_perm_mode
+  select case(fpermmode)
+    case ('DEFAULT')
+      j = 1
+    case default
+      option%io_buffer = 'Permeability modification function "' &
+                       // trim(fpermmode) &
+                       //'" was not found among the available options.'
+      call PrintErrMsgByRank(option)
+  end select
+  allocate(fperm(j))
+  do k = 1, j
+    fperm(k) = perm%f_perm(k)
+  enddo
+
+  ! Apply function to modify permeability tensor
+  select case(fpermmode)
+    case ('DEFAULT')
+      do i = 1, ps
+        ki = material_auxvar%iltf%perm0(i) * &
+               (1.0d0 + material_auxvar%iltf%ilt_scale*fperm(1))
+        material_auxvar%permeability(i) = ki
+      enddo
+    case default
+      ! option%io_buffer = 'Permeability was not modified.'
+      ! call PrintErrMsgByRank(option)
+  end select
+  if (allocated(fperm)) deallocate(fperm)
+
+  ! Save time of modification
+  material_auxvar%iltf%ilt_tst = option%time
+
+end subroutine ILTShiftPerm
+
+! ************************************************************************** !
+
+function MaterialTransformCreate()
+  !
+  ! Creates a material transform object
+  !
+  ! Author: Alex Salazar III
+  ! Date: 02/26/2021
+  !
   implicit none
 
   class(material_transform_type), pointer :: MaterialTransformCreate
@@ -728,7 +864,12 @@ end function MaterialTransformCreate
 ! ************************************************************************** !
 
 subroutine MaterialTransformRead(this,input,option)
-
+  !
+  ! Reads in components of a MATERIAL_TRANSFORM block
+  !
+  ! Author: Alex Salazar III
+  ! Date: 11/09/2021
+  !
   use Option_module
   use Input_Aux_module
   use String_module
@@ -773,7 +914,12 @@ end subroutine MaterialTransformRead
 ! ************************************************************************** !
 
 subroutine IllitizationRead(this,input,option)
-
+  !
+  ! Reads in contents of an ILLITIZATION block from MATERIAL_TRANSFORM
+  !
+  ! Author: Alex Salazar III
+  ! Date: 02/26/2021
+  !
   use Option_module
   use Input_Aux_module
   use String_module
@@ -860,6 +1006,9 @@ subroutine ILTRead(illitization_function,input,option)
   !
   ! Reads in contents of a ILLITIZATION_FUNCTION block
   !
+  ! Author: Alex Salazar III
+  ! Date: 02/26/2021
+  !
   use Option_module
   use Input_Aux_module
   use String_module
@@ -931,6 +1080,9 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
   !
   ! Reads in contents of ILLITIZATION_FUNCTION block for the illitization 
   !   base class
+  !
+  ! Author: Alex Salazar III
+  ! Date: 02/26/2021
   !
   use Option_module
   use Input_Aux_module
@@ -1129,6 +1281,9 @@ subroutine ILTDefaultRead(ilf,input,keyword,error_string,kind,option)
   ! Reads in contents of ILLITIZATION_FUNCTION block for illitization
   !   default class
   !
+  ! Author: Alex Salazar III
+  ! Date: 10/12/2021
+  !
   use Option_module
   use Input_Aux_module
   use String_module
@@ -1174,7 +1329,12 @@ end subroutine ILTDefaultRead
 ! ************************************************************************** !
 
 subroutine MaterialTransformAddToList(new_mtf,list)
-
+  !
+  ! Populates the next pointer with a new material transform
+  !
+  ! Author: Alex Salazar III
+  ! Date: 02/26/2021
+  !
   implicit none
 
   class(material_transform_type), pointer :: new_mtf
@@ -1199,7 +1359,12 @@ end subroutine MaterialTransformAddToList
 ! ************************************************************************** !
 
 subroutine MaterialTransformConvertListToArray(list,array,option)
-
+  !
+  ! Populates the material transform pointer type
+  !
+  ! Author: Alex Salazar III
+  ! Date: 02/26/2021
+  !
   use String_module
   use Option_module
 
@@ -1249,7 +1414,12 @@ end subroutine MaterialTransformConvertListToArray
 
 function MaterialTransformGetID(material_transform_array, &
            material_transform_name, material_property_name, option)
-
+  !
+  ! Obtains the id number of the material transform from the list
+  !
+  ! Author: Alex Salazar III
+  ! Date: 02/26/2021
+  !
   use Option_module
   use String_module
 
@@ -1298,7 +1468,12 @@ end function MaterialTransformGetID
 ! ************************************************************************** !
 
 function MaterialTransformCheckILT(material_transform_array,id)
-  
+  !
+  ! A logical check to determine whether an illitization function is extended
+  !
+  ! Author: Alex Salazar III
+  ! Date: 11/10/2021
+  !
   type(material_transform_ptr_type), pointer :: material_transform_array(:)
   PetscInt, intent(in) :: id
 
@@ -1320,7 +1495,12 @@ end function MaterialTransformCheckILT
 ! ************************************************************************** !
 
 subroutine MaterialTransformInputRecord(material_transform_list)
-
+  !
+  ! Adds details on material transform functions to the input record file
+  !
+  ! Author: Alex Salazar III
+  ! Date: 11/09/2021
+  !
   implicit none
 
   class(material_transform_type), pointer :: material_transform_list
