@@ -66,7 +66,6 @@ module Material_Transform_module
     PetscReal, pointer :: f_kd(:,:) ! factors for modifying the kd value
     character(len=MAXWORDLENGTH), pointer :: f_kd_mode(:) ! function type
     character(len=MAXWORDLENGTH), pointer :: f_kd_element(:) ! element affected
-    class(ilt_kd_effects_type), pointer :: next
   end type
   !---------------------------------------------------------------------------
 
@@ -329,7 +328,6 @@ function ILTKdEffectsCreate()
   ILTKdEffectsCreate%num_elements = UNINITIALIZED_INTEGER
   nullify(ILTKdEffectsCreate%f_kd)
   nullify(ILTKdEffectsCreate%f_kd_element)
-  nullify(ILTKdEffectsCreate%next)
 
 end function ILTKdEffectsCreate
 
@@ -570,34 +568,30 @@ subroutine ILTShiftSorption(this,kd0,ele,material_auxvar,option)
 
   ! Find element and functional properties
   kdl => this%ilt_shift_kd_list
-  do
-    if (.not. associated(kdl)) exit
-    do i = 1, kdl%num_elements
-      fkdele = kdl%f_kd_element(i)
-      ! If elements match, proceed
-      if (trim(fkdele) == trim(ele)) then
-        ! Identify function
-        fkdmode = kdl%f_kd_mode(i)
-        ! Allocate vector of function values
-        select case(fkdmode)
-          case ('DEFAULT')
-            j = 1
-          case default
-            option%io_buffer = 'Sorption modification function "' &
-                             // trim(fkdmode) &
-                             //'" was not found among the available options.'
-          call PrintErrMsgByRank(option)
-        end select
-        allocate(fkd(j))
-        ! Populate local vector of function values
-        do k = 1, j
-          fkd(k) = kdl%f_kd(i,k)
-        enddo
-        ! Done
-        exit
-      endif
-    enddo
-    kdl => kdl%next
+  do i = 1, kdl%num_elements
+    fkdele = kdl%f_kd_element(i)
+    ! If elements match, proceed
+    if (trim(fkdele) == trim(ele)) then
+      ! Identify function
+      fkdmode = kdl%f_kd_mode(i)
+      ! Allocate vector of function values
+      select case(fkdmode)
+        case ('DEFAULT')
+          j = 1
+        case default
+          option%io_buffer = 'Sorption modification function "' &
+                           // trim(fkdmode) &
+                           //'" was not found among the available options.'
+        call PrintErrMsgByRank(option)
+      end select
+      allocate(fkd(j))
+      ! Populate local vector of function values
+      do k = 1, j
+        fkd(k) = kdl%f_kd(i,k)
+      enddo
+      ! Done
+      exit
+    endif
   enddo
   
   ! Apply function to modify kd
@@ -652,29 +646,25 @@ subroutine ILTCheckElements(this,pm_ufd_elements,num,option)
   if (.not. associated(this%ilt_shift_kd_list)) return
   
   kdl => this%ilt_shift_kd_list
-  do
-    if (.not. associated(kdl)) exit
-    do i = 1, kdl%num_elements
-      ! Element specified in illitization function
-      fkdele1 = kdl%f_kd_element(i)
-      found = PETSC_FALSE
-      do j = 1, num
-        ! Element specified in UFD Decay
-        fkdele2 = pm_ufd_elements(j)
-        ! If elements match, proceed to next in list
-        if (trim(fkdele1) == trim(fkdele2)) then
-          found = PETSC_TRUE
-          exit
-        endif
-      enddo
-      if (.not. found) then
-        option%io_buffer = 'Element "'// trim(fkdele1) &
-                         //'" listed for kd modification was not found among ' &
-                         //'the elements in UFD Decay.'
-        call PrintErrMsgByRank(option)
+  do i = 1, kdl%num_elements
+    ! Element specified in illitization function
+    fkdele1 = kdl%f_kd_element(i)
+    found = PETSC_FALSE
+    do j = 1, num
+      ! Element specified in UFD Decay
+      fkdele2 = pm_ufd_elements(j)
+      ! If elements match, proceed to next in list
+      if (trim(fkdele1) == trim(fkdele2)) then
+        found = PETSC_TRUE
+        exit
       endif
     enddo
-    kdl => kdl%next
+    if (.not. found) then
+      option%io_buffer = 'Element "'// trim(fkdele1) &
+                       //'" listed for kd modification was not found among ' &
+                       //'the elements in UFD Decay.'
+      call PrintErrMsgByRank(option)
+    endif
   enddo
   
 end subroutine ILTCheckElements
@@ -920,13 +910,11 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
   PetscInt :: i,j,jmax
   PetscInt, parameter :: MAX_KD_SIZE = 100
   character(len=MAXWORDLENGTH) :: word
-  class(ilt_kd_effects_type), pointer :: shift_kd_list, prev_shift_kd_list
+  class(ilt_kd_effects_type), pointer :: shift_kd_list
   PetscReal :: f_kd(MAX_KD_SIZE,10)
   PetscInt :: f_kd_mode_size(MAX_KD_SIZE)
   character(len=MAXWORDLENGTH) :: f_kd_element(MAX_KD_SIZE)
   character(len=MAXWORDLENGTH) :: f_kd_mode(MAX_KD_SIZE)
-
-  nullify(prev_shift_kd_list)
 
   select case(keyword)
     case('SMECTITE_INITIAL')
@@ -1031,13 +1019,8 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
       shift_kd_list%f_kd_mode = f_kd_mode(1:i)
       shift_kd_list%num_elements = i
       
-      if (associated(prev_shift_kd_list)) then
-        prev_shift_kd_list%next => shift_kd_list
-      else
-        ilf%ilt_shift_kd_list => shift_kd_list
-      endif
+      ilf%ilt_shift_kd_list => shift_kd_list
       
-      prev_shift_kd_list => shift_kd_list
       nullify(shift_kd_list)
     case default
       call InputKeywordUnrecognized(input,keyword, &
@@ -1322,25 +1305,21 @@ subroutine MaterialTransformInputRecord(material_transform_list)
           if (associated(ilf%ilt_shift_kd_list)) then
             write(id,'(a29)') 'shift (kd): '
             kdl => ilf%ilt_shift_kd_list
-            do
-              if (.not. associated(kdl)) exit
-              do i = 1, kdl%num_elements
-                write(id,'(a29)',advance='no') " "
-                write(word1,'(a)') kdl%f_kd_element(i)
+            do i = 1, kdl%num_elements
+              write(id,'(a29)',advance='no') " "
+              write(word1,'(a)') kdl%f_kd_element(i)
+              write(id,'(a)',advance='no') adjustl(trim(word1))//" "
+              write(word1,'(a)') kdl%f_kd_mode(i)
+              write(id,'(a)',advance='no') adjustl(trim(word1))//" "
+              select case(kdl%f_kd_mode(i))
+                case ('DEFAULT')
+                  j = 1
+              end select
+              do k = 1, j
+                write(word1,'(es12.5)') kdl%f_kd(i,k)
                 write(id,'(a)',advance='no') adjustl(trim(word1))//" "
-                write(word1,'(a)') kdl%f_kd_mode(i)
-                write(id,'(a)',advance='no') adjustl(trim(word1))//" "
-                select case(kdl%f_kd_mode(i))
-                  case ('DEFAULT')
-                    j = 1
-                end select
-                do k = 1, j
-                  write(word1,'(es12.5)') kdl%f_kd(i,k)
-                  write(id,'(a)',advance='no') adjustl(trim(word1))//" "
-                enddo
-                write(id,'(a)')
               enddo
-              kdl => kdl%next
+              write(id,'(a)')
             enddo
           endif
         !---------------------------------
@@ -1373,25 +1352,21 @@ subroutine MaterialTransformInputRecord(material_transform_list)
           if (associated(ilf%ilt_shift_kd_list)) then
             write(id,'(a29)') 'shift (kd): '
             kdl => ilf%ilt_shift_kd_list
-            do
-              if (.not. associated(kdl)) exit
-              do i = 1, kdl%num_elements
-                write(id,'(a29)',advance='no') " "
-                write(word1,'(a)') kdl%f_kd_element(i)
+            do i = 1, kdl%num_elements
+              write(id,'(a29)',advance='no') " "
+              write(word1,'(a)') kdl%f_kd_element(i)
+              write(id,'(a)',advance='no') adjustl(trim(word1))//" "
+              write(word1,'(a)') kdl%f_kd_mode(i)
+              write(id,'(a)',advance='no') adjustl(trim(word1))//" "
+              select case(kdl%f_kd_mode(i))
+                case ('DEFAULT')
+                  j = 1
+              end select
+              do k = 1, j
+                write(word1,'(es12.5)') kdl%f_kd(i,k)
                 write(id,'(a)',advance='no') adjustl(trim(word1))//" "
-                write(word1,'(a)') kdl%f_kd_mode(i)
-                write(id,'(a)',advance='no') adjustl(trim(word1))//" "
-                select case(kdl%f_kd_mode(i))
-                  case ('DEFAULT')
-                    j = 1
-                end select
-                do k = 1, j
-                  write(word1,'(es12.5)') kdl%f_kd(i,k)
-                  write(id,'(a)',advance='no') adjustl(trim(word1))//" "
-                enddo
-                write(id,'(a)')
               enddo
-              kdl => kdl%next
+              write(id,'(a)')
             enddo
           endif
       end select
