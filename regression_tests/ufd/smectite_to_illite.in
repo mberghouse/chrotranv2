@@ -172,7 +172,7 @@ MATERIAL_PROPERTY buffer2
   /
 /
 
-#========================== illitization functions ============================
+#========================= material transformations ===========================
 MATERIAL_TRANSFORM def_1
   ILLITIZATION
     ILLITIZATION_FUNCTION DEFAULT
