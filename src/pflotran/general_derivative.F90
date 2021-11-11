@@ -265,7 +265,7 @@ subroutine GeneralDerivativeSetup(general_parameter, &
   class(rpf_Mualem_VG_gas_type), pointer :: rpf_gas  
 
   class(kT_power_type), pointer :: tcf
-  class(ILT_default_type), pointer :: iltf
+  class(ILT_default_type), pointer :: ilt
   
   if (.not.associated(general_parameter)) then
     allocate(general_parameter)
@@ -309,14 +309,14 @@ subroutine GeneralDerivativeSetup(general_parameter, &
   end if
   if (.not.associated(material_transform)) then
     material_transform => MaterialTransformCreate()
-    iltf => ILTDefaultCreate()
-    iltf%ilt_threshold = 0.d0
-    iltf%ilt_fs0 = 1.0d0
-    iltf%ilt_ea = 1.2d5
-    iltf%ilt_freq = 8.0d4
-    iltf%ilt_K_conc = 2.2d-3
-    iltf%ilt_shift_perm = 0.0d0
-    material_transform%illitization_function => iltf
+    ilt => ILTDefaultCreate()
+    ilt%ilt_threshold = 0.d0
+    ilt%ilt_fs0 = 1.0d0
+    ilt%ilt_ea = 1.2d5
+    ilt%ilt_freq = 8.0d4
+    ilt%ilt_K_conc = 2.2d-3
+    ilt%ilt_shift_perm = 0.0d0
+    material_transform%illitization_function => ilt
   end if
     
 end subroutine GeneralDerivativeSetup

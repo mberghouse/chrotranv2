@@ -18,6 +18,8 @@ module Material_Transform_module
   type, public :: illitization_base_type
     PetscReal :: ilt_threshold ! temperature threshold to begin illitization
     PetscReal :: ilt_fs0 ! initial fraction of smectite in material
+    PetscReal :: ilt_shift_perm ! permeability shift factor for illite fraction
+    class(ilt_kd_effects_type), pointer :: ilt_shift_kd_list
   contains
     procedure, public :: Verify => ILTBaseVerify
     procedure, public :: Test => ILTBaseTest
@@ -31,8 +33,6 @@ module Material_Transform_module
     PetscReal :: ilt_ea   ! activation energy in J/mol
     PetscReal :: ilt_freq ! frequency term (in L/mol-sec for default)
     PetscReal :: ilt_K_conc ! molar concentration of potassium
-    PetscReal :: ilt_shift_perm ! permeability shift factor for illite fraction
-    class(ilt_kd_effects_type), pointer :: ilt_shift_kd_list
   contains
     procedure, public :: Verify => ILTDefaultVerify
     procedure, public :: CalculateILT => ILTDefaultIllitization
@@ -111,6 +111,14 @@ subroutine ILTBaseVerify(this,name,option)
       call PrintErrMsg(option)
     endif
   endif
+  if (Initialized(this%ilt_shift_perm)) then
+    if (this%ilt_shift_perm <= -1.0d0) then
+      option%io_buffer = 'If negative, the illitization permeability shift ' &
+                       //'factor must be greater than -1 ' &
+                       //'in function "'//trim(name)//'".'
+      call PrintErrMsg(option)
+    endif
+  endif
 
 end subroutine ILTBaseVerify
 
@@ -139,14 +147,14 @@ end subroutine ILTBaseIllitization
 
 ! ************************************************************************** !
 
-subroutine ILTBaseTest(this,ilt_name,option)
+subroutine ILTBaseTest(this,name,option)
 
   use Option_module
 
   implicit none
 
   class(illitization_base_type) :: this
-  character(len=MAXWORDLENGTH) :: ilt_name
+  character(len=MAXWORDLENGTH) :: name
   type(option_type), intent(inout) :: option
 
   ! Test with pertubrations to initial smectite and temperature over time
@@ -160,10 +168,10 @@ subroutine ILTBaseTest(this,ilt_name,option)
   PetscReal :: smec_vec(ns)
   PetscReal :: temp_vec(nt)
   PetscReal :: time_vec(np)
-  PetscReal :: ilt(ns,nt,np)
-  PetscReal :: dilt_dtemp_numerical(ns,nt,np)
+  PetscReal :: fi(ns,nt,np)
+  PetscReal :: dfi_dtemp_numerical(ns,nt,np)
   PetscReal :: perturbed_temp
-  PetscReal :: ilt_temp_pert
+  PetscReal :: fi_temp_pert
   PetscReal :: smec_min, smec_max
   PetscReal :: temp_min, temp_max
   PetscReal :: dt,scale,shift,fs0_original
@@ -173,8 +181,8 @@ subroutine ILTBaseTest(this,ilt_name,option)
   ! thermal conductivity as a function of temp. and liq. sat.
   smec_min = 1.0d-1 ! Minimum fraction smectite
   smec_max = 1.0d+0 ! Maximum fraction smectite
-  temp_min = 2.0d+1 ! Celcius
-  temp_max = 2.6d+2 ! Celcius
+  temp_min = 2.0d+1 ! Minimum temperature in Celcius
+  temp_max = 2.6d+2 ! Maximum temperature in Celcius
 
   deltaSmec = (smec_max - smec_min)/(ns - 1)
   deltaTemp = (temp_max - temp_min)/(nt - 1)
@@ -200,22 +208,22 @@ subroutine ILTBaseTest(this,ilt_name,option)
 
         ! base case with analytical derivatives
         fsp = fs
-        call this%CalculateILT(fs,temp_vec(j),dt,ilt(i,j,k), &
+        call this%CalculateILT(fs,temp_vec(j),dt,fi(i,j,k), &
                                scale,shift,option)
 
         ! calculate numerical derivatives via finite differences
         perturbed_temp = temp_vec(j) * (1.d0 + perturbation)
-        call this%CalculateILT(fsp,perturbed_temp,dt,ilt_temp_pert, &
+        call this%CalculateILT(fsp,perturbed_temp,dt,fi_temp_pert, &
                                scale,shift,option)
 
-        dilt_dtemp_numerical(i,j,k) = (ilt_temp_pert - ilt(i,j,k))/ &
+        dfi_dtemp_numerical(i,j,k) = (fi_temp_pert - fi(i,j,k))/ &
                                       (temp_vec(j)*perturbation)
       enddo
     enddo
   enddo
 
-  write(string,*) ilt_name
-  string = trim(ilt_name) // '_ilt_vs_time_and_temp.dat'
+  write(string,*) name
+  string = trim(name) // '_ilt_vs_time_and_temp.dat'
   open(unit=86,file=string)
   write(86,*) '"initial smectite [-]", "temperature [C]", &
                "time [yr]", "illite [-]", "dillite/dT [1/yr]"'
@@ -223,7 +231,7 @@ subroutine ILTBaseTest(this,ilt_name,option)
     do j = 1,nt
       do k = 2,np
         write(86,'(5(ES14.6))') smec_vec(i), temp_vec(j), time_vec(k), &
-             ilt(i,j,k),dilt_dtemp_numerical(i,j,k)
+             fi(i,j,k),dfi_dtemp_numerical(i,j,k)
       enddo
     enddo
   enddo
@@ -260,6 +268,8 @@ function ILTBaseCreate()
 
   ILTBaseCreate%ilt_threshold  = 0.0d0
   ILTBaseCreate%ilt_fs0        = 0.0d0
+  ILTBaseCreate%ilt_shift_perm = 0.0d0
+  nullify(ILTBaseCreate%ilt_shift_kd_list)
 
 end function ILTBaseCreate
 
@@ -275,7 +285,6 @@ function ILTDefaultCreate()
 
   ILTDefaultCreate%ilt_threshold  = 0.0d0
   ILTDefaultCreate%ilt_fs0        = 1.0d0
-  
   ILTDefaultCreate%ilt_shift_perm = 0.0d0
   ILTDefaultCreate%ilt_ea     = UNINITIALIZED_DOUBLE
   ILTDefaultCreate%ilt_freq   = UNINITIALIZED_DOUBLE
@@ -296,7 +305,6 @@ function ILTGeneralCreate()
 
   ILTGeneralCreate%ilt_threshold  = 0.0d0
   ILTGeneralCreate%ilt_fs0        = 1.0d0
-  
   ILTGeneralCreate%ilt_shift_perm = 0.0d0
   ILTGeneralCreate%ilt_freq       = 1.0d0 ! Default of 1.0 in general model
   ILTGeneralCreate%ilt_ea     = UNINITIALIZED_DOUBLE
@@ -363,14 +371,6 @@ subroutine ILTDefaultVerify(this,name,option)
     option%io_buffer = 'Illitization potassium concentration must be ' &
                      //'specified in function "'//trim(string)//'".'
     call PrintErrMsg(option)
-  endif
-  if (Initialized(this%ilt_shift_perm)) then
-    if (this%ilt_shift_perm <= -1.0d0) then
-      option%io_buffer = 'If negative, the illitization permeability shift ' &
-                       //'factor must be greater than -1 ' &
-                       //'in function "'//trim(string)//'".'
-      call PrintErrMsg(option)
-    endif
   endif
 
 end subroutine ILTDefaultVerify
@@ -911,54 +911,14 @@ end subroutine ILTRead
 
 subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
   !
-  ! Reads in contents of ILLITIZATION_FUNCTION block for derived
-  ! types of illitization base class
+  ! Reads in contents of ILLITIZATION_FUNCTION block for the illitization 
+  !   base class
   !
   use Option_module
   use Input_Aux_module
   use String_module
 
   class(illitization_base_type) :: ilf
-  type(input_type), pointer :: input
-  character(len=MAXWORDLENGTH)   :: keyword
-  character(len=MAXSTRINGLENGTH) :: error_string
-  character(len=*)  :: kind
-  type(option_type) :: option
-
-  select case(keyword)
-    case('SMECTITE_INITIAL')
-      ! Initial fraction of smectite in the smectite/illite mixture
-      call InputReadDouble(input,option,ilf%ilt_fs0)
-      call InputErrorMsg(input,option,'initial smectite fraction', &
-                         'ILLITIZATION, '//trim(kind)//'')
-    case('THRESHOLD_TEMPERATURE')
-      ! Specifies the temperature threshold for activating illitization
-      call InputReadDouble(input,option, &
-                           ilf%ilt_threshold)
-      call InputErrorMsg(input,option,'temperature threshold', &
-                         'ILLITIZATION, '//trim(kind)//'')
-      call InputReadAndConvertUnits(input,ilf%ilt_threshold,'C', &
-                                    'ILLITIZATION, '//trim(kind)// &
-                                    ', temperature threshold',option)
-    case default
-      call InputKeywordUnrecognized(input,keyword, &
-           'illitization function ('//trim(kind)//')',option)
-  end select
-
-end subroutine
-
-! ************************************************************************** !
-
-subroutine ILTDefaultRead(ilf,input,keyword,error_string,kind,option)
-  !
-  ! Reads in contents of ILLITIZATION_FUNCTION block for derived
-  ! types of illitization default class
-  !
-  use Option_module
-  use Input_Aux_module
-  use String_module
-
-  class(ILT_default_type) :: ilf
   type(input_type), pointer :: input
   character(len=MAXWORDLENGTH)   :: keyword
   character(len=MAXSTRINGLENGTH) :: error_string
@@ -975,39 +935,30 @@ subroutine ILTDefaultRead(ilf,input,keyword,error_string,kind,option)
   character(len=MAXWORDLENGTH) :: f_kd_mode(MAX_KD_SIZE)
 
   nullify(prev_shift_kd_list)
-  
+
   select case(keyword)
-    case('EA')
-      ! Activation energy in Arrhenius term
-      call InputReadDouble(input,option,ilf%ilt_ea)
-      call InputErrorMsg(input,option,'activation energy', &
+    case('SMECTITE_INITIAL')
+      ! Initial fraction of smectite in the smectite/illite mixture
+      call InputReadDouble(input,option,ilf%ilt_fs0)
+      call InputErrorMsg(input,option,'initial smectite fraction', &
                          'ILLITIZATION, '//trim(kind)//'')
-      call InputReadAndConvertUnits(input,ilf%ilt_ea, &
-                                    'J/mol','ILLITIZATION, '//trim(kind)// &
-                                    ', activation energy',option)
-    case('FREQ')
-      ! Frequency factor (scaling constant of Arrhenius term)
-      call InputReadDouble(input,option,ilf%ilt_freq)
-      call InputErrorMsg(input,option,'frequency term', &
+    case('THRESHOLD_TEMPERATURE')
+      ! Specifies the temperature threshold for activating illitization
+      call InputReadDouble(input,option, &
+                           ilf%ilt_threshold)
+      call InputErrorMsg(input,option,'temperature threshold', &
                          'ILLITIZATION, '//trim(kind)//'')
-      call InputReadAndConvertUnits(input,ilf%ilt_freq, &
-                                    'L/s-mol','ILLITIZATION, '//trim(kind)// &
-                                    ', frequency term',option)
-    case('K_CONC')
-      ! Concentration of potassium cation
-      call InputReadDouble(input,option,ilf%ilt_K_conc)
-      call InputErrorMsg(input,option,'potassium concentration', &
-                         'ILLITIZATION, '//trim(kind)//'')
-      call InputReadAndConvertUnits(input,ilf%ilt_K_conc,'M',&
-                                    'ILLITIZATION, ' //trim(kind)// &
-                                    ', potassium concentration',option)
+      call InputReadAndConvertUnits(input,ilf%ilt_threshold,'C', &
+                                    'ILLITIZATION, '//trim(kind)// &
+                                    ', temperature threshold',option)
     case('SHIFT_PERM')
-      ! Factor modifying permeability per fraction illitized
+      ! Factor modifying permeability as a function of the illite fraction
       call InputReadDouble(input,option,ilf%ilt_shift_perm)
       call InputErrorMsg(input,option,'permeability shift factor', &
                          'ILLITIZATION, '//trim(kind)//'')
     case('SHIFT_KD')
-      ! Factors modifying selected kd values as function of illite fraction
+      ! Factors modifying selected kd values as a function of the
+      !   illite fraction
       shift_kd_list => ILTKdEffectsCreate()
       i = 0
       j = 0
@@ -1096,12 +1047,61 @@ subroutine ILTDefaultRead(ilf,input,keyword,error_string,kind,option)
       
       prev_shift_kd_list => shift_kd_list
       nullify(shift_kd_list)
-      
+    case default
+      call InputKeywordUnrecognized(input,keyword, &
+           'illitization function ('//trim(kind)//')',option)
+  end select
+
+end subroutine ILTBaseRead
+
+! ************************************************************************** !
+
+subroutine ILTDefaultRead(ilf,input,keyword,error_string,kind,option)
+  !
+  ! Reads in contents of ILLITIZATION_FUNCTION block for illitization
+  !   default class
+  !
+  use Option_module
+  use Input_Aux_module
+  use String_module
+
+  class(ILT_default_type) :: ilf
+  type(input_type), pointer :: input
+  character(len=MAXWORDLENGTH)   :: keyword
+  character(len=MAXSTRINGLENGTH) :: error_string
+  character(len=*)  :: kind
+  type(option_type) :: option
+  
+  select case(keyword)
+    case('EA')
+      ! Activation energy in Arrhenius term
+      call InputReadDouble(input,option,ilf%ilt_ea)
+      call InputErrorMsg(input,option,'activation energy', &
+                         'ILLITIZATION, '//trim(kind)//'')
+      call InputReadAndConvertUnits(input,ilf%ilt_ea, &
+                                    'J/mol','ILLITIZATION, '//trim(kind)// &
+                                    ', activation energy',option)
+    case('FREQ')
+      ! Frequency factor (scaling constant of Arrhenius term)
+      call InputReadDouble(input,option,ilf%ilt_freq)
+      call InputErrorMsg(input,option,'frequency term', &
+                         'ILLITIZATION, '//trim(kind)//'')
+      call InputReadAndConvertUnits(input,ilf%ilt_freq, &
+                                    'L/s-mol','ILLITIZATION, '//trim(kind)// &
+                                    ', frequency term',option)
+    case('K_CONC')
+      ! Concentration of potassium cation
+      call InputReadDouble(input,option,ilf%ilt_K_conc)
+      call InputErrorMsg(input,option,'potassium concentration', &
+                         'ILLITIZATION, '//trim(kind)//'')
+      call InputReadAndConvertUnits(input,ilf%ilt_K_conc,'M',&
+                                    'ILLITIZATION, ' //trim(kind)// &
+                                    ', potassium concentration',option)
     case default
       call ILTBaseRead(ilf,input,keyword,error_string,kind,option)
   end select
 
-end subroutine
+end subroutine ILTDefaultRead
 
 ! ************************************************************************** !
 
@@ -1419,7 +1419,7 @@ recursive subroutine MaterialTransformDestroy(mtf)
 
   class(material_transform_type), pointer :: mtf
 
-  if (.not.associated(mtf)) return
+  if (.not. associated(mtf)) return
 
   call MaterialTransformDestroy(mtf%next)
 

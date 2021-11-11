@@ -920,8 +920,8 @@ subroutine RealProcessMatPropAndSatFunc(realization)
         ! create base type functions for materials without transformations
         material_transform => MaterialTransformCreate()
         material_transform%illitization_function => ILTBaseCreate()
-        material_transform%name = patch%material_property_array(i)%ptr% &
-                                    material_transform_name
+        material_transform%name = &
+          patch%material_property_array(i)%ptr%material_transform_name
         call MaterialTransformAddToList(material_transform, &
                                         realization%material_transform)
       endif

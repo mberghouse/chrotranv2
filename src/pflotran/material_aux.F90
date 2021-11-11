@@ -70,6 +70,7 @@ module Material_Aux_class
   contains
     procedure, public :: PermeabilityTensorToScalar
     procedure, public :: PermeabilityTensorToScalarSafe
+    procedure, public :: ShiftPerm => MaterialShiftPermeability
   end type material_auxvar_type
 
   type, public :: ilt_auxvar_type
@@ -85,7 +86,6 @@ module Material_Aux_class
     PetscReal :: ilt_scale ! scale factor
     PetscReal, allocatable :: perm0(:) ! intiial permeability
   contains
-    procedure, public :: ShiftPerm => MaterialShiftPermeability
     procedure, public :: Update => MaterialAuxUpdateSmectite
     procedure, public :: Restore => MaterialAuxRestoreSmectite
     procedure, public :: Set => MaterialAuxSetSmectite
@@ -991,9 +991,10 @@ end subroutine MaterialCompressSoilQuadratic
 
 ! ************************************************************************** !
 
-subroutine MaterialShiftPermeability(this,auxvar,shift,option)
+subroutine MaterialShiftPermeability(this,shift,option)
   !
-  ! Modifies permeability based on shift from illitization model.
+  ! Modifies the permeability tensor based on shift factor and results from
+  !   the illitization model (material transform).
   !
   ! Author: Alex Salazar III
   ! Date: 03/01/2021
@@ -1003,31 +1004,32 @@ subroutine MaterialShiftPermeability(this,auxvar,shift,option)
 
   implicit none
 
-  class(ilt_auxvar_type) :: this
-  class(material_auxvar_type), intent(inout) :: auxvar
+  class(material_auxvar_type), intent(inout) :: this
   PetscReal, intent(in) :: shift
   class(option_type), intent(inout) :: option
 
   PetscInt  :: ps, i
   PetscReal :: ki
 
-  ps = size(auxvar%permeability)
+  ps = size(this%permeability)
   
-  if (.not. associated(auxvar%iltf)) return
+  if (.not. associated(this%iltf)) return
   
-  if (.not. this%set_perm0) then
-    allocate(this%perm0(ps))
-    this%perm0 = UNINITIALIZED_DOUBLE
+  if (.not. this%iltf%set_perm0) then
+    allocate(this%iltf%perm0(ps))
+    this%iltf%perm0 = UNINITIALIZED_DOUBLE
     do i = 1, ps
-      this%perm0(i) = auxvar%permeability(i)
+      this%iltf%perm0(i) = this%permeability(i)
     enddo
-    this%set_perm0 = PETSC_TRUE
+    this%iltf%set_perm0 = PETSC_TRUE
   endif
 
   do i = 1, ps
-    ki = this%perm0(i) * (1.0d0 + shift)
-    auxvar%permeability(i) = ki
+    ki = this%iltf%perm0(i) * (1.0d0 + this%iltf%ilt_scale*shift)
+    this%permeability(i) = ki
   enddo
+  
+  this%iltf%ilt_tst = option%time
 
 end subroutine MaterialShiftPermeability
 
