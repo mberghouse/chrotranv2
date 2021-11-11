@@ -70,7 +70,6 @@ module Material_Aux_class
   contains
     procedure, public :: PermeabilityTensorToScalar
     procedure, public :: PermeabilityTensorToScalarSafe
-    procedure, public :: ShiftPerm => MaterialShiftPermeability
   end type material_auxvar_type
 
   type, public :: ilt_auxvar_type
@@ -988,50 +987,6 @@ subroutine MaterialCompressSoilQuadratic(auxvar,pressure, &
           ( 1.0 + compress_factor) * compressibility
 
 end subroutine MaterialCompressSoilQuadratic
-
-! ************************************************************************** !
-
-subroutine MaterialShiftPermeability(this,shift,option)
-  !
-  ! Modifies the permeability tensor based on shift factor and results from
-  !   the illitization model (material transform).
-  !
-  ! Author: Alex Salazar III
-  ! Date: 03/01/2021
-  !
-
-  use Option_module
-
-  implicit none
-
-  class(material_auxvar_type), intent(inout) :: this
-  PetscReal, intent(in) :: shift
-  class(option_type), intent(inout) :: option
-
-  PetscInt  :: ps, i
-  PetscReal :: ki
-
-  ps = size(this%permeability)
-  
-  if (.not. associated(this%iltf)) return
-  
-  if (.not. this%iltf%set_perm0) then
-    allocate(this%iltf%perm0(ps))
-    this%iltf%perm0 = UNINITIALIZED_DOUBLE
-    do i = 1, ps
-      this%iltf%perm0(i) = this%permeability(i)
-    enddo
-    this%iltf%set_perm0 = PETSC_TRUE
-  endif
-
-  do i = 1, ps
-    ki = this%iltf%perm0(i) * (1.0d0 + this%iltf%ilt_scale*shift)
-    this%permeability(i) = ki
-  enddo
-  
-  this%iltf%ilt_tst = option%time
-
-end subroutine MaterialShiftPermeability
 
 ! ************************************************************************** !
 
