@@ -928,6 +928,8 @@ subroutine PMZFlowBuildJsensitivity(this)
 
       call MatSetValue(this%inversion_aux%Jsensitivity,idata-1,local_id-1, &
                        -jacob,INSERT_VALUES,ierr);CHKERRQ(ierr)
+      !call MatSetValueLocal(this%inversion_aux%JsensitivityT,ghosted_id-1, &
+      !                      idata-1,-jacob,INSERT_VALUES,ierr);CHKERRQ(ierr)
 
       deallocate(phi_sor, phi_rec)
 
@@ -943,6 +945,11 @@ subroutine PMZFlowBuildJsensitivity(this)
   call MatAssemblyBegin(this%inversion_aux%Jsensitivity, &
                         MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
   call MatAssemblyEnd(this%inversion_aux%Jsensitivity, &
+                      MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
+
+call MatAssemblyBegin(this%inversion_aux%JsensitivityT, &
+                        MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
+  call MatAssemblyEnd(this%inversion_aux%JsensitivityT, &
                       MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
 
   !print *, 'Jsensitivity Matrix1'

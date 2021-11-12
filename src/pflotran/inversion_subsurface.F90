@@ -17,6 +17,7 @@ module Inversion_Subsurface_class
     class(simulation_subsurface_type), pointer :: forward_simulation
     class(realization_subsurface_type), pointer :: realization
     Mat :: Jsensitivity
+    Mat :: JsensitivityT
     PetscReal, pointer :: measurement(:)
     PetscInt, pointer :: imeasurement(:)
     Vec :: quantity_of_interest
@@ -58,6 +59,7 @@ subroutine InversionSubsurfaceInit(this,driver)
   this%forward_simulation_filename = ''
 
   this%Jsensitivity = PETSC_NULL_MAT
+  this%JsensitivityT = PETSC_NULL_MAT
   nullify(this%measurement)
   nullify(this%imeasurement)
 
@@ -191,6 +193,13 @@ subroutine InversionSubsurfaceSetup(this)
                         this%realization%patch%grid%nmax, &
                         PETSC_NULL_SCALAR, &
                         this%Jsensitivity,ierr);CHKERRQ(ierr)
+    call MatCreateDense(this%driver%comm%mycomm, &
+                        this%realization%patch%grid%nlmax, &
+                        PETSC_DECIDE, &
+                        this%realization%patch%grid%nmax, &
+                        num_measurements, &
+                        PETSC_NULL_SCALAR, &
+                        this%JsensitivityT,ierr);CHKERRQ(ierr)
   endif
 
 end subroutine InversionSubsurfaceSetup

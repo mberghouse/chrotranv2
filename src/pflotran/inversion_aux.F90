@@ -16,6 +16,7 @@ module Inversion_Aux_module
     PetscInt, pointer :: imeasurement(:)
     PetscReal, pointer :: measurement(:)
     Mat :: Jsensitivity
+    Mat :: JsensitivityT
     PetscInt :: num_aux
     class(inversion_auxvar_type), pointer :: auxvars(:)
   end type inversion_aux_type

@@ -730,6 +730,7 @@ subroutine InversionZFlowSetup(this)
     class is(pm_zflow_type)
       pm%inversion_aux => InversionAuxCreate()
       pm%inversion_aux%Jsensitivity = this%Jsensitivity
+      pm%inversion_aux%JsensitivityT = this%JsensitivityT
       pm%inversion_aux%imeasurement => this%imeasurement
       pm%inversion_aux%measurement => this%measurement
     class default
