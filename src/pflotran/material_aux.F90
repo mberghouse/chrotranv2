@@ -1002,7 +1002,7 @@ subroutine MaterialAuxGetScaleFactor(this)
   
   class(ilt_auxvar_type) :: this
   
-  this%ilt_scale = ((this%ilt_fi - (1.0d+0 - this%ilt_fs0)) / this%ilt_fs0)
+  this%ilt_scale = (this%ilt_fi - (1.0d+0 - this%ilt_fs0)) / this%ilt_fs0
   
 end subroutine MaterialAuxGetScaleFactor
 
