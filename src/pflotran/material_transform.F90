@@ -628,10 +628,12 @@ subroutine ILTShiftSorption(this,kd0,ele,material_auxvar,option)
       select case(fkdmode)
         case ('DEFAULT','LINEAR')
           j = 1
-        case('QUADRATIC')
+        case ('QUADRATIC')
           j = 2
-        case('POWER')
+        case ('POWER')
           j = 2
+        case ('EXPONENTIAL')
+          j = 1
         case default
           option%io_buffer = 'Sorption modification function "' &
                            // trim(fkdmode) &
@@ -653,11 +655,13 @@ subroutine ILTShiftSorption(this,kd0,ele,material_auxvar,option)
   factor = 1.0d0
   select case(fkdmode)
     case ('DEFAULT','LINEAR')
-      factor = (1.0d0 + fkd(1)*scale)
+      factor = 1.0d0 + fkd(1)*scale
     case ('QUADRATIC')
-      factor = (1.0d0 + fkd(1)*scale + fkd(2)*(scale**2))
+      factor = 1.0d0 + fkd(1)*scale + fkd(2)*(scale**2)
     case ('POWER')
-      factor = (1.0d0 + fkd(1)*(scale**fkd(2)))
+      factor = 1.0d0 + fkd(1)*(scale**fkd(2))
+    case ('EXPONENTIAL')
+      factor = exp(fkd(1) * scale)
     case default
       option%io_buffer = 'No analytical expression available for sorption ' &
                        //'modification function "'// trim(fkdmode)//'".'
@@ -714,6 +718,20 @@ subroutine ILTCheckElements(this,pm_ufd_elements,num,option)
   if (.not. associated(this%ilt_shift_kd_list)) return
   
   kdl => this%ilt_shift_kd_list
+  ! Check for duplicates in list
+  do i = 1, kdl%num_elements
+    fkdele1 = kdl%f_kd_element(i)
+    do j = 1, kdl%num_elements
+      if (i == j) cycle
+      fkdele2 = kdl%f_kd_element(j)
+      if (trim(fkdele1) == trim(fkdele2)) then
+        option%io_buffer = 'Duplicate element "'// trim(fkdele1) &
+                         //'" has been detected in SHIFT_KD.'
+        call PrintErrMsgByRank(option)
+      endif
+    enddo
+  enddo
+  ! Check if present in UFD Decay
   do i = 1, kdl%num_elements
     ! Element specified in illitization function
     fkdele1 = kdl%f_kd_element(i)
@@ -750,8 +768,9 @@ subroutine ILTBaseShiftPerm(this,material_auxvar,option)
   class(material_auxvar_type), intent(inout) :: material_auxvar
   class(option_type), intent(inout) :: option
 
-  if (.not. associated(this%ilt_shift_perm)) return
-  if (.not. associated(material_auxvar%iltf)) return
+  option%io_buffer = 'Illitization function must be extended to modify ' &
+                   //'the permeability.'
+  call PrintErrMsgByRank(option)
 
 end subroutine ILTBaseShiftPerm
 
@@ -781,13 +800,12 @@ subroutine ILTShiftPerm(this,material_auxvar,option)
   character(len=MAXWORDLENGTH) :: fpermmode
   class(ilt_perm_effects_type), pointer :: perm
 
-  ps = size(material_auxvar%permeability)
-
   ! Check whether illitization and permeability modification are active
   if (.not. associated(this%ilt_shift_perm)) return
   if (.not. associated(material_auxvar%iltf)) return
 
   ! Assess whether original permeability was saved in the auxvar
+  ps = size(material_auxvar%permeability)
   if (.not. material_auxvar%iltf%set_perm0) then
     allocate(material_auxvar%iltf%perm0(ps))
     material_auxvar%iltf%perm0 = UNINITIALIZED_DOUBLE
@@ -808,6 +826,8 @@ subroutine ILTShiftPerm(this,material_auxvar,option)
       j = 2
     case ('POWER')
       j = 2
+    case ('EXPONENTIAL')
+      j = 1
     case default
       option%io_buffer = 'Permeability modification function "' &
                        // trim(fpermmode) &
@@ -827,10 +847,10 @@ subroutine ILTShiftPerm(this,material_auxvar,option)
       factor = 1.0d0 + fperm(1)*scale
     case ('QUADRATIC')
       factor = 1.0d0 + fperm(1)*scale + fperm(2)*(scale**2)
-      if (factor < 0.d0) factor = 0.d0
     case ('POWER')
       factor = 1.0d0 + fperm(1)*(scale**fperm(2))
-      if (factor < 0.d0) factor = 0.d0
+    case ('EXPONENTIAL')
+      factor = exp(fperm(1) * scale)
     case default
       option%io_buffer = 'No analytical expression available for permeability '&
                        //'modification function "'// trim(fpermmode)//'".'
@@ -1108,7 +1128,7 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
   type(option_type) :: option
   
   PetscInt :: i, j
-  PetscReal :: a, b, v1, v2
+  PetscReal :: a, b, v1, v2, v3, r1, r2
   PetscInt, parameter :: MAX_KD_SIZE = 100
   character(len=MAXWORDLENGTH) :: word
   class(ilt_kd_effects_type), pointer :: shift_kd_list
@@ -1149,20 +1169,20 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
       
       ! Function parameters
       select case(f_perm_mode)
-        case('DEFAULT','LINEAR')
+        case ('DEFAULT','LINEAR')
           f_perm_mode_size = 1
           call InputReadDouble(input,option,f_perm(1))
           call InputErrorMsg(input,option,'f_perm(1), DEFAULT/LINEAR', &
                              error_string)
           ! Check user values
           if (f_perm(1) < -1.0d+0) then
-            option%io_buffer = 'Functional parameter #1 in "' &
+            option%io_buffer = 'Function parameter #1 in "' &
                              // trim(f_perm_mode) &
                              //'" must not be less than -1 for ' &
                              //'SHIFT_PERM in ILLITIZATION, '//trim(kind)//'.'
             call PrintErrMsg(option)
           endif
-        case('QUADRATIC')
+        case ('QUADRATIC')
           f_perm_mode_size = 2
           call InputReadDouble(input,option,f_perm(1))
           call InputErrorMsg(input,option,'f_perm(1), QUADRATIC',error_string)
@@ -1171,30 +1191,40 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
           ! Check user values
           a = f_perm(1)
           b = f_perm(2)
-          v1 = 1 + a + b ! value at x = 1
-          v2 = a + 2*b   ! slope at x = 1
-          if (v1 < 0.d0) then
-            option%io_buffer = 'Functional parameters in "' &
+          v1 = 1 + a + b    ! value at x = 1
+          v2 = a + 2*b      ! slope at x = 1
+          v3 = a**2 - 4*a*b ! check for real roots
+          if (v1 < 0.d0) then ! negative values
+            option%io_buffer = 'Function parameters in "' &
                              // trim(f_perm_mode) //'" cannot result ' &
-                             //'in a negative value at 100% illite for' &
+                             //'in a negative value at 100% illite for ' &
                              //'SHIFT_PERM in ILLITIZATION, '//trim(kind)//'.'
             call PrintErrMsg(option)
           endif
-          if (a > 0.d0 .and. v2 < 0.d0) then
-            option%io_buffer = 'Functional parameters in "' &
-                             // trim(f_perm_mode) //'" must provide ' &
-                             //'monotonically increasing results for' &
+          if (a > 0.d0 .and. v2 < 0.d0) then ! positive monotonic
+            option%io_buffer = 'Function parameters in "'//trim(f_perm_mode) &
+                             //'" must provide monotonic results for ' &
                              //'SHIFT_PERM in ILLITIZATION, '//trim(kind)//'.'
             call PrintErrMsg(option)
           endif
-          if (a < 0.d0 .and. v2 > 0.d0) then
-            option%io_buffer = 'Functional parameters in "' &
-                             // trim(f_perm_mode) //'" must provide ' &
-                             //'monotonically decreasing results for' &
+          if (a < 0.d0 .and. v2 > 0.d0) then ! negative monotonic
+            option%io_buffer = 'Function parameters in "'//trim(f_perm_mode) &
+                             //'" must provide monotonic results for ' &
                              //'SHIFT_PERM in ILLITIZATION, '//trim(kind)//'.'
             call PrintErrMsg(option)
           endif
-        case('POWER')
+          if (v3 > 0) then ! roots between 0 and 1
+            r1 = (-1*a - sqrt(v3))/(2*b)
+            r2 = (-1*a + sqrt(v3))/(2*b)
+            if ((r1 >= 0.d0 .and. r1 < 1.d0) .or. & 
+                (r2 >= 0.d0 .and. r2 < 1.d0)) then
+              option%io_buffer = 'Function parameters in "'//trim(f_perm_mode) &
+                               //'" must not have roots between 0 and 1 for ' &
+                               //'SHIFT_PERM in ILLITIZATION, '//trim(kind)//'.'
+              call PrintErrMsg(option)
+            endif
+          endif
+        case ('POWER')
           f_perm_mode_size = 2
           call InputReadDouble(input,option,f_perm(1))
           call InputErrorMsg(input,option,'f_perm(1), POWER',error_string)
@@ -1205,19 +1235,23 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
           b = f_perm(2)
           v1 = 1 + a ! value at x = 1
           if (v1 < 0.d0) then
-            option%io_buffer = 'Functional parameters in "' &
+            option%io_buffer = 'Function parameters in "' &
                              // trim(f_perm_mode) //'" cannot result ' &
-                             //'in a negative value at 100% illite for' &
+                             //'in a negative value at 100% illite for ' &
                              //'SHIFT_PERM in ILLITIZATION, '//trim(kind)//'.'
             call PrintErrMsg(option)
           endif
           if (b <= 0.d0) then
-            option%io_buffer = 'Functional parameter #2 "' &
+            option%io_buffer = 'Function parameter #2 in "' &
                              // trim(f_perm_mode) //'" must be greater than ' &
                              //'zero for SHIFT_PERM in ILLITIZATION, ' &
                              //trim(kind)//'.'
             call PrintErrMsg(option)
           endif
+        case ('EXPONENTIAL')
+          f_perm_mode_size = 1
+          call InputReadDouble(input,option,f_perm(1))
+          call InputErrorMsg(input,option,'f_perm(1), EXPONENTIAL',error_string)
         case default
           option%io_buffer = 'Permeability modification function "' &
                            // trim(f_perm_mode) &
@@ -1280,7 +1314,7 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
         
         ! Function parameters
         select case(f_kd_mode(i))
-          case('DEFAULT','LINEAR')
+          case ('DEFAULT','LINEAR')
             f_kd_mode_size(i) = 1
             call InputReadDouble(input,option,f_kd(i,1))
             call InputErrorMsg(input,option,'f_kd(*,1), DEFAULT/LINEAR', &
@@ -1288,7 +1322,7 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
             
             ! Check user values
             if (f_kd(i,1) < -1.0d+0) then
-              option%io_buffer = 'Functional parameter #1 in "' &
+              option%io_buffer = 'Function parameter #1 in "' &
                                // trim(f_kd_mode(i)) // '" for element "'&
                                // trim(f_kd_element(i)) &
                                //'" must not be less than -1 for ' &
@@ -1296,7 +1330,7 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
               call PrintErrMsg(option)
               
             endif
-          case('QUADRATIC')
+          case ('QUADRATIC')
             f_kd_mode_size(i) = 2
             call InputReadDouble(input,option,f_kd(i,1))
             call InputErrorMsg(input,option,'f_kd(*,1), QUADRATIC',error_string)
@@ -1305,30 +1339,43 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
             ! Check user values
             a = f_kd(i,1)
             b = f_kd(i,2)
-            v1 = 1 + a + b ! value at x = 1
-            v2 = a + 2*b   ! slope at x = 1
-            if (v1 < 0.d0) then
-              option%io_buffer = 'Functional parameters in "' &
+            v1 = 1 + a + b    ! value at x = 1
+            v2 = a + 2*b      ! slope at x = 1
+            v3 = a**2 - 4*a*b ! check for real roots
+            if (v1 < 0.d0) then ! negative values
+              option%io_buffer = 'Function parameters in "' &
                                // trim(f_kd_mode(i)) //'" cannot result ' &
-                               //'in a negative value at 100% illite for' &
+                               //'in a negative value at 100% illite for ' &
                                //'SHIFT_KD in ILLITIZATION, '//trim(kind)//'.'
               call PrintErrMsg(option)
             endif
-            if (a > 0.d0 .and. v2 < 0.d0) then
-              option%io_buffer = 'Functional parameters in "' &
-                               // trim(f_kd_mode(i)) //'" must provide ' &
-                               //'monotonically increasing results for' &
+            if (a > 0.d0 .and. v2 < 0.d0) then ! positive monotonic
+              option%io_buffer = 'Function parameters in "' &
+                               // trim(f_kd_mode(i)) &
+                               //'" must provide monotonic results for ' &
                                //'SHIFT_KD in ILLITIZATION, '//trim(kind)//'.'
               call PrintErrMsg(option)
             endif
-            if (a < 0.d0 .and. v2 > 0.d0) then
-              option%io_buffer = 'Functional parameters in "' &
-                               // trim(f_kd_mode(i)) //'" must provide ' &
-                               //'monotonically decreasing results for' &
+            if (a < 0.d0 .and. v2 > 0.d0) then ! negative monotonic
+              option%io_buffer = 'Function parameters in "' &
+                               // trim(f_kd_mode(i)) &
+                               //'" must provide monotonic results for ' &
                                //'SHIFT_KD in ILLITIZATION, '//trim(kind)//'.'
               call PrintErrMsg(option)
             endif
-          case('POWER')
+            if (v3 > 0) then ! roots between 0 and 1
+              r1 = (-1*a - sqrt(v3))/(2*b)
+              r2 = (-1*a + sqrt(v3))/(2*b)
+              if ((r1 >= 0.d0 .and. r1 < 1.d0) .or. & 
+                  (r2 >= 0.d0 .and. r2 < 1.d0)) then
+                option%io_buffer = 'Function parameters in "' &
+                                 // trim(f_kd_mode(i)) &
+                                 //'" must not have roots between 0 and 1 for '&
+                                 //'SHIFT_KD in ILLITIZATION, '//trim(kind)//'.'
+                call PrintErrMsg(option)
+              endif
+            endif
+          case ('POWER')
             f_kd_mode_size(i) = 2
             call InputReadDouble(input,option,f_kd(i,1))
             call InputErrorMsg(input,option,'f_kd(*,1), POWER',error_string)
@@ -1339,19 +1386,24 @@ subroutine ILTBaseRead(ilf,input,keyword,error_string,kind,option)
             b = f_kd(i,2)
             v1 = 1 + a ! value at x = 1
             if (v1 < 0.d0) then
-              option%io_buffer = 'Functional parameters in "' &
+              option%io_buffer = 'Function parameters in "' &
                                // trim(f_kd_mode(i)) //'" cannot result ' &
-                               //'in a negative value at 100% illite for' &
+                               //'in a negative value at 100% illite for ' &
                                //'SHIFT_KD in ILLITIZATION, '//trim(kind)//'.'
               call PrintErrMsg(option)
             endif
             if (b <= 0.d0) then
-              option%io_buffer = 'Functional parameter #2 "' &
+              option%io_buffer = 'Function parameter #2 in "' &
                                // trim(f_kd_mode(i)) //'" must be greater ' &
                                //'than zero for SHIFT_KD in ILLITIZATION, ' &
                                //trim(kind)//'.'
               call PrintErrMsg(option)
             endif
+          case ('EXPONENTIAL')
+            f_kd_mode_size(i) = 1
+            call InputReadDouble(input,option,f_kd(i,1))
+            call InputErrorMsg(input,option,'f_kd(*,1), EXPONENTIAL', &
+                               error_string)
           case default
             option%io_buffer = 'Sorption modification function "' &
                              // trim(f_kd_mode(i)) // '" for element "'&
@@ -1773,6 +1825,8 @@ subroutine MaterialTransformPrintKd(ilf)
         j = 2
       case ('POWER')
         j = 2
+      case ('EXPONENTIAL')
+        j = 1
     end select
     do k = 1, j
       write(word,'(es12.5)') kdl%f_kd(i,k)
@@ -1817,6 +1871,8 @@ subroutine MaterialTransformPrintPerm(ilf)
       j = 2
     case ('POWER')
       j = 2
+    case ('EXPONENTIAL')
+      j = 1
   end select
   do k = 1, j
     write(word,'(es12.5)') perm%f_perm(k)
