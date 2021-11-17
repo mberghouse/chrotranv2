@@ -931,14 +931,14 @@ survey.o : geometry.o grid.o input_aux.o option.o option_geophysics.o \
 th.o : characteristic_curves.o characteristic_curves_thermal.o condition.o \
        connection.o coupler.o debug.o discretization.o eos_water.o field.o \
        fluid.o global_aux.o grid.o logging.o material.o material_aux.o \
-       option.o output_aux.o patch.o pflotran_constants.o \
+       material_transform.o option.o output_aux.o patch.o pflotran_constants.o \
        realization_subsurface.o region.o saturation_function.o \
        secondary_continuum.o secondary_continuum_aux.o th_aux.o utility.o \
        variables.o
 th_aux.o : characteristic_curves.o characteristic_curves_common.o \
            characteristic_curves_thermal.o eos_water.o global_aux.o \
-           material_aux.o matrix_zeroing.o option.o pflotran_constants.o \
-           saturation_function.o
+           material_aux.o material_transform.o matrix_zeroing.o option.o \
+           pflotran_constants.o saturation_function.o
 time_storage.o : option.o pflotran_constants.o
 timer.o :
 timestepper_KSP.o : checkpoint.o convergence.o hdf5_aux.o input_aux.o option.o \

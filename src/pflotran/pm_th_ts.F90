@@ -126,7 +126,7 @@ subroutine PMTHTSUpdateAuxVarsPatch(realization)
   PetscReal, pointer :: xx_loc_p(:),xxdot_loc_p(:)
   type(global_auxvar_type), pointer :: global_auxvars(:)
   class(material_auxvar_type), pointer :: material_auxvars(:)
-  PetscInt :: icc, icct
+  PetscInt :: icc, icct, imtf
   PetscErrorCode :: ierr
 
   option => realization%option
@@ -155,6 +155,7 @@ subroutine PMTHTSUpdateAuxVarsPatch(realization)
     istart = iend-option%nflowdof+1
     icc = patch%cc_id(ghosted_id)
     icct = patch%cct_id(ghosted_id)
+    imtf = patch%mtf_id(ghosted_id)
 
     th_auxvars(ghosted_id)%dpres_dtime = & 
       xxdot_loc_p((ghosted_id-1)*option%nflowdof+1)
@@ -166,6 +167,7 @@ subroutine PMTHTSUpdateAuxVarsPatch(realization)
                                   th_parameter,icct, &
                                   patch%characteristic_curves_array(icc)%ptr, &
                                   patch%char_curves_thermal_array(icct)%ptr, &
+                                  patch%material_transform_array(imtf)%ptr, &
                                   option)
   enddo
 
