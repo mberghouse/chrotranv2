@@ -1080,7 +1080,7 @@ subroutine THUpdateSolutionPatch(realization)
   do ghosted_id = 1, grid%ngmax
     if (associated(material_auxvars(ghosted_id)%iltf)) then
       call material_auxvars(ghosted_id)%iltf%Update
-      call material_auxvars(ghosted_id)%iltf%GetScale ! scale factor
+      call material_auxvars(ghosted_id)%iltf%GetScale
     endif
   enddo
   
@@ -2284,7 +2284,7 @@ subroutine THFluxDerivative(auxvar_up,global_auxvar_up, &
         call THAuxVarComputeFreezing(x_pert_dn,auxvar_pert_dn, &
              global_auxvar_pert_dn, material_auxvar_pert_up, &
              iphase,sf_dn,tcc_dn,mtf_dn, &
-             th_parameter,icct_up, &
+             th_parameter,icct_dn, &
              -999,PETSC_TRUE,option)
       else
         call THAuxVarComputeNoFreezing(x_pert_up,auxvar_pert_up, &
@@ -2610,7 +2610,9 @@ subroutine THBCFluxDerivative(ibndtype,auxvars, &
                               mtf_dn, &
                               Dk_dry_dn, &
                               Dk_ice_dn, &
-                              Jdn)
+                              Jdn,&
+                              th_parameter,&
+                              icct_dn)
   ! 
   ! Computes the derivatives of the boundary flux
   ! terms for the Jacobian
@@ -2633,6 +2635,7 @@ subroutine THBCFluxDerivative(ibndtype,auxvars, &
   type(TH_auxvar_type) :: auxvar_up, auxvar_dn
   type(global_auxvar_type) :: global_auxvar_up, global_auxvar_dn
   class(material_auxvar_type) :: material_auxvar_dn
+  class(th_parameter_type) :: th_parameter
   type(option_type) :: option
 
   PetscReal :: sir_dn
@@ -2651,6 +2654,7 @@ subroutine THBCFluxDerivative(ibndtype,auxvars, &
   PetscReal :: alpha_fr_dn
   PetscReal :: Jdn(option%nflowdof,option%nflowdof)
   PetscReal :: dist(-1:3)
+  PetscInt :: icct_dn
   
   PetscReal :: dist_gravity  ! distance along gravity vector
           
@@ -3147,24 +3151,26 @@ subroutine THBCFluxDerivative(ibndtype,auxvars, &
             global_auxvar_dn, &
             material_auxvar_dn, &
             iphase,sf_dn, tcc_dn, mtf_dn, &
-            th_parameter,icct_up, &
+            th_parameter,icct_dn, &
             -999,PETSC_TRUE,option) ! do not perturb boundary porosity
        call THAuxVarComputeFreezing(x_up,auxvar_up, &
             global_auxvar_up, &
             material_auxvar_up, &
             iphase,sf_dn, tcc_dn, mtf_dn, &
-            th_parameter,icct_up, &
+            th_parameter,icct_dn, &
             -999,PETSC_FALSE,option)
     else
        call THAuxVarComputeNoFreezing(x_dn,auxvar_dn, &
             global_auxvar_dn, &
             material_auxvar_dn, &
             iphase,cc_dn, tcc_dn, mtf_dn, &
+            th_parameter,icct_dn, &
             -999,PETSC_TRUE,option)
        call THAuxVarComputeNoFreezing(x_up,auxvar_up, &
             global_auxvar_up, &
             material_auxvar_up, &
             iphase,cc_dn, tcc_dn, mtf_dn, &
+            th_parameter,icct_dn, &
             -999,PETSC_FALSE,option) ! do not perturb boundary porosity
     endif
     
@@ -3216,22 +3222,26 @@ subroutine THBCFluxDerivative(ibndtype,auxvars, &
               global_auxvar_pert_dn, &
               material_auxvar_pert_dn, &
               iphase,sf_dn, tcc_dn, mtf_dn, &
+              th_parameter,icct_dn, &
               -999,PETSC_TRUE,option)
          call THAuxVarComputeFreezing(x_pert_up,auxvar_pert_up, &
               global_auxvar_pert_up, &
               material_auxvar_pert_up, &
               iphase,sf_dn, tcc_dn, mtf_dn, &
+              th_parameter,icct_dn, &
               -999,PETSC_FALSE,option) ! do not perturb boundary porosity
       else
          call THAuxVarComputeNoFreezing(x_pert_dn,auxvar_pert_dn, &
               global_auxvar_pert_dn, &
               material_auxvar_pert_dn, &
               iphase,cc_dn,tcc_dn,mtf_dn, &
+              th_parameter,icct_dn, &
               -999,PETSC_TRUE,option)
          call THAuxVarComputeNoFreezing(x_pert_up,auxvar_pert_up, &
               global_auxvar_pert_up, &
               material_auxvar_pert_up, &
               iphase,cc_dn,tcc_dn,mtf_dn, &
+              th_parameter,icct_dn, &
               -999,PETSC_FALSE,option) ! do not perturb boundary porosity
       endif
 
@@ -5066,7 +5076,7 @@ subroutine THJacobianBoundaryConn(A,realization,ierr)
                               option, &
                               sf_dn,cc_dn, tcc_dn, mtf_dn, &
                               Dk_dry_dn,Dk_ice_dn, &
-                              Jdn)
+                              Jdn,th_parameter,icct_dn)
       Jdn = -Jdn
   
       !  scale by the volume of the cell
