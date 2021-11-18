@@ -416,8 +416,7 @@ subroutine THAuxVarComputeNoFreezing(x,auxvar,global_auxvar, &
   endif
 
   if (associated(material_auxvar%iltf)) then
-    if (option%time > material_auxvar%iltf%ilt_tst .and. &
-        option%dt > 0.d0) then
+    if (option%time > material_auxvar%iltf%ilt_tst .and. option%dt > 0.d0) then
       call material_transform%illitization_function% &
              CalculateILT(material_auxvar%iltf%ilt_fst, &
                           global_auxvar%temp, &

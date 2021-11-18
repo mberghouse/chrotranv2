@@ -61,6 +61,8 @@ subroutine RichardsTimeCut(realization)
   ! 
  
   use Realization_Subsurface_class
+  use Material_Aux_class
+  use Grid_module
   use Option_module
   use Field_module
  
@@ -68,6 +70,20 @@ subroutine RichardsTimeCut(realization)
   
   type(realization_subsurface_type) :: realization
   
+  type(grid_type), pointer :: grid
+  class(material_auxvar_type), pointer :: material_auxvars(:)
+  PetscInt :: ghosted_id
+
+  ! material transform, illitization - restore stored state
+  grid => realization%patch%grid
+  material_auxvars => realization%patch%aux%Material%auxvars
+  do ghosted_id = 1, grid%ngmax
+    if (associated(material_auxvars(ghosted_id)%iltf)) then
+      call material_auxvars(ghosted_id)%iltf%Restore
+      call material_auxvars(ghosted_id)%iltf%GetScale
+    endif
+  enddo
+
   richards_ts_cut_count = richards_ts_cut_count + 1
   call RichardsInitializeTimestep(realization)  
  
@@ -773,12 +789,20 @@ subroutine RichardsUpdateAuxVarsPatch(realization)
     iend = ghosted_id*option%nflowdof
     istart = iend - option%nflowdof + 1
 
+    ! material transform, illitization: update stored state
+    if (associated(material_auxvars(ghosted_id)%iltf)) then
+      call material_auxvars(ghosted_id)%iltf%Update
+      call material_auxvars(ghosted_id)%iltf%GetScale
+    endif
+
     call RichardsAuxVarCompute(xx_loc_p(istart:iend), &
                                rich_auxvars(ghosted_id), &
                                global_auxvars(ghosted_id), &
                                material_auxvars(ghosted_id), &
                                patch%characteristic_curves_array( &
                                  patch%cc_id(ghosted_id))%ptr, &
+                               patch%material_transform_array( &
+                                 patch%mtf_id(ghosted_id))%ptr, &
                                grid%nG2A(ghosted_id), &
                                PETSC_TRUE,option)   
   enddo
@@ -832,6 +856,8 @@ subroutine RichardsUpdateAuxVarsPatch(realization)
                                  material_auxvars(ghosted_id), &
                                  patch%characteristic_curves_array( &
                                    patch%cc_id(ghosted_id))%ptr, &
+                                 patch%material_transform_array( &
+                                   patch%mtf_id(ghosted_id))%ptr, &
                                  -grid%nG2A(ghosted_id), &
                                  PETSC_FALSE,option)
     enddo
@@ -1100,6 +1126,8 @@ subroutine RichardsUpdateFixedAccumPatch(realization)
                    material_auxvars(ghosted_id), &
                    patch%characteristic_curves_array( &
                          patch%cc_id(ghosted_id))%ptr, &
+                   patch%material_transform_array( &
+                         patch%mtf_id(ghosted_id))%ptr, &
                    grid%nG2A(ghosted_id), &
                    PETSC_TRUE,option)
     call RichardsAccumulation(rich_auxvars(ghosted_id), &
@@ -2175,6 +2203,7 @@ subroutine RichardsJacobianInternalConn(A,realization,ierr)
   PetscErrorCode :: ierr
 
   PetscInt :: icc_up,icc_dn
+  PetscInt :: imtf_up,imtf_dn
   PetscInt :: local_id_up, local_id_dn
   PetscInt :: ghosted_id_up, ghosted_id_dn
   PetscInt :: region_id_up, region_id_dn
@@ -2254,6 +2283,9 @@ subroutine RichardsJacobianInternalConn(A,realization,ierr)
       icc_up = patch%cc_id(ghosted_id_up)
       icc_dn = patch%cc_id(ghosted_id_dn)
 
+      imtf_up = patch%mtf_id(ghosted_id_up)
+      imtf_dn = patch%mtf_id(ghosted_id_dn)
+
       call RichardsFluxDerivative(rich_auxvars(ghosted_id_up), &
                      global_auxvars(ghosted_id_up), &
                      material_auxvars(ghosted_id_up), &
@@ -2265,6 +2297,8 @@ subroutine RichardsJacobianInternalConn(A,realization,ierr)
                      option,&
                      patch%characteristic_curves_array(icc_up)%ptr, &
                      patch%characteristic_curves_array(icc_dn)%ptr, &
+                     patch%material_transform_array(imtf_up)%ptr, &
+                     patch%material_transform_array(imtf_dn)%ptr, &
                      Jup,Jdn)
 
       if (local_id_up > 0) then
@@ -2411,6 +2445,7 @@ subroutine RichardsJacobianBoundaryConn(A,realization,ierr)
   PetscErrorCode :: ierr
 
   PetscInt :: icc_up,icc_dn
+  PetscInt :: imtf_up,imtf_dn
   PetscInt :: local_id, ghosted_id
   PetscInt :: local_id_up, local_id_dn, region_id, i
   PetscInt :: ghosted_id_up, ghosted_id_dn
@@ -2472,6 +2507,8 @@ subroutine RichardsJacobianBoundaryConn(A,realization,ierr)
 
       icc_dn = patch%cc_id(ghosted_id) 
 
+      imtf_dn = patch%mtf_id(ghosted_id) 
+
       call RichardsBCFluxDerivative(boundary_condition%flow_condition%itype, &
                      boundary_condition%flow_aux_real_var(:,iconn), &
                      rich_auxvars_bc(sum_connection), &
@@ -2483,6 +2520,7 @@ subroutine RichardsJacobianBoundaryConn(A,realization,ierr)
                      cur_connection_set%dist(:,iconn), &
                      option, &
                      patch%characteristic_curves_array(icc_dn)%ptr, &
+                     patch%material_transform_array(imtf_dn)%ptr, &
                      Jdn)
       Jdn = -Jdn
 
@@ -2635,6 +2673,8 @@ subroutine RichardsJacobianAccumulation(A,realization,ierr)
            option, &
            patch%characteristic_curves_array( &
            patch%cc_id(ghosted_id))%ptr, &
+           patch%material_transform_array( &
+             patch%mtf_id(ghosted_id))%ptr, &
            Jup)
 
 #ifdef BUFFER_MATRIX

@@ -32,6 +32,7 @@ subroutine RichardsAccumDerivative(rich_auxvar,global_auxvar, &
                                    material_auxvar, &
                                    option, &
                                    characteristic_curves, &
+                                   material_transform, &
                                    J)
   ! 
   ! Computes derivatives of the accumulation
@@ -43,6 +44,7 @@ subroutine RichardsAccumDerivative(rich_auxvar,global_auxvar, &
 
   use Option_module
   use Characteristic_Curves_module
+  use Material_Transform_module
   use Material_Aux_class, only : material_auxvar_type, &
                                  soil_compressibility_index, &
                                  MaterialAuxVarInit, &
@@ -57,6 +59,7 @@ subroutine RichardsAccumDerivative(rich_auxvar,global_auxvar, &
   class(material_auxvar_type) :: material_auxvar
   type(option_type) :: option
   class(characteristic_curves_type) :: characteristic_curves
+  class(material_transform_type) :: material_transform
   PetscReal :: J(option%nflowdof,option%nflowdof)
      
   PetscInt :: ispec 
@@ -99,6 +102,7 @@ subroutine RichardsAccumDerivative(rich_auxvar,global_auxvar, &
     call RichardsAuxVarCompute(x_pert(1),rich_auxvar_pert,global_auxvar_pert, &
                                material_auxvar_pert, &
                                characteristic_curves, &
+                               material_transform, &
                                -999, &
                                PETSC_TRUE,option)
     call RichardsAccumulation(rich_auxvar_pert,global_auxvar_pert, &
@@ -158,6 +162,8 @@ subroutine RichardsFluxDerivative(rich_auxvar_up,global_auxvar_up, &
                                   option, &
                                   characteristic_curves_up, &
                                   characteristic_curves_dn, &
+                                  material_transform_up, &
+                                  material_transform_dn, &
                                   Jup,Jdn)
   ! 
   ! Computes the derivatives of the internal flux terms
@@ -169,6 +175,7 @@ subroutine RichardsFluxDerivative(rich_auxvar_up,global_auxvar_up, &
   use Option_module 
   use Characteristic_Curves_module
   use Material_Aux_class
+  use Material_Transform_module
   use Connection_module
   
   implicit none
@@ -180,6 +187,8 @@ subroutine RichardsFluxDerivative(rich_auxvar_up,global_auxvar_up, &
   PetscReal :: v_darcy, area, dist(-1:3)
   class(characteristic_curves_type) :: characteristic_curves_up
   class(characteristic_curves_type) :: characteristic_curves_dn
+  class(material_transform_type) :: material_transform_up
+  class(material_transform_type) :: material_transform_dn
   PetscReal :: Jup(option%nflowdof,option%nflowdof)
   PetscReal :: Jdn(option%nflowdof,option%nflowdof)
      
@@ -309,12 +318,14 @@ subroutine RichardsFluxDerivative(rich_auxvar_up,global_auxvar_up, &
                                global_auxvar_pert_up, &
                                material_auxvar_pert_up, &
                                characteristic_curves_up, &
+                               material_transform_up, &
                                -999, &
                                PETSC_TRUE,option)
     call RichardsAuxVarCompute(x_pert_dn(1),rich_auxvar_pert_dn, &
                                global_auxvar_pert_dn, &
                                material_auxvar_pert_dn, &
                                characteristic_curves_dn, &
+                               material_transform_dn, &
                                -999, &
                                PETSC_TRUE,option)
     call RichardsFlux(rich_auxvar_pert_up,global_auxvar_pert_up, &
@@ -434,6 +445,7 @@ subroutine RichardsBCFluxDerivative(ibndtype,auxvars, &
                                     material_auxvar_dn, &
                                     area,dist,option, &
                                     characteristic_curves_dn, &
+                                    material_transform_dn, &
                                     Jdn)
   ! 
   ! Computes the derivatives of the boundary flux
@@ -445,6 +457,7 @@ subroutine RichardsBCFluxDerivative(ibndtype,auxvars, &
   use Option_module
   use Characteristic_Curves_module
   use Material_Aux_class
+  use Material_Transform_module
   use EOS_Water_module
   use Utility_module
  
@@ -454,6 +467,7 @@ subroutine RichardsBCFluxDerivative(ibndtype,auxvars, &
   type(richards_auxvar_type) :: rich_auxvar_up, rich_auxvar_dn
   type(global_auxvar_type) :: global_auxvar_up, global_auxvar_dn
   class(material_auxvar_type) :: material_auxvar_dn
+  class(material_transform_type) :: material_transform_dn
   type(option_type) :: option
   PetscReal :: auxvars(:) ! from aux_real_var array in boundary condition
   PetscReal :: area
@@ -666,12 +680,14 @@ subroutine RichardsBCFluxDerivative(ibndtype,auxvars, &
                                global_auxvar_pert_dn, &
                                material_auxvar_pert_dn, &
                                characteristic_curves_dn, &
+                               material_transform_dn, &
                                -999, &
                                PETSC_TRUE,option)
     call RichardsAuxVarCompute(x_pert_up(1),rich_auxvar_pert_up, &
                                global_auxvar_pert_up, &
                                material_auxvar_pert_up, &
                                characteristic_curves_dn, &
+                               material_transform_dn, &
                                -999, &
                                PETSC_TRUE,option)
     call RichardsBCFlux(ibndtype,auxvars, &
