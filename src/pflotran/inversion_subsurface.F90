@@ -16,10 +16,10 @@ module Inversion_Subsurface_class
     character(len=MAXSTRINGLENGTH) :: forward_simulation_filename
     class(simulation_subsurface_type), pointer :: forward_simulation
     class(realization_subsurface_type), pointer :: realization
-    Mat :: Jsensitivity
     Mat :: JsensitivityT
     PetscReal, pointer :: measurement(:)
     PetscInt, pointer :: imeasurement(:)
+    PetscInt :: measurement_offset
     Vec :: quantity_of_interest
     PetscInt :: iqoi
     Vec :: ref_quantity_of_interest
@@ -57,8 +57,8 @@ subroutine InversionSubsurfaceInit(this,driver)
   this%ref_quantity_of_interest = PETSC_NULL_VEC
   this%ref_qoi_dataset_name = ''
   this%forward_simulation_filename = ''
+  this%measurement_offset = UNINITIALIZED_INTEGER
 
-  this%Jsensitivity = PETSC_NULL_MAT
   this%JsensitivityT = PETSC_NULL_MAT
   nullify(this%measurement)
   nullify(this%imeasurement)
@@ -186,13 +186,6 @@ subroutine InversionSubsurfaceSetup(this)
     call DiscretizationLocalToGlobal(this%realization%discretization, &
                                      this%realization%field%work_loc, &
                                      this%quantity_of_interest,ONEDOF)
-    call MatCreateDense(this%driver%comm%mycomm, &
-                        num_measurements, &
-                        this%realization%patch%grid%nlmax, &
-                        num_measurements, &
-                        this%realization%patch%grid%nmax, &
-                        PETSC_NULL_SCALAR, &
-                        this%Jsensitivity,ierr);CHKERRQ(ierr)
     call MatCreateDense(this%driver%comm%mycomm, &
                         this%realization%patch%grid%nlmax, &
                         PETSC_DECIDE, &

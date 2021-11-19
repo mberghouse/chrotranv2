@@ -12,6 +12,7 @@ module Inversion_Tao_class
   private
 
   type, public, extends(inversion_subsurface_type) :: inversion_tao_type
+    Mat :: Jsensitivity
   contains
     procedure, public :: Init => InversionTaoInit
     procedure, public :: ReadBlock => InversionTaoReadBlock

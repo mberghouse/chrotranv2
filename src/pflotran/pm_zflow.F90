@@ -808,11 +808,13 @@ subroutine PMZFlowBuildJsensitivity(this)
   class(timer_type), pointer :: timer
 
   PetscInt :: idata, num_measurement
-  PetscInt :: local_id, ghosted_id
+  PetscInt :: local_id,ghosted_id,natural_id
   PetscInt :: inbr, num_neighbors
+  PetscInt :: icell_measurement
   PetscInt, pointer :: cell_neighbors(:,:)
   PetscReal :: jacob_A, jacob_c, jacob
   PetscReal :: perm_x,wd
+  PetscReal :: tempreal
   PetscReal, pointer :: rhs_ptr(:)
   PetscReal, pointer :: lambda_ptr(:)
   PetscReal, allocatable :: phi_sor(:), phi_rec(:)
@@ -822,6 +824,7 @@ subroutine PMZFlowBuildJsensitivity(this)
   Vec :: work
   Vec :: lambda
   Vec :: rhs
+  Vec :: natural_vec
 
   option => this%option
   solver => this%solver
@@ -848,34 +851,40 @@ subroutine PMZFlowBuildJsensitivity(this)
   work = realization%field%work
   call VecDuplicate(work,lambda,ierr);CHKERRQ(ierr)
   call VecDuplicate(work,rhs,ierr);CHKERRQ(ierr)
+  call DiscretizationCreateVector(discretization,ONEDOF, &
+                                  natural_vec,NATURAL,option)
 
   ! Get dAdK and dcdk
   call ZFlowCalculateMatrixDerivatives(realization)
 
-  open(unit=558,file='Jsensitivity_zflow.out',status='unknown')
-  open(unit=559,file='Jhessian_zflow.out',status='unknown')
-
   num_measurement = size(this%inversion_aux%imeasurement)
+
   do idata=1,num_measurement
 
     wd = 0.05 * this%inversion_aux%measurement(idata)
     wd = 1/wd
 
-    ! initialize lambda and rhs
+    ! RHS
+    call VecZeroEntries(natural_vec,ierr);CHKERRQ(ierr)
+    if (this%option%myrank == 0) then
+      tempreal = 1.d0
+      icell_measurement = this%inversion_aux%imeasurement(idata)
+      call VecSetValue(natural_vec,icell_measurement-1,tempreal, &
+                       INSERT_VALUES,ierr);CHKERRQ(ierr)
+    endif
+    call VecAssemblyBegin(natural_vec,ierr);CHKERRQ(ierr)
+    call VecAssemblyEnd(natural_vec,ierr);CHKERRQ(ierr)
+    call DiscretizationNaturalToGlobal(discretization,natural_vec,rhs,ONEDOF)
+
+    ! Get lambda
     call VecZeroEntries(lambda,ierr);CHKERRQ(ierr)
-    call VecZeroEntries(rhs,ierr);CHKERRQ(ierr)
-
-    ! Assign RHS values -> unit source at observation (TEMP)
-    call VecGetArrayF90(rhs,rhs_ptr,ierr);CHKERRQ(ierr)
-    rhs_ptr(this%inversion_aux%imeasurement(idata)) = 1.d0
-    call VecRestoreArrayF90(rhs,rhs_ptr,ierr);CHKERRQ(ierr)
-
     ! Solve Adjoint System
     call KSPSolveTranspose(solver%ksp,rhs,lambda,ierr);CHKERRQ(ierr)
 
-    !call DiscretizationGlobalToLocal(discretization,lambda, &
-    !                                 realization%field%work_loc,ONEDOF)
-    call VecGetArrayF90(lambda,lambda_ptr,ierr);CHKERRQ(ierr)
+    call DiscretizationGlobalToLocal(discretization,lambda, &
+                                     realization%field%work_loc,ONEDOF)
+    call VecGetArrayF90(realization%field%work_loc,lambda_ptr, &
+                        ierr);CHKERRQ(ierr)
 
     do local_id=1,grid%nlmax
       jacob_A = 0.d0
@@ -884,19 +893,20 @@ subroutine PMZFlowBuildJsensitivity(this)
 
       ghosted_id = grid%nL2G(local_id)
       if (patch%imat(ghosted_id) <= 0) cycle
+      natural_id = grid%nG2A(ghosted_id)
 
       num_neighbors = cell_neighbors(0,local_id)
       allocate(phi_sor(num_neighbors+1), phi_rec(num_neighbors+1))
       phi_sor = 0.d0
       phi_rec = 0.d0
 
-      phi_sor(1) = zflow_auxvars(local_id)%pres
-      phi_rec(1) = lambda_ptr(local_id)
+      phi_sor(1) = zflow_auxvars(ghosted_id)%pres
+      phi_rec(1) = lambda_ptr(ghosted_id)
 
       ! jacob_A = lambda^T * dA/dk * p
-      jacob_A = phi_sor(1) * zflow_auxvars(local_id)%dAdK(1) * phi_rec(1)
+      jacob_A = phi_sor(1) * zflow_auxvars(ghosted_id)%dAdK(1) * phi_rec(1)
       ! jacob_c = lambda^T * dc/dk
-      jacob_c = phi_rec(1) * zflow_auxvars(local_id)%dcdK(1)
+      jacob_c = phi_rec(1) * zflow_auxvars(ghosted_id)%dcdK(1)
 
       do inbr = 1,num_neighbors
 
@@ -904,14 +914,14 @@ subroutine PMZFlowBuildJsensitivity(this)
         phi_rec(inbr+1) = lambda_ptr(abs(cell_neighbors(inbr,local_id)))
 
         jacob_A = jacob_A +                                                 &
-                  phi_sor(1)*zflow_auxvars(local_id)%dAdK(1+inbr)*          &
+                  phi_sor(1)*zflow_auxvars(ghosted_id)%dAdK(1+inbr)*          &
                   phi_rec(inbr+1) +                                         &
                   phi_sor(1+inbr) * (                                       &
-                    zflow_auxvars(local_id)%dAdk(1+inbr)*phi_rec(1) -       &
-                    zflow_auxvars(local_id)%dAdk(1+inbr)*phi_rec(1+inbr) )
+                    zflow_auxvars(ghosted_id)%dAdk(1+inbr)*phi_rec(1) -       &
+                    zflow_auxvars(ghosted_id)%dAdk(1+inbr)*phi_rec(1+inbr) )
 
         jacob_c = jacob_c + &
-                  phi_rec(inbr+1) * zflow_auxvars(local_id)%dcdK(1+inbr)
+                  phi_rec(inbr+1) * zflow_auxvars(ghosted_id)%dcdK(1+inbr)
       enddo
 
       ! jacobian = lambda^T * dc/dk - lambda^T * dA/dk * p -> -ve due to A and c
@@ -926,34 +936,26 @@ subroutine PMZFlowBuildJsensitivity(this)
       !write(558,*) local_id,jacob
       !write(559,*) local_id, jacob*jacob
 
-      call MatSetValue(this%inversion_aux%Jsensitivity,idata-1,local_id-1, &
-                       -jacob,INSERT_VALUES,ierr);CHKERRQ(ierr)
-      !call MatSetValueLocal(this%inversion_aux%JsensitivityT,ghosted_id-1, &
-      !                      idata-1,-jacob,INSERT_VALUES,ierr);CHKERRQ(ierr)
+      call MatSetValue(this%inversion_aux%JsensitivityT,natural_id-1, &
+                       idata-1,-jacob,INSERT_VALUES,ierr);CHKERRQ(ierr)
 
       deallocate(phi_sor, phi_rec)
 
-    enddo ! local)id
-    call VecRestoreArrayF90(lambda,lambda_ptr,ierr);CHKERRQ(ierr)
+    enddo ! local_id
+    call VecRestoreArrayF90(realization%field%work_loc,lambda_ptr, &
+                            ierr);CHKERRQ(ierr)
   enddo ! idata
-
-  close(558)
-  close(559)
 
   call VecDestroy(lambda,ierr);CHKERRQ(ierr)
   call VecDestroy(rhs,ierr);CHKERRQ(ierr)
-  call MatAssemblyBegin(this%inversion_aux%Jsensitivity, &
-                        MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
-  call MatAssemblyEnd(this%inversion_aux%Jsensitivity, &
-                      MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
 
-call MatAssemblyBegin(this%inversion_aux%JsensitivityT, &
+  call MatAssemblyBegin(this%inversion_aux%JsensitivityT, &
                         MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
   call MatAssemblyEnd(this%inversion_aux%JsensitivityT, &
                       MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
 
   !print *, 'Jsensitivity Matrix1'
-  !call MatView(this%inversion_aux%Jsensitivity,PETSC_VIEWER_STDOUT_WORLD, &
+  !call MatView(this%inversion_aux%JsensitivityT,PETSC_VIEWER_STDOUT_WORLD, &
   !             ierr);CHKERRQ(ierr)
 
   call MPI_Barrier(option%mycomm,ierr)
