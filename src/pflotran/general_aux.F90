@@ -117,6 +117,7 @@ module General_Aux_module
   PetscBool, public :: general_isothermal = PETSC_FALSE
   PetscBool, public :: general_no_air = PETSC_FALSE
   PetscBool, public :: general_soluble_matrix = PETSC_FALSE
+  PetscBool, public :: general_set_porosity = PETSC_FALSE
   PetscInt, public :: solubility_function = 1
   
   type, public :: general_auxvar_type
@@ -2002,9 +2003,9 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
         gen_auxvar%sat(pid) = x(GENERAL_PRECIPITATE_SAT_DOF)
       else
         gen_auxvar%effective_porosity = max(0.0001d0,x(GENERAL_POROSITY_DOF))
-        call GeneralAuxNaClSolubility(gen_auxvar%temp,NaClSolubility,solubility_function)
-        gen_auxvar%xmol(sid,lid) = NaClSolubility
       endif
+      call GeneralAuxNaClSolubility(gen_auxvar%temp,NaClSolubility,solubility_function)
+      gen_auxvar%xmol(sid,lid) = NaClSolubility
 
       if (gen_auxvar%istatechng) then
         gen_auxvar%sat(lid) = max(0.d0,gen_auxvar%sat(lid))
@@ -2180,7 +2181,7 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
       endif
     endif
   else
-    material_auxvar%porosity = gen_auxvar%effective_porosity
+    !material_auxvar%porosity = gen_auxvar%effective_porosity
   endif
   if (associated(gen_auxvar%d)) then
     gen_auxvar%d%por_p = dpor_dp
@@ -4435,9 +4436,15 @@ subroutine GeneralAuxVarPerturb4(gen_auxvar,global_auxvar, &
     x_pert = x
     x_pert(idof) = x(idof) + pert(idof)
     x_pert_save = x_pert
+    if (general_set_porosity .and. idof == 4) then
+      material_auxvar%porosity = material_auxvar%porosity + pert(idof)
+    endif
     call GeneralAuxVarCompute4(x_pert,gen_auxvar(idof),global_auxvar, &
                                material_auxvar, &
                                characteristic_curves,natural_id,option)
+    if (general_set_porosity .and. idof == 4) then
+      material_auxvar%porosity = material_auxvar%porosity - pert(idof)
+    endif
 #ifdef DEBUG_GENERAL
     call GlobalAuxVarCopy(global_auxvar,global_auxvar_debug,option)
     call GeneralAuxVarCopy(gen_auxvar(idof),general_auxvar_debug,option)

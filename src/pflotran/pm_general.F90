@@ -121,7 +121,7 @@ subroutine PMGeneralSetFlowMode(pm,option)
   implicit none
 
   type(option_type) :: option
-  class(pm_general_type), pointer :: pm
+  class(pm_general_type) :: pm!, pointer, intent(inout) :: pm
 
   PetscReal, parameter :: ref_temp = 20.d0 !degrees C
   PetscReal, parameter :: ref_pres = 101325.d0 !Pa
@@ -239,7 +239,7 @@ subroutine PMGeneralSetFlowMode(pm,option)
                pres_rel_inf_tol,sat_rel_inf_tol,temp_rel_inf_tol,xmol_rel_inf_tol,&
                pres_rel_inf_tol,999.d0,temp_rel_inf_tol,999.d0,&
                pres_rel_inf_tol,xmol_rel_inf_tol,temp_rel_inf_tol,sat_rel_inf_tol,&
-               pres_rel_inf_tol,sat_rel_inf_tol,temp_rel_inf_tol,pres_rel_inf_tol,&
+               pres_rel_inf_tol,pres_rel_inf_tol,temp_rel_inf_tol,sat_rel_inf_tol,&
                pres_rel_inf_tol,sat_rel_inf_tol,temp_rel_inf_tol,sat_rel_inf_tol], &
                shape(rel_update_inf_tol)) * &
                1.d0 ! change to 0.d0 to zero tolerances
@@ -249,7 +249,7 @@ subroutine PMGeneralSetFlowMode(pm,option)
                pres_abs_inf_tol,sat_abs_inf_tol,temp_abs_inf_tol,xmol_abs_inf_tol,&
                pres_abs_inf_tol,999.d0,temp_abs_inf_tol,999.d0,&
                pres_abs_inf_tol,xmol_abs_inf_tol,temp_abs_inf_tol,sat_abs_inf_tol,&
-               pres_abs_inf_tol,sat_abs_inf_tol,temp_abs_inf_tol,pres_abs_inf_tol,&
+               pres_abs_inf_tol,pres_abs_inf_tol,temp_abs_inf_tol,sat_abs_inf_tol,&
                pres_abs_inf_tol,sat_abs_inf_tol,temp_abs_inf_tol,sat_abs_inf_tol], &
                shape(abs_update_inf_tol)) * &
                1.d0 ! change to 0.d0 to zero tolerances
@@ -261,7 +261,7 @@ subroutine PMGeneralSetFlowMode(pm,option)
                           LIQUID_MOLE_FRACTION, TEMPERATURE, &
                           GAS_SATURATION, POROSITY]
     allocate(pm%max_change_isubvar(7))
-    pm%max_change_isubvar = [0,0,0,3,0,0,0]
+    pm%max_change_isubvar = [0,0,0,2,0,0,0]
   endif
   pm%damping_factor = -1.d0
   pm%residual_abs_inf_tol = residual_abs_inf_tol
@@ -401,6 +401,8 @@ subroutine PMGeneralReadSimOptionsBlock(this,input)
         call InputErrorMsg(input,option,keyword,error_string)
       case('SOLUBLE_MATRIX')
         general_soluble_matrix = PETSC_TRUE
+      case('SET_POROSITY')
+        general_set_porosity = PETSC_TRUE
       ! This belongs somewhere else
       ! case('SOLUBILITY_FUNCTION')
       !   call InputReadWord(input,option,word,PETSC_TRUE)

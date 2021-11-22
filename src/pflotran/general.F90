@@ -1391,6 +1391,18 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
                              general_analytical_derivatives, &
                              local_id == general_debug_cell_id)
     r_p(local_start:local_end) =  r_p(local_start:local_end) + Res(:)
+    if (general_set_porosity) then
+       r_p(3) = r_p(3)+((material_auxvars(ghosted_id)%porosity - &
+                         gen_auxvars(ZERO_INTEGER,ghosted_id)%effective_porosity)*&
+            PRECIPITATE_DENSITY*material_auxvars(ghosted_id)%volume/option%flow_dt)
+       r_p(4) = r_p(4)+(material_auxvars(ghosted_id)%porosity - &
+            gen_auxvars(ZERO_INTEGER,ghosted_id)%effective_porosity)*&
+            material_auxvars(ghosted_id)%soil_particle_density*0.000830*&
+            gen_auxvars(ZERO_INTEGER,ghosted_id)%temp*&
+            material_auxvars(ghosted_id)%volume/&
+            option%flow_dt
+       !DF: soil_heat_capacity temporarily hard-coded, not in material_auxvar
+    endif
     accum_p2(local_start:local_end) = Res(:)
   enddo
   call VecRestoreArrayF90(field%flow_accum2, accum_p2, ierr);CHKERRQ(ierr)
@@ -1590,7 +1602,11 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
     enddo
     source_sink => source_sink%next
   enddo
-  
+  ! if (general_set_porosity) then
+  !    r_p(3) = r_p(3)+&
+  !        ((material_auxvars(ghosted_id)%porosity - gen_auxvars(ZERO_INTEGER,ghosted_id)%effective_porosity)*&
+  !        PRECIPITATE_DENSITY*material_auxvars(ghosted_id)%volume/option%flow_dt)
+  ! endif
   if (patch%aux%General%inactive_cells_exist) then
     do i=1,patch%aux%General%matrix_zeroing%n_inactive_rows
       r_p(patch%aux%General%matrix_zeroing%inactive_rows_local(i)) = 0.d0
@@ -1640,7 +1656,7 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
       r_p((local_id-1)*option%nflowdof+GENERAL_GAS_EQUATION_INDEX) =  0.d0
     enddo
     call VecRestoreArrayF90(r, r_p, ierr);CHKERRQ(ierr)
-  endif  
+  endif
   
   if (realization%debug%vecview_residual) then
     call DebugWriteFilename(realization%debug,string,'Gresidual','', &
@@ -2436,7 +2452,7 @@ subroutine GeneralSSSandbox(residual,Jacobian,compute_derivative, &
       if (general_no_air) then
         Jac(GENERAL_GAS_EQUATION_INDEX,:) = 0.d0
         Jac(:,GENERAL_GAS_EQUATION_INDEX) = 0.d0
-      endif          
+      endif
       call MatSetValuesBlockedLocal(Jacobian,1,ghosted_id-1,1, &
                                     ghosted_id-1,Jac,ADD_VALUES, &
                                     ierr);CHKERRQ(ierr)

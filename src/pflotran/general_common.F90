@@ -67,6 +67,7 @@ subroutine GeneralAccumulation(gen_auxvar,global_auxvar,material_auxvar, &
   type(global_auxvar_type) :: global_auxvar
   class(material_auxvar_type) :: material_auxvar
   PetscReal :: soil_heat_capacity
+  PetscReal :: void_volume, volume
   type(option_type) :: option
   PetscReal :: Res(option%nflowdof) 
   PetscReal :: Jac(option%nflowdof,option%nflowdof)
@@ -87,7 +88,7 @@ subroutine GeneralAccumulation(gen_auxvar,global_auxvar,material_auxvar, &
   ! v_over_t[m^3 bulk/sec] = vol[m^3 bulk] / dt[sec]
   volume_over_dt = material_auxvar%volume / option%flow_dt
   ! must use gen_auxvar%effective porosity here as it enables numerical 
-  ! derivatives to be employed 
+  ! derivatives to be employed
   porosity = gen_auxvar%effective_porosity
   
   ! accumulation term units = kmol/s
@@ -4834,7 +4835,7 @@ subroutine GeneralBCFluxDerivative(ibndtype,auxvar_mapping,auxvars, &
   if (general_no_air) then
     Jdn(GENERAL_GAS_EQUATION_INDEX,:) = 0.d0
     Jdn(:,GENERAL_GAS_EQUATION_INDEX) = 0.d0
-  endif  
+  endif
   
 end subroutine GeneralBCFluxDerivative
 
@@ -4918,7 +4919,7 @@ subroutine GeneralSrcSinkDerivative(option,source_sink,gen_auxvar_ss, &
   if (general_no_air) then
     Jac(GENERAL_GAS_EQUATION_INDEX,:) = 0.d0
     Jac(:,GENERAL_GAS_EQUATION_INDEX) = 0.d0
-  endif  
+  endif
   
 end subroutine GeneralSrcSinkDerivative
 
