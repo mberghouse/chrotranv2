@@ -204,8 +204,6 @@ subroutine PMWIPPFloInitObject(this)
   this%scale_linear_system = PETSC_FALSE
   this%newtontrd_inner_iter_num = 0
   this%newtontrd_prev_iter_num = 0
-  this%newtontrd_jacobian_calculated = PETSC_FALSE
-  this%newtontrd_scale_diagonal = PETSC_FALSE
   this%scaling_vec = PETSC_NULL_VEC
   nullify(this%dirichlet_dofs_ghosted)
   nullify(this%dirichlet_dofs_ints)
@@ -1411,35 +1409,6 @@ subroutine PMWIPPFloJacobian(this,snes,xx,A,B,ierr)
                           this%scaling_vec,ierr);CHKERRQ(ierr)
 
     if (this%realization%debug%matview_Matrix) then
-      string = 'WFscale_vec'
-      call DebugCreateViewer(this%realization%debug,string,this%option,viewer)
-      call VecView(this%scaling_vec,viewer,ierr);CHKERRQ(ierr)
-      call PetscViewerDestroy(viewer,ierr);CHKERRQ(ierr)
-      string = 'WFjacobian_scaled'
-      call DebugCreateViewer(this%realization%debug,string,this%option,viewer)
-      call MatView(A,viewer,ierr);CHKERRQ(ierr)
-      call PetscViewerDestroy(viewer,ierr);CHKERRQ(ierr)
-    endif
-    if (this%realization%debug%vecview_residual) then
-      string = 'WFresidual_scaled'
-      call DebugCreateViewer(this%realization%debug,string,this%option,viewer)
-      call VecView(residual_vec,viewer,ierr);CHKERRQ(ierr)
-      call PetscViewerDestroy(viewer,ierr);CHKERRQ(ierr)
-    endif
-  endif
-
-  if (this%newtontrd_scale_diagonal .and. this%newtontrd_jacobian_calculated) then
-    ! only used for newtontrd algorithm - Heeho
-    call VecGetLocalSize(this%scaling_vec,matsize,ierr);CHKERRQ(ierr)
-    call VecSet(this%scaling_vec,1.d0,ierr);CHKERRQ(ierr)
-    call MatGetRowMaxAbs(A,this%scaling_vec,PETSC_NULL_INTEGER, &
-                         ierr);CHKERRQ(ierr)
-    call VecReciprocal(this%scaling_vec,ierr);CHKERRQ(ierr)
-    call MatDiagonalScale(A,this%scaling_vec,PETSC_NULL_VEC, &
-                          ierr);CHKERRQ(ierr)
-    call VecPointwiseMult(residual_vec,residual_vec, &
-                          this%scaling_vec,ierr);CHKERRQ(ierr)
-    if (this%realization%debug%matview_Jacobian) then
       string = 'WFscale_vec'
       call DebugCreateViewer(this%realization%debug,string,this%option,viewer)
       call VecView(this%scaling_vec,viewer,ierr);CHKERRQ(ierr)

@@ -376,7 +376,7 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
           case('AUTO_SCALE_UNKNOWNS','AUTO_SCALE')
             call InputReadWord(input,option,word,PETSC_TRUE)
             call InputErrorMsg(input,option, &
-                               'auto scale multiphase flow modes', &
+                               'auto scale multiphase flow TRUE or FALSE', &
                                'NEWTON TRD options')
             string = '-flow_snes_trdc_auto_scale_multiphase'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
@@ -385,18 +385,9 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
           case('AUTO_SCALE_MAX')
             call InputReadWord(input,option,word,PETSC_TRUE)
             call InputErrorMsg(input,option, &
-                               'initial trust region size', &
+                               'auto scale multiphase max value', &
                                'NEWTON TRD options')
             string = '-flow_snes_trdc_auto_scale_max'
-            call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
-                                      trim(string),trim(word), &
-                                      ierr);CHKERRQ(ierr)
-          case('AUTO_SCALE_MAX')
-            call InputReadWord(input,option,word,PETSC_TRUE)
-            call InputErrorMsg(input,option, &
-                               'initial trust region size', &
-                               'NEWTON TRD options')
-            string = '-flow_snes_auto_scale_max'
             call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                       trim(string),trim(word), &
                                       ierr);CHKERRQ(ierr)
