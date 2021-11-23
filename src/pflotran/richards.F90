@@ -80,7 +80,6 @@ subroutine RichardsTimeCut(realization)
   do ghosted_id = 1, grid%ngmax
     if (associated(material_auxvars(ghosted_id)%iltf)) then
       call material_auxvars(ghosted_id)%iltf%Restore
-      call material_auxvars(ghosted_id)%iltf%GetScale
     endif
   enddo
 
@@ -792,7 +791,6 @@ subroutine RichardsUpdateAuxVarsPatch(realization)
     ! material transform, illitization: update stored state
     if (associated(material_auxvars(ghosted_id)%iltf)) then
       call material_auxvars(ghosted_id)%iltf%Update
-      call material_auxvars(ghosted_id)%iltf%GetScale
     endif
 
     call RichardsAuxVarCompute(xx_loc_p(istart:iend), &

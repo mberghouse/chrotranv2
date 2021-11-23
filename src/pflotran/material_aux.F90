@@ -796,7 +796,6 @@ subroutine MaterialAuxVarSetValue(material_auxvar,ivar,value)
     case(SMECTITE)
       if (associated(material_auxvar%iltf)) then
         call material_auxvar%iltf%Set(value)
-        call material_auxvar%iltf%GetScale
       endif
   end select
 
@@ -1026,6 +1025,8 @@ subroutine MaterialAuxUpdateSmectite(this)
 
   this%ilt_fi = this%ilt_fit ! illite fraction
 
+  call this%GetScale
+
 end subroutine MaterialAuxUpdateSmectite
 
 ! ************************************************************************** !
@@ -1047,6 +1048,8 @@ subroutine MaterialAuxRestoreSmectite(this)
   this%ilt_fst = this%ilt_fs ! smectite fraction
 
   this%ilt_fit = this%ilt_fi ! illite fraction
+
+  call this%GetScale
 
 end subroutine MaterialAuxRestoreSmectite
 
@@ -1072,6 +1075,8 @@ subroutine MaterialAuxSetSmectite(this,new)
   this%ilt_fi = 1.0d+0 - new ! stored illite fraction
 
   this%ilt_fit = 1.0d+0 - new ! test illite fraction
+
+  call this%GetScale
 
 end subroutine MaterialAuxSetSmectite
 

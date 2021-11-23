@@ -315,7 +315,6 @@ subroutine GeneralUpdateSolution(realization)
       global_auxvars(ghosted_id)%istate
     if (associated(material_auxvars(ghosted_id)%iltf)) then
       call material_auxvars(ghosted_id)%iltf%Update
-      call material_auxvars(ghosted_id)%iltf%GetScale ! scale factor
     endif
   enddo
  
@@ -368,7 +367,6 @@ subroutine GeneralTimeCut(realization)
       gen_auxvars(ZERO_INTEGER,ghosted_id)%istate_store(PREV_TS)
     if (associated(material_auxvars(ghosted_id)%iltf)) then
       call material_auxvars(ghosted_id)%iltf%Restore
-      call material_auxvars(ghosted_id)%iltf%GetScale ! scale factor
     endif
   enddo
 

@@ -1682,7 +1682,6 @@ subroutine MaterialAssignPropertyToAux(material_auxvar,material_property, &
     material_auxvar%iltf%mtf_fn_id = material_property%material_transform_id
     material_auxvar%iltf%ilt_fs0 = material_property%ilt_fs0
     call material_auxvar%iltf%Set(material_property%ilt_fs0)
-    call material_auxvar%iltf%GetScale
   endif
     
 !  if (soil_heat_capacity_index > 0) then
@@ -1786,7 +1785,6 @@ subroutine MaterialSetAuxVarScalar(Material,value,ivar,isubvar)
       do i=1, Material%num_aux
         if (associated(Material%auxvars(i)%iltf)) then
           call Material%auxvars(i)%iltf%Set(value)
-          call Material%auxvars(i)%iltf%GetScale
         endif
       enddo
   end select
@@ -1906,7 +1904,6 @@ subroutine MaterialSetAuxVarVecLoc(Material,vec_loc,ivar,isubvar)
       do ghosted_id=1, Material%num_aux
         if (associated(Material%auxvars(ghosted_id)%iltf)) then
           call Material%auxvars(ghosted_id)%iltf%Set(vec_loc_p(ghosted_id))
-          call Material%auxvars(ghosted_id)%iltf%GetScale
         endif
       enddo
   end select

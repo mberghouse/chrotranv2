@@ -77,7 +77,6 @@ subroutine THTimeCut(realization)
   do ghosted_id = 1, grid%ngmax
     if (associated(material_auxvars(ghosted_id)%iltf)) then
       call material_auxvars(ghosted_id)%iltf%Restore
-      call material_auxvars(ghosted_id)%iltf%GetScale
     endif
   enddo
 
@@ -1080,7 +1079,6 @@ subroutine THUpdateSolutionPatch(realization)
   do ghosted_id = 1, grid%ngmax
     if (associated(material_auxvars(ghosted_id)%iltf)) then
       call material_auxvars(ghosted_id)%iltf%Update
-      call material_auxvars(ghosted_id)%iltf%GetScale
     endif
   enddo
   
