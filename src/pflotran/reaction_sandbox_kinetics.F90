@@ -453,33 +453,13 @@ subroutine KineticsEvaluate(this,Residual,Jacobian,compute_derivative, &
 
 !     print *,'kinetics1: ',ph,oh,RateFe,m_fe2,m_fe3,m_cro4,kfe
 
-  
-  ! NOTES
-  ! 1. Always subtract contribution from residual
-  ! 2. Units of residual are moles/second
-
-  !Residual(this%species_k_id) = Residual(this%species_k_id)
-  !Residual(this%species_na_id) = Residual(this%species_na_id)
-  !Residual(this%species_cl_id) = Residual(this%species_cl_id)
-  Residual(this%species_fe2_id) = Residual(this%species_fe2_id) - Ratefe2
-  Residual(this%species_fe3_id) = Residual(this%species_fe3_id) - Ratefe3
-  !Residual(this%species_cr6_id) = Residual(this%species_cr6_id) - Ratecr6
-  !Residual(this%species_cr3_id) = Residual(this%species_cr3_id) - Ratecr3
-  !Residual(this%species_na_id) = Residual(this%species_cu1_id)
-  !Residual(this%species_na_id) = Residual(this%species_cu2_id)
-  Residual(this%species_h_id) = Residual(this%species_h_id) - Rateh
-  !Residual(this%species_na_id) = Residual(this%species_hco3_id)
-  !Residual(this%species_na_id) = Residual(this%species_so4_id)
-  !Residual(this%species_na_id) = Residual(this%species_citrate_id)
-  Residual(this%species_o2_id) = Residual(this%species_o2_id) - Rateo2
-
 
     case('Cr-Fe')
   
-  !++++++++++++++++++++++++++++++++++++++++++
+  !++++++++++++++++++++++++++++++++++++++++++++++++
   ! Cr(VI) reduction by Fe(II): Fendorf & Li (1996)
   ! 3 Fe2+ + CrO2− + 8 H+ → Cr3+ + 3 Fe3+ + 4 H2O
-  !++++++++++++++++++++++++++++++++++++++++++
+  !++++++++++++++++++++++++++++++++++++++++++++++++
 
       ph = -log10(gh * m_h)
       oh = 10.d0**(ph-13.9951d0)
@@ -501,26 +481,12 @@ subroutine KineticsEvaluate(this,Residual,Jacobian,compute_derivative, &
       Rateh = -1.d0 * RateFe - 5.d0 * RateCr
       Rateo2 = -0.25d0 * RateFe + 0.75d0 * RateCr
 
-
-  ! NOTES
-  ! 1. Always subtract contribution from residual
-  ! 2. Units of residual are moles/second
-
-  !Residual(this%species_na_id) = Residual(this%species_na_id)
-  !Residual(this%species_cl_id) = Residual(this%species_cl_id)
-  Residual(this%species_fe2_id) = Residual(this%species_fe2_id) - Ratefe2
-  Residual(this%species_fe3_id) = Residual(this%species_fe3_id) - Ratefe3
-  Residual(this%species_cr6_id) = Residual(this%species_cr6_id) - Ratecr6
-  Residual(this%species_cr3_id) = Residual(this%species_cr3_id) - Ratecr3
-  !Residual(this%species_h_id) = Residual(this%species_h_id) - Rateh
-  !Residual(this%species_o2_id) = Residual(this%species_o2_id) - Rateo2
-
     case('Cr-Fe-H')
 
-!++++++++++++++++++++++++++++++++++++++++++
+!++++++++++++++++++++++++++++++++++++++++++++++++
 ! Cr(VI) reduction by Fe(II): Fendorf & Li (1996)
 ! 3 Fe2+ + CrO42− + 8 H+ → Cr3+ + 3 Fe3+ + 4 H2O
-!++++++++++++++++++++++++++++++++++++++++++
+!++++++++++++++++++++++++++++++++++++++++++++++++
 
 ! ph = -log10(gh * m_h)
 ! oh = 10.d0**(ph-13.9951d0)
@@ -548,20 +514,6 @@ subroutine KineticsEvaluate(this,Residual,Jacobian,compute_derivative, &
   Ratecr3 = 1.d0 * RateFeCr
   Rateh = -8.d0 * RateFeCr
   Rateo2 = 0.d0 * RateFeCr
-
-
-! NOTES
-! 1. Always subtract contribution from residual
-! 2. Units of residual are moles/second
-
-!Residual(this%species_na_id) = Residual(this%species_na_id)
-!Residual(this%species_cl_id) = Residual(this%species_cl_id)
-Residual(this%species_fe2_id) = Residual(this%species_fe2_id) - Ratefe2
-Residual(this%species_fe3_id) = Residual(this%species_fe3_id) - Ratefe3
-Residual(this%species_cr6_id) = Residual(this%species_cr6_id) - Ratecr6
-Residual(this%species_cr3_id) = Residual(this%species_cr3_id) - Ratecr3
-Residual(this%species_h_id) = Residual(this%species_h_id)     - Rateh
-Residual(this%species_o2_id) = Residual(this%species_o2_id)   - Rateo2
 
     case('EXP')
 
@@ -592,7 +544,13 @@ Residual(this%species_o2_id) = Residual(this%species_o2_id)   - Rateo2
 !     Rate = -kTST * (Baq - 1.d0/Keq) * volume * L_water
       Rate =  kTST / Keq * (1.d0 - Keq * Baq) * L_water
 
-    case('Elem')
+      RateA = Rate
+      RateC = -Rate
+
+      print *,'Model TST not completed'
+      stop
+
+    case('Elementary')
 
 !     A + B = C(aq), A + B = C(s)
       kf = 1.e-3
@@ -616,21 +574,40 @@ Residual(this%species_o2_id) = Residual(this%species_o2_id)   - Rateo2
       dRCC = kb * L_water
     endif
 
+    print *,'Model Elementary not completed'
+    stop
+
     case default
       print *,'Kinetics error msg.: ', this%model, ' Model not recognized. Stop!'
       stop
   end select
 
 
-  ! NOTES
-  ! 1. Always subtract contribution from residual
-  ! 2. Units of residual are moles/second  
-  Residual(this%species_Aaq_id) = Residual(this%species_Aaq_id) - (-RateAB - RateABs)
-  Residual(this%species_Baq_id) = Residual(this%species_Baq_id) - (-RateAB - RateABs)
-  Residual(this%species_Caq_id) = Residual(this%species_Caq_id) - RateAB
-  !Residual(this%species_Daq_id) = Residual(this%species_Daq_id) - RateD
-  !Residual(this%species_Eaq_id) = Residual(this%species_Eaq_id) - RateE
-  !Residual(this%species_Faq_id) = Residual(this%species_Faq_id) - RateF
+! NOTES
+! 1. Always subtract contribution from residual
+! 2. Units of residual are moles/second
+
+Residual(this%species_Aaq_id) = Residual(this%species_Aaq_id) - RateA
+Residual(this%species_Baq_id) = Residual(this%species_Baq_id) - RateB
+Residual(this%species_Caq_id) = Residual(this%species_Caq_id) - RateC
+Residual(this%species_Daq_id) = Residual(this%species_Daq_id) - RateD
+Residual(this%species_Eaq_id) = Residual(this%species_Eaq_id) - RateE
+Residual(this%species_Faq_id) = Residual(this%species_Faq_id) - RateF
+
+Residual(this%species_k_id) = Residual(this%species_k_id) - Ratek
+Residual(this%species_na_id) = Residual(this%species_na_id) - Ratena
+Residual(this%species_cl_id) = Residual(this%species_cl_id) - Ratecl
+Residual(this%species_fe2_id) = Residual(this%species_fe2_id) - Ratefe2
+Residual(this%species_fe3_id) = Residual(this%species_fe3_id) - Ratefe3
+Residual(this%species_cr6_id) = Residual(this%species_cr6_id) - Ratecr6
+Residual(this%species_cr3_id) = Residual(this%species_cr3_id) - Ratecr3
+Residual(this%species_na_id) = Residual(this%species_cu1_id) - Ratecu1
+Residual(this%species_na_id) = Residual(this%species_cu2_id) - Ratecu2
+Residual(this%species_h_id) = Residual(this%species_h_id) - Rateh
+Residual(this%species_na_id) = Residual(this%species_hco3_id) - Ratehco3
+Residual(this%species_na_id) = Residual(this%species_so4_id) - Rateso4
+Residual(this%species_na_id) = Residual(this%species_citrate_id) - Ratecitrate
+Residual(this%species_o2_id) = Residual(this%species_o2_id) - Rateo2
 
 #if 0
   Residual(this%species_Xim_id + reaction%offset_immobile) = &
