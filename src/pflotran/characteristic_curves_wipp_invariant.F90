@@ -255,6 +255,8 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, expon, Pct_ignore, Pct_alpha, &
     return
   end if
 
+  new%Pcmax = Pcmax
+
   ! Assign residual saturation parameters
   new%Swr = Swr
   new%Sgr = Sgr
