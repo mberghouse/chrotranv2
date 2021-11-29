@@ -416,7 +416,7 @@ subroutine WIPPFloAuxVarCompute(x,wippflo_auxvar,global_auxvar, &
         sf%pct = sf%pct_a * perm_for_cc ** sf%pct_exp
         option%flow%pct_updated = PETSC_TRUE
       class is (sf_WIPP_type)
-        call sf%setPct(perm_for_cc)
+        call sf%setK(perm_for_cc)
       class default
         option%flow%pct_updated = PETSC_FALSE
     end select

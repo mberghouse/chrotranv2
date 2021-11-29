@@ -2,7 +2,7 @@ module characteristic_curves_WIPP_invariant_module
 #include "petsc/finclude/petscsys.h"
 
 use petscsys ! Necessary for PETSC_TRUE / PETSC_FALSE
-use option_module ! Necessary for global passing of PCT
+use option_module ! Necessary for characterisic curve base class arguments
 use characteristic_curves_base_module ! Needed to define base type
 implicit none
 
@@ -18,7 +18,7 @@ implicit none
 
 type, public, extends(sat_func_base_type) :: sf_WIPP_type
   private
-    procedure(set_Pct_type), public, pointer :: setPct
+    procedure(set_k_type), public, pointer :: setK
     procedure(set_Swj_type), pointer :: setSwj
 
     procedure(calc_Pc_type), pointer :: KPCPc
@@ -94,7 +94,7 @@ abstract interface
     PetscReal, intent(in)  :: Pc
     PetscReal, intent(out) :: Sw
   end subroutine
-  subroutine set_pct_type(this, k)
+  subroutine set_k_type(this, k)
     import sf_WIPP_type
     class(sf_WIPP_type), intent(inout) :: this
     PetscReal, intent(in)  :: k
@@ -139,9 +139,9 @@ private :: SFWIPPKRP1Pc , &
            SFWIPPKRP12Pc , &
            SFWIPPKRP12Sw
 
-! Implemented WIPP Pct procedures
-private :: SFWIPPSetPct , &
-           SFWIPPIgnorePct
+! Implemented WIPP Permeability derived Pct procedures
+private :: SFWIPPSetK , &
+           SFWIPPIgnoreK
 
 contains 
 
@@ -172,7 +172,7 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, expon, Pct_ignore, Pct_alpha, &
 !  For all others except KRP 9, if PCT_A is zero, the same occurs.
 
   if (KRP == 11 .OR. (Pct_alpha == 0d0 .AND. KRP /= 9)) then
-    new%setPct => SFWIPPIgnorePct
+    new%setK => SFWIPPIgnoreK
     new%setSwj => SFWIPPKPC1Swj
 
     new%KRPPc  => SFWIPPKRP11Pc
@@ -300,12 +300,12 @@ function SFWIPPctor(KRP, KPC, Swr, Sgr, expon, Pct_ignore, Pct_alpha, &
   ! Depending on pct_ignore, pct_alpha is either alpha or pct_a
   new%permeability = -1d0   ! Initialize
   if (pct_ignore) then
-    new%setPct  => SFWIPPIgnorePct
+    new%setK  => SFWIPPIgnoreK
     new%pct_a   = 0d0       ! Not used
     new%pct_exp = 0d0       ! Not used
     new%pct     = pct_alpha ! Pct permanently set to alpha
   else
-    new%setPct  => SFWIPPSetPct
+    new%setK  => SFWIPPSetK
     new%pct_a   = pct_alpha
     new%pct_exp = pct_expon
     new%pct     = 1E6       ! Initialize to 1 MPa to permit test function. 
@@ -362,7 +362,7 @@ end subroutine
 ! WIPP PCT Subroutines
 ! **************************************************************************** !
 
-subroutine SFWIPPSetPct(this, permeability)
+subroutine SFWIPPSetK(this, permeability)
   class(sf_WIPP_type), intent(inout) :: this
   PetscReal, intent(in) :: permeability
   PetscInt :: error
@@ -380,7 +380,7 @@ end subroutine
 
 ! **************************************************************************** !
 
-subroutine SFWIPPIgnorePct(this, permeability)
+subroutine SFWIPPIgnoreK(this, permeability)
   class(sf_WIPP_type), intent(inout) :: this
   PetscReal, intent(in) :: permeability
 end subroutine
