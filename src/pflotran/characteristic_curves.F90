@@ -887,14 +887,14 @@ function SaturationFunctionRead(saturation_function,input,option) &
     if (Slj == 0d0) Slj = Sr + 5d-2*(1d0-Sr)
     ! Call constructor
     if (wipp_krp /= 0) then ! WIPP invariants flagged by wipp_krp
-      if (wipp_krp == 12) then ! wipp_s_min replaces Sr
+      if (wipp_krp == 12) then ! wipp_s_min replaces Sr, wipp_s_effmin replaces Slj
         sf_swap => SFWIPPctor(wipp_krp, wipp_kpc, wipp_s_min, Srg, wipp_expon, &
                               wipp_pct_ignore, wipp_pct_alpha, wipp_pct_expon, &
-                              Pcmax, Slj, wipp_s_effmin)
+                              Pcmax, wipp_s_effmin)
       else
         sf_swap => SFWIPPctor(wipp_krp, wipp_kpc, Sr, Srg, wipp_expon, &
                               wipp_pct_ignore, wipp_pct_alpha, wipp_pct_expon, &
-                              Pcmax, Slj, wipp_s_effmin)
+                              Pcmax, Slj)
       end if
     else ! Old object type is used to identify common invariants
       select type (saturation_function)
@@ -1630,8 +1630,9 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
   call InputPopBlock(input,option)
 
   ! At the end of the input block, call constructors as applicable
+  ! to replace with optimized relative permeability functions
   if (loop_invariant) then
-    select type (permeability_function)
+    select type (rpf => permeability_function)
     class is (RPF_mualem_VG_liq_type)
       rpf_swap => RPFMVGliqCtor(m, Sr)
     class is (RPF_burdine_VG_liq_type)
@@ -1640,6 +1641,42 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
       rpf_swap => RPFMVGgasCtor(m, Sr, Srg)
     class is (RPF_burdine_VG_gas_type)
       rpf_swap => RPFBVGgasCtor(m, Sr, Srg)
+    class is (rpf_KRP1_liq_type)
+      rpf_swap => RPFWIPPctor(.TRUE.,1,rpf%Sr,rpf%Srg,rpf%m)
+    class is (rpf_KRP1_gas_type)
+      rpf_swap => RPFWIPPctor(.FALSE.,1,rpf%Sr,rpf%Srg,rpf%m)
+    class is (rpf_KRP2_liq_type)
+      rpf_swap => RPFWIPPctor(.TRUE.,2,rpf%Sr,rpf%Srg,rpf%lambda)
+    class is (rpf_KRP2_gas_type)
+      rpf_swap => RPFWIPPctor(.FALSE.,2,rpf%Sr,rpf%Srg,rpf%lambda)
+    class is (rpf_KRP3_liq_type)
+      rpf_swap => RPFWIPPctor(.TRUE.,3,rpf%Sr,rpf%Srg,rpf%lambda)
+    class is (rpf_KRP3_gas_type)
+      rpf_swap => RPFWIPPctor(.FALSE.,3,rpf%Sr,rpf%Srg,rpf%lambda)
+    class is (rpf_KRP4_liq_type)
+      rpf_swap => RPFWIPPctor(.TRUE.,4,rpf%Sr,rpf%Srg,rpf%lambda)
+    class is (rpf_KRP4_gas_type)
+      rpf_swap => RPFWIPPctor(.FALSE.,4,rpf%Sr,rpf%Srg,rpf%lambda)
+    class is (rpf_KRP5_liq_type)
+      rpf_swap => RPFWIPPctor(.TRUE.,5,rpf%Sr,rpf%Srg,0d0)
+    class is (rpf_KRP5_gas_type)
+      rpf_swap => RPFWIPPctor(.FALSE.,5,rpf%Sr,rpf%Srg,0d0)
+    class is (rpf_KRP8_liq_type)
+      rpf_swap => RPFWIPPctor(.TRUE.,8,rpf%Sr,rpf%Srg,rpf%m)
+    class is (rpf_KRP8_gas_type)
+      rpf_swap => RPFWIPPctor(.FALSE.,8,rpf%Sr,rpf%Srg,rpf%m)
+    class is (rpf_KRP9_liq_type)
+      rpf_swap => RPFWIPPctor(.TRUE.,9,rpf%Sr,rpf%Srg,0d0)
+    class is (rpf_KRP9_gas_type)
+      rpf_swap => RPFWIPPctor(.FALSE.,9,rpf%Sr,rpf%Srg,0d0)
+    class is (rpf_KRP11_liq_type)
+      rpf_swap => RPFWIPPctor(.TRUE.,11,rpf%Sr,rpf%Srg,rpf%tolc)
+    class is (rpf_KRP11_gas_type)
+      rpf_swap => RPFWIPPctor(.FALSE.,11,rpf%Sr,rpf%Srg,rpf%tolc)
+    class is (rpf_KRP12_liq_type)
+      rpf_swap => RPFWIPPctor(.TRUE.,12,rpf%Sr,rpf%Srg,rpf%lambda)
+    class is (rpf_KRP12_gas_type)
+      rpf_swap => RPFWIPPctor(.FALSE.,12,rpf%Sr,rpf%Srg,rpf%lambda)
     end select
   end if
 
