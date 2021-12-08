@@ -301,52 +301,14 @@ subroutine TimestepperSNESUpdateDT(this,process_model)
     endif
     if (this%rescue_step_counter > this%rescue_frequency) then
       this%rescue_step_counter = 0
-#if 0
-      if (2**this%max_time_step_cuts < this%rescue_factor) then
-        ! can't jump timestep more than the max time step cut is allowed
-        if (this%max_time_step_cuts < 2) then
-          option%io_buffer  = 'max time step cut too small for rescue mode. exiting.'
-          call PrintErrMsg(option)
-        endif
-        this%rescue_factor = 2**(this%max_time_step_cuts-2)
-        option%io_buffer = 'rescue factor too big. automatically adjusted.'
-        call PrintMsg(option)
-      endif
-#endif
+      ! there was conditional to control too big of rescue factor but it
+      ! was removed as it is very unlikely.
       this%dt = this%dt * this%rescue_factor
       option%io_buffer = 'rescue mode activated. jumping time step size.'
       call PrintMsg(option)
     endif
   endif
 
-  ! rescue mode - heeho
-  if (this%rescue_mode) then
-    if (this%target_time*this%rescue_step_threshold > this%dt) then
-      this%rescue_step_counter = this%rescue_step_counter + 1
-    else
-      if (this%rescue_step_counter > 0) then
-        ! subtract from the counter if it recovers itself
-        this%rescue_step_counter = this%rescue_step_counter - 1
-      endif
-    endif
-    if (this%rescue_step_counter > this%rescue_frequency) then
-      this%rescue_step_counter = 0
-      if (2**this%max_time_step_cuts < this%rescue_factor) then
-        ! can't jump timestep more than the max time step cut is allowed
-        if (this%max_time_step_cuts < 2) then
-          option%io_buffer  = 'max time step cut too small for rescue mode. exiting.'
-          call PrintErrMsg(option)
-        endif
-        this%rescue_factor = 2**(this%max_time_step_cuts-2)
-        option%io_buffer = 'rescue factor too big. automatically adjusted.'
-        call PrintMsg(option)
-      endif      
-      this%dt = this%dt * this%rescue_factor
-      option%io_buffer = 'rescue mode activated. jumping time step size.'
-      call PrintMsg(option)
-    endif
-  endif
-  
 end subroutine TimestepperSNESUpdateDT
 
 ! ************************************************************************** !
