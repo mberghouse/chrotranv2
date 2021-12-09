@@ -4,7 +4,7 @@ module PM_Auxiliary_class
   use petscsys
   use PM_Base_class
   use Realization_Subsurface_class
-  use Communicator_Base_module
+  use Communicator_Base_class
   
   use PFLOTRAN_Constants_module
 
@@ -338,8 +338,6 @@ subroutine PMAuxiliaryEvolvingStrata(this,time,ierr)
   class(pm_auxiliary_type) :: this
   PetscReal :: time
   PetscErrorCode :: ierr
-
-  PetscInt :: ndof
 
   ierr = 0
   call InitSubsurfAssignMatIDsToRegns(this%realization)
