@@ -1292,6 +1292,8 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
     !------------------------------------------
       class is(rpf_KRP1_liq_type)
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case('M')
             call InputReadDouble(input,option,rpf%m)
             call InputErrorMsg(input,option,'M',error_string)
@@ -1307,6 +1309,8 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
     !------------------------------------------
       class is(rpf_KRP1_gas_type)
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case('M')
             call InputReadDouble(input,option,rpf%m)
             call InputErrorMsg(input,option,'M',error_string)
@@ -1322,6 +1326,8 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
     !------------------------------------------
       class is(rpf_KRP2_liq_type)
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case('LAMBDA')
             call InputReadDouble(input,option,rpf%lambda)
             call InputErrorMsg(input,option,'LAMBDA',error_string)
@@ -1333,6 +1339,8 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
     !------------------------------------------
       class is(rpf_KRP2_gas_type)
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case('LAMBDA')
             call InputReadDouble(input,option,rpf%lambda)
             call InputErrorMsg(input,option,'LAMBDA',error_string)
@@ -1344,6 +1352,8 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
     !------------------------------------------
       class is(rpf_KRP3_liq_type)
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case('LAMBDA')
             call InputReadDouble(input,option,rpf%lambda)
             call InputErrorMsg(input,option,'LAMBDA',error_string)
@@ -1359,6 +1369,8 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
     !------------------------------------------
       class is(rpf_KRP3_gas_type)
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case('LAMBDA')
             call InputReadDouble(input,option,rpf%lambda)
             call InputErrorMsg(input,option,'LAMBDA',error_string)
@@ -1375,6 +1387,8 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
     !------------------------------------------
       class is(rpf_KRP4_liq_type)
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case('LAMBDA')
             call InputReadDouble(input,option,rpf%lambda)
             call InputErrorMsg(input,option,'LAMBDA',error_string)
@@ -1390,6 +1404,8 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
     !------------------------------------------
       class is(rpf_KRP4_gas_type)
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case('LAMBDA')
             call InputReadDouble(input,option,rpf%lambda)
             call InputErrorMsg(input,option,'LAMBDA',error_string)
@@ -1405,6 +1421,8 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
     !------------------------------------------
       class is(rpf_KRP5_liq_type)
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case('GAS_RESIDUAL_SATURATION')
             call InputReadDouble(input,option,rpf%Srg)
             call InputErrorMsg(input,option,'GAS_RESIDUAL_SATURATION', &
@@ -1417,6 +1435,8 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
     !------------------------------------------
       class is(rpf_KRP5_gas_type)
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case('GAS_RESIDUAL_SATURATION')
             call InputReadDouble(input,option,rpf%Srg)
             call InputErrorMsg(input,option,'GAS_RESIDUAL_SATURATION', &
@@ -1429,6 +1449,8 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
     !------------------------------------------
       class is(rpf_KRP8_liq_type)
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case('M')
             call InputReadDouble(input,option,rpf%m)
             call InputErrorMsg(input,option,'M',error_string)
@@ -1440,6 +1462,8 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
     !------------------------------------------
       class is(rpf_KRP8_gas_type)
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case('M')
             call InputReadDouble(input,option,rpf%m)
             call InputErrorMsg(input,option,'M',error_string)
@@ -1451,6 +1475,8 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
     !------------------------------------------
       class is(rpf_KRP9_liq_type)
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case default
             call InputKeywordUnrecognized(input,keyword, &
               'BRAGFLO_KRP9_LIQ relative permeability function', &
@@ -1459,6 +1485,8 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
     !------------------------------------------
       class is(rpf_KRP9_gas_type)
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case default
             call InputKeywordUnrecognized(input,keyword, &
               'BRAGFLO_KRP9_GAS relative permeability function', &
@@ -1467,6 +1495,8 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
     !------------------------------------------
       class is(rpf_KRP11_liq_type)
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case('TOLC')
             call InputReadDouble(input,option,rpf%tolc)
             call InputErrorMsg(input,option,'TOLC',error_string)
@@ -1482,6 +1512,8 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
     !------------------------------------------
       class is(rpf_KRP11_gas_type)
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case('TOLC')
             call InputReadDouble(input,option,rpf%tolc)
             call InputErrorMsg(input,option,'TOLC',error_string)
@@ -1497,6 +1529,8 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
     !------------------------------------------
       class is(rpf_KRP12_liq_type)
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case('LAMBDA')
             call InputReadDouble(input,option,rpf%lambda)
             call InputErrorMsg(input,option,'LAMBDA',error_string)
@@ -1512,6 +1546,8 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
     !------------------------------------------
       class is(rpf_KRP12_gas_type)
         select case(keyword)
+          case('LOOP_INVARIANT')
+            loop_invariant = PETSC_TRUE
           case('LAMBDA')
             call InputReadDouble(input,option,rpf%lambda)
             call InputErrorMsg(input,option,'LAMBDA',error_string)
@@ -1642,41 +1678,41 @@ function PermeabilityFunctionRead(permeability_function,phase_keyword, &
     class is (RPF_burdine_VG_gas_type)
       rpf_swap => RPFBVGgasCtor(m, Sr, Srg)
     class is (rpf_KRP1_liq_type)
-      rpf_swap => RPFWIPPctor(.TRUE.,1,rpf%Sr,rpf%Srg,rpf%m)
+      rpf_swap => RPFWIPPctor(PETSC_TRUE,1,rpf%Sr,rpf%Srg,rpf%m)
     class is (rpf_KRP1_gas_type)
-      rpf_swap => RPFWIPPctor(.FALSE.,1,rpf%Sr,rpf%Srg,rpf%m)
+      rpf_swap => RPFWIPPctor(PETSC_FALSE,1,rpf%Sr,rpf%Srg,rpf%m)
     class is (rpf_KRP2_liq_type)
-      rpf_swap => RPFWIPPctor(.TRUE.,2,rpf%Sr,rpf%Srg,rpf%lambda)
+      rpf_swap => RPFWIPPctor(PETSC_TRUE,2,rpf%Sr,rpf%Srg,rpf%lambda)
     class is (rpf_KRP2_gas_type)
-      rpf_swap => RPFWIPPctor(.FALSE.,2,rpf%Sr,rpf%Srg,rpf%lambda)
+      rpf_swap => RPFWIPPctor(PETSC_FALSE,2,rpf%Sr,rpf%Srg,rpf%lambda)
     class is (rpf_KRP3_liq_type)
-      rpf_swap => RPFWIPPctor(.TRUE.,3,rpf%Sr,rpf%Srg,rpf%lambda)
+      rpf_swap => RPFWIPPctor(PETSC_TRUE,3,rpf%Sr,rpf%Srg,rpf%lambda)
     class is (rpf_KRP3_gas_type)
-      rpf_swap => RPFWIPPctor(.FALSE.,3,rpf%Sr,rpf%Srg,rpf%lambda)
+      rpf_swap => RPFWIPPctor(PETSC_FALSE,3,rpf%Sr,rpf%Srg,rpf%lambda)
     class is (rpf_KRP4_liq_type)
-      rpf_swap => RPFWIPPctor(.TRUE.,4,rpf%Sr,rpf%Srg,rpf%lambda)
+      rpf_swap => RPFWIPPctor(PETSC_TRUE,4,rpf%Sr,rpf%Srg,rpf%lambda)
     class is (rpf_KRP4_gas_type)
-      rpf_swap => RPFWIPPctor(.FALSE.,4,rpf%Sr,rpf%Srg,rpf%lambda)
+      rpf_swap => RPFWIPPctor(PETSC_FALSE,4,rpf%Sr,rpf%Srg,rpf%lambda)
     class is (rpf_KRP5_liq_type)
-      rpf_swap => RPFWIPPctor(.TRUE.,5,rpf%Sr,rpf%Srg,0d0)
+      rpf_swap => RPFWIPPctor(PETSC_TRUE,5,rpf%Sr,rpf%Srg,0d0)
     class is (rpf_KRP5_gas_type)
-      rpf_swap => RPFWIPPctor(.FALSE.,5,rpf%Sr,rpf%Srg,0d0)
+      rpf_swap => RPFWIPPctor(PETSC_FALSE,5,rpf%Sr,rpf%Srg,0d0)
     class is (rpf_KRP8_liq_type)
-      rpf_swap => RPFWIPPctor(.TRUE.,8,rpf%Sr,rpf%Srg,rpf%m)
+      rpf_swap => RPFWIPPctor(PETSC_TRUE,8,rpf%Sr,rpf%Srg,rpf%m)
     class is (rpf_KRP8_gas_type)
-      rpf_swap => RPFWIPPctor(.FALSE.,8,rpf%Sr,rpf%Srg,rpf%m)
+      rpf_swap => RPFWIPPctor(PETSC_FALSE,8,rpf%Sr,rpf%Srg,rpf%m)
     class is (rpf_KRP9_liq_type)
-      rpf_swap => RPFWIPPctor(.TRUE.,9,rpf%Sr,rpf%Srg,0d0)
+      rpf_swap => RPFWIPPctor(PETSC_TRUE,9,rpf%Sr,rpf%Srg,0d0)
     class is (rpf_KRP9_gas_type)
-      rpf_swap => RPFWIPPctor(.FALSE.,9,rpf%Sr,rpf%Srg,0d0)
+      rpf_swap => RPFWIPPctor(PETSC_FALSE,9,rpf%Sr,rpf%Srg,0d0)
     class is (rpf_KRP11_liq_type)
-      rpf_swap => RPFWIPPctor(.TRUE.,11,rpf%Sr,rpf%Srg,rpf%tolc)
+      rpf_swap => RPFWIPPctor(PETSC_TRUE,11,rpf%Sr,rpf%Srg,rpf%tolc)
     class is (rpf_KRP11_gas_type)
-      rpf_swap => RPFWIPPctor(.FALSE.,11,rpf%Sr,rpf%Srg,rpf%tolc)
+      rpf_swap => RPFWIPPctor(PETSC_FALSE,11,rpf%Sr,rpf%Srg,rpf%tolc)
     class is (rpf_KRP12_liq_type)
-      rpf_swap => RPFWIPPctor(.TRUE.,12,rpf%Sr,rpf%Srg,rpf%lambda)
+      rpf_swap => RPFWIPPctor(PETSC_TRUE,12,rpf%Sr,rpf%Srg,rpf%lambda)
     class is (rpf_KRP12_gas_type)
-      rpf_swap => RPFWIPPctor(.FALSE.,12,rpf%Sr,rpf%Srg,rpf%lambda)
+      rpf_swap => RPFWIPPctor(PETSC_FALSE,12,rpf%Sr,rpf%Srg,rpf%lambda)
     end select
   end if
 
