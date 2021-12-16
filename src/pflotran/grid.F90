@@ -117,7 +117,8 @@ module Grid_module
             GridRestrictRegionalConnect, &
             GridPrintExtents, &
             GridSetupCellNeighbors, &
-            GridMapCellsToConnections
+            GridMapCellsToConnections, &
+            GridRemoveInactiveFromRegions
 
 contains
 
@@ -722,7 +723,7 @@ subroutine GridLocalizeRegions(grid,region_list,option)
               call PrintErrMsg(option)
             endif
             allocate(region%faces(size(region%cell_ids)))
-            region%faces = region%iface 
+            region%faces = region%iface
           case(IMPLICIT_UNSTRUCTURED_GRID)
             call UGridMapBoundFacesInPolVol(grid%unstructured_grid, &
                                             region%polygonal_volume, &
@@ -1098,6 +1099,222 @@ subroutine GridLocalizeExplicitFaceset(ugrid,region,option)
 #endif
 
 end subroutine GridLocalizeExplicitFaceset
+
+! ************************************************************************** !
+
+subroutine GridRemoveInactiveFromRegions(grid,imat,region_list,option)
+  !
+  ! Removes inactive cells from regions and cleans up boundary regions
+  !
+  ! Author: Glenn Hammond
+  ! Date: 12/16/21
+  !
+  use Option_module
+  use Region_module
+
+  implicit none
+
+  type(region_list_type), pointer :: region_list
+  PetscInt :: imat(:)
+  type(grid_type), pointer :: grid
+  type(option_type) :: option
+
+  type(region_type), pointer :: region
+  character(len=MAXSTRINGLENGTH) :: string
+  PetscInt, allocatable :: temp_cell_ids(:)
+  PetscInt, allocatable :: temp_face_ids(:)
+  PetscInt :: icell
+  PetscInt :: active_count
+  PetscErrorCode :: ierr
+
+  region => region_list%first
+  do
+    if (.not.associated(region)) exit
+
+    allocate(temp_cell_ids(region%num_cells))
+    temp_cell_ids = 0
+    if (associated(region%faces)) then
+      allocate(temp_face_ids(region%num_cells))
+      temp_face_ids = 0
+    endif
+    active_count = 0
+    do icell = 1, region%num_cells
+      if (imat(grid%nL2G(region%cell_ids(icell))) > 0) then
+        active_count = active_count + 1
+        temp_cell_ids(active_count) = region%cell_ids(icell)
+        if (associated(region%faces)) then
+          temp_cell_ids(active_count) = region%faces(icell)
+        endif
+      endif
+    enddo
+    if (active_count /= region%num_cells) then
+      region%num_cells = active_count
+      deallocate(region%cell_ids)
+      allocate(region%cell_ids(active_count))
+      region%cell_ids(:) = temp_cell_ids(1:active_count)
+      if (associated(region%faces)) then
+        deallocate(region%faces)
+        allocate(region%faces(active_count))
+        region%faces(:) = temp_face_ids(1:active_count)
+      endif
+    endif
+    deallocate(temp_cell_ids)
+    if (allocated(temp_face_ids)) deallocate(temp_face_ids)
+
+#if 0
+    select case(region%def_type)
+      case (DEFINED_BY_BLOCK)
+        call GridLocalizeRegionFromBlock(grid,region,option)
+      case (DEFINED_BY_CARTESIAN_BOUNDARY)
+        call GridLocalizeRegionFromCartBound(grid,region,option)
+      case (DEFINED_BY_COORD)
+        call GridLocalizeRegionFromCoordinates(grid,region,option)
+      case (DEFINED_BY_CELL_IDS)
+        select case(grid%itype)
+          case(STRUCTURED_GRID)
+            call GridLocalizeRegionsFromCellIDs(grid,region,option)
+          case(IMPLICIT_UNSTRUCTURED_GRID)
+            call GridLocalizeRegionsFromCellIDs(grid,region,option)
+          case(EXPLICIT_UNSTRUCTURED_GRID)
+            call GridLocalizeRegionsFromCellIDs(grid,region,option)
+        end select
+      case (DEFINED_BY_CELL_AND_FACE_IDS)
+        select case(grid%itype)
+          case (STRUCTURED_GRID)
+            call GridLocalizeRegionsFromCellIDs(grid,region,option)
+          case default
+            option%io_buffer = 'GridLocalizeRegions() must be extended ' // &
+            'for unstructured region DEFINED_BY_CELL_AND_FACE_IDS'
+            call PrintErrMsg(option)
+        end select
+      case (DEFINED_BY_VERTEX_IDS)
+        option%io_buffer = 'GridLocalizeRegions() must be extended ' // &
+          'for unstructured region DEFINED_BY_VERTEX_IDS'
+        call PrintErrMsg(option)
+      case (DEFINED_BY_SIDESET_UGRID)
+        if (grid%itype /= IMPLICIT_UNSTRUCTURED_GRID) then
+          option%io_buffer = 'Regions defined through sidesets are &
+                             &only supported for IMPLICIT_UNSTRUCTURED_GRIDS.'
+          call PrintErrMsg(option)
+        endif
+        call UGridMapSideSet2(grid%unstructured_grid, &
+                             region%sideset%face_vertices, &
+                             region%sideset%nfaces,region%name, &
+                             option,region%cell_ids,region%faces)
+        if (associated(region%cell_ids)) then
+          region%num_cells = size(region%cell_ids)
+        endif
+      case (DEFINED_BY_FACE_UGRID_EXP)
+        if (grid%itype /= EXPLICIT_UNSTRUCTURED_GRID) then
+          option%io_buffer = 'Regions defined through explicit facesets are &
+                             &only supported for EXPLICIT_UNSTRUCTURED_GRIDS.'
+          call PrintErrMsg(option)
+        endif
+        call GridLocalizeExplicitFaceset(grid%unstructured_grid,region, &
+                                         option)
+        ! For explicit unstructured grids, the face locations are not
+        ! defined in the grid. They are in the boundary connections. We
+        ! must update the global bounds of the domain to account for
+        ! these faces. Otherwise, algorithms such as hydrostatic, etc.
+        ! may not span the proper bounds.
+        update_grid_bounds = PETSC_TRUE
+        if (associated(region%explicit_faceset)) then
+          face_centroids => region%explicit_faceset%face_centroids
+          do i = 1, size(face_centroids)
+            grid%x_min_local = min(grid%x_min_local,face_centroids(i)%x)
+            grid%y_min_local = min(grid%y_min_local,face_centroids(i)%y)
+            grid%z_min_local = min(grid%z_min_local,face_centroids(i)%z)
+            grid%x_max_local = max(grid%x_max_local,face_centroids(i)%x)
+            grid%y_max_local = max(grid%y_max_local,face_centroids(i)%y)
+            grid%z_max_local = max(grid%z_max_local,face_centroids(i)%z)
+          enddo
+        endif
+      case (DEFINED_BY_POLY_BOUNDARY_FACE)
+        select case(grid%itype)
+          case(STRUCTURED_GRID)
+            call GridMapCellsInPolVol(grid, &
+                                      region%polygonal_volume, &
+                                      region%name,option, &
+                                      region%cell_ids)
+            if (region%iface == 0) then
+              option%io_buffer = 'REGIONs defined with POLYGON and &
+                BOUNDARY_FACES_IN_VOLUME on STRUCTURED grids must &
+                define a FACE.'
+              call PrintErrMsg(option)
+            endif
+            allocate(region%faces(size(region%cell_ids)))
+            region%faces = region%iface
+          case(IMPLICIT_UNSTRUCTURED_GRID)
+            call UGridMapBoundFacesInPolVol(grid%unstructured_grid, &
+                                            region%polygonal_volume, &
+                                            region%name,option, &
+                                            region%cell_ids,region%faces)
+          case default
+            option%io_buffer = 'Regions defined through poly boundary faces &
+                          &are not supported for the current grid type.'
+            call PrintErrMsg(option)
+        end select
+        if (associated(region%cell_ids)) then
+          region%num_cells = size(region%cell_ids)
+        endif
+      case (DEFINED_BY_POLY_CELL_CENTER)
+        call GridMapCellsInPolVol(grid, &
+                                  region%polygonal_volume, &
+                                  region%name,option, &
+                                  region%cell_ids)
+        if (associated(region%cell_ids)) then
+          region%num_cells = size(region%cell_ids)
+        endif
+      case default
+        option%io_buffer = 'GridLocalizeRegions: Region definition not recognized'
+        call PrintErrMsg(option)
+    end select
+#endif
+#if 0
+    if (region%num_cells == 0 .and. associated(region%cell_ids)) then
+      deallocate(region%cell_ids)
+      nullify(region%cell_ids)
+    endif
+
+    if (region%num_cells == 0 .and. associated(region%faces)) then
+      deallocate(region%faces)
+      nullify(region%faces)
+    endif
+
+    ! check to ensure that there is at least one grid cell in each region
+    call MPI_Allreduce(region%num_cells,global_cell_count,ONE_INTEGER_MPI, &
+                       MPI_INTEGER, MPI_SUM, option%mycomm,ierr)
+    if (global_cell_count == 0) then
+      option%io_buffer = 'No cells assigned to REGION "' // &
+        trim(region%name) // '".'
+      call PrintErrMsg(option)
+    endif
+#endif
+    region => region%next
+
+  enddo
+
+#if 0
+  ! these global reductions are replicates from GridComputeCoordinates(), but
+  ! must be calculated again for explicit unstructured grids
+  if (update_grid_bounds) then
+    ! compute global max/min from the local max/in
+    call MPI_Allreduce(grid%x_min_local,grid%x_min_global,ONE_INTEGER_MPI, &
+                      MPI_DOUBLE_PRECISION,MPI_MIN,option%mycomm,ierr)
+    call MPI_Allreduce(grid%y_min_local,grid%y_min_global,ONE_INTEGER_MPI, &
+                      MPI_DOUBLE_PRECISION,MPI_MIN,option%mycomm,ierr)
+    call MPI_Allreduce(grid%z_min_local,grid%z_min_global,ONE_INTEGER_MPI, &
+                      MPI_DOUBLE_PRECISION,MPI_MIN,option%mycomm,ierr)
+    call MPI_Allreduce(grid%x_max_local,grid%x_max_global,ONE_INTEGER_MPI, &
+                      MPI_DOUBLE_PRECISION,MPI_MAX,option%mycomm,ierr)
+    call MPI_Allreduce(grid%y_max_local,grid%y_max_global,ONE_INTEGER_MPI, &
+                      MPI_DOUBLE_PRECISION,MPI_MAX,option%mycomm,ierr)
+    call MPI_Allreduce(grid%z_max_local,grid%z_max_global,ONE_INTEGER_MPI, &
+                      MPI_DOUBLE_PRECISION,MPI_MAX,option%mycomm,ierr)
+  endif
+#endif
+
+end subroutine GridRemoveInactiveFromRegions
 
 ! ************************************************************************** !
 
