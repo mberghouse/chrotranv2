@@ -1709,6 +1709,7 @@ subroutine SubsurfaceSetupRealization(simulation)
   use EOS_module
   use Dataset_module
   use Patch_module
+  use Grid_module
   use EOS_module !to be removed as already present above
 
   implicit none
@@ -1779,6 +1780,9 @@ subroutine SubsurfaceSetupRealization(simulation)
   ! assignVolumesToMaterialAuxVars() must be called after
   ! RealizInitMaterialProperties() where the Material object is created
   call SubsurfAssignVolsToMatAuxVars(realization)
+  call GridRemoveInactiveFromRegions(realization%patch%grid, &
+                                     realization%patch%imat, &
+                                     realization%patch%region_list,option)
   call RealizationInitAllCouplerAuxVars(realization)
   if (option%ntrandof > 0) then
     call PrintMsg(option,"  Setting up TRAN Realization ")
@@ -1981,10 +1985,6 @@ subroutine SubsurfaceReadRequiredCards(simulation,input)
     case(STRUCTURED_GRID,UNSTRUCTURED_GRID)
       patch => PatchCreate()
       patch%grid => discretization%grid
-      if (.not.associated(realization%patch_list)) then
-        realization%patch_list => PatchCreateList()
-      endif
-      call PatchAddToList(patch,realization%patch_list)
       realization%patch => patch
   end select
   call InputPopBlock(input,option)
@@ -2444,7 +2444,7 @@ subroutine SubsurfaceReadInput(simulation,input)
         call RegionRead(region,input,option)
         ! we don't copy regions down to patches quite yet, since we
         ! don't want to duplicate IO in reading the regions
-        call RegionAddToList(region,realization%region_list)
+        call RegionAddToList(region,realization%patch%region_list)
         nullify(region)
 
 !....................

@@ -98,13 +98,6 @@ module Patch_module
     type(patch_type), pointer :: ptr           ! pointer to the patch_type
   end type patch_ptr_type
 
-  type, public :: patch_list_type
-    PetscInt :: num_patch_objects
-    type(patch_type), pointer :: first
-    type(patch_type), pointer :: last
-    type(patch_ptr_type), pointer :: array(:)
-  end type patch_list_type
-
   PetscInt, parameter, public :: INT_VAR = 0
   PetscInt, parameter, public :: REAL_VAR = 1
 
@@ -120,8 +113,7 @@ module Patch_module
     module procedure PatchUnsupportedVariable4
   end interface
 
-  public :: PatchCreate, PatchDestroy, PatchCreateList, PatchDestroyList, &
-            PatchAddToList, PatchConvertListToArray, PatchProcessCouplers, &
+  public :: PatchCreate, PatchDestroy, PatchProcessCouplers, &
             PatchUpdateAllCouplerAuxVars, PatchInitAllCouplerAuxVars, &
             PatchLocalizeRegions, PatchUpdateUniformVelocity, &
             PatchGetVariable, PatchGetVariableValueAtCell, &
@@ -220,87 +212,7 @@ end function PatchCreate
 
 ! ************************************************************************** !
 
-function PatchCreateList()
-  !
-  ! PatchListCreate: Creates a patch list
-  !
-  ! Author: Glenn Hammond
-  ! Date: 02/22/08
-  !
-
-  implicit none
-
-  type(patch_list_type), pointer :: PatchCreateList
-
-  type(patch_list_type), pointer :: patch_list
-
-  allocate(patch_list)
-  nullify(patch_list%first)
-  nullify(patch_list%last)
-  nullify(patch_list%array)
-  patch_list%num_patch_objects = 0
-
-  PatchCreateList => patch_list
-
-end function PatchCreateList
-
-! ************************************************************************** !
-
-subroutine PatchAddToList(new_patch,patch_list)
-  !
-  ! Adds a new patch to list
-  !
-  ! Author: Glenn Hammond
-  ! Date: 02/22/08
-  !
-
-  implicit none
-
-  type(patch_type), pointer :: new_patch
-  type(patch_list_type) :: patch_list
-
-  if (associated(new_patch)) then
-     patch_list%num_patch_objects = patch_list%num_patch_objects + 1
-     new_patch%id = patch_list%num_patch_objects
-     if (.not.associated(patch_list%first)) patch_list%first => new_patch
-     if (associated(patch_list%last)) patch_list%last%next => new_patch
-     patch_list%last => new_patch
-  end if
-end subroutine PatchAddToList
-
-! ************************************************************************** !
-
-subroutine PatchConvertListToArray(patch_list)
-  !
-  ! Creates an array of pointers to the
-  ! patchs in the patch list
-  !
-  ! Author: Glenn Hammond
-  ! Date: 02/22/08
-  !
-
-  implicit none
-
-  type(patch_list_type) :: patch_list
-
-  PetscInt :: count
-  type(patch_type), pointer :: cur_patch
-
-
-  allocate(patch_list%array(patch_list%num_patch_objects))
-
-  cur_patch => patch_list%first
-  do
-    if (.not.associated(cur_patch)) exit
-    patch_list%array(cur_patch%id)%ptr => cur_patch
-    cur_patch => cur_patch%next
-  enddo
-
-end subroutine PatchConvertListToArray
-
-! ************************************************************************** !
-
-subroutine PatchLocalizeRegions(patch,regions,option)
+subroutine PatchLocalizeRegions(patch,option)
   !
   ! Localizes regions within each patch
   !
@@ -315,19 +227,7 @@ subroutine PatchLocalizeRegions(patch,regions,option)
   implicit none
 
   type(patch_type) :: patch
-  type(region_list_type) :: regions
   type(option_type) :: option
-
-  type(region_type), pointer :: cur_region
-  type(region_type), pointer :: patch_region
-
-  cur_region => regions%first
-  do
-    if (.not.associated(cur_region)) exit
-    patch_region => RegionCreate(cur_region)
-    call RegionAddToList(patch_region,patch%region_list)
-    cur_region => cur_region%next
-  enddo
 
   !geh: All grids must be localized through GridLocalizeRegions.  Patch
   !     should not differentiate between structured/unstructured, etc.
@@ -9402,44 +9302,6 @@ subroutine PatchUnsupportedVariable4(ivar,option)
   call PatchUnsupportedVariable('','',ivar,option)
 
 end subroutine PatchUnsupportedVariable4
-
-! ************************************************************************** !
-
-subroutine PatchDestroyList(patch_list)
-  !
-  ! Deallocates a patch list and array of patches
-  !
-  ! Author: Glenn Hammond
-  ! Date: 10/15/07
-  !
-
-  implicit none
-
-  type(patch_list_type), pointer :: patch_list
-
-  type(patch_type), pointer :: cur_patch, prev_patch
-
-  if (.not.associated(patch_list)) return
-
-  if (associated(patch_list%array)) deallocate(patch_list%array)
-  nullify(patch_list%array)
-
-  cur_patch => patch_list%first
-  do
-    if (.not.associated(cur_patch)) exit
-    prev_patch => cur_patch
-    cur_patch => cur_patch%next
-    call PatchDestroy(prev_patch)
-  enddo
-
-  nullify(patch_list%first)
-  nullify(patch_list%last)
-  patch_list%num_patch_objects = 0
-
-  deallocate(patch_list)
-  nullify(patch_list)
-
-end subroutine PatchDestroyList
 
 ! ************************************************************************** !
 

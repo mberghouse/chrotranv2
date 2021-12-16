@@ -27,7 +27,6 @@ module Realization_Base_class
     PetscInt :: id
     type(discretization_type), pointer :: discretization
     class(communicator_type), pointer :: comm1
-    type(patch_list_type), pointer :: patch_list
     type(patch_type), pointer :: patch
 
     type(option_type), pointer :: option
@@ -77,8 +76,6 @@ subroutine RealizationBaseInit(realization_base,option)
   realization_base%field => FieldCreate()
   realization_base%debug => DebugCreate()
   nullify(realization_base%output_option)
-
-  realization_base%patch_list => PatchCreateList()
 
   nullify(realization_base%reaction_base)
 
@@ -272,7 +269,6 @@ subroutine RealizationBaseStrip(this)
   endif
   nullify(this%comm1)
   
-  call PatchDestroyList(this%patch_list)
   nullify(this%patch)
 
   call DebugDestroy(this%debug)

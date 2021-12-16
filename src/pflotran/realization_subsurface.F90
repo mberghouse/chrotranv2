@@ -29,7 +29,6 @@ private
 
   type, public, extends(realization_base_type) :: realization_subsurface_type
 
-    type(region_list_type), pointer :: region_list
     type(condition_list_type), pointer :: flow_conditions
     type(tran_condition_list_type), pointer :: transport_conditions
     type(tran_constraint_list_type), pointer :: transport_constraints
@@ -142,9 +141,6 @@ function RealizationCreate2(option)
 
   allocate(realization)
   call RealizationBaseInit(realization,option)
-
-  allocate(realization%region_list)
-  call RegionInitList(realization%region_list)
 
   allocate(realization%flow_conditions)
   call FlowConditionInitList(realization%flow_conditions)
@@ -510,7 +506,7 @@ subroutine RealizationLocalizeRegions(realization)
   option => realization%option
 
   ! check to ensure that region names are not duplicated
-  cur_region => realization%region_list%first
+  cur_region => realization%patch%region_list%first
   do
     if (.not.associated(cur_region)) exit
     cur_region2 => cur_region%next
@@ -525,11 +521,7 @@ subroutine RealizationLocalizeRegions(realization)
     cur_region => cur_region%next
   enddo
 
-  call PatchLocalizeRegions(realization%patch,realization%region_list, &
-                            realization%option)
-  ! destroy realization's copy of region list as it can be confused with the
-  ! localized patch regions later in teh simulation.
-  call RegionDestroyList(realization%region_list)
+  call PatchLocalizeRegions(realization%patch,realization%option)
 
   ! compute regional connections for inline surface flow
   if (option%flow%inline_surface_flow) then
@@ -1413,15 +1405,8 @@ subroutine RealizationInitConstraints(realization)
 
   class(realization_subsurface_type) :: realization
 
-  type(patch_type), pointer :: cur_patch
-
-  cur_patch => realization%patch_list%first
-  do
-    if (.not.associated(cur_patch)) exit
-    call PatchInitConstraints(cur_patch,realization%reaction_base, &
-                              realization%option)
-    cur_patch => cur_patch%next
-  enddo
+  call PatchInitConstraints(realization%patch,realization%reaction_base, &
+                            realization%option)
 
 end subroutine RealizationInitConstraints
 
@@ -1442,42 +1427,36 @@ subroutine RealizationPrintCouplers(realization)
 
   class(realization_subsurface_type) :: realization
 
-  type(patch_type), pointer :: cur_patch
   type(coupler_type), pointer :: cur_coupler
   type(option_type), pointer :: option
   class(reaction_rt_type), pointer :: reaction
+  type(patch_type), pointer :: patch
 
   option => realization%option
   reaction => realization%reaction
+  patch => realization%patch
 
   if (.not.OptionPrintToFile(option)) return
 
-  cur_patch => realization%patch_list%first
+  cur_coupler => patch%initial_condition_list%first
   do
-    if (.not.associated(cur_patch)) exit
+    if (.not.associated(cur_coupler)) exit
+    call RealizationPrintCoupler(cur_coupler,reaction,option)
+    cur_coupler => cur_coupler%next
+  enddo
 
-    cur_coupler => cur_patch%initial_condition_list%first
-    do
-      if (.not.associated(cur_coupler)) exit
-      call RealizationPrintCoupler(cur_coupler,reaction,option)
-      cur_coupler => cur_coupler%next
-    enddo
+  cur_coupler => patch%boundary_condition_list%first
+  do
+    if (.not.associated(cur_coupler)) exit
+    call RealizationPrintCoupler(cur_coupler,reaction,option)
+    cur_coupler => cur_coupler%next
+  enddo
 
-    cur_coupler => cur_patch%boundary_condition_list%first
-    do
-      if (.not.associated(cur_coupler)) exit
-      call RealizationPrintCoupler(cur_coupler,reaction,option)
-      cur_coupler => cur_coupler%next
-    enddo
-
-    cur_coupler => cur_patch%source_sink_list%first
-    do
-      if (.not.associated(cur_coupler)) exit
-      call RealizationPrintCoupler(cur_coupler,reaction,option)
-      cur_coupler => cur_coupler%next
-    enddo
-
-    cur_patch => cur_patch%next
+  cur_coupler => patch%source_sink_list%first
+  do
+    if (.not.associated(cur_coupler)) exit
+    call RealizationPrintCoupler(cur_coupler,reaction,option)
+    cur_coupler => cur_coupler%next
   enddo
 
 end subroutine RealizationPrintCouplers
@@ -2937,7 +2916,6 @@ subroutine RealizationStrip(this)
   class(realization_subsurface_type) :: this
 
   call RealizationBaseStrip(this)
-  call RegionDestroyList(this%region_list)
 
   call FlowConditionDestroyList(this%flow_conditions)
   call TranConditionDestroyList(this%transport_conditions)
