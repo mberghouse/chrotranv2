@@ -60,7 +60,6 @@ private
 
   public :: RealizationCreate, &
             RealizationStrip, &
-            RealizationProcessCouplers, &
             RealizationInitAllCouplerAuxVars, &
             RealizationProcessConditions, &
             RealizationProcessDatasets, &
@@ -628,29 +627,6 @@ subroutine RealizationAddStrata(realization,strata)
   call StrataDestroy(strata)
 
 end subroutine RealizationAddStrata
-
-
-! ************************************************************************** !
-
-subroutine RealizationProcessCouplers(realization)
-  !
-  ! Sets connectivity and pointers for couplers
-  !
-  ! Author: Glenn Hammond
-  ! Date: 02/22/08
-  !
-
-  use Option_module
-
-  implicit none
-
-  class(realization_subsurface_type) :: realization
-
-  call PatchProcessCouplers(realization%patch,realization%flow_conditions, &
-                            realization%transport_conditions, &
-                            realization%geophysics_conditions,realization%option)
-
-end subroutine RealizationProcessCouplers
 
 ! ************************************************************************** !
 

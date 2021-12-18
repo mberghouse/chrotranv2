@@ -129,6 +129,7 @@ subroutine InitCommonVerifyCoupler(realization,coupler_list)
   use Grid_module
   use Output_module
   use Output_Tecplot_module, only : OutputVectorTecplot
+  use Output_HDF5_module, only : OutputVectorHDF5
   use Patch_module
 
   implicit none
@@ -193,7 +194,9 @@ subroutine InitCommonVerifyCoupler(realization,coupler_list)
     dataset_name = dataset_name(1:28)
     filename = trim(dataset_name) // '.tec'
     call OutputVectorTecplot(filename,dataset_name,realization,global_vec)
-
+    filename = trim(dataset_name) // '.h5'
+    call OutputVectorHDF5(realization,filename,dataset_name,global_vec, &
+                          ZERO_INTEGER)
     coupler => coupler%next
   enddo
 

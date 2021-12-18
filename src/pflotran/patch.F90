@@ -113,7 +113,8 @@ module Patch_module
     module procedure PatchUnsupportedVariable4
   end interface
 
-  public :: PatchCreate, PatchDestroy, PatchProcessCouplers, &
+  public :: PatchCreate, PatchDestroy, &
+            PatchProcessStrataCouplers, PatchProcessRemainingCouplers, &
             PatchUpdateAllCouplerAuxVars, PatchInitAllCouplerAuxVars, &
             PatchLocalizeRegions, PatchUpdateUniformVelocity, &
             PatchGetVariable, PatchGetVariableValueAtCell, &
@@ -126,7 +127,9 @@ module Patch_module
             PatchGetWaterMassInRegion, &
             PatchGetCompMassInRegionAssign, &
             PatchUpdateCouplerSaturation, &
-            PatchSetupUpwindDirection
+            PatchSetupUpwindDirection, &
+            PatchCleanRegions, &
+            PatchVerifyRegions
 
 contains
 
@@ -237,11 +240,11 @@ end subroutine PatchLocalizeRegions
 
 ! ************************************************************************** !
 
-subroutine PatchProcessCouplers(patch,flow_conditions,transport_conditions, &
-                                geophysics_conditions, option)
-
+subroutine PatchProcessRemainingCouplers(patch,flow_conditions, &
+                                         transport_conditions, &
+                                         geophysics_conditions, option)
   !
-  ! Assigns conditions and regions to couplers
+  ! Assigns conditions and regions to couplers. Allocates flux array
   !
   ! Author: Glenn Hammond
   ! Date: 02/22/08
@@ -263,7 +266,6 @@ subroutine PatchProcessCouplers(patch,flow_conditions,transport_conditions, &
 
   type(coupler_type), pointer :: coupler
   type(coupler_list_type), pointer :: coupler_list
-  type(strata_type), pointer :: strata
   type(observation_type), pointer :: observation, next_observation
   type(integral_flux_type), pointer :: integral_flux
 
@@ -494,42 +496,6 @@ subroutine PatchProcessCouplers(patch,flow_conditions,transport_conditions, &
     coupler => coupler%next
   enddo
 
-!----------------------------
-! AUX
-
-  ! strata
-  ! connect pointers from strata to regions
-  strata => patch%strata_list%first
-  do
-    if (.not.associated(strata)) exit
-    ! pointer to region
-    if (len_trim(strata%region_name) > 0) then
-      strata%region => RegionGetPtrFromList(strata%region_name, &
-                                                  patch%region_list)
-      if (.not.associated(strata%region)) then
-        option%io_buffer = 'Region "' // trim(strata%region_name) // &
-                 '" in strata not found in region list'
-        call PrintErrMsg(option)
-      endif
-      if (strata%active) then
-        ! pointer to material
-        strata%material_property => &
-          MaterialPropGetPtrFromArray(strata%material_property_name, &
-                                      patch%material_property_array)
-        if (.not.associated(strata%material_property)) then
-          option%io_buffer = 'Material "' // &
-                            trim(strata%material_property_name) // &
-                            '" not found in material list'
-          call PrintErrMsg(option)
-        endif
-      endif
-    else
-      nullify(strata%region)
-      nullify(strata%material_property)
-    endif
-    strata => strata%next
-  enddo
-
   ! connectivity between initial conditions, boundary conditions,
   ! srcs/sinks, etc and grid
   call CouplerListComputeConnections(patch%grid,option, &
@@ -675,7 +641,59 @@ subroutine PatchProcessCouplers(patch,flow_conditions,transport_conditions, &
     endif
   endif
 
-end subroutine PatchProcessCouplers
+end subroutine PatchProcessRemainingCouplers
+
+! ************************************************************************** !
+
+subroutine PatchProcessStrataCouplers(patch,option)
+  !
+  ! Assigns regions and materials to strata
+  !
+  ! Author: Glenn Hammond
+  ! Date: 12/17/21
+  !
+  use Option_module
+
+  implicit none
+
+  type(patch_type) :: patch
+  type(option_type) :: option
+
+  type(strata_type), pointer :: strata
+
+  ! connect pointers from strata to regions
+  strata => patch%strata_list%first
+  do
+    if (.not.associated(strata)) exit
+    ! pointer to region
+    if (len_trim(strata%region_name) > 0) then
+      strata%region => RegionGetPtrFromList(strata%region_name, &
+                                                  patch%region_list)
+      if (.not.associated(strata%region)) then
+        option%io_buffer = 'Region "' // trim(strata%region_name) // &
+                 '" in strata not found in region list'
+        call PrintErrMsg(option)
+      endif
+      if (strata%active) then
+        ! pointer to material
+        strata%material_property => &
+          MaterialPropGetPtrFromArray(strata%material_property_name, &
+                                      patch%material_property_array)
+        if (.not.associated(strata%material_property)) then
+          option%io_buffer = 'Material "' // &
+                            trim(strata%material_property_name) // &
+                            '" not found in material list'
+          call PrintErrMsg(option)
+        endif
+      endif
+    else
+      nullify(strata%region)
+      nullify(strata%material_property)
+    endif
+    strata => strata%next
+  enddo
+
+end subroutine PatchProcessStrataCouplers
 
 ! ************************************************************************** !
 
@@ -6070,7 +6088,7 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
       do local_id=1,grid%nlmax
         vec_ptr(local_id) = &
           patch%aux%ERT%auxvars(grid%nL2G(local_id))%jacobian(isubvar)
-      enddo      
+      enddo
     case(PROCESS_ID)
       do local_id=1,grid%nlmax
         vec_ptr(local_id) = option%myrank
@@ -7825,7 +7843,7 @@ subroutine PatchSetVariable(patch,field,option,vec,vec_format,ivar,isubvar)
       do local_id=1,grid%nlmax
         patch%aux%ERT%auxvars(grid%nL2G(local_id))%jacobian(isubvar) = &
           vec_ptr(local_id)
-      enddo      
+      enddo
     case(PROCESS_ID)
       call PrintErrMsg(option, &
                        'Cannot set PROCESS_ID through PatchSetVariable()')
@@ -9302,6 +9320,107 @@ subroutine PatchUnsupportedVariable4(ivar,option)
   call PatchUnsupportedVariable('','',ivar,option)
 
 end subroutine PatchUnsupportedVariable4
+
+! ************************************************************************** !
+
+subroutine PatchCleanRegions(patch,option)
+  !
+  ! Removes inactive cells from regions
+  !
+  ! Author: Glenn Hammond
+  ! Date: 12/17/21
+  !
+  use Option_module
+
+  implicit none
+
+  type(patch_type) :: patch
+  type(option_type) :: option
+
+  call GridCleanRegions(patch%grid,patch%imat,patch%region_list,option)
+
+end subroutine PatchCleanRegions
+
+! ************************************************************************** !
+
+subroutine PatchVerifyRegions(patch,option)
+  !
+  ! Ensures that no inactive cells are in a localized region
+  ! Ensure that regions have at least one grid cell in them
+  !
+  ! Author: Glenn Hammond
+  ! Date: 12/17/21
+  !
+  use Option_module
+  use String_module
+  use Region_module
+  use Grid_module
+
+  implicit none
+
+  type(patch_type) :: patch
+  type(option_type) :: option
+
+  type(region_type), pointer :: region
+  type(grid_type), pointer :: grid
+  PetscInt :: icell
+  PetscInt :: ghosted_id
+  PetscBool :: error_flag
+  PetscInt :: num_cells_global
+  PetscInt :: num_cells_local
+  PetscErrorCode :: ierr
+
+  grid => patch%grid
+
+  error_flag = PETSC_FALSE
+  region => patch%region_list%first
+  do
+    if (.not.associated(region)) exit
+    num_cells_local = 0
+    if (associated(region%cell_ids)) then
+      ! check if the number of cells matches
+      num_cells_local = size(region%cell_ids)
+      if (num_cells_local /= region%num_cells) then
+        error_flag = PETSC_TRUE
+        option%io_buffer = 'Mismatch in number of cells in region "' // &
+          trim(StringWrite(region%name)) // '": ' // &
+          trim(StringWrite(num_cells_local)) // ' ' // &
+          trim(StringWrite(region%num_cells))
+        call PrintErrMsgNoStopByRank(option)
+      endif
+      if (region%remove_inactive_cells) then
+        ! check for inactive cells
+        do icell = 1, size(region%cell_ids)
+          ghosted_id = grid%nL2G(region%cell_ids(icell))
+          if (patch%imat(ghosted_id) <= 0) then
+            error_flag = PETSC_TRUE
+            option%io_buffer = 'Inactive cell (' // &
+              trim(StringWrite(grid%nG2A(ghosted_id))) // ') in region "' // &
+              trim(StringWrite(region%name)) // '".'
+            call PrintErrMsgNoStopByRank(option)
+          endif
+        enddo
+      endif
+    endif
+    call MPI_Allreduce(num_cells_local,num_cells_global,ONE_INTEGER_MPI, &
+                       MPI_INTEGER,MPI_SUM,option%mycomm,ierr)
+    if (num_cells_global == 0) then
+      option%io_buffer = 'ERROR: No cells assigned to region "' // &
+        trim(StringWrite(region%name)) // '".'
+      ! do not stop, the ErrMsg below will stop
+      call PrintMsg(option)
+    endif
+    region => region%next
+  enddo
+
+  call MPI_Allreduce(MPI_IN_PLACE,error_flag,ONE_INTEGER_MPI,MPI_LOGICAL, &
+                     MPI_LOR,option%mycomm,ierr)
+  if (error_flag) then
+    option%io_buffer = 'Errors found in regions. See messages above.'
+    call PrintErrMsg(option)
+  endif
+
+end subroutine PatchVerifyRegions
 
 ! ************************************************************************** !
 

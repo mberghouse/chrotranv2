@@ -1717,10 +1717,12 @@ subroutine SubsurfaceSetupRealization(simulation)
   class(simulation_subsurface_type) :: simulation
 
   class(realization_subsurface_type), pointer :: realization
+  type(patch_type), pointer :: patch
   type(option_type), pointer :: option
   PetscErrorCode :: ierr
 
   realization => simulation%realization
+  patch => realization%patch
   option => realization%option
 
   call PetscLogEventBegin(logging%event_setup,ierr);CHKERRQ(ierr)
@@ -1766,23 +1768,29 @@ subroutine SubsurfaceSetupRealization(simulation)
   call RealizationPassPtrsToPatches(realization)
   call RealizationProcessDatasets(realization)
   if (realization%output_option%mass_balance_region_flag) then
-    call PatchGetCompMassInRegionAssign(realization%patch%region_list, &
+    call PatchGetCompMassInRegionAssign(patch%region_list, &
          realization%output_option%mass_balance_region_list,option)
   endif
-  ! link conditions with regions through couplers and generate connectivity
+  ! must process material properties before coupling to strata
   call RealProcessMatPropAndSatFunc(realization)
-  ! must process conditions before couplers in order to determine dataset types
-  call RealizationProcessConditions(realization)
-  call RealizationProcessCouplers(realization)
-  call SubsurfSandboxesSetup(realization)
-  call RealProcessFluidProperties(realization)
+  call PatchProcessStrataCouplers(patch,option)
   call SubsurfInitMaterialProperties(realization)
   ! assignVolumesToMaterialAuxVars() must be called after
   ! RealizInitMaterialProperties() where the Material object is created
   call SubsurfAssignVolsToMatAuxVars(realization)
-  call GridRemoveInactiveFromRegions(realization%patch%grid, &
-                                     realization%patch%imat, &
-                                     realization%patch%region_list,option)
+  ! remove inactive cells, etc. from regions
+  call PatchCleanRegions(patch,option)
+  ! link conditions with regions through couplers and generate connectivity.
+  ! must process conditions before couplers in order to determine dataset types
+  call RealizationProcessConditions(realization)
+  call PatchProcessRemainingCouplers(patch,realization%flow_conditions, &
+                                     realization%transport_conditions, &
+                                     realization%geophysics_conditions, &
+                                     option)
+  call SubsurfSandboxesSetup(realization)
+  call RealProcessFluidProperties(realization)
+  ! ensure that regions are correctly specified
+  call PatchVerifyRegions(realization%patch,option)
   call RealizationInitAllCouplerAuxVars(realization)
   if (option%ntrandof > 0) then
     call PrintMsg(option,"  Setting up TRAN Realization ")

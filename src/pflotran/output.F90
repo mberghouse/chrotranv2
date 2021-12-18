@@ -1767,6 +1767,7 @@ subroutine OutputPrintCouplers(realization_base,istep)
   type(grid_type), pointer :: grid
   character(len=MAXWORDLENGTH) :: word
   character(len=MAXSTRINGLENGTH) :: string, coupler_string
+  character(len=MAXSTRINGLENGTH) :: filename
   type(connection_set_type), pointer :: cur_connection_set
   PetscReal, pointer :: vec_ptr(:)
   PetscInt :: local_id, iconn, iaux
@@ -1782,8 +1783,8 @@ subroutine OutputPrintCouplers(realization_base,istep)
   grid => patch%grid
 
   if (len_trim(flow_debug%coupler_string) == 0) then
-    option%io_buffer = &
-      'Coupler debugging requested, but no string of coupler names was included.'
+    option%io_buffer = 'Coupler debugging requested, but no string &
+      &of coupler names was included.'
     call PrintErrMsg(option)
   endif
 
@@ -1832,26 +1833,28 @@ subroutine OutputPrintCouplers(realization_base,istep)
         cur_connection_set => coupler%connection_set
         do iconn = 1, cur_connection_set%num_connections
           local_id = cur_connection_set%id_dn(iconn)
-          if (patch%imat(grid%nL2G(local_id)) <= 0) cycle
           vec_ptr(local_id) = coupler%flow_aux_real_var(iauxvars(iaux),iconn)
         enddo
       endif
       call VecRestoreArrayF90(field%work,vec_ptr,ierr);CHKERRQ(ierr)
-    enddo
 
-    if (istep > 0) then
-      write(string,*) istep
-      string = adjustl(string)
-      string = trim(word) // '_' // trim(auxvar_names(iaux)) // '_' // &
-               trim(string)
-    else
-      string = trim(word) // '_' // trim(auxvar_names(iaux))
-    endif
-    if (len_trim(option%group_prefix) > 1) then
-      string = trim(string) // trim(option%group_prefix)
-    endif
-    string = trim(string) // '.tec'
-    call OutputVectorTecplot(string,word,realization_base,field%work)
+      if (istep > 0) then
+        write(string,*) istep
+        string = adjustl(string)
+        string = trim(word) // '_' // trim(auxvar_names(iaux)) // '_' // &
+                 trim(string)
+      else
+        string = trim(word) // '_' // trim(auxvar_names(iaux))
+      endif
+      if (len_trim(option%group_prefix) > 1) then
+        string = trim(string) // trim(option%group_prefix)
+      endif
+      filename = trim(string) // '.tec'
+      call OutputVectorTecplot(filename,word,realization_base,field%work)
+      filename = trim(string) // '.h5'
+      call OutputVectorHDF5(realization_base,filename,word,field%work, &
+                            ZERO_INTEGER)
+    enddo
   enddo
 
   deallocate(iauxvars)
