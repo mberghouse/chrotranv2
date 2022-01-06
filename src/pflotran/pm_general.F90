@@ -235,7 +235,7 @@ subroutine PMGeneralSetFlowMode(pm,option)
   elseif (option%nflowdof == 4) then
     rel_update_inf_tol = &
       reshape([pres_rel_inf_tol,xmol_rel_inf_tol,temp_rel_inf_tol,xmol_rel_inf_tol,&
-               pres_rel_inf_tol,pres_rel_inf_tol,temp_rel_inf_tol,xmol_rel_inf_tol,&
+               pres_rel_inf_tol,pres_rel_inf_tol,temp_rel_inf_tol,999.d0,&
                pres_rel_inf_tol,sat_rel_inf_tol,temp_rel_inf_tol,xmol_rel_inf_tol,&
                pres_rel_inf_tol,999.d0,temp_rel_inf_tol,999.d0,&
                pres_rel_inf_tol,xmol_rel_inf_tol,temp_rel_inf_tol,sat_rel_inf_tol,&
@@ -245,7 +245,7 @@ subroutine PMGeneralSetFlowMode(pm,option)
                1.d0 ! change to 0.d0 to zero tolerances
     abs_update_inf_tol = &
       reshape([pres_abs_inf_tol,xmol_abs_inf_tol,temp_abs_inf_tol,xmol_abs_inf_tol,&
-               pres_abs_inf_tol,pres_abs_inf_tol,temp_abs_inf_tol,xmol_abs_inf_tol,&
+               pres_abs_inf_tol,pres_abs_inf_tol,temp_abs_inf_tol,999.d0,&
                pres_abs_inf_tol,sat_abs_inf_tol,temp_abs_inf_tol,xmol_abs_inf_tol,&
                pres_abs_inf_tol,999.d0,temp_abs_inf_tol,999.d0,&
                pres_abs_inf_tol,xmol_abs_inf_tol,temp_abs_inf_tol,sat_abs_inf_tol,&

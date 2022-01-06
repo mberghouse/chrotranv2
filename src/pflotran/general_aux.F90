@@ -773,6 +773,7 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
         gen_auxvar%pres(apid) = gen_auxvar%xmol(acid,gid) * &
                                 gen_auxvar%pres(gid)
       endif
+      !x(GENERAL_LIQUID_STATE_S_MOLE_DOF) = 0.D0
 
       gen_auxvar%temp = x(GENERAL_ENERGY_DOF)
 
@@ -808,7 +809,7 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
        
       ! we have to have a liquid pressure to counter a neighboring 
       ! liquid pressure.  Set to gas pressure.
-!      gen_auxvar%pres(lid) = gen_auxvar%pres(gid)
+      gen_auxvar%pres(lid) = gen_auxvar%pres(gid)
 !      gen_auxvar%pres(cpid) = 0.d0
 
       call characteristic_curves%saturation_function% &

@@ -1983,6 +1983,9 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                 call PrintErrMsg(option)
             end select
           endif
+          if (option%nflowdof == 4) then
+            dof4 = PETSC_TRUE
+          endif
       ! ---------------------------------------------------------------------- !
         case(LP_STATE)
           ! liquid pressure; 1st dof ------------------------ !
