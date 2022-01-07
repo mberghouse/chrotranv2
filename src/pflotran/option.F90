@@ -8,6 +8,7 @@ module Option_module
   use Option_Flow_module
   use Option_Transport_module
   use Option_Geophysics_module
+  use Option_Inversion_module
 
   implicit none
 
@@ -19,6 +20,7 @@ module Option_module
     type(transport_option_type), pointer :: transport
     type(geophysics_option_type), pointer :: geophysics
 
+    type(inversion_option_type), pointer :: inversion
     type(comm_type), pointer :: comm
     class(driver_type), pointer :: driver
 
@@ -209,6 +211,7 @@ module Option_module
 
   public :: OptionCreate, &
             OptionSetDriver, &
+            OptionSetInversionOption, &
             OptionUpdateComm, &
             OptionCheckCommandLine, &
             PrintErrMsg, &
@@ -257,6 +260,7 @@ function OptionCreate()
   option%flow => OptionFlowCreate()
   option%transport => OptionTransportCreate()
   option%geophysics => OptionGeophysicsCreate()
+  nullify(option%inversion)
   nullify(option%driver)
   nullify(option%comm)
 
@@ -302,6 +306,19 @@ subroutine OptionUpdateComm(option)
   option%myrank          = option%comm%myrank
 
 end subroutine OptionUpdateComm
+
+! ************************************************************************** !
+
+subroutine OptionSetInversionOption(option,inversion_option)
+
+  implicit none
+
+  type(option_type) :: option
+  type(inversion_option_type), pointer :: inversion_option
+
+  option%inversion => inversion_option
+
+end subroutine OptionSetInversionOption
 
 ! ************************************************************************** !
 
@@ -1329,6 +1346,7 @@ subroutine OptionDestroy(option)
   call OptionTransportDestroy(option%transport)
   call OptionGeophysicsDestroy(option%geophysics)
   ! never destroy the driver as it was created elsewhere
+  nullify(option%inversion)
   nullify(option%driver)
   nullify(option%comm)
 

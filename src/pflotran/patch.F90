@@ -131,7 +131,6 @@ module Patch_module
             PatchGetVarNameFromKeyword, &
             PatchCalculateCFL1Timestep, &
             PatchGetCellCenteredVelocities, &
-            PatchGetCompMassInRegion, &
             PatchGetWaterMassInRegion, &
             PatchGetCompMassInRegionAssign, &
             PatchUpdateCouplerSaturation, &
@@ -4421,6 +4420,7 @@ subroutine PatchScaleSourceSink(patch,source_sink,iscale_type,option)
   PetscInt :: icount, x_count, y_count, z_count
   PetscInt, parameter :: x_width = 1, y_width = 1, z_width = 0
   PetscInt :: ghosted_neighbors(27)
+  PetscBool :: inactive_found
   class(material_auxvar_type), pointer :: material_auxvars(:)
 
   field => patch%field
@@ -4432,6 +4432,7 @@ subroutine PatchScaleSourceSink(patch,source_sink,iscale_type,option)
   call VecZeroEntries(field%work,ierr);CHKERRQ(ierr)
   call VecGetArrayF90(field%work,vec_ptr,ierr);CHKERRQ(ierr)
 
+  inactive_found = PETSC_FALSE
   cur_connection_set => source_sink%connection_set
 
   select case(iscale_type)
@@ -4439,6 +4440,7 @@ subroutine PatchScaleSourceSink(patch,source_sink,iscale_type,option)
       do iconn = 1, cur_connection_set%num_connections
         local_id = cur_connection_set%id_dn(iconn)
         ghosted_id = grid%nL2G(local_id)
+        if (patch%imat(ghosted_id) <= 0) inactive_found = PETSC_TRUE
         vec_ptr(local_id) = vec_ptr(local_id) + &
           material_auxvars(ghosted_id)%volume
       enddo
@@ -4446,6 +4448,7 @@ subroutine PatchScaleSourceSink(patch,source_sink,iscale_type,option)
       do iconn = 1, cur_connection_set%num_connections
         local_id = cur_connection_set%id_dn(iconn)
         ghosted_id = grid%nL2G(local_id)
+        if (patch%imat(ghosted_id) <= 0) inactive_found = PETSC_TRUE
         vec_ptr(local_id) = vec_ptr(local_id) + &
           ! this function protects from error in gfortran compiler when indexing
           ! the permeability array
@@ -4457,6 +4460,7 @@ subroutine PatchScaleSourceSink(patch,source_sink,iscale_type,option)
       do iconn = 1, cur_connection_set%num_connections
         local_id = cur_connection_set%id_dn(iconn)
         ghosted_id = grid%nL2G(local_id)
+        if (patch%imat(ghosted_id) <= 0) inactive_found = PETSC_TRUE
         !geh: kludge for 64-bit integers.
         call GridGetGhostedNeighbors(grid,ghosted_id,DMDA_STENCIL_STAR, &
                                     x_width,y_width,z_width, &
@@ -4477,6 +4481,7 @@ subroutine PatchScaleSourceSink(patch,source_sink,iscale_type,option)
         do while (icount < x_count)
           icount = icount + 1
           neighbor_ghosted_id = ghosted_neighbors(icount)
+          if (patch%imat(neighbor_ghosted_id) <= 0) inactive_found = PETSC_TRUE
           sum = sum + &
                 MaterialAuxVarGetValue(material_auxvars(neighbor_ghosted_id), &
                                        PERMEABILITY_X) * &
@@ -4487,6 +4492,7 @@ subroutine PatchScaleSourceSink(patch,source_sink,iscale_type,option)
         do while (icount < x_count + y_count)
           icount = icount + 1
           neighbor_ghosted_id = ghosted_neighbors(icount)
+          if (patch%imat(neighbor_ghosted_id) <= 0) inactive_found = PETSC_TRUE
           sum = sum + &
                 MaterialAuxVarGetValue(material_auxvars(neighbor_ghosted_id), &
                                        PERMEABILITY_Y) * &
@@ -4497,6 +4503,7 @@ subroutine PatchScaleSourceSink(patch,source_sink,iscale_type,option)
         do while (icount < x_count + y_count + z_count)
           icount = icount + 1
           neighbor_ghosted_id = ghosted_neighbors(icount)
+          if (patch%imat(neighbor_ghosted_id) <= 0) inactive_found = PETSC_TRUE
           sum = sum + &
                 MaterialAuxVarGetValue(material_auxvars(neighbor_ghosted_id), &
                                        PERMEABILITY_Z) * &
@@ -4537,6 +4544,12 @@ subroutine PatchScaleSourceSink(patch,source_sink,iscale_type,option)
     end select
   enddo
   call VecRestoreArrayF90(field%work,vec_ptr,ierr);CHKERRQ(ierr)
+
+  if (inactive_found) then
+    option%io_buffer = 'Inactive cells found in source/sink "' // &
+      trim(source_sink%name) // '" coupler region cells or neighboring cells.'
+    call PrintErrMsgByRank(option)
+  endif
 
 end subroutine PatchScaleSourceSink
 
@@ -5072,6 +5085,7 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
   use Option_module
   use Field_module
 
+  use ERT_Aux_module
   use Mphase_Aux_module
   use TH_Aux_module
   use Richards_Aux_module
@@ -6520,11 +6534,23 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
         endif
       enddo
     case(ELECTRICAL_POTENTIAL)
+      call ERTAuxCheckElectrodeBounds(size(patch%aux%ERT%auxvars(1)% &
+                                      potential),isubvar,isubvar2,option)
       do local_id=1,grid%nlmax
         vec_ptr(local_id) = &
           patch%aux%ERT%auxvars(grid%nL2G(local_id))%potential(isubvar)
       enddo
+    case(ELECTRICAL_POTENTIAL_DIPOLE)
+      call ERTAuxCheckElectrodeBounds(size(patch%aux%ERT%auxvars(1)% &
+                                      potential),isubvar,isubvar2,option)
+      do local_id=1,grid%nlmax
+        vec_ptr(local_id) = &
+          patch%aux%ERT%auxvars(grid%nL2G(local_id))%potential(isubvar) - &
+          patch%aux%ERT%auxvars(grid%nL2G(local_id))%potential(isubvar2)
+      enddo
     case(ELECTRICAL_JACOBIAN)
+      call ERTAuxCheckElectrodeBounds(size(patch%aux%ERT%auxvars(1)% &
+                                      jacobian),isubvar,isubvar2,option)
       do local_id=1,grid%nlmax
         vec_ptr(local_id) = &
           patch%aux%ERT%auxvars(grid%nL2G(local_id))%jacobian(isubvar)
@@ -6598,6 +6624,7 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
   use Reaction_Mineral_Aux_module
   use Reaction_Surface_Complexation_Aux_module
   use Output_Aux_module
+  use ERT_Aux_module
   use Variables_module
   use General_Aux_module, only : general_fmw => fmw_comp, &
                                  GAS_STATE, LIQUID_STATE
@@ -7452,9 +7479,18 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
           value = 1.d0
         endif
       endif
+    case(ELECTRICAL_POTENTIAL_DIPOLE)
+      call ERTAuxCheckElectrodeBounds(size(patch%aux%ERT%auxvars(1)% &
+                                      potential),isubvar,isubvar2,option)
+      value = patch%aux%ERT%auxvars(ghosted_id)%potential(isubvar) - &
+              patch%aux%ERT%auxvars(ghosted_id)%potential(isubvar2)
     case(ELECTRICAL_POTENTIAL)
+      call ERTAuxCheckElectrodeBounds(size(patch%aux%ERT%auxvars(1)% &
+                                      potential),isubvar,isubvar2,option)
       value = patch%aux%ERT%auxvars(ghosted_id)%potential(isubvar)
     case(ELECTRICAL_JACOBIAN)
+      call ERTAuxCheckElectrodeBounds(size(patch%aux%ERT%auxvars(1)% &
+                                      jacobian),isubvar,isubvar2,option)
       value = patch%aux%ERT%auxvars(ghosted_id)%jacobian(isubvar)
     case(PROCESS_ID)
       value = grid%nG2A(ghosted_id)
@@ -9407,107 +9443,6 @@ subroutine PatchCouplerInputRecord(patch)
   enddo
 
 end subroutine PatchCouplerInputRecord
-
-! **************************************************************************** !
-
-subroutine PatchGetCompMassInRegion(cell_ids,num_cells,patch,option, &
-                                    global_total_mass)
-  !
-  ! Calculates the total mass (aqueous, sorbed, and precipitated) in a region
-  ! in units of kg. [modified to kg from mol by Heeho]
-  !
-  ! Author: Jenn Frederick, Heeho Park
-  ! Date: 04/25/2016
-  !
-  use Global_Aux_module
-  use Material_Aux_class
-  use Reaction_Aux_module
-  use Grid_module
-  use Option_module
-  use Reactive_Transport_Aux_module
-
-  implicit none
-
-  PetscInt, pointer :: cell_ids(:)
-  PetscInt :: num_cells
-  type(patch_type), pointer :: patch
-  type(option_type), pointer :: option
-  PetscReal :: global_total_mass  ! [mol]
-
-  type(global_auxvar_type), pointer :: global_auxvars(:)
-  class(material_auxvar_type), pointer :: material_auxvars(:)
-  type(reactive_transport_auxvar_type), pointer :: rt_auxvars(:)
-  class(reaction_rt_type), pointer :: reaction
-  PetscReal :: aq_species_mass    ! [mol]
-  PetscReal :: sorb_species_mass  ! [mol]
-  PetscReal :: ppt_species_mass   ! [mol]
-  PetscReal :: m3_water           ! [m^3-water]
-  PetscReal :: m3_bulk            ! [m^3-bulk]
-  PetscInt :: k, j, m
-  PetscInt :: local_id, ghosted_id
-  PetscErrorCode :: ierr
-  PetscReal :: local_total_mass
-
-  global_auxvars => patch%aux%Global%auxvars
-  material_auxvars => patch%aux%Material%auxvars
-  rt_auxvars => patch%aux%RT%auxvars
-  reaction => patch%reaction
-  local_total_mass = 0.d0
-  global_total_mass = 0.d0
-
-  ! Loop through all cells in the region:
-  do k = 1,num_cells
-    local_id = cell_ids(k)
-    ghosted_id = patch%grid%nL2G(local_id)
-    if (patch%imat(ghosted_id) <= 0) cycle
-    m3_water = material_auxvars(ghosted_id)%porosity * &         ! [-]
-               global_auxvars(ghosted_id)%sat(LIQUID_PHASE) * &  ! [water]
-               material_auxvars(ghosted_id)%volume               ! [m^3-bulk]
-    m3_bulk = material_auxvars(ghosted_id)%volume                ! [m^3-bulk]
-    ! Loop through aqueous and sorbed species:
-    do j = 1,reaction%ncomp
-      aq_species_mass = 0.d0
-      sorb_species_mass = 0.d0
-      ! aqueous species; units [mol/L-water]*[m^3-water]*[1000L/m^3-water]=[mol]
-      aq_species_mass = rt_auxvars(ghosted_id)%total(j,LIQUID_PHASE) * &
-                        m3_water * 1.0d3     
-      if (reaction%print_total_mass_kg) then
-        ! aqueous species; [mol] * [g/mol] * [kg/g] = [kg]
-        aq_species_mass = aq_species_mass * reaction%primary_spec_molar_wt(j) * 1.0d-3
-      endif
-      if (associated(rt_auxvars(ghosted_id)%total_sorb_eq)) then
-        ! sorbed species; units [mol/m^3-bulk]*[m^3-bulk]=[mol]
-        sorb_species_mass = rt_auxvars(ghosted_id)%total_sorb_eq(j) * m3_bulk
-        if (reaction%print_total_mass_kg) then
-          ! sorbed species; [mol] * [g/mol] * [kg/g] = [kg]
-          sorb_species_mass = sorb_species_mass * reaction%primary_spec_molar_wt(j) * 1.0d-3
-        endif
-      else
-        sorb_species_mass = 0.d0
-      endif
-      local_total_mass = local_total_mass + aq_species_mass + &
-                                            sorb_species_mass
-    enddo
-    ! Loop through precipitated species:
-    do m = 1,reaction%mineral%nkinmnrl
-      ppt_species_mass = 0.d0
-      ! precip. species; units [m^3-mnrl/m^3-bulk]*[m^3-bulk]/[m^3-mnrl/mol-mnrl]=[mol]
-      ppt_species_mass = rt_auxvars(ghosted_id)%mnrl_volfrac(m) * m3_bulk / &
-                         reaction%mineral%kinmnrl_molar_vol(m)
-      if (reaction%print_total_mass_kg) then
-        ! precip. species; [mol] * [g/mol] * [kg/g] = [kg]
-        ppt_species_mass = ppt_species_mass * reaction%mineral%kinmnrl_molar_wt(j) * &
-                           1.0d-3
-      endif
-      local_total_mass = local_total_mass + ppt_species_mass
-    enddo
-  enddo ! Cell loop
-
-  ! Sum the local_total_mass across all processes that own the region:
-  call MPI_Allreduce(local_total_mass,global_total_mass,ONE_INTEGER_MPI, &
-                     MPI_DOUBLE_PRECISION,MPI_SUM,option%mycomm,ierr)
-
-end subroutine PatchGetCompMassInRegion
 
 ! **************************************************************************** !
 
