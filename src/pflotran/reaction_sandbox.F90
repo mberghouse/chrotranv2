@@ -13,6 +13,8 @@ module Reaction_Sandbox_module
   use Reaction_Sandbox_BioHill_class
   use Reaction_Sand_FlexBioHill_class
   use Reaction_Sandbox_BioTH_class
+  use Reaction_Sandbox_Ncycle_class
+
 
   ! Add new reacton sandbox classes here.
   
@@ -175,6 +177,9 @@ subroutine RSandboxRead2(local_sandbox_list,input,option)
         new_sandbox => FlexBioHillCreate()
       case('BIOPARTICLE')
         new_sandbox => BioTH_Create()
+      case('NCYCLE')
+        new_sandbox => NcycleCreate()
+
       case default
         call InputKeywordUnrecognized(input,word, &
                                       'CHEMISTRY,REACTION_SANDBOX',option)
