@@ -165,6 +165,7 @@ subroutine PMAuxiliaryRead(input, option, this)
   character(len=MAXSTRINGLENGTH) :: error_string
   PetscInt :: i
   PetscReal :: tempreal
+  PetscBool :: flag
 
   error_string = 'SIMULATION,PROCESS_MODELS,AUXILIARY'
   call InputReadCard(input,option,word,PETSC_FALSE)
@@ -175,6 +176,7 @@ subroutine PMAuxiliaryRead(input, option, this)
   this%ctype = word
   select case(word)
     case('SALINITY')
+      flag = PETSC_TRUE
       option%flow%density_depends_on_salinity = PETSC_TRUE
       allocate(this%salinity)
       this%salinity%nspecies = 0
@@ -191,6 +193,8 @@ subroutine PMAuxiliaryRead(input, option, this)
         call InputErrorMsg(input,option,'keyword',error_string)
         call StringToUpper(word)
         select case(word)
+          case('OVERRIDE_SALINITY_ERROR_MSG')
+            flag = PETSC_FALSE
           case('SPECIES')
             i = i + 1
             if (i > 6) then
@@ -217,6 +221,11 @@ subroutine PMAuxiliaryRead(input, option, this)
       enddo
       call InputPopBlock(input,option)
       this%salinity%nspecies = i
+      if (flag) then
+        option%io_buffer = 'The SALINITY process model as a design flaw &
+          &and should not be used until it is fixed.'
+        call PrintErrMsg(option)
+      endif
     case default
       call InputKeywordUnrecognized(input,word,error_string,option)
   end select
