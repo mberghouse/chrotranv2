@@ -162,11 +162,4 @@ module Variables_module
   PetscInt, parameter, public :: SECONDARY_CONTINUUM_UPDATED_CONC = 131
   PetscInt, parameter, public :: SECONDARY_CONCENTRATION_GAS = 132
 
-<<<<<<< HEAD
-=======
-  PetscInt, parameter, public :: DARCY_VELOCITY          = 130
-
-  PetscInt, parameter, public :: DERIVATIVE              = 131
-
->>>>>>> refactored saturation observation to work in parallel
 end module Variables_module
