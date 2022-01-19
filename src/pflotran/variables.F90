@@ -157,9 +157,10 @@ module Variables_module
   PetscInt, parameter, public :: ELECTRICAL_JACOBIAN     = 128
   PetscInt, parameter, public :: ELECTRICAL_POTENTIAL_DIPOLE = 129
 
-  PetscInt, parameter, public :: EPSILON = 130
-  PetscInt, parameter, public :: SMECTITE = 140
+  PetscInt, parameter, public :: EPSILON                 = 130
+  PetscInt, parameter, public :: DERIVATIVE              = 131
+  PetscInt, parameter, public :: DARCY_VELOCITY          = 132
 
-  PetscInt, parameter, public :: DARCY_VELOCITY          = 141
+  PetscInt, parameter, public :: SMECTITE                = 140
 
 end module Variables_module
