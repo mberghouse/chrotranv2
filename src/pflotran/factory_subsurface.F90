@@ -821,12 +821,11 @@ end subroutine AddPMCAuxiliary
 
 subroutine AddPMCMaterialTransform(simulation,pm_material_transform,pmc_name,&
                                    realization,input,option)
-
   !
-  ! Adds a UFD decay PMC
+  ! Adds a material transform PMC
   !
-  ! Author: Gautam Bisht
-  ! Date: 06/05/18
+  ! Author: Alex Salazar III
+  ! Date: 01/19/2022
   !
 
   use PMC_Base_class
@@ -852,7 +851,7 @@ subroutine AddPMCMaterialTransform(simulation,pm_material_transform,pmc_name,&
 
   nullify(pmc_dummy)
 
-  string = 'MATERIAL_TRANSFORM'
+  string = 'MATERIAL_TRANSFORM_GENERAL'
   call InputFindStringInFile(input,option,string)
   call InputFindStringErrorMsg(input,option,string)
   call pm_material_transform%ReadPMBlock(input)
@@ -868,7 +867,7 @@ subroutine AddPMCMaterialTransform(simulation,pm_material_transform,pmc_name,&
   pmc_material_transform%realization => realization
 
   ! set up logging stage
-  string = 'MATERIAL_TRANSFORM'
+  string = 'MATERIAL_TRANSFORM_GENERAL'
   call LoggingCreateStage(string,pmc_material_transform%stage)
   
   ! Material transform is child of flow and peer of transport

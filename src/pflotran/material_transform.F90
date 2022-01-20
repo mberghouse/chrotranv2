@@ -128,6 +128,7 @@ module Material_Transform_module
             MaterialTransformInputRecord, &
             MaterialTransformRead, &
             IllitizationCreate, &
+            BufferErosionCreate, &
             ILTBaseCreate, &
             ILTDefaultCreate
 
