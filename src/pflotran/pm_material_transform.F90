@@ -1,0 +1,522 @@
+module PM_Material_Transform_class
+
+#include "petsc/finclude/petscsys.h"
+  use petscsys
+  use PM_Base_class
+  use Realization_Subsurface_class
+  use PFLOTRAN_Constants_module
+
+  implicit none
+
+  private
+
+  type, public, extends(pm_base_type) :: pm_material_transform_type
+    class(realization_subsurface_type), pointer :: realization
+  contains
+    procedure, public :: Setup => PMMaterialTransformSetup
+    procedure, public :: ReadPMBlock => PMMaterialTransformReadPMBlock
+    procedure, public :: SetRealization => PMMaterialTransformSetRealization
+    procedure, public :: InitializeRun => PMMaterialTransformInitializeRun
+    procedure, public :: FinalizeRun => PMMaterialTransformFinalizeRun
+    procedure, public :: InitializeTimestep => PMMaterialTransformInitializeTS
+    procedure, public :: FinalizeTimestep => PMMaterialTransformFinalizeTS
+    procedure, public :: UpdateSolution => PMMaterialTransformUpdateSolution
+    procedure, public :: Solve => PMMaterialTransformSolve
+    ! procedure, public :: CheckpointHDF5 => PMMaterialTransformCheckpointHDF5
+    ! procedure, public :: CheckpointBinary => PMMaterialTransformCheckpointBinary
+    ! procedure, public :: RestartHDF5 => PMMaterialTransformRestartHDF5
+    ! procedure, public :: RestartBinary => PMMaterialTransformRestartBinary
+    procedure, public :: InputRecord => PMMaterialTransformInputRecord
+    procedure, public :: Destroy => PMMaterialTransformDestroy
+  end type pm_material_transform_type
+
+  public :: PMMaterialTransformCreate, &
+            PMMaterialTransformInputRecord
+
+contains
+
+! ************************************************************************** !
+
+function PMMaterialTransformCreate()
+  !
+  ! Creates process model
+  !
+  ! Author: Alex Salazar III
+  ! Date: 01/19/2022
+  !
+
+  implicit none
+
+  class(pm_material_transform_type), pointer :: PMMaterialTransformCreate
+
+  class(pm_material_transform_type), pointer :: pm
+
+  allocate(pm)
+  call PMBaseInit(pm)
+
+  pm%header = 'MATERIAL TRANSFORM'
+
+  nullify(pm%realization)
+
+  PMMaterialTransformCreate => pm
+
+end function PMMaterialTransformCreate
+
+! ************************************************************************** !
+
+subroutine PMMaterialTransformSetRealization(this,realization)
+  !
+  ! Author: Alex Salazar
+  ! Date: 01/19/2022
+
+  use Realization_Subsurface_class
+
+  implicit none
+
+! INPUT ARGUMENTS:
+! ================
+! this (input/output): material transform process model object
+! realization (input): subsurface realization object
+! ----------------------------------
+  class(pm_material_transform_type) :: this
+  class(realization_subsurface_type), pointer :: realization
+! ----------------------------------
+
+  this%realization => realization
+  this%realization_base => realization
+
+end subroutine PMMaterialTransformSetRealization
+
+! ************************************************************************** !
+
+subroutine PMMaterialTransformSetup(this)
+  !
+  ! Sets up auxiliary process model
+  !
+  ! Author: Alex Salazar III
+  ! Date: 01/19/2022
+
+  implicit none
+
+! INPUT ARGUMENTS:
+! ================
+! this (intput/output): material transform process model object
+! ----------------------------------
+  class(pm_material_transform_type) :: this
+! ----------------------------------
+
+end subroutine PMMaterialTransformSetup
+
+
+! ************************************************************************** !
+
+subroutine PMMaterialTransformReadPMBlock(this,input)
+  !
+  ! Reads input file parameters associated with the material transform
+  !   process model
+  !
+  ! Author: Alex Salazar III
+  ! Date: 01/19/2022
+
+  use Input_Aux_module
+  use Option_module
+  use String_module
+
+  implicit none
+
+! INPUT ARGUMENTS:
+! ================
+! this (intput/output): material transform process model object
+! input (input/output): pointer to input object
+! ----------------------------------
+  class(pm_material_transform_type) :: this
+  type(input_type), pointer :: input
+! ----------------------------------
+! LOCAL VARIABLES:
+! ================
+! option: pointer to option object
+! word: temporary string
+! error_string: error message string
+! found: Boolean helper
+! ----------------------------------
+  type(option_type), pointer :: option
+  character(len=MAXWORDLENGTH) :: word
+  character(len=MAXSTRINGLENGTH) :: error_string
+  PetscBool :: found
+! ----------------------------------
+
+  option => this%option
+  input%ierr = 0
+  error_string = 'MATERIAL_TRANSFORM'
+
+end subroutine PMMaterialTransformReadPMBlock
+
+! ************************************************************************** !
+
+subroutine PMMaterialTransformRead(input, option, this)
+  !
+  ! Author: Alex Salazar III
+  ! Date: 01/19/2022
+  !
+  use Input_Aux_module
+  use Option_module
+  use String_module
+
+  implicit none
+
+! INPUT ARGUMENTS:
+! ================
+! input: pointer to input object
+! option: pointer to option object
+! this (input/output): material transform process model object
+! --------------------------------
+  type(input_type), pointer :: input
+  type(option_type), pointer :: option
+  class(pm_material_transform_type), pointer :: this
+! --------------------------------
+! LOCAL VARIABLES:
+! ================
+! word: temporary string
+! error_string: error message string
+! --------------------------------
+  character(len=MAXWORDLENGTH) :: word
+  character(len=MAXSTRINGLENGTH) :: error_string
+! --------------------------------
+
+  error_string = 'SIMULATION,PROCESS_MODELS,MATERIAL_TRANSFORM'
+  call InputReadCard(input,option,word,PETSC_FALSE)
+  call InputErrorMsg(input,option,'type',error_string)
+  call StringToUpper(word)
+  error_string = trim(error_string) // ',' // trim(word)
+
+  select case(word)
+    case('DEFAULT')
+
+    case default
+      call InputKeywordUnrecognized(input,word,error_string,option)
+  end select
+
+end subroutine PMMaterialTransformRead
+
+! ************************************************************************** !
+
+recursive subroutine PMMaterialTransformInitializeRun(this)
+  !
+  ! Initializes the time stepping
+  !
+  ! Author: Alex Salazar III
+  ! Date: 01/19/2022
+
+  use Reaction_Aux_module
+
+  implicit none
+
+! INPUT ARGUMENTS:
+! ================
+! this (input/output): material transform process model object
+! --------------------------------
+  class(pm_material_transform_type) :: this
+! --------------------------------
+
+end subroutine PMMaterialTransformInitializeRun
+
+! ************************************************************************** !
+
+subroutine PMMaterialTransformInitializeTS(this)
+  !
+  ! Author: Alex Salazar III
+  ! Date: 01/20/2022
+
+  implicit none
+
+! INPUT ARGUMENTS:
+! ================
+! this (input/output): material transform process model object
+! --------------------------------
+  class(pm_material_transform_type) :: this
+! --------------------------------
+
+end subroutine PMMaterialTransformInitializeTS
+
+! ************************************************************************** !
+
+subroutine PMMaterialTransformFinalizeTS(this)
+  !
+  ! Author: Alex Salazar III
+  ! Date: 01/20/2022
+
+  implicit none
+
+! INPUT ARGUMENTS:
+! ================
+! this (input/output): material transform process model object
+! --------------------------------
+  class(pm_material_transform_type) :: this
+! --------------------------------
+
+end subroutine PMMaterialTransformFinalizeTS
+
+! ************************************************************************** !
+
+recursive subroutine PMMaterialTransformFinalizeRun(this)
+  !
+  ! Finalizes the run
+  !
+  ! Author: Alex Salazar III
+  ! Date: 01/19/2022
+  !
+
+  implicit none
+
+! INPUT ARGUMENTS:
+! ================
+! this (input/output): material transform process model object
+! --------------------------------
+  class(pm_material_transform_type) :: this
+! --------------------------------
+
+end subroutine PMMaterialTransformFinalizeRun
+
+
+! ************************************************************************** !
+
+subroutine PMMaterialTransformUpdateSolution(this)
+  !
+  ! Author: Alex Salazar
+  ! Date: 01/19/2022
+
+  implicit none
+
+! INPUT ARGUMENTS:
+! ================
+! this (input/output): material transform process model object
+! ---------------------------------
+  class(pm_material_transform_type) :: this
+! ---------------------------------
+
+end subroutine PMMaterialTransformUpdateSolution
+
+! ************************************************************************** !
+
+subroutine PMMaterialTransformSolve(this,time,ierr)
+  !
+  ! Updates the soil composition based on the model chosen
+  !
+  ! Author: Alex Salazar
+  ! Date: 01/19/2022
+  !
+  use Global_Aux_module
+  use Option_module
+  use Utility_module
+
+  implicit none
+
+! INPUT ARGUMENTS:
+! ================
+! this (input/output): material transform process model object
+! time (input): [sec] simulation time
+! ierr (input/output): [-] PETSc error integer
+! ---------------------------------
+  class(pm_material_transform_type) :: this
+  PetscReal :: time
+  PetscErrorCode :: ierr
+! ---------------------------------
+
+  ierr = 0
+
+end subroutine PMMaterialTransformSolve
+
+! ***************************************************************************** !
+
+subroutine PMMaterialTransformCheckpointHDF5(this,pm_grp_id)
+  ! 
+  ! Checkpoints data associated with the material transform process model
+  !
+  ! Author: Alex Salazar III
+  ! Date: 01/20/2022
+  ! 
+
+  use Option_module
+  use Realization_Subsurface_class
+  use hdf5
+  use HDF5_module, only : HDF5WriteDataSetFromVec
+
+  implicit none
+
+! INPUT ARGUMENTS:
+! ================
+! this (input/output): material transform process model object
+! pm_grp_id: file id number
+! ----------------------------------
+  class(pm_material_transform_type) :: this
+  integer(HID_T) :: pm_grp_id
+! ----------------------------------
+! LOCAL VARIABLES:
+! ================
+!
+! ----------------------------------
+
+! ----------------------------------
+  
+end subroutine PMMaterialTransformCheckpointHDF5
+
+! ***************************************************************************** !
+
+
+subroutine PMMaterialTransformRestartHDF5(this,pm_grp_id)
+  ! 
+  ! Restarts data associated with material transform process model
+  ! 
+  ! Author: Alex Salazar III
+  ! Date: 01/20/2022
+
+  use Option_module
+  use Realization_Subsurface_class
+  use hdf5
+  use HDF5_module, only : HDF5ReadDataSetInVec
+
+  implicit none
+
+! INPUT ARGUMENTS:
+! ================
+! this (input/output): material transform process model object
+! pm_grp_id: file id number
+! ----------------------------------
+  class(pm_material_transform_type) :: this
+  integer(HID_T) :: pm_grp_id
+! ----------------------------------
+! LOCAL VARIABLES:
+! ================
+!
+! ----------------------------------
+
+! ----------------------------------
+
+  
+end subroutine PMMaterialTransformRestartHDF5
+
+! ************************************************************************** !
+
+subroutine PMMaterialTransformCheckpointBinary(this,viewer)
+  ! 
+  ! Checkpoints data associated with the material transform process model
+  !
+  ! Author: Alex Salazar III
+  ! Date: 01/20/2022
+  ! 
+
+  use petscvec
+  use Option_module
+  use Discretization_module
+  use Grid_module
+  
+  implicit none
+  
+! INPUT ARGUMENTS:
+! ================
+! this (input/output): material transform process model object
+! viewer: petsc viewer variable
+! ----------------------------------
+  PetscViewer :: viewer
+  class(pm_material_transform_type) :: this
+! ----------------------------------
+! LOCAL VARIABLES:
+! ================
+!
+! ----------------------------------
+
+! ----------------------------------
+
+end subroutine PMMaterialTransformCheckpointBinary
+
+! ***************************************************************************** !
+
+subroutine PMMaterialTransformRestartBinary(this,viewer)
+  !
+  ! Restarts data associated with material transform process model
+  ! 
+  ! Author: Alex Salazar III
+  ! Date: 01/20/2022
+
+  use Option_module
+  use hdf5
+  use HDF5_module, only : HDF5ReadDataSetInVec
+
+  implicit none
+
+! INPUT ARGUMENTS:
+! ================
+! this (input/output): material transform process model object
+! viewer: petsc viewer variable
+! ----------------------------------
+  PetscViewer :: viewer
+  class(pm_material_transform_type) :: this
+! ----------------------------------
+! LOCAL VARIABLES:
+! ================
+!
+! ----------------------------------
+
+! ----------------------------------
+
+end subroutine PMMaterialTransformRestartBinary
+
+! ************************************************************************** !
+
+subroutine PMMaterialTransformInputRecord(this)
+  !
+  ! Writes process model information to the input record file.
+  !
+  ! Author: Alex Salazar III
+  ! Date: 01/19/2022
+  !
+
+  implicit none
+
+! INPUT ARGUMENTS:
+! ================
+! this (input/output): material transform process model object
+! --------------------------------
+  class(pm_material_transform_type) :: this
+! --------------------------------
+! LOCAL VARIABLES:
+! ================
+! id: number of output unit
+! --------------------------------
+  PetscInt :: id
+! --------------------------------
+
+  id = INPUT_RECORD_UNIT
+
+  write(id,'(a29)',advance='no') 'pm: '
+  write(id,'(a)') this%name
+
+end subroutine PMMaterialTransformInputRecord
+
+! ************************************************************************** !
+
+subroutine PMMaterialTransformDestroy(this)
+  !
+  ! Destroys auxiliary process model
+  !
+  ! Author: Alex Salazar III
+  ! Date: 01/19/2022
+
+  implicit none
+
+! INPUT ARGUMENTS:
+! ================
+! this (input/output): material transform process model object
+! --------------------------------
+  class(pm_material_transform_type) :: this
+! --------------------------------
+
+  call PMBaseDestroy(this)
+
+  nullify(this%realization)
+  nullify(this%option)
+  nullify(this%output_option)
+
+end subroutine PMMaterialTransformDestroy
+
+end module PM_Material_Transform_class

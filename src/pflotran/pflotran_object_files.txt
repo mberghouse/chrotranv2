@@ -72,6 +72,7 @@ mode_process_model_obj = \
 	${common_src}pm_wipp_srcsink.o \
 	${common_src}pm_ufd_biosphere.o \
 	${common_src}pm_zflow.o \
+	${common_src}pm_material_transform.o \
 
 mode_obj = \
 	${common_src}general.o \

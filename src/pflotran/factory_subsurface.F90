@@ -20,6 +20,7 @@ module Factory_Subsurface_module
             FactorySubsurfaceReadWasteFormPM, &
             FactorySubsurfaceReadUFDDecayPM, &
             FactorySubsurfReadUFDBiospherePM, &
+            FactorySubsurfaceReadMTPM, &
             FactorySubsurfReadGeophysicsPM
 
 contains
@@ -68,6 +69,7 @@ subroutine FactorySubsurfaceInitPostPetsc(simulation)
   use PM_UFD_Decay_class
   use PM_UFD_Biosphere_class
   use PM_Auxiliary_class
+  use PM_Material_Transform_class
   use Realization_Subsurface_class
   use Simulation_Subsurface_class
   use Waypoint_module
@@ -84,6 +86,7 @@ subroutine FactorySubsurfaceInitPostPetsc(simulation)
   class(pm_ufd_biosphere_type), pointer :: pm_ufd_biosphere
   class(pm_base_type), pointer :: pm_geop
   class(pm_auxiliary_type), pointer :: pm_auxiliary
+  class(pm_material_transform_type), pointer :: pm_material_transform
   class(realization_subsurface_type), pointer :: realization
 
   option => simulation%option
@@ -95,12 +98,14 @@ subroutine FactorySubsurfaceInitPostPetsc(simulation)
   nullify(pm_ufd_biosphere)
   nullify(pm_geop)
   nullify(pm_auxiliary)
+  nullify(pm_material_transform)
 
   ! process command line arguments specific to subsurface
   call SubsurfInitCommandLineSettings(option)
 
   call ExtractPMsFromPMList(simulation,pm_flow,pm_tran,pm_waste_form,&
-                            pm_ufd_decay,pm_ufd_biosphere,pm_geop,pm_auxiliary)
+                            pm_ufd_decay,pm_ufd_biosphere,pm_geop,pm_auxiliary,&
+                            pm_material_transform)
 
   call SubsurfaceSetFlowMode(pm_flow,option)
   call SubsurfaceSetGeopMode(pm_geop,option)
@@ -114,7 +119,7 @@ subroutine FactorySubsurfaceInitPostPetsc(simulation)
   ! Setup linkages between PMCs
   call SetupPMCLinkages(simulation,pm_flow,pm_tran,pm_waste_form,&
                         pm_ufd_decay,pm_ufd_biosphere,pm_geop, &
-                        pm_auxiliary,realization)
+                        pm_auxiliary,pm_material_transform,realization)
 
   ! SubsurfaceInitSimulation() must be called after pmc linkages are set above.
   call SubsurfaceInitSimulation(simulation)
@@ -127,7 +132,8 @@ end subroutine FactorySubsurfaceInitPostPetsc
 ! ************************************************************************** !
 
 subroutine ExtractPMsFromPMList(simulation,pm_flow,pm_tran,pm_waste_form,&
-                                pm_ufd_decay,pm_ufd_biosphere,pm_geop,pm_auxiliary)
+                                pm_ufd_decay,pm_ufd_biosphere,pm_geop,&
+                                pm_auxiliary,pm_material_transform)
   !
   ! Extracts all possible PMs from the PM list
   !
@@ -144,6 +150,7 @@ subroutine ExtractPMsFromPMList(simulation,pm_flow,pm_tran,pm_waste_form,&
   use PM_UFD_Biosphere_class
   use PM_ERT_class
   use PM_Auxiliary_class
+  use PM_Material_Transform_class
   use Option_module
   use Simulation_Subsurface_class
 
@@ -159,6 +166,7 @@ subroutine ExtractPMsFromPMList(simulation,pm_flow,pm_tran,pm_waste_form,&
   class(pm_ufd_biosphere_type), pointer :: pm_ufd_biosphere
   class(pm_base_type), pointer :: pm_geop
   class(pm_auxiliary_type), pointer :: pm_auxiliary
+  class(pm_material_transform_type), pointer :: pm_material_transform
   class(pm_base_type), pointer :: cur_pm, prev_pm
 
   option => simulation%option
@@ -169,6 +177,7 @@ subroutine ExtractPMsFromPMList(simulation,pm_flow,pm_tran,pm_waste_form,&
   nullify(pm_ufd_decay)
   nullify(pm_ufd_biosphere)
   nullify(pm_auxiliary)
+  nullify(pm_material_transform)
 
   cur_pm => simulation%process_model_list
   do
@@ -190,6 +199,8 @@ subroutine ExtractPMsFromPMList(simulation,pm_flow,pm_tran,pm_waste_form,&
         pm_geop => cur_pm
       class is(pm_auxiliary_type)
         pm_auxiliary => cur_pm
+      class is(pm_material_transform_type)
+        pm_material_transform => cur_pm
       class default
         option%io_buffer = &
          'PM Class unrecognized in FactorySubsurfaceInitPostPetsc.'
@@ -211,7 +222,7 @@ end subroutine ExtractPMsFromPMList
 
 subroutine SetupPMCLinkages(simulation,pm_flow,pm_tran,pm_waste_form,&
                             pm_ufd_decay,pm_ufd_biosphere,pm_geop, &
-                            pm_auxiliary,realization)
+                            pm_auxiliary,pm_material_transform,realization)
   !
   ! Sets up all PMC linkages
   !
@@ -225,6 +236,7 @@ subroutine SetupPMCLinkages(simulation,pm_flow,pm_tran,pm_waste_form,&
   use PM_UFD_Decay_class
   use PM_UFD_Biosphere_class
   use PM_Auxiliary_class
+  use PM_Material_Transform_class
   use Realization_Subsurface_class
   use Option_module
   use Input_Aux_module
@@ -239,6 +251,7 @@ subroutine SetupPMCLinkages(simulation,pm_flow,pm_tran,pm_waste_form,&
   class(pm_ufd_biosphere_type), pointer :: pm_ufd_biosphere
   class(pm_base_type), pointer :: pm_geop
   class(pm_auxiliary_type), pointer :: pm_auxiliary
+  class(pm_material_transform_type), pointer :: pm_material_transform
   class(realization_subsurface_type), pointer :: realization
 
   type(option_type), pointer :: option
@@ -278,6 +291,11 @@ subroutine SetupPMCLinkages(simulation,pm_flow,pm_tran,pm_waste_form,&
 
   if (associated(pm_auxiliary)) &
     call AddPMCAuxiliary(simulation,pm_auxiliary,'SALINITY',realization,option)
+
+  if (associated(pm_material_transform)) &
+    call AddPMCMaterialTransform(simulation,pm_material_transform, &
+                                 'PMC3MaterialTransform',realization,input, &
+                                 option)
 
   call InputDestroy(input)
 
@@ -797,6 +815,74 @@ subroutine AddPMCAuxiliary(simulation,pm_auxiliary,pmc_name, &
   call LoggingCreateStage(string,pmc_auxiliary%stage)
 
 end subroutine AddPMCAuxiliary
+
+
+! ************************************************************************** !
+
+subroutine AddPMCMaterialTransform(simulation,pm_material_transform,pmc_name,&
+                                   realization,input,option)
+
+  !
+  ! Adds a UFD decay PMC
+  !
+  ! Author: Gautam Bisht
+  ! Date: 06/05/18
+  !
+
+  use PMC_Base_class
+  use PMC_Third_Party_class
+  use PM_Material_Transform_class
+  use Realization_Subsurface_class
+  use Option_module
+  use Logging_module
+  use Input_Aux_module
+
+  implicit none
+
+  class(simulation_subsurface_type) :: simulation
+  class(pm_material_transform_type), pointer :: pm_material_transform
+  character(len=*) :: pmc_name
+  class(realization_subsurface_type), pointer :: realization
+  type(input_type), pointer :: input
+  type(option_type), pointer :: option
+
+  class(pmc_third_party_type), pointer :: pmc_material_transform
+  character(len=MAXSTRINGLENGTH) :: string
+  class(pmc_base_type), pointer :: pmc_dummy
+
+  nullify(pmc_dummy)
+
+  string = 'MATERIAL_TRANSFORM'
+  call InputFindStringInFile(input,option,string)
+  call InputFindStringErrorMsg(input,option,string)
+  call pm_material_transform%ReadPMBlock(input)
+
+  pmc_material_transform => PMCThirdPartyCreate()
+  call pmc_material_transform%SetName(pmc_name)
+  call pmc_material_transform%SetOption(option)
+  call pmc_material_transform%SetCheckpointOption(simulation%checkpoint_option)
+  call pmc_material_transform%SetWaypointList(simulation&
+                                                %waypoint_list_subsurface)
+  pmc_material_transform%pm_list => pm_material_transform
+  pmc_material_transform%pm_ptr%pm => pm_material_transform
+  pmc_material_transform%realization => realization
+
+  ! set up logging stage
+  string = 'MATERIAL_TRANSFORM'
+  call LoggingCreateStage(string,pmc_material_transform%stage)
+  
+  ! Material transform is child of flow and peer of transport
+  if(associated(simulation%tran_process_model_coupler)) then
+    call PMCBaseSetChildPeerPtr(PMCCastToBase(pmc_material_transform), &
+           PM_CHILD,PMCCastToBase(simulation%flow_process_model_coupler), &
+           PMCCastToBase(simulation%tran_process_model_coupler),PM_INSERT)
+  else
+    call PMCBaseSetChildPeerPtr(PMCCastToBase(pmc_material_transform), &
+           PM_CHILD,PMCCastToBase(simulation%flow_process_model_coupler), &
+           pmc_dummy,PM_INSERT)
+  endif
+
+end subroutine AddPMCMaterialTransform
 
 ! ************************************************************************** !
 
@@ -1436,6 +1522,59 @@ end subroutine FactorySubsurfReadGeophysicsPM
 
 ! ************************************************************************** !
 
+subroutine FactorySubsurfaceReadMTPM(input,option,pm)
+  !
+  ! Author: Alex Salazar III
+  ! Date: 01/19/2022
+  !
+  use Input_Aux_module
+  use Option_module
+  use String_module
+
+  use PM_Base_class
+  use PM_Material_Transform_class
+
+  implicit none
+
+  type(input_type), pointer :: input
+  type(option_type), pointer :: option
+  class(pm_base_type), pointer :: pm
+
+  character(len=MAXWORDLENGTH) :: word
+  character(len=MAXSTRINGLENGTH) :: error_string
+  PetscBool :: found
+
+  error_string = 'SIMULATION,PROCESS_MODELS,MATERIAL_TRANSFORM'
+
+  pm => PMMaterialTransformCreate()
+  pm%option => option
+  
+  word = ''
+  call InputPushBlock(input,option)
+  do
+    call InputReadPflotranString(input,option)
+    if (InputCheckExit(input,option)) exit
+    call InputReadCard(input,option,word,PETSC_FALSE)
+    call StringToUpper(word)
+
+    found = PETSC_FALSE
+    call PMBaseReadSimOptionsSelectCase(pm,input,word,found, &
+                                        error_string,option)
+    if (found) cycle
+
+    select case(word)
+      case default
+        option%io_buffer = 'Keyword ' // trim(word) // &
+              ' not recognized for the ' // trim(error_string) // ' block.'
+        call PrintErrMsg(option)
+    end select
+  enddo
+  call InputPopBlock(input,option)
+
+end subroutine FactorySubsurfaceReadMTPM
+
+! ************************************************************************** !
+
 subroutine SubsurfaceInitSimulation(simulation)
   !
   ! Author: Glenn Hammond
@@ -1617,6 +1756,7 @@ recursive subroutine SetUpPMApproach(pmc,simulation)
   use PM_UFD_Decay_class
   use PM_UFD_Biosphere_class
   use PM_ERT_class
+  use PM_Material_Transform_class
   use Option_module
   use Simulation_Subsurface_class
   use Realization_Subsurface_class
@@ -1677,6 +1817,9 @@ recursive subroutine SetUpPMApproach(pmc,simulation)
         call cur_pm%SetRealization(realization)
 
       class is(pm_ert_type)
+        call cur_pm%SetRealization(realization)
+
+      class is(pm_material_transform_type)
         call cur_pm%SetRealization(realization)
 
     end select
