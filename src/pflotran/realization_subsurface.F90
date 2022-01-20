@@ -919,7 +919,8 @@ subroutine RealProcessMatPropAndSatFunc(realization)
       if (.not. patch%material_property_array(i)%ptr%mtf) then
         ! create base type functions for materials without transformations
         material_transform => MaterialTransformCreate()
-        material_transform%illitization_function => ILTBaseCreate()
+        material_transform%illitization => IllitizationCreate()
+        material_transform%illitization%illitization_function => ILTBaseCreate()
         material_transform%name = &
           patch%material_property_array(i)%ptr%material_transform_name
         call MaterialTransformAddToList(material_transform, &
@@ -1002,7 +1003,7 @@ subroutine RealProcessMatPropAndSatFunc(realization)
         if (cur_material_property%material_transform_id > 0) then
           cur_material_property%ilt_fs0 = patch% &
             material_transform_array(cur_material_property% &
-              material_transform_id)%ptr%illitization_function%ilt_fs0
+              material_transform_id)%ptr%illitization%illitization_function%ilt_fs0
         endif
         
       endif

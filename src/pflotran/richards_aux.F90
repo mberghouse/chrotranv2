@@ -240,14 +240,14 @@ subroutine RichardsAuxVarCompute(x,auxvar,global_auxvar,material_auxvar, &
 
   if (associated(material_auxvar%iltf)) then
     if (option%time > material_auxvar%iltf%ilt_tst .and. option%dt > 0.d0) then
-      call material_transform%illitization_function% &
+      call material_transform%illitization%illitization_function% &
              CalculateILT(material_auxvar%iltf%ilt_fst, &
                           global_auxvar%temp, &
                           option%flow_dt, &
                           material_auxvar%iltf%ilt_fit, &
                           material_auxvar%iltf%ilt_scale, &
                           option)
-      call material_transform%illitization_function% &
+      call material_transform%illitization%illitization_function% &
              ShiftPerm(material_auxvar,option)
     endif
   endif

@@ -269,7 +269,7 @@ subroutine SetupPMCLinkages(simulation,pm_flow,pm_tran,pm_waste_form,&
                          associated(pm_ufd_decay),realization,input,option)
 
   if (associated(pm_ufd_decay)) &
-    call AddPMCUDFDecay(simulation,pm_ufd_decay,'PMC3PUFDDecay',realization, &
+    call AddPMCUFDDecay(simulation,pm_ufd_decay,'PMC3PUFDDecay',realization, &
                         input,option)
 
   if (associated(pm_ufd_biosphere)) &
@@ -541,7 +541,7 @@ end subroutine AddPMCWasteForm
 
 ! ************************************************************************** !
 
-subroutine AddPMCUDFDecay(simulation,pm_ufd_decay,pmc_name,&
+subroutine AddPMCUFDDecay(simulation,pm_ufd_decay,pmc_name,&
                           realization,input,option)
 
   !
@@ -601,7 +601,7 @@ subroutine AddPMCUDFDecay(simulation,pm_ufd_decay,pmc_name,&
          PMCCastToBase(simulation%tran_process_model_coupler), &
          pmc_dummy,PM_APPEND)
 
-end subroutine AddPMCUDFDecay
+end subroutine AddPMCUFDDecay
 
 ! ************************************************************************** !
 

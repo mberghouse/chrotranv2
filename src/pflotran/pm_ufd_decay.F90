@@ -953,7 +953,7 @@ recursive subroutine PMUFDDecayInitializeRun(this)
       material_transform => &
         patch%material_transform_array(patch%mtf_id(ghosted_id))%ptr
       if (associated(material_auxvars(ghosted_id)%iltf)) then
-        call material_transform%illitization_function% &
+        call material_transform%illitization%illitization_function% &
                CheckElements(this%element_name, &
                              this%num_elements, &
                              this%option)
@@ -967,7 +967,7 @@ recursive subroutine PMUFDDecayInitializeRun(this)
       if (associated(material_auxvars(ghosted_id)%iltf)) then
         if (this%option%time > material_auxvars(ghosted_id)%iltf%ilt_tst) then
           if (this%option%dt > 0.d0 .or. this%option%restart_flag) then
-            call material_transform%illitization_function% &
+            call material_transform%illitization%illitization_function% &
                    ShiftKd(kd_kgw_m3b, &
                            this%element_name(iele), &
                            material_auxvars(ghosted_id), &
@@ -1402,7 +1402,7 @@ subroutine PMUFDDecaySolve(this,time,ierr)
       if (associated(material_auxvars(ghosted_id)%iltf)) then
         if (option%time > material_auxvars(ghosted_id)%iltf%ilt_tst .and. &
             option%dt > 0.d0) then
-          call material_transform%illitization_function% &
+          call material_transform%illitization%illitization_function% &
                  ShiftKd(kd_kgw_m3b, &
                          this%element_name(iele), &
                          material_auxvars(ghosted_id), &

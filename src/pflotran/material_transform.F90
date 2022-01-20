@@ -51,18 +51,6 @@ module Material_Transform_module
     procedure, public :: CalculateILT => ILTGeneralIllitization
   end type ILT_general_type
   !---------------------------------------------------------------------------
-  type, public :: material_transform_type
-    character(len=MAXWORDLENGTH) :: name
-    PetscBool :: print_me
-    PetscBool :: test
-    class(illitization_base_type), pointer :: illitization_function
-    class(material_transform_type), pointer :: next
-  end type material_transform_type
-  !---------------------------------------------------------------------------
-  type, public :: material_transform_ptr_type
-    class(material_transform_type), pointer :: ptr
-  end type material_transform_ptr_type
-  !---------------------------------------------------------------------------
   type :: ilt_perm_effects_type
     PetscReal, pointer :: f_perm(:) ! factors for modifying the permeability
     character(len=MAXWORDLENGTH), pointer :: f_perm_mode ! function type
@@ -75,6 +63,61 @@ module Material_Transform_module
     character(len=MAXWORDLENGTH), pointer :: f_kd_element(:) ! element affected
   end type
   !---------------------------------------------------------------------------
+  type, public :: illitization_type
+    character(len=MAXWORDLENGTH) :: name
+    PetscBool :: print_me
+    PetscBool :: test
+    class(illitization_base_type), pointer :: illitization_function
+  end type illitization_type
+  !---------------------------------------------------------------------------
+  type, public :: illitization_auxvar_type
+    ! These auxvars are intended to replace the ilt_auxvar_type currently in
+    !   material_aux
+    PetscReal :: fs0    ! initial fraction of smectite in material
+    PetscReal :: fs     ! fraction of smectite in material (final)
+    PetscReal :: fi     ! fraction of illite in material (final)
+    PetscReal :: ts     ! track time of last change in smectite (final)
+    PetscBool :: qperm0 ! save initial permeability
+    PetscReal :: scale  ! scale factor
+    PetscReal, allocatable :: perm0(:) ! intiial permeability
+  end type illitization_auxvar_type
+  !---------------------------------------------------------------------------
+  type, public :: buffer_erosion_type
+    character(len=MAXWORDLENGTH) :: name
+    PetscBool :: print_me
+    PetscBool :: test
+    ! class(buffer_erosion_base_type), pointer :: buffer_erosion_model
+  end type buffer_erosion_type
+  !---------------------------------------------------------------------------
+  type, public :: buffer_erosion_auxvar_type
+    ! Placeholder for buffer erosion model auxvars
+  end type buffer_erosion_auxvar_type
+  !---------------------------------------------------------------------------
+  type, public :: material_transform_type
+    character(len=MAXWORDLENGTH) :: name
+    PetscBool :: test
+    
+    ! Auxiliary variables
+    PetscBool :: auxvars_up_to_date
+    PetscInt :: num_aux
+    type(material_transform_auxvar_type), pointer :: auxvars(:)
+    
+    ! Classes for material transformations
+    class(illitization_type), pointer :: illitization
+    class(buffer_erosion_type), pointer :: buffer_erosion
+    
+    ! Linked list
+    class(material_transform_type), pointer :: next
+  end type material_transform_type
+  !---------------------------------------------------------------------------
+  type, public :: material_transform_auxvar_type
+    ! Placeholder for general material transform auxvars
+  end type material_transform_auxvar_type
+  !---------------------------------------------------------------------------
+  type, public :: material_transform_ptr_type
+    class(material_transform_type), pointer :: ptr
+  end type material_transform_ptr_type
+  !---------------------------------------------------------------------------
 
   public :: MaterialTransformCreate, &
             MaterialTransformGetID, &
@@ -84,6 +127,7 @@ module Material_Transform_module
             MaterialTransformDestroy, &
             MaterialTransformInputRecord, &
             MaterialTransformRead, &
+            IllitizationCreate, &
             ILTBaseCreate, &
             ILTDefaultCreate
 
@@ -884,14 +928,63 @@ function MaterialTransformCreate()
 
   allocate(material_transform)
   material_transform%name = ''
-  material_transform%print_me = PETSC_FALSE
   material_transform%test = PETSC_FALSE
-  nullify(material_transform%illitization_function)
+  nullify(material_transform%auxvars)
+  nullify(material_transform%illitization)
+  nullify(material_transform%buffer_erosion)
   nullify(material_transform%next)
 
   MaterialTransformCreate => material_transform
 
 end function MaterialTransformCreate
+
+! ************************************************************************** !
+
+function IllitizationCreate()
+  !
+  ! Creates an illitization object
+  !
+  ! Author: Alex Salazar III
+  ! Date: 01/19/2022
+  !
+  implicit none
+
+  class(illitization_type), pointer :: IllitizationCreate
+  class(illitization_type), pointer :: Illitization
+
+  allocate(Illitization)
+  Illitization%name = ''
+  Illitization%print_me = PETSC_FALSE
+  Illitization%test = PETSC_FALSE
+  nullify(Illitization%illitization_function)
+
+  IllitizationCreate => Illitization
+
+end function IllitizationCreate
+
+! ************************************************************************** !
+
+function BufferErosionCreate()
+  !
+  ! Creates an object for a buffer erosion model
+  !
+  ! Author: Alex Salazar III
+  ! Date: 01/20/2022
+  !
+  implicit none
+
+  class(buffer_erosion_type), pointer :: BufferErosionCreate
+  class(buffer_erosion_type), pointer :: BufferErosion
+
+  allocate(BufferErosion)
+  BufferErosion%name = ''
+  BufferErosion%print_me = PETSC_FALSE
+  BufferErosion%test = PETSC_FALSE
+  ! nullify(BufferErosion%buffer_erosion_model)
+
+  BufferErosionCreate => BufferErosion
+
+end function BufferErosionCreate
 
 ! ************************************************************************** !
 
@@ -930,7 +1023,12 @@ subroutine MaterialTransformRead(this,input,option)
     select case(trim(keyword))
       !------------------------------------------
       case('ILLITIZATION')
-        call IllitizationRead(this,input,option)
+        this%illitization => IllitizationCreate()
+        call IllitizationRead(this%illitization,input,option)
+      !------------------------------------------
+      case('BUFFER_EROSION')
+        this%buffer_erosion=> BufferErosionCreate()
+        call BufferErosionRead(this%buffer_erosion,input,option)
       !------------------------------------------
       case default
         call InputKeywordUnrecognized(input,keyword, &
@@ -958,7 +1056,7 @@ subroutine IllitizationRead(this,input,option)
 
   implicit none
 
-  class(material_transform_type) :: this
+  class(illitization_type) :: this
   type(input_type), pointer :: input
   type(option_type) :: option
 
@@ -973,8 +1071,8 @@ subroutine IllitizationRead(this,input,option)
   
   if (associated(this%illitization_function)) then
     option%io_buffer = 'There may only be one instance of '// &
-                       trim(error_string) // &
-                       ' in MATERIAL_TRANSFORM "'//trim(this%name)//'".'
+                       'ILLITIZATION_FUNCTION in ILLITIZATION "'// &
+                       trim(this%name)//'".'
     call PrintErrMsg(option)
   endif
   
@@ -1031,6 +1129,79 @@ subroutine IllitizationRead(this,input,option)
   endif
 
 end subroutine IllitizationRead
+
+! ************************************************************************** !
+
+subroutine BufferErosionRead(this,input,option)
+  !
+  ! Reads in contents of a BUFFER_EROSION block from MATERIAL_TRANSFORM
+  !
+  ! Author: Alex Salazar III
+  ! Date: 01/20/2022
+  !
+  use Option_module
+  use Input_Aux_module
+  use String_module
+
+  implicit none
+
+  class(buffer_erosion_type) :: this
+  type(input_type), pointer :: input
+  type(option_type) :: option
+
+  character(len=MAXWORDLENGTH) :: keyword, word
+  character(len=MAXSTRINGLENGTH) :: error_string, verify_string
+  ! class(buffer_erosion_base_type), pointer :: buffer_erosion_model_ptr
+
+  ! nullify(buffer_erosion_model_ptr)
+
+  input%ierr = 0
+  error_string = 'BUFFER_EROSION'
+  
+  ! if (associated(this%buffer_erosion_model)) then
+  !   option%io_buffer = 'There may only be one instance of '// &
+  !                      'BUFFER_EROSION_MODEL in BUFFER_EROSION "'// &
+  !                      trim(this%name)//'".'
+  !   call PrintErrMsg(option)
+  ! endif
+  
+  call InputPushBlock(input,option)
+  do
+
+    call InputReadPflotranString(input,option)
+
+    if (InputCheckExit(input,option)) exit
+
+    call InputReadCard(input,option,keyword)
+    call InputErrorMsg(input,option,'keyword',error_string)
+    call StringToUpper(keyword)
+
+    select case(trim(keyword))
+      !------------------------------------------
+      case('BUFFER_EROSION_MODEL')
+        ! Placeholder for erosion models
+      !------------------------------------------
+      case('TEST')
+        this%test = PETSC_TRUE
+      !------------------------------------------
+      case default
+        call InputKeywordUnrecognized(input,keyword,'BUFFER_EROSION',option)
+    end select
+  enddo
+  call InputPopBlock(input,option)
+
+  verify_string = 'BUFFER_EROSION(' // trim(this%name) // '),'
+
+  ! if (associated(this%buffer_erosion_model)) then
+  !   call this%buffer_erosion_model%Verify(verify_string,option)
+  ! else
+  !   option%io_buffer = 'A buffer erosion model has &
+  !        &not been set under BUFFER_EROSION "' // &
+  !        trim(this%name) // '". A BUFFER_EROSION_MODEL &
+  !        &block must be specified.'
+  ! endif
+
+end subroutine BufferErosionRead
 
 ! ************************************************************************** !
 
@@ -1569,17 +1740,23 @@ subroutine MaterialTransformConvertListToArray(list,array,option)
     if (.not.associated(cur_mtf)) exit
     count = count + 1
     array(count)%ptr => cur_mtf
-    if (cur_mtf%test) then
-      call OptionSetBlocking(option,PETSC_FALSE)
-      if (OptionIsIORank(option)) then
-        if (associated(cur_mtf%illitization_function)) then
-          call cur_mtf%illitization_function%Test( &
-               cur_mtf%name,option)
+    call OptionSetBlocking(option,PETSC_FALSE)
+    if (OptionIsIORank(option)) then
+      if (associated(cur_mtf%illitization%illitization_function)) then
+        if (cur_mtf%illitization%test) then
+          call cur_mtf%illitization%illitization_function%Test( &
+            cur_mtf%illitization%name,option)
         endif
       endif
-      call OptionSetBlocking(option,PETSC_TRUE)
-      call OptionCheckNonBlockingError(option)
+      ! if (associated(cur_mtf%buffer_erosion%buffer_erosion_model)) then
+      !   if (cur_mtf%buffer_erosion%test) then
+      !     call cur_mtf%buffer_erosion%buffer_erosion_model%Test( &
+      !       cur_mtf%buffer_erosion_model%name,option)
+      !   endif
+      ! endif
     endif
+    call OptionSetBlocking(option,PETSC_TRUE)
+    call OptionCheckNonBlockingError(option)
     cur_mtf => cur_mtf%next
   enddo
 
@@ -1657,8 +1834,10 @@ function MaterialTransformCheckILT(material_transform_array,id)
   
   MaterialTransformCheckILT = PETSC_FALSE
   
-  if (associated(material_transform_array(id)%ptr%illitization_function)) then
-    select type(ilt => material_transform_array(id)%ptr%illitization_function)
+  if (associated(material_transform_array(id)%ptr%illitization &
+        %illitization_function)) then
+    select type(ilt => material_transform_array(id)%ptr%illitization &
+                  %illitization_function)
       ! Type must be extended
       class is(ILT_default_type)
         MaterialTransformCheckILT = PETSC_TRUE
@@ -1695,8 +1874,8 @@ subroutine MaterialTransformInputRecord(material_transform_list)
   cur_mtf => material_transform_list
   do
     if (.not.associated(cur_mtf)) exit
-    if (associated(cur_mtf%illitization_function)) then
-      select type (ilf => cur_mtf%illitization_function)
+    if (associated(cur_mtf%illitization%illitization_function)) then
+      select type (ilf => cur_mtf%illitization%illitization_function)
         class is (ILT_default_type)
           inactive = PETSC_FALSE
           exit
@@ -1717,8 +1896,8 @@ subroutine MaterialTransformInputRecord(material_transform_list)
   do
     if (.not.associated(cur_mtf)) exit
     
-    if (associated(cur_mtf%illitization_function)) then
-      select type (ilf => cur_mtf%illitization_function)
+    if (associated(cur_mtf%illitization%illitization_function)) then
+      select type (ilf => cur_mtf%illitization%illitization_function)
         type is (illitization_base_type)
           exit
         end select
@@ -1727,10 +1906,10 @@ subroutine MaterialTransformInputRecord(material_transform_list)
     write(id,'(a29)',advance='no') 'material transform name: '
     write(id,'(a)') adjustl(trim(cur_mtf%name))
     
-    if (associated(cur_mtf%illitization_function)) then
+    if (associated(cur_mtf%illitization%illitization_function)) then
       write(id,'(a29)') '--------------: '
       write(id,'(a29)',advance='no') 'illitization model: '
-      select type (ilf => cur_mtf%illitization_function)
+      select type (ilf => cur_mtf%illitization%illitization_function)
         !---------------------------------
         class is (ILT_default_type)
           write(id,'(a)') 'Huang et al., 1993'
@@ -1884,23 +2063,90 @@ end subroutine MaterialTransformPrintPerm
 
 ! ************************************************************************** !
 
+subroutine MaterialTransformAuxVarStrip(auxvar)
+  ! 
+  ! Deallocates a material transform auxiliary object
+  ! 
+  ! Author: Alex Salazar
+  ! Date: 01/20/2022
+  ! 
+  use Utility_module, only : DeallocateArray
+
+  implicit none
+
+  type(material_transform_auxvar_type) :: auxvar
+  
+  ! call DeallocateArray(auxvar%variable)  
+  
+end subroutine MaterialTransformAuxVarStrip
+
+! ************************************************************************** !
+
 recursive subroutine MaterialTransformDestroy(mtf)
 
   implicit none
 
-  class(material_transform_type), pointer :: mtf
+  type(material_transform_type), pointer :: mtf
+  
+  PetscInt :: i
 
   if (.not. associated(mtf)) return
 
   call MaterialTransformDestroy(mtf%next)
 
-  if (associated(mtf%illitization_function)) then
-    call ILTDestroy(mtf%illitization_function)
+  if (associated(mtf%auxvars)) then
+    do i = 1, size(mtf%auxvars)
+      call MaterialTransformAuxVarStrip(mtf%auxvars(i))
+    enddo
+    deallocate(mtf%auxvars)
+  endif
+  nullify(mtf%auxvars)
+
+  if (associated(mtf%illitization)) then
+    call IllitizationDestroy(mtf%illitization)
+  endif
+  
+  if (associated(mtf%buffer_erosion)) then
+    call BufferErosionDestroy(mtf%buffer_erosion)
   endif
 
   deallocate(mtf)
   nullify(mtf)
 
 end subroutine MaterialTransformDestroy
+
+! ************************************************************************** !
+
+recursive subroutine IllitizationDestroy(illitization)
+
+  implicit none
+
+  class(illitization_type), pointer :: illitization
+
+  if (.not. associated(illitization)) return
+
+  if (associated(illitization%illitization_function)) then
+    call ILTDestroy(illitization%illitization_function)
+  endif
+
+  deallocate(illitization)
+  nullify(illitization)
+
+end subroutine IllitizationDestroy
+
+! ************************************************************************** !
+
+recursive subroutine BufferErosionDestroy(buffer_erosion)
+
+  implicit none
+
+  class(buffer_erosion_type), pointer :: buffer_erosion
+
+  if (.not. associated(buffer_erosion)) return
+
+  deallocate(buffer_erosion)
+  nullify(buffer_erosion)
+
+end subroutine BufferErosionDestroy
 
 end module Material_Transform_module
