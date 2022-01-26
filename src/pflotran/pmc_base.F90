@@ -20,6 +20,7 @@ module PMC_Base_class
 
   PetscInt, parameter, public :: PM_CHILD = 0
   PetscInt, parameter, public :: PM_PEER = 1
+  PetscInt, parameter, public :: PM_PEER_NO_SYNC = 2
   PetscInt, parameter, public :: PM_APPEND = 0
   PetscInt, parameter, public :: PM_INSERT = 1
 
@@ -35,6 +36,7 @@ module PMC_Base_class
     class(pm_base_type), pointer :: pm_list
     type(waypoint_list_type), pointer :: waypoint_list
     class(pmc_base_type), pointer :: child
+    class(pmc_base_type), pointer :: peer_no_sync_output
     class(pmc_base_type), pointer :: peer
     type(pm_base_pointer_type), pointer :: pm_ptr
     type(simulation_aux_type),pointer :: sim_aux
@@ -162,6 +164,7 @@ subroutine PMCBaseInit(this)
   nullify(this%pm_list)
   nullify(this%waypoint_list)
   nullify(this%child)
+  nullify(this%peer_no_sync_output)
   nullify(this%peer)
   nullify(this%sim_aux)
   this%Output => Null()
@@ -319,6 +322,10 @@ recursive subroutine PMCBaseInputRecord(this)
   if (associated(this%peer)) then
     call this%peer%inputrecord
   endif
+  if (associated(this%peer_no_sync_output)) then
+    call this%peer_no_sync_output%inputrecord
+  endif
+
 
 end subroutine PMCBaseInputRecord
 
@@ -429,6 +436,40 @@ recursive subroutine PMCBaseSetChildPeerPtr(pmcA,relationship_to,pmcB, &
           endif
       !----------------------------------------------------
       end select
+      !--------------------------------------------------------
+    case(PM_PEER_NO_SYNC)
+      select case(position_instruction)
+      !----------------------------------------------------
+        case(PM_APPEND)
+          if (associated(pmcB%peer_no_sync_output)) then
+            new_relationship = PM_PEER_NO_SYNC
+            call PMCBaseSetChildPeerPtr(pmcA,new_relationship,pmcB%peer_no_sync_output, &
+                                        pmcB_dummy,position_instruction)
+          else
+             pmcB%peer_no_sync_output => pmcA
+#ifdef DEBUG
+        pmcA%option%io_buffer = trim(pmcA%name) // ' assigned as peer of ' // &
+                                trim(pmcB%name) // ' via "append".'
+        call PrintMsg(pmcA%option)
+#endif
+          endif
+      !----------------------------------------------------
+        case(PM_INSERT)
+          pmcA%peer_no_sync_output => pmcB
+          if (associated(pmcB_parent)) then
+            pmcB_parent%child => pmcA
+#ifdef DEBUG
+        pmcA%option%io_buffer = trim(pmcA%name)// ' assigned as first child&
+                                & of ' // trim(pmcB%name) // ' via "insert".'
+        call PrintMsg(pmcA%option)
+#endif
+          else
+            pmcA%option%io_buffer = 'Null pointer for pmcB_parent passed into &
+                                     &PMCBaseSetChildPeerPtr.'
+            call PrintErrMsg(pmcA%option)
+          endif
+      !----------------------------------------------------
+      end select   
   !--------------------------------------------------------
     case default
       pmcA%option%io_buffer = 'PMC relationship_to not understood in &
@@ -542,6 +583,10 @@ recursive subroutine PMCBaseInitializeRun(this)
 
   if (associated(this%peer)) then
     call this%peer%InitializeRun()
+  endif
+ 
+  if (associated(this%peer_no_sync_output)) then
+    call this%peer_no_sync_output%InitializeRun()
   endif
 
 end subroutine PMCBaseInitializeRun
@@ -759,6 +804,10 @@ recursive subroutine PMCBaseRunToTime(this,sync_time,stop_flag)
     call this%peer%RunToTime(sync_time,local_stop_flag)
   endif
 
+  if (associated(this%peer_no_sync_output) .and. .not.peer_already_run_to_time) then
+    call this%peer_no_sync_output%RunToTime(sync_time,local_stop_flag)
+  endif
+
   stop_flag = max(stop_flag,local_stop_flag)
 
   if (this%stage /= 0) then
@@ -875,6 +924,10 @@ recursive subroutine PMCBaseFinalizeRun(this)
 
   if (associated(this%peer)) then
     call this%peer%FinalizeRun()
+  endif
+
+  if (associated(this%peer_no_sync_output)) then
+    call this%peer_no_sync_output%FinalizeRun()
   endif
 
 end subroutine PMCBaseFinalizeRun
@@ -1046,6 +1099,10 @@ recursive subroutine PMCBaseCheckpointBinary(this,viewer,append_name)
 
   if (associated(this%peer)) then
     call this%peer%CheckpointBinary(viewer,append_name)
+  endif
+
+  if (associated(this%peer_no_sync_output)) then
+    call this%peer_no_sync_output%CheckpointBinary(viewer,append_name)
   endif
 
   if (this%is_master) then
@@ -1231,6 +1288,10 @@ recursive subroutine PMCBaseRestartBinary(this,viewer)
     call this%peer%RestartBinary(viewer)
   endif
 
+  if (associated(this%peer_no_sync_output)) then
+    call this%peer_no_sync_output%RestartBinary(viewer)
+  endif
+
   if (this%is_master) then
     call PetscViewerDestroy(viewer,ierr);CHKERRQ(ierr)
     call PetscTime(tend,ierr);CHKERRQ(ierr)
@@ -1363,6 +1424,10 @@ recursive subroutine PMCBaseCheckpointHDF5(this,h5_chk_grp_id,append_name)
     call this%peer%CheckpointHDF5(h5_chk_grp_id,append_name)
   endif
 
+  if (associated(this%peer_no_sync_output)) then
+    call this%peer_no_sync_output%CheckpointHDF5(h5_chk_grp_id,append_name)
+  endif
+  
   if (this%is_master) then
     call h5gclose_f(h5_chk_grp_id, hdf5_err)
     call h5fclose_f(h5_file_id,hdf5_err)
@@ -1510,6 +1575,10 @@ recursive subroutine PMCBaseRestartHDF5(this,h5_chk_grp_id)
 
   if (associated(this%peer)) then
     call this%peer%RestartHDF5(h5_chk_grp_id)
+  endif
+ 
+  if (associated(this%peer_no_sync_output)) then
+    call this%peer_no_sync_output%RestartHDF5(h5_chk_grp_id)
   endif
 
   if (this%is_master) then
@@ -1744,6 +1813,10 @@ recursive subroutine PMCBaseCheckNullPM(this,option)
     call this%peer%CheckNullPM(option)
   endif
 
+  if (associated(this%peer_no_sync_output)) then
+    call this%peer_no_sync_output%CheckNullPM(option)
+  endif
+
   if (associated(this%child)) then
     call this%child%CheckNullPM(option)
   endif
@@ -1895,6 +1968,12 @@ recursive subroutine PMCBaseDestroy(this)
     nullify(this%peer)
   endif
 
+  if (associated(this%peer_no_sync_output)) then
+    call this%peer_no_sync_output%Destroy()
+    ! destroy does not currently destroy; it strips
+    deallocate(this%peer_no_sync_output)
+    nullify(this%peer_no_sync_output)
+  endif
 !  deallocate(pmc)
 !  nullify(pmc)
 

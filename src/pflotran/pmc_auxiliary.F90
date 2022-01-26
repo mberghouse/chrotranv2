@@ -138,6 +138,10 @@ recursive subroutine PMCAuxiliaryRunToTime(this,sync_time,stop_flag)
     call this%peer%RunToTime(sync_time,local_stop_flag)
   endif
 
+  if (associated(this%peer_no_sync_output)) then
+    call this%peer_no_sync_output%RunToTime(sync_time,local_stop_flag)
+  endif
+
   stop_flag = max(stop_flag,local_stop_flag)
 
   if (this%stage /= 0) then
@@ -217,6 +221,13 @@ recursive subroutine PMCAuxiliaryDestroy(this)
     ! destroy does not currently destroy; it strips
     deallocate(this%peer)
     nullify(this%peer)
+  endif
+
+  if (associated(this%peer_no_sync_output)) then
+    call this%peer_no_sync_output%Destroy()
+    ! destroy does not currently destroy; it strips
+    deallocate(this%peer_no_sync_output)
+    nullify(this%peer_no_sync_output)
   endif
 
 end subroutine PMCAuxiliaryDestroy

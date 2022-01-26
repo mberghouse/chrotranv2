@@ -633,7 +633,11 @@ function SimSubsurfGetFinalWaypointTime(this)
         final_time < SimSubsurfGetFinalWaypointTime) then
       SimSubsurfGetFinalWaypointTime = final_time
     endif
-    cur_process_model_coupler => cur_process_model_coupler%peer
+    if (associated(cur_process_model_coupler%peer)) then
+      cur_process_model_coupler => cur_process_model_coupler%peer
+    else
+       cur_process_model_coupler => cur_process_model_coupler%peer_no_sync_output
+    endif   
   enddo
 
 end function SimSubsurfGetFinalWaypointTime

@@ -784,7 +784,7 @@ subroutine AddPMCAuxiliary(simulation,pm_auxiliary,pmc_name, &
   if (StringCompareIgnoreCase(pm_auxiliary%ctype,string)) then
     if (option%itranmode == RT_MODE) then
       pmc_auxiliary => PMCAuxiliaryCreate(pmc_name,pm_auxiliary)
-      call PMCBaseSetChildPeerPtr(PMCCastToBase(pmc_auxiliary),PM_PEER, &
+      call PMCBaseSetChildPeerPtr(PMCCastToBase(pmc_auxiliary),PM_PEER_NO_SYNC, &
              PMCCastToBase(simulation%tran_process_model_coupler), &
              pmc_dummy,PM_APPEND)
     else
@@ -1530,7 +1530,7 @@ subroutine SubsurfaceInitSimulation(simulation)
 
     pmc_auxiliary => PMCAuxiliaryCreate('',pm_aux)
     ! place the material process model as %peer for the top pmc
-    call PMCBaseSetChildPeerPtr(PMCCastToBase(pmc_auxiliary),PM_PEER, &
+    call PMCBaseSetChildPeerPtr(PMCCastToBase(pmc_auxiliary),PM_PEER_NO_SYNC, &
            PMCCastToBase(simulation%process_model_coupler_list), &
            pmc_dummy,PM_APPEND)
     nullify(pm_aux)
@@ -1697,7 +1697,10 @@ recursive subroutine SetUpPMApproach(pmc,simulation)
   if (associated(pmc%peer)) then
     call SetUpPMApproach(pmc%peer,simulation)
   endif
-
+ 
+  if (associated(pmc%peer_no_sync_output)) then
+    call SetUpPMApproach(pmc%peer_no_sync_output,simulation)
+  endif
 
 end subroutine SetUpPMApproach
 
