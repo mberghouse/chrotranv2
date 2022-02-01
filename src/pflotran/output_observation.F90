@@ -924,10 +924,21 @@ subroutine WriteObservationHeaderSec(fid,realization_base,cell_string, &
               write(string,'(i2)') i
               string = 'C(' // trim(adjustl(string)) // ') ' &
                          // trim(reaction%primary_species_names(j))
-              call OutputWriteToHeader(fid,string,'molal',cell_string, &
+              call OutputWriteToHeader(fid,string,'M',cell_string, &
                                        icolumn)
             enddo
           enddo
+          do j=1,reaction%gas%nactive_gas
+            if (reaction%gas%active_print_me(j)) then
+              do i = 1, option%nsec_cells
+                write(string,'(i2)') i
+                string = 'C(' // trim(adjustl(string)) // ') ' &
+                         // trim(reaction%gas%active_names(j))
+                call OutputWriteToHeader(fid,string,'Bar',cell_string, &
+                                         icolumn)
+              enddo
+            endif
+          enddo  
         endif
       
       ! add secondary mineral volume fractions to header
@@ -1781,7 +1792,7 @@ subroutine WriteObservationSecondaryDataAtCell(fid,realization_base,local_id,iva
 
   implicit none
   
-  PetscInt :: fid,i,naqcomp,nkinmnrl
+  PetscInt :: fid,i,naqcomp,nkinmnrl,ngas
   class(realization_base_type) :: realization_base
   PetscInt :: local_id
   PetscInt :: ghosted_id
@@ -1823,9 +1834,20 @@ subroutine WriteObservationSecondaryDataAtCell(fid,realization_base,local_id,iva
               do i = 1, option%nsec_cells 
                 write(fid,110,advance="no") &
                   RealizGetVariableValueAtCell(realization_base,ghosted_id, &
-                                             SECONDARY_CONCENTRATION,i,naqcomp)
+                                               SECONDARY_CONCENTRATION, &
+                                               i,naqcomp)
               enddo
-            enddo 
+            enddo
+            do ngas=1,reaction%gas%nactive_gas
+              if (reaction%gas%active_print_me(ngas)) then
+                do i = 1, option%nsec_cells
+                  write(fid,110,advance="no") &
+                    RealizGetVariableValueAtCell(realization_base,ghosted_id, &
+                                                 SECONDARY_CONCENTRATION_GAS, &
+                                                 i,ngas)
+                enddo
+              endif
+            enddo  
           endif
           if (ivar == PRINT_SEC_MIN_VOLFRAC) then
             do nkinmnrl = 1, reaction%mineral%nkinmnrl
@@ -2354,7 +2376,7 @@ subroutine OutputMassBalance(realization_base)
                realization_base%option%nphase)
   PetscReal, allocatable :: sum_mol(:,:), sum_mol_global(:,:)
   PetscReal, allocatable :: global_total_mass(:,:), total_mass(:,:)
-  PetscReal :: global_water_mass
+  PetscReal :: global_water_mass, global_total_mass_sum
 
   PetscReal :: sum_trapped(realization_base%option%nphase)
   PetscReal :: sum_trapped_global(realization_base%option%nphase)
@@ -2626,10 +2648,16 @@ subroutine OutputMassBalance(realization_base)
           if (option%ntrandof > 0) then
             select case(option%itranmode)
               case(RT_MODE)
+                string = 'Region ' // trim(cur_mbr%region_name) // ' Total Mass' 
+                if (reaction%print_total_mass_kg) then                
+                  call OutputWriteToHeader(fid,string,'kg','',icol)
+                else
+                  call OutputWriteToHeader(fid,string,'mol','',icol)
+                endif
                 do i=1, reaction%naqcomp
                   if (reaction%primary_species_print(i)) then  
                     string = 'Region ' // trim(cur_mbr%region_name) // ' ' // &
-                           trim(reaction%primary_species_names(i)) // ' Total Mass'
+                           trim(reaction%primary_species_names(i)) // ' Mass'
                     if (reaction%print_total_mass_kg) then                
                       call OutputWriteToHeader(fid,string,'kg','',icol)
                     else
@@ -2640,7 +2668,7 @@ subroutine OutputMassBalance(realization_base)
                 do i=1,reaction%immobile%nimmobile
                   if (reaction%immobile%print_me(i)) then
                     string = 'Region ' // trim(cur_mbr%region_name) // ' ' // &
-                         trim(reaction%immobile%names(i)) // ' Total Mass'
+                         trim(reaction%immobile%names(i)) // ' Mass'
                     if (reaction%print_total_mass_kg) then                
                       call OutputWriteToHeader(fid,string,'kg','',icol)
                     else
@@ -2652,7 +2680,7 @@ subroutine OutputMassBalance(realization_base)
                 do i=1,reaction%gas%nactive_gas
                   if (reaction%gas%active_print_me(i)) then
                     string = 'Region ' // trim(cur_mbr%region_name) // ' ' // &
-                         trim(reaction%gas%active_names(i)) // ' Total Mass'
+                         trim(reaction%gas%active_names(i)) // ' Mass'
                     if (reaction%print_total_mass_kg) then                
                       call OutputWriteToHeader(fid,string,'kg','',icol)
                     else
@@ -3241,7 +3269,9 @@ subroutine OutputMassBalance(realization_base)
       call PatchGetWaterMassInRegion(cur_mbr%region_cell_ids, &
                                      cur_mbr%num_cells,patch,option, &
                                      global_water_mass)
-      write(fid,110,advance="no") global_water_mass
+      if (OptionIsIORank(option)) then
+        write(fid,110,advance="no") global_water_mass
+      endif
       if (option%ntrandof > 0) then
         max_tran_size = max(reaction%naqcomp,reaction%mineral%nkinmnrl, &
                           reaction%immobile%nimmobile,reaction%gas%nactive_gas)
@@ -3261,8 +3291,12 @@ subroutine OutputMassBalance(realization_base)
         call MPI_Reduce(total_mass,global_total_mass,int_mpi, &
                       MPI_DOUBLE_PRECISION,MPI_SUM, &
                       option%driver%io_rank,option%mycomm,ierr)
-
+        global_total_mass_sum = 0.d0
+        do i =1, size(global_total_mass(:,1))
+            global_total_mass_sum = global_total_mass_sum + global_total_mass(i,1)
+        enddo                    
         if (OptionIsIORank(option)) then
+          write(fid,110,advance="no") global_total_mass_sum
           do icomp = 1, reaction%naqcomp
             if (reaction%primary_species_print(icomp)) then
               write(fid,110,advance="no") global_total_mass(icomp,1)
@@ -3288,8 +3322,8 @@ subroutine OutputMassBalance(realization_base)
             endif
           enddo
         endif
+        deallocate(total_mass,global_total_mass)
       endif
-      deallocate(total_mass,global_total_mass)
       cur_mbr => cur_mbr%next
     enddo
   endif

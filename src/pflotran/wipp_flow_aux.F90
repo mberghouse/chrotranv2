@@ -280,6 +280,7 @@ subroutine WIPPFloAuxVarCompute(x,wippflo_auxvar,global_auxvar, &
   use EOS_Gas_module
   use Characteristic_Curves_module
   use Characteristic_Curves_WIPP_module
+  use Characteristic_Curves_WIPP_invariant_module
   use Material_Aux_class
   use Creep_Closure_module
   use Fracture_module
@@ -414,6 +415,8 @@ subroutine WIPPFloAuxVarCompute(x,wippflo_auxvar,global_auxvar, &
       class is(sat_func_WIPP_type)
         sf%pct = sf%pct_a * perm_for_cc ** sf%pct_exp
         option%flow%pct_updated = PETSC_TRUE
+      class is (sf_WIPP_type)
+        call sf%setK(perm_for_cc)
       class default
         option%flow%pct_updated = PETSC_FALSE
     end select
@@ -456,7 +459,15 @@ subroutine WIPPFloAuxVarCompute(x,wippflo_auxvar,global_auxvar, &
                          wippflo_auxvar%den_kg(lid), &
                          wippflo_auxvar%den(lid),ierr)
   else
-    aux(1) = global_auxvar%m_nacl(1)
+    if (option%iflag == WIPPFLO_UPDATE_FOR_FIXED_ACCUM) then
+      ! For the computation of fixed accumulation term use NaCl
+      ! value, m_nacl(2), from the previous time step.
+      aux(1) = global_auxvar%m_nacl(2)
+    else
+      ! Use NaCl value for the current time step, m_nacl(1), for computing
+      ! the accumulation term
+      aux(1) = global_auxvar%m_nacl(1)
+    endif
     call EOSWaterDensityExt(wippflo_auxvar%temp,wippflo_auxvar%pres(lid),aux, &
                             wippflo_auxvar%den_kg(lid), &
                             wippflo_auxvar%den(lid),ierr)
@@ -479,7 +490,15 @@ subroutine WIPPFloAuxVarCompute(x,wippflo_auxvar,global_auxvar, &
     call EOSWaterViscosity(wippflo_auxvar%temp,wippflo_auxvar%pres(lid), &
                            wippflo_auxvar%pres(spid),visl,ierr)
   else
-    aux(1) = global_auxvar%m_nacl(1)
+    if (option%iflag == WIPPFLO_UPDATE_FOR_FIXED_ACCUM) then
+      ! For the computation of fixed accumulation term use NaCl
+      ! value, m_nacl(2), from the previous time step.
+      aux(1) = global_auxvar%m_nacl(2)
+    else
+      ! Use NaCl value for the current time step, m_nacl(1), for computing
+      ! the accumulation term
+      aux(1) = global_auxvar%m_nacl(1)
+    endif
     call EOSWaterViscosityExt(wippflo_auxvar%temp,wippflo_auxvar%pres(lid), &
                               wippflo_auxvar%pres(spid),aux,visl,ierr)
   endif

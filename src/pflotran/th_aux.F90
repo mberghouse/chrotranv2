@@ -16,6 +16,8 @@ module TH_Aux_module
 
   PetscInt, public :: th_ice_model
 
+  PetscInt, parameter, public :: TH_UPDATE_FOR_FIXED_ACCUM = 0
+
   type, public :: TH_auxvar_type
     PetscReal :: avgmw
     PetscReal :: h
@@ -499,7 +501,15 @@ subroutine THAuxVarComputeNoFreezing(x,auxvar,global_auxvar, &
     call EOSWaterViscosity(global_auxvar%temp,pw,sat_pressure,dpsat_dT,visl, &
                            dvis_dT,dvis_dp,ierr)
   else
-    aux(1) = global_auxvar%m_nacl(1)
+    if (option%iflag == TH_UPDATE_FOR_FIXED_ACCUM) then
+      ! For the computation of fixed accumulation term use NaCl
+      ! value, m_nacl(2), from the previous time step.
+      aux(1) = global_auxvar%m_nacl(2)
+    else
+      ! Use NaCl value for the current time step, m_nacl(1), for computing
+      ! the accumulation term
+      aux(1) = global_auxvar%m_nacl(1)
+    endif
     call EOSWaterDensityExt(global_auxvar%temp,pw,aux, &
                             dw_kg,dw_mol,dw_dp,dw_dT,ierr)
     if (ierr /= 0) then
@@ -565,7 +575,8 @@ subroutine THAuxVarComputeNoFreezing(x,auxvar,global_auxvar, &
 
   ! Effective thermal conductivity
   call thermal_cc%thermal_conductivity_function%CalculateTCond( &
-       global_auxvar%sat(1),global_auxvar%temp,auxvar%Dk_eff,dk_ds,dk_dT,option)
+       global_auxvar%sat(1),global_auxvar%temp, &
+       material_auxvar%porosity,auxvar%Dk_eff,dk_ds,dk_dT,option)
 
   ! Derivative of soil Kersten number
   auxvar%dKe_dp = alpha*(global_auxvar%sat(1) + epsilon)**(alpha - 1.d0)* &
@@ -868,7 +879,7 @@ subroutine THAuxVarComputeFreezing(x, auxvar, global_auxvar, &
   ! Effective thermal conductivity
   call thermal_cc%thermal_conductivity_function%CalculateFTCond( &
        global_auxvar%sat(1),auxvar%ice%sat_ice,global_auxvar%temp, &
-       auxvar%Dk_eff,dk_ds,dK_di,dk_dT,option)
+       material_auxvar%porosity,auxvar%Dk_eff,dk_ds,dK_di,dk_dT,option)
 
   ! Derivative of Kersten number
   auxvar%dKe_dp = alpha*(global_auxvar%sat(1) + epsilon)**(alpha - 1.d0)* &

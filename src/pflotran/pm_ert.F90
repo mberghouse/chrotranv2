@@ -26,10 +26,12 @@ module PM_ERT_class
     PetscLogDouble :: ksp_time
     Vec :: rhs
     ! EMPIRICAL Archie and Waxman-Smits options
+    PetscInt :: conductivity_mapping_law
     PetscReal :: tortuosity_constant   ! a
     PetscReal :: cementation_exponent  ! m
     PetscReal :: saturation_exponent   ! n
     PetscReal :: water_conductivity
+    PetscReal :: surface_conductivity
     PetscReal :: tracer_conductivity
     PetscReal :: clay_conductivity
     PetscReal :: clay_volume_factor
@@ -106,10 +108,12 @@ subroutine PMERTInit(pm_ert)
   pm_ert%rhs = PETSC_NULL_VEC
 
   ! Archie and Waxman-Smits default values
+  pm_ert%conductivity_mapping_law = ARCHIE
   pm_ert%tortuosity_constant = 1.d0
   pm_ert%cementation_exponent = 1.9d0
   pm_ert%saturation_exponent = 2.d0
   pm_ert%water_conductivity = 0.01d0
+  pm_ert%surface_conductivity = 0.d0 ! to modifie Archie's equation
   pm_ert%tracer_conductivity = 0.d0
   pm_ert%clay_conductivity = 0.03d0
   pm_ert%clay_volume_factor = 0.0d0  ! No clay -> clean sand
@@ -178,6 +182,20 @@ subroutine PMERTReadSimOptionsBlock(this,input)
       ! Add various options for ERT if needed here
       case('COMPUTE_JACOBIAN')
         option%geophysics%compute_jacobian = PETSC_TRUE
+      case('CONDUCTIVITY_MAPPING_LAW')
+        call InputReadWord(input,option,word,PETSC_TRUE)
+        call InputErrorMsg(input,option,keyword,error_string)
+        call StringToUpper(word)
+        select case(trim(word))
+          case('ARCHIE')
+            this%conductivity_mapping_law = ARCHIE
+          case('WAXMAN_SMITS')
+            this%conductivity_mapping_law = WAXMAN_SMITS
+          case default
+            option%io_buffer  = 'CONDUCTIVITY_MAPPING_LAW: ' &
+                                      // trim(word) // ' unknown.'
+            call PrintErrMsg(option)
+        end select
       case('TORTUOSITY_CONSTANT')
         call InputReadDouble(input,option,this%tortuosity_constant)
         call InputErrorMsg(input,option,keyword,error_string)
@@ -189,6 +207,9 @@ subroutine PMERTReadSimOptionsBlock(this,input)
         call InputErrorMsg(input,option,keyword,error_string)
       case('WATER_CONDUCTIVITY')
         call InputReadDouble(input,option,this%water_conductivity)
+        call InputErrorMsg(input,option,keyword,error_string)
+      case('SURFACE_CONDUCTIVITY')
+        call InputReadDouble(input,option,this%surface_conductivity)
         call InputErrorMsg(input,option,keyword,error_string)
       case('TRACER_CONDUCTIVITY')
         call InputReadDouble(input,option,this%tracer_conductivity)
@@ -556,7 +577,8 @@ subroutine PMERTPreSolve(this)
   class(reaction_rt_type), pointer :: reaction
   PetscInt :: ghosted_id
   PetscInt :: species_id
-  PetscReal :: a,m,n,cond_w,cond_c,Vc,cond  ! variables for Archie's law
+  PetscInt :: empirical_law
+  PetscReal :: a,m,n,cond_w,cond_s,cond_c,Vc,cond  ! variables for Archie's law
   PetscReal :: por,sat
   PetscReal :: cond_sp,cond_w0
   PetscReal :: tracer_scale
@@ -569,11 +591,13 @@ subroutine PMERTPreSolve(this)
   grid => patch%grid
   reaction => patch%reaction
 
+  empirical_law = this%conductivity_mapping_law
   a = this%tortuosity_constant
   m = this%cementation_exponent
   n = this%saturation_exponent
   Vc = this%clay_volume_factor
   cond_w = this%water_conductivity
+  cond_s = this%surface_conductivity
   cond_c = this%clay_conductivity
   cond_w0 = cond_w
 
@@ -610,7 +634,8 @@ subroutine PMERTPreSolve(this)
       endif
     endif
     ! compute conductivity
-    call ERTConductivityFromEmpiricalEqs(por,sat,a,m,n,Vc,cond_w,cond_c,cond)
+    call ERTConductivityFromEmpiricalEqs(por,sat,a,m,n,Vc,cond_w,cond_s, &
+                                         cond_c,empirical_law,cond)
     material_auxvars(ghosted_id)%electrical_conductivity(1) = cond
   enddo
 
