@@ -113,6 +113,9 @@ subroutine ZFlowSetup(realization)
   ! ensure mapping of local cell ids to neighboring ghosted ids exits
   call GridSetupCellNeighbors(grid,option)
 
+  ! ensure mapping of local cell ids to neighboring ghosted ids exits
+  call GridSetupCellNeighbors(grid,option)
+
   ! ensure that material properties specific to this module are properly
   ! initialized
   material_parameter => patch%aux%Material%material_parameter
