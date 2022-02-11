@@ -172,11 +172,12 @@ subroutine PMMaterialTransformReadPMBlock(this,input)
   call PrintMsg(option)
   
   input%ierr = 0
-  error_string = 'MATERIAL_TRANSFORM_GENERAL'
   
   nullify(prev_material_transform)
   call InputPushBlock(input,option)
   do
+    error_string = 'MATERIAL_TRANSFORM_GENERAL'
+    
     call InputReadPflotranString(input,option)
     if (InputError(input)) exit
     if (InputCheckExit(input,option)) exit

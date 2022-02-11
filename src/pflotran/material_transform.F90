@@ -111,7 +111,8 @@ module Material_Transform_module
   end type material_transform_type
   !---------------------------------------------------------------------------
   type, public :: material_transform_auxvar_type
-    ! Placeholder for general material transform auxvars
+    class(illitization_auxvar_type), pointer :: il_aux ! auxvars for illitization class
+    class(buffer_erosion_auxvar_type), pointer :: be_aux ! auxvars for buffer erosion class
   end type material_transform_auxvar_type
   !---------------------------------------------------------------------------
   type, public :: material_transform_ptr_type
@@ -930,6 +931,7 @@ function MaterialTransformCreate()
   allocate(material_transform)
   material_transform%name = ''
   material_transform%test = PETSC_FALSE
+  material_transform%num_aux = 0
   nullify(material_transform%auxvars)
   nullify(material_transform%illitization)
   nullify(material_transform%buffer_erosion)
@@ -2064,6 +2066,136 @@ end subroutine MaterialTransformPrintPerm
 
 ! ************************************************************************** !
 
+subroutine MaterialTransformAuxVarInit(auxvar,option)
+  !
+  ! Initializes a material transform auxiliary object
+  !
+  ! Author: Alex Salazar III
+  ! Date: 02/10/2022
+  !
+
+  use Option_module
+
+  implicit none
+
+  class(material_transform_auxvar_type) :: auxvar
+  type(option_type) :: option
+
+  nullify(auxvar%il_aux)
+  nullify(auxvar%be_aux)
+
+end subroutine MaterialTransformAuxVarInit
+
+! ************************************************************************** !
+
+subroutine IllitizationAuxVarInit(auxvar,option)
+  !
+  ! Initializes an illitization auxiliary object
+  !
+  ! Author: Alex Salazar III
+  ! Date: 02/10/2022
+  !
+
+  use Option_module
+
+  implicit none
+
+  class(material_transform_auxvar_type), intent(inout) :: auxvar
+  type(option_type) :: option
+
+  call IllitizationAuxVarStrip(auxvar%il_aux)
+  allocate(auxvar%il_aux)
+  ! auxvar%il_aux%initial_pressure = UNINITIALIZED_DOUBLE
+  auxvar%il_aux%fs0    = 1.0d+0               ! initial fraction of smectite in material
+  auxvar%il_aux%fs     = UNINITIALIZED_DOUBLE ! fraction of smectite in material
+  auxvar%il_aux%fi     = UNINITIALIZED_DOUBLE ! fraction of illite in material
+  auxvar%il_aux%ts     = UNINITIALIZED_DOUBLE ! track time of last change in smectite
+  auxvar%il_aux%scale  = UNINITIALIZED_DOUBLE ! scale factor
+  auxvar%il_aux%qperm0 = PETSC_FALSE          ! save initial permeability
+
+  if (option%iflowmode /= NULL_MODE) then
+    if (option%flow%full_perm_tensor) then
+      allocate(auxvar%il_aux%perm0(6))
+    else
+      allocate(auxvar%il_aux%perm0(3))
+    endif
+    auxvar%il_aux%perm0 = UNINITIALIZED_DOUBLE
+  else
+    ! nullify(auxvar%il_aux%perm0)
+  endif
+
+end subroutine IllitizationAuxVarInit
+
+! ************************************************************************** !
+
+subroutine IllitizationAuxVarStrip(auxvar)
+  !
+  ! Deallocates an illitization auxiliary object
+  !
+  ! Author: Alex Salazar III
+  ! Date: 02/10/2022
+  !
+
+  use Utility_module, only : DeallocateArray
+
+  implicit none
+
+  type(illitization_auxvar_type), pointer :: auxvar
+
+  if (.not.associated(auxvar)) return
+  
+  ! call DeallocateArray(auxvar%perm0)
+
+  deallocate(auxvar)
+  nullify(auxvar)
+
+end subroutine IllitizationAuxVarStrip
+
+! ************************************************************************** !
+
+subroutine BufferErosionAuxVarInit(auxvar,option)
+  !
+  ! Initializes a buffer erosion auxiliary object
+  !
+  ! Author: Alex Salazar III
+  ! Date: 02/10/2022
+  !
+
+  use Option_module
+
+  implicit none
+
+  class(material_transform_auxvar_type), intent(inout) :: auxvar
+  type(option_type) :: option
+
+  call BufferErosionAuxVarStrip(auxvar%be_aux)
+  allocate(auxvar%be_aux)
+
+end subroutine BufferErosionAuxVarInit
+
+! ************************************************************************** !
+
+subroutine BufferErosionAuxVarStrip(auxvar)
+  !
+  ! Deallocates a buffer erosion auxiliary object
+  !
+  ! Author: Alex Salazar III
+  ! Date: 02/10/2022
+  !
+
+  implicit none
+
+  type(buffer_erosion_auxvar_type), pointer :: auxvar
+
+  if (.not.associated(auxvar)) return
+
+  deallocate(auxvar)
+  nullify(auxvar)
+
+end subroutine BufferErosionAuxVarStrip
+
+! ************************************************************************** !
+
 subroutine MaterialTransformAuxVarStrip(auxvar)
   ! 
   ! Deallocates a material transform auxiliary object
@@ -2076,6 +2208,13 @@ subroutine MaterialTransformAuxVarStrip(auxvar)
   implicit none
 
   type(material_transform_auxvar_type) :: auxvar
+  
+  if (associated(auxvar%il_aux)) then
+    call IllitizationAuxVarStrip(auxvar%il_aux)
+  endif
+  if (associated(auxvar%be_aux)) then
+    call BufferErosionAuxVarStrip(auxvar%be_aux)
+  endif
   
   ! call DeallocateArray(auxvar%variable)  
   
