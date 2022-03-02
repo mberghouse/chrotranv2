@@ -118,7 +118,7 @@ subroutine PMMaterialTransformSetup(this)
 
 ! INPUT ARGUMENTS:
 ! ================
-! this (intput/output): material transform process model object
+! this (input/output): material transform process model object
 ! ----------------------------------
   class(pm_material_transform_type) :: this
 ! ----------------------------------
@@ -145,7 +145,7 @@ subroutine PMMaterialTransformReadPMBlock(this,input)
 
 ! INPUT ARGUMENTS:
 ! ================
-! this (intput/output): material transform process model object
+! this (input/output): material transform process model object
 ! input (input/output): pointer to input object
 ! ----------------------------------
   class(pm_material_transform_type) :: this

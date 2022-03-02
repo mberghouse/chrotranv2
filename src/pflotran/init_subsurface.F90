@@ -288,7 +288,6 @@ subroutine InitSubsurfAssignMatProperties(realization)
   PetscReal, pointer :: vec_p(:)
   PetscReal, pointer :: compress_p(:)
   PetscReal, pointer :: cond_p(:)
-  PetscReal, pointer :: smectite_p(:) 
 
   Vec :: epsilon0
 
@@ -344,9 +343,6 @@ subroutine InitSubsurfAssignMatProperties(realization)
       ierr);CHKERRQ(ierr)
   endif
 
-  ! material transform - illitization
-  call VecGetArrayF90(field%smectite,smectite_p,ierr);CHKERRQ(ierr)
-        
   ! have to use Material%auxvars() and not material_auxvars() due to memory
   ! errors in gfortran
   Material => patch%aux%Material
@@ -450,9 +446,6 @@ subroutine InitSubsurfAssignMatProperties(realization)
     if (associated(Material%auxvars)) then
       call MaterialAssignPropertyToAux(Material%auxvars(ghosted_id), &
                                         material_property,option)
-      if (associated(Material%auxvars(ghosted_id)%iltf)) then
-        smectite_p(local_id) = Material%auxvars(ghosted_id)%iltf%ilt_fs
-      endif
     endif
     por0_p(local_id) = material_property%porosity
     tor0_p(local_id) = material_property%tortuosity
@@ -489,8 +482,6 @@ subroutine InitSubsurfAssignMatProperties(realization)
     call VecRestoreArrayF90(field%electrical_conductivity,cond_p, &
       ierr);CHKERRQ(ierr)
   endif
-
-  call VecRestoreArrayF90(field%smectite,smectite_p,ierr);CHKERRQ(ierr)
 
   ! read in any user-defined property fields
   do material_id = 1, size(patch%material_property_array)
@@ -583,9 +574,6 @@ subroutine InitSubsurfAssignMatProperties(realization)
     if (associated(patch%cct_id)) then
       call RealLocalToLocalWithArray(realization,CCT_ID_ARRAY)
     endif
-    if (associated(patch%mtf_id)) then
-      call RealLocalToLocalWithArray(realization,MTF_ID_ARRAY)
-    endif
 
     if (soil_compressibility_index > 0) then
       call DiscretizationGlobalToLocal(discretization,field%compressibility0, &
@@ -621,11 +609,6 @@ subroutine InitSubsurfAssignMatProperties(realization)
      call MaterialSetAuxVarVecLoc(patch%aux%Material,field%work_loc, &
                                ELECTRICAL_CONDUCTIVITY,ZERO_INTEGER)
   endif
-
-  call DiscretizationGlobalToLocal(discretization,field%smectite, &
-                                   field%work_loc,ONEDOF)
-  call MaterialSetAuxVarVecLoc(patch%aux%Material,field%work_loc, &
-                               SMECTITE,ZERO_INTEGER)
 
   ! copy rock properties to neighboring ghost cells
   do i = 1, max_material_index

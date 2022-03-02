@@ -372,10 +372,6 @@ subroutine RealizationCreateDiscretization(realization)
                                        field%electrical_conductivity)
   endif
 
-  ! material transform - illitization
-  call DiscretizationDuplicateVector(discretization,field%work, &
-                                     field%smectite)
-
   grid => discretization%grid
   select case(discretization%itype)
     case(STRUCTURED_GRID)
@@ -1771,11 +1767,6 @@ subroutine RealizationRevertFlowParameters(realization)
 !  call MaterialSetAuxVarVecLoc(Material,field%work_loc,TORTUOSITY, &
 !                               ZERO_INTEGER)
 
-  call DiscretizationGlobalToLocal(discretization,field%smectite, &
-                                 field%work_loc,ONEDOF)
-  call MaterialSetAuxVarVecLoc(Material,field%work_loc,SMECTITE, &
-                               ZERO_INTEGER)
-
 end subroutine RealizationRevertFlowParameters
 
 ! ************************************************************************** !
@@ -1839,8 +1830,6 @@ subroutine RealizStoreRestartFlowParams(realization)
   endif
   call MaterialGetAuxVarVecLoc(Material,field%work_loc,SMECTITE, &
                                ZERO_INTEGER)
-  call DiscretizationLocalToGlobal(discretization,field%work_loc, &
-                                   field%smectite,ONEDOF)                                     
   call MaterialGetAuxVarVecLoc(Material,field%work_loc,POROSITY, &
                                POROSITY_BASE)
   ! might as well update initial and base at the same time
@@ -2207,7 +2196,6 @@ subroutine RealizationUpdatePropertiesTS(realization)
   endif
 
   if (reaction%update_permeability) then
-    call VecGetArrayReadF90(field%smectite,smec_ptr,ierr);CHKERRQ(ierr)
     call VecGetArrayReadF90(field%perm0_xx,perm0_xx_p,ierr);CHKERRQ(ierr)
     call VecGetArrayReadF90(field%perm0_zz,perm0_zz_p,ierr);CHKERRQ(ierr)
     call VecGetArrayReadF90(field%perm0_yy,perm0_yy_p,ierr);CHKERRQ(ierr)
@@ -2271,7 +2259,6 @@ subroutine RealizationUpdatePropertiesTS(realization)
       call VecRestoreArrayReadF90(field%perm0_xz,perm0_xz_p,ierr);CHKERRQ(ierr)
       call VecRestoreArrayReadF90(field%perm0_yz,perm0_yz_p,ierr);CHKERRQ(ierr)
     endif
-    call VecRestoreArrayReadF90(field%smectite,smec_ptr,ierr);CHKERRQ(ierr)
     call VecRestoreArrayReadF90(field%porosity0,porosity0_p,ierr);CHKERRQ(ierr)
 
     call MaterialGetAuxVarVecLoc(patch%aux%Material,field%work_loc, &
