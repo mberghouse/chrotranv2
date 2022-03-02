@@ -193,17 +193,16 @@ general.o : connection.o coupler.o debug.o discretization.o eos_water.o \
             srcsink_sandbox_base.o srcsink_sandbox_wipp_gas.o \
             srcsink_sandbox_wipp_well.o upwind_direction.o variables.o
 general_aux.o : characteristic_curves.o eos_gas.o eos_water.o global_aux.o \
-                material_aux.o material_transform.o matrix_zeroing.o option.o \
-                pflotran_constants.o string.o utility.o wipp.o
+                material_aux.o matrix_zeroing.o option.o pflotran_constants.o \
+                string.o utility.o wipp.o
 general_common.o : characteristic_curves.o characteristic_curves_thermal.o \
                    connection.o coupler.o eos_gas.o eos_water.o general_aux.o \
-                   global_aux.o material_aux.o material_transform.o option.o \
-                   pflotran_constants.o upwind_direction.o utility.o wipp.o
+                   global_aux.o material_aux.o option.o pflotran_constants.o \
+                   upwind_direction.o utility.o wipp.o
 general_derivative.o : characteristic_curves.o characteristic_curves_common.o \
                        characteristic_curves_thermal.o coupler.o eos_gas.o \
                        eos_water.o general_aux.o general_common.o global_aux.o \
-                       material_aux.o material_transform.o option.o \
-                       pflotran_constants.o
+                       material_aux.o option.o pflotran_constants.o
 generic.o : pflotran_constants.o string.o
 geomech_grid.o : gauss.o geomech_grid_aux.o geomechanics_region.o geometry.o \
                  grid_unstructured_aux.o grid_unstructured_cell.o input_aux.o \
@@ -601,8 +600,8 @@ pm_ufd_biosphere.o : coupler.o global_aux.o grid.o input_aux.o material_aux.o \
                      reaction_aux.o reactive_transport_aux.o \
                      realization_subsurface.o region.o string.o utility.o
 pm_ufd_decay.o : field.o global.o global_aux.o grid.o input_aux.o material.o \
-                 material_aux.o material_transform.o option.o output_aux.o \
-                 patch.o pflotran_constants.o pm_base.o reaction_aux.o \
+                 material_aux.o option.o output_aux.o patch.o \
+                 pflotran_constants.o pm_base.o reaction_aux.o \
                  reaction_mineral_aux.o reactive_transport_aux.o \
                  realization_subsurface.o string.o utility.o
 pm_waste_form.o : checkpoint.o condition.o data_mediator_vec.o dataset.o \
@@ -872,12 +871,11 @@ richards.o : connection.o coupler.o debug.o discretization.o field.o \
              richards_common.o srcsink_sandbox.o srcsink_sandbox_base.o \
              srcsink_sandbox_downreg.o utility.o variables.o
 richards_aux.o : characteristic_curves.o characteristic_curves_common.o \
-                 eos_water.o global_aux.o material_aux.o material_transform.o \
-                 matrix_buffer.o matrix_zeroing.o option.o \
-                 pflotran_constants.o utility.o
+                 eos_water.o global_aux.o material_aux.o matrix_buffer.o \
+                 matrix_zeroing.o option.o pflotran_constants.o utility.o
 richards_common.o : characteristic_curves.o connection.o eos_water.o \
-                    global_aux.o material_aux.o material_transform.o option.o \
-                    pflotran_constants.o richards_aux.o utility.o
+                    global_aux.o material_aux.o option.o pflotran_constants.o \
+                    richards_aux.o utility.o
 saturation_function.o : input_aux.o option.o pflotran_constants.o string.o \
                         utility.o
 secondary_continuum.o : block_solve.o block_tridiag.o condition.o coupler.o \
@@ -958,14 +956,14 @@ survey.o : geometry.o grid.o input_aux.o option.o option_geophysics.o \
 th.o : characteristic_curves.o characteristic_curves_thermal.o condition.o \
        connection.o coupler.o debug.o discretization.o eos_water.o field.o \
        fluid.o global_aux.o grid.o logging.o material.o material_aux.o \
-       material_transform.o option.o output_aux.o patch.o pflotran_constants.o \
+       option.o output_aux.o patch.o pflotran_constants.o \
        realization_subsurface.o region.o saturation_function.o \
        secondary_continuum.o secondary_continuum_aux.o th_aux.o utility.o \
        variables.o
 th_aux.o : characteristic_curves.o characteristic_curves_common.o \
            characteristic_curves_thermal.o eos_water.o global_aux.o \
-           material_aux.o material_transform.o matrix_zeroing.o option.o \
-           pflotran_constants.o saturation_function.o
+           material_aux.o matrix_zeroing.o option.o pflotran_constants.o \
+           saturation_function.o
 time_storage.o : option.o pflotran_constants.o
 timer.o :
 timestepper_KSP.o : checkpoint.o convergence.o hdf5_aux.o input_aux.o option.o \
