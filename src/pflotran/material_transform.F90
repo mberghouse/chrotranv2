@@ -614,7 +614,7 @@ end subroutine ILTGeneralIllitization
 subroutine ILTBaseShiftSorption(this,kd0,ele,material_auxvar,option)
 
   use Option_module
-  use Material_Aux_class
+  use Material_Aux_module
 
   implicit none
 
@@ -641,7 +641,7 @@ subroutine ILTShiftSorption(this,kd0,ele,material_auxvar,option)
   ! Date: 10/21/2021
   !
   use Option_module
-  use Material_Aux_class
+  use Material_Aux_module
 
   implicit none
 
@@ -806,7 +806,7 @@ end subroutine ILTCheckElements
 subroutine ILTBaseShiftPerm(this,material_auxvar,option)
 
   use Option_module
-  use Material_Aux_class
+  use Material_Aux_module
 
   implicit none
 
@@ -832,7 +832,7 @@ subroutine ILTShiftPerm(this,material_auxvar,option)
   !
 
   use Option_module
-  use Material_Aux_class
+  use Material_Aux_module
 
   implicit none
 

@@ -511,8 +511,8 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
   use EOS_Water_module
   use EOS_Gas_module
   use Characteristic_Curves_module
+  use Material_Aux_module
   use Material_Transform_module
-  use Material_Aux_class
   use Creep_Closure_module
   use Fracture_module
   use WIPP_module
@@ -525,7 +525,7 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
   PetscReal :: x(option%nflowdof)
   type(general_auxvar_type) :: gen_auxvar
   type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   class(creep_closure_type), pointer :: creep_closure
   PetscInt :: natural_id
 
@@ -995,7 +995,15 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
                            gen_auxvar%den_kg(lid),gen_auxvar%den(lid),ierr)
     endif
   else
-    aux(1) = global_auxvar%m_nacl(1)
+    if (option%iflag == GENERAL_UPDATE_FOR_FIXED_ACCUM) then
+      ! For the computation of fixed accumulation term use NaCl
+      ! value, m_nacl(2), from the previous time step.
+      aux(1) = global_auxvar%m_nacl(2)
+    else
+      ! Use NaCl value for the current time step, m_nacl(1), for computing
+      ! the accumulation term
+      aux(1) = global_auxvar%m_nacl(1)
+    endif
     if (associated(gen_auxvar%d)) then
       call EOSWaterDensityExt(gen_auxvar%temp,cell_pressure,aux, &
                               gen_auxvar%den_kg(lid),gen_auxvar%den(lid), &
@@ -1212,7 +1220,15 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
                                gen_auxvar%pres(spid),visl,ierr)
       endif
     else
-      aux(1) = global_auxvar%m_nacl(1)
+      if (option%iflag == GENERAL_UPDATE_FOR_FIXED_ACCUM) then
+        ! For the computation of fixed accumulation term use NaCl
+        ! value, m_nacl(2), from the previous time step.
+        aux(1) = global_auxvar%m_nacl(2)
+      else
+        ! Use NaCl value for the current time step, m_nacl(1), for computing
+        ! the accumulation term
+        aux(1) = global_auxvar%m_nacl(1)
+      endif
       if (associated(gen_auxvar%d)) then
         call EOSWaterViscosityExt(gen_auxvar%temp,cell_pressure, &
                                   gen_auxvar%pres(spid), &
@@ -1370,8 +1386,8 @@ subroutine GeneralAuxVarUpdateState(x,gen_auxvar,global_auxvar, &
   use Global_Aux_module
   use EOS_Water_module
   use Characteristic_Curves_module
+  use Material_Aux_module
   use Material_Transform_module
-  use Material_Aux_class
 
   implicit none
 
@@ -1381,7 +1397,7 @@ subroutine GeneralAuxVarUpdateState(x,gen_auxvar,global_auxvar, &
   class(material_transform_type) :: material_transform
   type(general_auxvar_type) :: gen_auxvar
   type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
 
   PetscReal, parameter :: epsilon = 0.d0
   PetscReal :: liq_epsilon, gas_epsilon, two_phase_epsilon
@@ -1611,7 +1627,7 @@ subroutine GeneralAuxVarPerturb(gen_auxvar,global_auxvar, &
   use Characteristic_Curves_module
   use Material_Transform_module
   use Global_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
 
   implicit none
 
@@ -1619,7 +1635,7 @@ subroutine GeneralAuxVarPerturb(gen_auxvar,global_auxvar, &
   PetscInt :: natural_id
   type(general_auxvar_type) :: gen_auxvar(0:)
   type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   class(characteristic_curves_type) :: characteristic_curves
   class(material_transform_type) :: material_transform
      
@@ -2015,14 +2031,14 @@ subroutine GeneralPrintAuxVars(general_auxvar,global_auxvar,material_auxvar, &
   ! 
 
   use Global_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Option_module
 
   implicit none
 
   type(general_auxvar_type) :: general_auxvar
   type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   PetscInt :: natural_id
   character(len=*) :: string
   type(option_type) :: option
@@ -2129,14 +2145,14 @@ subroutine GeneralOutputAuxVars1(general_auxvar,global_auxvar,material_auxvar, &
   ! 
 
   use Global_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Option_module
 
   implicit none
 
   type(general_auxvar_type) :: general_auxvar
   type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   PetscInt :: natural_id
   character(len=*) :: string
   PetscBool :: append
@@ -2630,6 +2646,7 @@ subroutine GeneralAuxVarStrip(auxvar)
   call DeallocateArray(auxvar%xmol)  
   call DeallocateArray(auxvar%H)  
   call DeallocateArray(auxvar%U)  
+  call DeallocateArray(auxvar%kr)  
   call DeallocateArray(auxvar%mobility)  
   if (associated(auxvar%d)) then
     deallocate(auxvar%d)

@@ -1683,9 +1683,9 @@ subroutine RealizationRevertFlowParameters(realization)
   use Option_module
   use Field_module
   use Grid_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Discretization_module
-  use Material_Aux_class, only : material_type, &
+  use Material_Aux_module, only : material_type, &
                               POROSITY_CURRENT, POROSITY_BASE, POROSITY_INITIAL
   use Variables_module, only : PERMEABILITY_X, PERMEABILITY_Y, PERMEABILITY_Z, &
                                PERMEABILITY_XY, PERMEABILITY_XZ, &
@@ -1783,7 +1783,7 @@ subroutine RealizStoreRestartFlowParams(realization)
   use Option_module
   use Field_module
   use Discretization_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Variables_module
 
   implicit none
@@ -2080,7 +2080,7 @@ subroutine RealizationUpdatePropertiesTS(realization)
   use Discretization_module
   use Field_module
   use Grid_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Reaction_Aux_module
   use Reactive_Transport_Aux_module
   use Reaction_Mineral_module
@@ -2101,7 +2101,7 @@ subroutine RealizationUpdatePropertiesTS(realization)
   type(material_property_ptr_type), pointer :: material_property_array(:)
   type(reactive_transport_auxvar_type), pointer :: rt_auxvars(:)
   type(discretization_type), pointer :: discretization
-  class(material_auxvar_type), pointer :: material_auxvars(:)
+  type(material_auxvar_type), pointer :: material_auxvars(:)
 
   PetscInt :: local_id, ghosted_id
   PetscInt :: imnrl, imnrl1, imnrl_armor, imat
@@ -2220,26 +2220,11 @@ subroutine RealizationUpdatePropertiesTS(realization)
       endif
       scale = max(material_property_array(imat)%ptr% &
                     permeability_min_scale_fac,scale)
-      !geh: this is a kludge for gfortran.  the code reports errors when
-      !     material_auxvars(ghosted_id)%permeability is used.
-      ! This is not an issue with Intel
-#if 1
-      perm_ptr => material_auxvars(ghosted_id)%permeability
-      perm_ptr(perm_xx_index) = perm0_xx_p(local_id)*scale
-      perm_ptr(perm_yy_index) = perm0_yy_p(local_id)*scale
-      perm_ptr(perm_zz_index) = perm0_zz_p(local_id)*scale
-      if (option%flow%full_perm_tensor) then
-        perm_ptr(perm_xy_index) = perm0_xy_p(local_id)*scale
-        perm_ptr(perm_xz_index) = perm0_xz_p(local_id)*scale
-        perm_ptr(perm_yz_index) = perm0_yz_p(local_id)*scale
-      endif
-#else
-        material_auxvars(ghosted_id)%iltf%ilt_fs = smec_ptr(local_id)
-        material_auxvars(ghosted_id)%permeability(perm_xx_index) = &
+      material_auxvars(ghosted_id)%permeability(perm_xx_index) = &
           perm0_xx_p(local_id)*scale
-        material_auxvars(ghosted_id)%permeability(perm_yy_index) = &
+      material_auxvars(ghosted_id)%permeability(perm_yy_index) = &
           perm0_yy_p(local_id)*scale
-        material_auxvars(ghosted_id)%permeability(perm_zz_index) = &
+      material_auxvars(ghosted_id)%permeability(perm_zz_index) = &
           perm0_zz_p(local_id)*scale
       if (option%flow%full_perm_tensor) then
         material_auxvars(ghosted_id)%permeability(perm_xy_index) = &
@@ -2249,7 +2234,6 @@ subroutine RealizationUpdatePropertiesTS(realization)
         material_auxvars(ghosted_id)%permeability(perm_yz_index) = &
           perm0_yz_p(local_id)*scale
       endif
-#endif
     enddo
     call VecRestoreArrayReadF90(field%perm0_xx,perm0_xx_p,ierr);CHKERRQ(ierr)
     call VecRestoreArrayReadF90(field%perm0_zz,perm0_zz_p,ierr);CHKERRQ(ierr)
@@ -2331,7 +2315,7 @@ subroutine RealizationUpdatePropertiesNI(realization)
   use Grid_module
   use Reaction_Aux_module
   use Reactive_Transport_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Variables_module, only : POROSITY, TORTUOSITY, PERMEABILITY_X, &
                                PERMEABILITY_Y, PERMEABILITY_Z, &
                                PERMEABILITY_XY, PERMEABILITY_XZ, &
@@ -2350,7 +2334,7 @@ subroutine RealizationUpdatePropertiesNI(realization)
   type(material_property_ptr_type), pointer :: material_property_array(:)
   type(reactive_transport_auxvar_type), pointer :: rt_auxvars(:)
   type(discretization_type), pointer :: discretization
-  class(material_auxvar_type), pointer :: material_auxvars(:)
+  type(material_auxvar_type), pointer :: material_auxvars(:)
 
   PetscInt :: local_id, ghosted_id
   PetscInt :: imnrl, imnrl1, imnrl_armor, imat
@@ -2394,7 +2378,7 @@ subroutine RealizationCalcMineralPorosity(realization)
   use Grid_module
   use Reaction_Aux_module
   use Reactive_Transport_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Variables_module, only : POROSITY
 
   implicit none
@@ -2408,7 +2392,7 @@ subroutine RealizationCalcMineralPorosity(realization)
   type(grid_type), pointer :: grid
   type(reactive_transport_auxvar_type), pointer :: rt_auxvars(:)
   type(discretization_type), pointer :: discretization
-  class(material_auxvar_type), pointer :: material_auxvars(:)
+  type(material_auxvar_type), pointer :: material_auxvars(:)
 
   PetscInt :: local_id, ghosted_id
   PetscInt :: imnrl
@@ -2796,7 +2780,7 @@ subroutine RealizUnInitializedVarsFlow(realization)
   ! Date: 07/06/16
   !
   use Option_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Variables_module, only : VOLUME, BASE_POROSITY, PERMEABILITY_X, &
                                PERMEABILITY_Y, PERMEABILITY_Z, &
                                PERMEABILITY_XY, PERMEABILITY_XZ, &
@@ -2842,7 +2826,7 @@ subroutine RealizUnInitializedVarsTran(realization)
   use Patch_module
   use Option_module
   use Material_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Variables_module, only : VOLUME, BASE_POROSITY, TORTUOSITY
 
   implicit none

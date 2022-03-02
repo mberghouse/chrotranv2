@@ -45,7 +45,7 @@ subroutine RichardsAccumDerivative(rich_auxvar,global_auxvar, &
   use Option_module
   use Characteristic_Curves_module
   use Material_Transform_module
-  use Material_Aux_class, only : material_auxvar_type, &
+  use Material_Aux_module, only : material_auxvar_type, &
                                  soil_compressibility_index, &
                                  MaterialAuxVarInit, &
                                  MaterialAuxVarCopy, &
@@ -56,7 +56,7 @@ subroutine RichardsAccumDerivative(rich_auxvar,global_auxvar, &
 
   type(richards_auxvar_type) :: rich_auxvar
   type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   type(option_type) :: option
   class(characteristic_curves_type) :: characteristic_curves
   class(material_transform_type) :: material_transform
@@ -130,7 +130,7 @@ subroutine RichardsAccumulation(rich_auxvar,global_auxvar, &
   ! 
 
   use Option_module
-  use Material_Aux_class, only : material_auxvar_type, &
+  use Material_Aux_module, only : material_auxvar_type, &
                                  soil_compressibility_index, &
                                  MaterialCompressSoil
   
@@ -138,7 +138,7 @@ subroutine RichardsAccumulation(rich_auxvar,global_auxvar, &
 
   type(richards_auxvar_type) :: rich_auxvar
   type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   type(option_type) :: option
   PetscReal :: Res(1:option%nflowdof)
   
@@ -174,7 +174,7 @@ subroutine RichardsFluxDerivative(rich_auxvar_up,global_auxvar_up, &
   ! 
   use Option_module 
   use Characteristic_Curves_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Material_Transform_module
   use Connection_module
   
@@ -182,7 +182,7 @@ subroutine RichardsFluxDerivative(rich_auxvar_up,global_auxvar_up, &
   
   type(richards_auxvar_type) :: rich_auxvar_up, rich_auxvar_dn
   type(global_auxvar_type) :: global_auxvar_up, global_auxvar_dn
-  class(material_auxvar_type) :: material_auxvar_up, material_auxvar_dn
+  type(material_auxvar_type) :: material_auxvar_up, material_auxvar_dn
   type(option_type) :: option
   PetscReal :: v_darcy, area, dist(-1:3)
   class(characteristic_curves_type) :: characteristic_curves_up
@@ -234,8 +234,8 @@ subroutine RichardsFluxDerivative(rich_auxvar_up,global_auxvar_up, &
   
   call ConnectionCalculateDistances(dist,option%gravity,dd_up,dd_dn, &
                                     dist_gravity,upweight)
-  call material_auxvar_up%PermeabilityTensorToScalar(dist,perm_up)
-  call material_auxvar_dn%PermeabilityTensorToScalar(dist,perm_dn)
+  call PermeabilityTensorToScalar(material_auxvar_up,dist,perm_up)
+  call PermeabilityTensorToScalar(material_auxvar_dn,dist,perm_dn)
   
   Dq = (perm_up * perm_dn)/(dd_up*perm_dn + dd_dn*perm_up)
   
@@ -367,14 +367,14 @@ subroutine RichardsFlux(rich_auxvar_up,global_auxvar_up, &
   ! Date: 12/13/07
   ! 
   use Option_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Connection_module
   
   implicit none
   
   type(richards_auxvar_type) :: rich_auxvar_up, rich_auxvar_dn
   type(global_auxvar_type) :: global_auxvar_up, global_auxvar_dn
-  class(material_auxvar_type) :: material_auxvar_up, material_auxvar_dn
+  type(material_auxvar_type) :: material_auxvar_up, material_auxvar_dn
   type(option_type) :: option
   PetscReal :: v_darcy, area, dist(-1:3)
   PetscReal :: Res(1:option%nflowdof) 
@@ -392,8 +392,8 @@ subroutine RichardsFlux(rich_auxvar_up,global_auxvar_up, &
   
   call ConnectionCalculateDistances(dist,option%gravity,dd_up,dd_dn, &
                                     dist_gravity,upweight)
-  call material_auxvar_up%PermeabilityTensorToScalar(dist,perm_up)
-  call material_auxvar_dn%PermeabilityTensorToScalar(dist,perm_dn)
+  call PermeabilityTensorToScalar(material_auxvar_up,dist,perm_up)
+  call PermeabilityTensorToScalar(material_auxvar_dn,dist,perm_dn)
 
   Dq = (perm_up * perm_dn)/(dd_up*perm_dn + dd_dn*perm_up)
   
@@ -456,7 +456,7 @@ subroutine RichardsBCFluxDerivative(ibndtype,auxvars, &
   ! 
   use Option_module
   use Characteristic_Curves_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Material_Transform_module
   use EOS_Water_module
   use Utility_module
@@ -466,7 +466,7 @@ subroutine RichardsBCFluxDerivative(ibndtype,auxvars, &
   PetscInt :: ibndtype(:)
   type(richards_auxvar_type) :: rich_auxvar_up, rich_auxvar_dn
   type(global_auxvar_type) :: global_auxvar_up, global_auxvar_dn
-  class(material_auxvar_type) :: material_auxvar_dn
+  type(material_auxvar_type) :: material_auxvar_dn
   class(material_transform_type) :: material_transform_dn
   type(option_type) :: option
   PetscReal :: auxvars(:) ! from aux_real_var array in boundary condition
@@ -499,7 +499,7 @@ subroutine RichardsBCFluxDerivative(ibndtype,auxvars, &
   PetscInt :: iphase, ideriv
   type(richards_auxvar_type) :: rich_auxvar_pert_dn, rich_auxvar_pert_up
   type(global_auxvar_type) :: global_auxvar_pert_dn, global_auxvar_pert_up
-  class(material_auxvar_type), allocatable :: material_auxvar_pert_dn, &
+  type(material_auxvar_type), allocatable :: material_auxvar_pert_dn, &
                                               material_auxvar_pert_up
   PetscReal :: perturbation
   PetscReal :: x_dn(1), x_up(1), x_pert_dn(1), x_pert_up(1), pert_dn, res(1), &
@@ -523,7 +523,7 @@ subroutine RichardsBCFluxDerivative(ibndtype,auxvars, &
   dukvr_dp_dn = 0.d0
   dq_dp_dn = 0.d0
 
-  call material_auxvar_dn%PermeabilityTensorToScalar(dist,perm_dn)
+  call PermeabilityTensorToScalar(material_auxvar_dn,dist,perm_dn)
   
   ! Flow
   pressure_bc_type = ibndtype(RICHARDS_PRESSURE_DOF)
@@ -720,7 +720,7 @@ subroutine RichardsBCFlux(ibndtype,auxvars, &
   ! Date: 12/13/07
   ! 
   use Option_module
-  use Material_Aux_class
+  use Material_Aux_module
   use EOS_Water_module
   use Utility_module
  
@@ -729,7 +729,7 @@ subroutine RichardsBCFlux(ibndtype,auxvars, &
   PetscInt :: ibndtype(:)
   type(richards_auxvar_type) :: rich_auxvar_up, rich_auxvar_dn
   type(global_auxvar_type) :: global_auxvar_up, global_auxvar_dn
-  class(material_auxvar_type) :: material_auxvar_dn
+  type(material_auxvar_type) :: material_auxvar_dn
   type(option_type) :: option
   PetscReal :: auxvars(:) ! from aux_real_var array
   PetscReal :: v_darcy, area
@@ -760,7 +760,7 @@ subroutine RichardsBCFlux(ibndtype,auxvars, &
   q = 0.d0
   ukvr = 0.d0
 
-  call material_auxvar_dn%PermeabilityTensorToScalar(dist,perm_dn)  
+  call PermeabilityTensorToScalar(material_auxvar_dn,dist,perm_dn)
 
   ! Flow  
   pressure_bc_type = ibndtype(RICHARDS_PRESSURE_DOF)
