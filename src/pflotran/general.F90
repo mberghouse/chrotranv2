@@ -276,7 +276,6 @@ subroutine GeneralUpdateSolution(realization)
   ! 
 
   use Realization_Subsurface_class
-  use Material_Aux_module
   use Field_module
   use Patch_module
   use Discretization_module
@@ -293,7 +292,6 @@ subroutine GeneralUpdateSolution(realization)
   type(field_type), pointer :: field
   type(general_auxvar_type), pointer :: gen_auxvars(:,:)
   type(global_auxvar_type), pointer :: global_auxvars(:)  
-  class(material_auxvar_type), pointer :: material_auxvars(:)  
   PetscInt :: local_id, ghosted_id
   PetscErrorCode :: ierr
   
@@ -303,7 +301,6 @@ subroutine GeneralUpdateSolution(realization)
   grid => patch%grid
   gen_auxvars => patch%aux%General%auxvars  
   global_auxvars => patch%aux%Global%auxvars
-  material_auxvars => patch%aux%Material%auxvars
   
   if (realization%option%compute_mass_balance_new) then
     call GeneralUpdateMassBalance(realization)
@@ -313,9 +310,6 @@ subroutine GeneralUpdateSolution(realization)
   do ghosted_id = 1, grid%ngmax
     gen_auxvars(ZERO_INTEGER,ghosted_id)%istate_store(PREV_TS) = &
       global_auxvars(ghosted_id)%istate
-    if (associated(material_auxvars(ghosted_id)%iltf)) then
-      call material_auxvars(ghosted_id)%iltf%Update
-    endif
   enddo
  
   general_ts_count = general_ts_count + 1
@@ -334,7 +328,6 @@ subroutine GeneralTimeCut(realization)
   ! Date: 03/10/11
   ! 
   use Realization_Subsurface_class
-  use Material_Aux_module
   use Option_module
   use Field_module
   use Patch_module
@@ -349,7 +342,6 @@ subroutine GeneralTimeCut(realization)
   type(grid_type), pointer :: grid
   type(global_auxvar_type), pointer :: global_auxvars(:)  
   type(general_auxvar_type), pointer :: gen_auxvars(:,:)
-  class(material_auxvar_type), pointer :: material_auxvars(:)
   
   PetscInt :: local_id, ghosted_id
   PetscErrorCode :: ierr
@@ -359,15 +351,11 @@ subroutine GeneralTimeCut(realization)
   grid => patch%grid
   global_auxvars => patch%aux%Global%auxvars
   gen_auxvars => patch%aux%General%auxvars
-  material_auxvars => patch%aux%Material%auxvars
 
   ! restore stored state
   do ghosted_id = 1, grid%ngmax
     global_auxvars(ghosted_id)%istate = &
       gen_auxvars(ZERO_INTEGER,ghosted_id)%istate_store(PREV_TS)
-    if (associated(material_auxvars(ghosted_id)%iltf)) then
-      call material_auxvars(ghosted_id)%iltf%Restore
-    endif
   enddo
 
   general_ts_cut_count = general_ts_cut_count + 1
@@ -765,8 +753,6 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
                        material_auxvars(ghosted_id), &
                        patch%characteristic_curves_array( &
                          patch%cc_id(ghosted_id))%ptr, &
-                       patch%material_transform_array( &
-                         patch%mtf_id(ghosted_id))%ptr, &
                        natural_id, &
                        option)
     if (update_state) then
@@ -776,8 +762,6 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
                                     material_auxvars(ghosted_id), &
                                     patch%characteristic_curves_array( &
                                       patch%cc_id(ghosted_id))%ptr, &
-                                    patch%material_transform_array( &
-                                      patch%mtf_id(ghosted_id))%ptr, &
                                     natural_id, &  ! for debugging
                                     option)
     endif
@@ -931,8 +915,6 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
                                 material_auxvars(ghosted_id), &
                                 patch%characteristic_curves_array( &
                                   patch%cc_id(ghosted_id))%ptr, &
-                                patch%material_transform_array( &
-                                  patch%mtf_id(ghosted_id))%ptr, &
                                 natural_id, &
                                 option)
       if (update_state_bc) then
@@ -943,8 +925,6 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
                                       material_auxvars(ghosted_id), &
                                       patch%characteristic_curves_array( &
                                         patch%cc_id(ghosted_id))%ptr, &
-                                      patch%material_transform_array( &
-                                        patch%mtf_id(ghosted_id))%ptr, &
                                       natural_id,option)
       endif
     enddo
@@ -1037,8 +1017,6 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
                           ss_flow_vol_flux, &
                           patch%characteristic_curves_array( &
                             patch%cc_id(ghosted_id))%ptr, &
-                          patch%material_transform_array( &
-                            patch%mtf_id(ghosted_id))%ptr, &
                           grid%nG2A(ghosted_id), &
                           scale, Res_dummy, Jac_dummy, &
                           general_analytical_derivatives, &
@@ -1124,8 +1102,6 @@ subroutine GeneralUpdateFixedAccum(realization)
                               material_auxvars(ghosted_id), &
                               patch%characteristic_curves_array( &
                                 patch%cc_id(ghosted_id))%ptr, &
-                              patch%material_transform_array( &
-                                patch%mtf_id(ghosted_id))%ptr, &
                               natural_id, &
                               option)
     call GeneralAccumulation(gen_auxvars(ZERO_INTEGER,ghosted_id), &
@@ -1484,8 +1460,6 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
                           ss_flow_vol_flux, &
                           patch%characteristic_curves_array( &
                             patch%cc_id(ghosted_id))%ptr, &
-                          patch%material_transform_array( &
-                            patch%mtf_id(ghosted_id))%ptr, &
                           grid%nG2A(ghosted_id), &
                           scale,Res,Jac_dummy, &
                           general_analytical_derivatives, &
@@ -1694,8 +1668,6 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
                                 material_auxvars(ghosted_id), &
                                 patch%characteristic_curves_array( &
                                   patch%cc_id(ghosted_id))%ptr, &
-                                patch%material_transform_array( &
-                                  patch%mtf_id(ghosted_id))%ptr, &
                                 natural_id,option)
     enddo
   endif
@@ -1881,8 +1853,6 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
                         global_auxvars_ss(sum_connection), &
                         patch%characteristic_curves_array( &
                           patch%cc_id(ghosted_id))%ptr, &
-                        patch%material_transform_array( &
-                          patch%mtf_id(ghosted_id))%ptr, &
                         grid%nG2A(ghosted_id),material_auxvars(ghosted_id), &
                         scale,Jup)
 

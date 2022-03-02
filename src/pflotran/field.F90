@@ -30,7 +30,7 @@ module Field_module
     Vec :: compressibility0
 
     Vec :: electrical_conductivity
-    
+
     !TODO(geh): move these Vecs into their respective pms
     ! residual vectors
     Vec :: flow_r
@@ -121,7 +121,6 @@ function FieldCreate()
 
   ! Geophysics
   field%electrical_conductivity = PETSC_NULL_VEC
-  
 
   field%flow_r = PETSC_NULL_VEC
   field%flow_xx = PETSC_NULL_VEC

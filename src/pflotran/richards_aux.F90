@@ -185,8 +185,8 @@ end subroutine RichardsAuxVarCopy
 ! ************************************************************************** !
 
 subroutine RichardsAuxVarCompute(x,auxvar,global_auxvar,material_auxvar, &
-                                 characteristic_curves,material_transform, &
-                                 natural_id,update_porosity,option)
+                                 characteristic_curves,natural_id, &
+                                 update_porosity,option)
   ! 
   ! Computes auxiliary variables for each grid cell
   ! 
@@ -201,7 +201,6 @@ subroutine RichardsAuxVarCompute(x,auxvar,global_auxvar,material_auxvar, &
   use Characteristic_Curves_module
   use Characteristic_Curves_Common_module
   use Material_Aux_module
-  use Material_Transform_module
   
   implicit none
 
@@ -211,7 +210,6 @@ subroutine RichardsAuxVarCompute(x,auxvar,global_auxvar,material_auxvar, &
   type(richards_auxvar_type) :: auxvar
   type(global_auxvar_type) :: global_auxvar
   type(material_auxvar_type) :: material_auxvar
-  class(material_transform_type) :: material_transform
   PetscInt :: natural_id
   PetscBool :: update_porosity
   
@@ -240,20 +238,6 @@ subroutine RichardsAuxVarCompute(x,auxvar,global_auxvar,material_auxvar, &
  
   global_auxvar%pres = x(1)
   global_auxvar%temp = option%flow%reference_temperature
-
-  if (associated(material_auxvar%iltf)) then
-    if (option%time > material_auxvar%iltf%ilt_tst .and. option%dt > 0.d0) then
-      call material_transform%illitization%illitization_function% &
-             CalculateILT(material_auxvar%iltf%ilt_fst, &
-                          global_auxvar%temp, &
-                          option%flow_dt, &
-                          material_auxvar%iltf%ilt_fit, &
-                          material_auxvar%iltf%ilt_scale, &
-                          option)
-      call material_transform%illitization%illitization_function% &
-             ShiftPerm(material_auxvar,option)
-    endif
-  endif
 
   if (update_porosity) then
     call MaterialAuxVarCompute(material_auxvar,global_auxvar%pres(1))
@@ -386,7 +370,6 @@ end subroutine RichardsAuxVarCompute
 subroutine RichardsAuxVarCompute2ndOrderDeriv(rich_auxvar,global_auxvar, &
                                               material_auxvar, &
                                               characteristic_curves, &
-                                              material_transform, &
                                               option)
 
   ! Computes 2nd order derivatives auxiliary variables for each grid cell
@@ -402,7 +385,6 @@ subroutine RichardsAuxVarCompute2ndOrderDeriv(rich_auxvar,global_auxvar, &
   use Characteristic_Curves_module
   use Characteristic_Curves_Common_module
   use Material_Aux_module
-  use Material_Transform_module
   
   implicit none
 
@@ -412,7 +394,6 @@ subroutine RichardsAuxVarCompute2ndOrderDeriv(rich_auxvar,global_auxvar, &
   type(global_auxvar_type) :: global_auxvar, global_auxvar_pert
   type(material_auxvar_type) :: material_auxvar
   type(material_auxvar_type) :: material_auxvar_pert
-  class(material_transform_type) :: material_transform
   PetscReal :: x(option%nflowdof), x_pert(option%nflowdof), pert
   PetscInt :: ideriv
   PetscErrorCode :: ierr
@@ -436,7 +417,6 @@ subroutine RichardsAuxVarCompute2ndOrderDeriv(rich_auxvar,global_auxvar, &
   call RichardsAuxVarCompute(x_pert(1),rich_auxvar_pert,global_auxvar_pert, &
                        material_auxvar_pert, &
                        characteristic_curves, &
-                       material_transform, &
                        -999, PETSC_TRUE, &
                        option)   
 

@@ -345,7 +345,6 @@ subroutine THAuxVarComputeNoFreezing(x,auxvar,global_auxvar, &
                                      material_auxvar, &
                                      iphase,characteristic_curves, &
                                      thermal_cc, &
-                                     material_transform, &
                                      th_parameter, icct, natural_id, &
                                      update_porosity,option)
   ! 
@@ -363,14 +362,12 @@ subroutine THAuxVarComputeNoFreezing(x,auxvar,global_auxvar, &
   use Characteristic_Curves_Common_module  
   use Characteristic_Curves_Thermal_module
   use Material_Aux_module
-  use Material_Transform_module
   
   implicit none
 
   type(option_type) :: option
   class(characteristic_curves_type) :: characteristic_curves
   class(cc_thermal_type) :: thermal_cc
-  class(material_transform_type) :: material_transform
   PetscReal :: x(option%nflowdof)
   type(TH_auxvar_type) :: auxvar
   type(global_auxvar_type) :: global_auxvar
@@ -415,20 +412,6 @@ subroutine THAuxVarComputeNoFreezing(x,auxvar,global_auxvar, &
  
   if (update_porosity) then
     call MaterialAuxVarCompute(material_auxvar,global_auxvar%pres(1))
-  endif
-
-  if (associated(material_auxvar%iltf)) then
-    if (option%time > material_auxvar%iltf%ilt_tst .and. option%dt > 0.d0) then
-      call material_transform%illitization%illitization_function% &
-             CalculateILT(material_auxvar%iltf%ilt_fst, &
-                          global_auxvar%temp, &
-                          option%flow_dt, &
-                          material_auxvar%iltf%ilt_fit, &
-                          material_auxvar%iltf%ilt_scale, &
-                          option)
-      call material_transform%illitization%illitization_function% &
-             ShiftPerm(material_auxvar,option)
-    endif
   endif
 
   auxvar%pc = min(option%flow%reference_pressure - global_auxvar%pres(1), &
@@ -613,7 +596,6 @@ subroutine THAuxVarComputeFreezing(x, auxvar, global_auxvar, &
                                    iphase, &
                                    saturation_function, &
                                    thermal_cc, &
-                                   material_transform, &
                                    th_parameter, icct, natural_id, &
                                    update_porosity,option)
   ! 
@@ -633,14 +615,12 @@ subroutine THAuxVarComputeFreezing(x, auxvar, global_auxvar, &
   use Saturation_Function_module  
   use Characteristic_Curves_Thermal_module
   use Material_Aux_module
-  use Material_Transform_module
   
   implicit none
 
   type(option_type) :: option
   type(saturation_function_type) :: saturation_function
   class(cc_thermal_type) :: thermal_cc
-  class(material_transform_type) :: material_transform
   PetscReal :: x(option%nflowdof)
   type(TH_auxvar_type) :: auxvar
   type(global_auxvar_type) :: global_auxvar
@@ -709,20 +689,6 @@ subroutine THAuxVarComputeFreezing(x, auxvar, global_auxvar, &
     call MaterialAuxVarCompute(material_auxvar,global_auxvar%pres(1))
   endif
  
-  if (associated(material_auxvar%iltf)) then
-    if (option%time > material_auxvar%iltf%ilt_tst .and. option%dt > 0.d0) then
-      call material_transform%illitization%illitization_function% &
-             CalculateILT(material_auxvar%iltf%ilt_fst, &
-                          global_auxvar%temp, &
-                          option%flow_dt, &
-                          material_auxvar%iltf%ilt_fit, &
-                          material_auxvar%iltf%ilt_scale, &
-                          option)
-      call material_transform%illitization%illitization_function% &
-             ShiftPerm(material_auxvar,option)
-    endif
-  endif
-
   auxvar%pc = option%flow%reference_pressure - global_auxvar%pres(1)
 
 !***************  Liquid phase properties **************************
@@ -953,7 +919,6 @@ subroutine THAuxVarCompute2ndOrderDeriv(TH_auxvar,global_auxvar, &
                                         material_auxvar,th_parameter, &
                                         icct,characteristic_curves,&
                                         thermal_cc,&
-                                        material_transform, &
                                         option)
 
   ! Computes 2nd order derivatives auxiliary variables for each grid cell
@@ -969,14 +934,12 @@ subroutine THAuxVarCompute2ndOrderDeriv(TH_auxvar,global_auxvar, &
   use Characteristic_Curves_module
   use Characteristic_Curves_Thermal_module
   use Material_Aux_module
-  use Material_Transform_module
   
   implicit none
 
   type(option_type) :: option
   class(characteristic_curves_type) :: characteristic_curves
   class(cc_thermal_type) :: thermal_cc
-  class(material_transform_type) :: material_transform
   type(TH_auxvar_type) :: TH_auxvar
   type(global_auxvar_type) :: global_auxvar
   type(material_auxvar_type) :: material_auxvar  
@@ -1051,7 +1014,6 @@ subroutine THAuxVarCompute2ndOrderDeriv(TH_auxvar,global_auxvar, &
                             global_auxvar_pert,material_auxvar_pert,&
                             iphase,characteristic_curves, &
                             thermal_cc, &
-                            material_transform, &
                             th_parameter,icct, &
                             -999,PETSC_TRUE,option)
     endif

@@ -497,8 +497,7 @@ end subroutine GeneralAuxSetAirMassDOF
 ! ************************************************************************** !
 
 subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
-                                characteristic_curves,material_transform, &
-                                natural_id,option)
+                                characteristic_curves,natural_id,option)
   ! 
   ! Computes auxiliary variables for each grid cell
   ! 
@@ -512,7 +511,6 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
   use EOS_Gas_module
   use Characteristic_Curves_module
   use Material_Aux_module
-  use Material_Transform_module
   use Creep_Closure_module
   use Fracture_module
   use WIPP_module
@@ -521,7 +519,6 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
 
   type(option_type) :: option
   class(characteristic_curves_type) :: characteristic_curves
-  class(material_transform_type) :: material_transform
   PetscReal :: x(option%nflowdof)
   type(general_auxvar_type) :: gen_auxvar
   type(global_auxvar_type) :: global_auxvar
@@ -562,7 +559,6 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
   PetscReal :: dh_water_vapor_dpv, dh_water_vapor_dT
   PetscReal :: du_water_vapor_dpv, du_water_vapor_dT
   PetscReal :: dpc_dsatl
-  PetscReal :: shift_perm
   character(len=8) :: state_char
   PetscErrorCode :: ierr
   PetscErrorCode :: eos_henry_ierr
@@ -958,21 +954,6 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
       call MaterialCompressSoil(material_auxvar,cell_pressure, &
                                 gen_auxvar%effective_porosity,dpor_dp)
     endif
-    if (associated(material_auxvar%iltf)) then
-      if (option%time > material_auxvar%iltf%ilt_tst .and. &
-          option%dt > 0.d0) then
-        call material_transform%illitization%illitization_function% &
-               CalculateILT(material_auxvar%iltf%ilt_fst, &
-                            gen_auxvar%temp, &
-                            option%flow_dt, &
-                            material_auxvar%iltf%ilt_fit, &
-                            material_auxvar%iltf%ilt_scale, &
-                            option)
-        call material_transform%illitization%illitization_function% &
-               ShiftPerm(material_auxvar,option)
-      endif
-    endif
-    
     if (option%iflag /= GENERAL_UPDATE_FOR_DERIVATIVE) then
       material_auxvar%porosity = gen_auxvar%effective_porosity
     endif
@@ -1371,8 +1352,8 @@ end subroutine GeneralEOSGasError
 
 subroutine GeneralAuxVarUpdateState(x,gen_auxvar,global_auxvar, &
                                     material_auxvar, &
-                                    characteristic_curves, &
-                                    material_transform, natural_id, option)
+                                    characteristic_curves,natural_id, &
+                                    option)
   !
   ! GeneralUpdateState: Updates the state and swaps primary variables
   !
@@ -1387,14 +1368,12 @@ subroutine GeneralAuxVarUpdateState(x,gen_auxvar,global_auxvar, &
   use EOS_Water_module
   use Characteristic_Curves_module
   use Material_Aux_module
-  use Material_Transform_module
 
   implicit none
 
   type(option_type) :: option
   PetscInt :: natural_id
   class(characteristic_curves_type) :: characteristic_curves
-  class(material_transform_type) :: material_transform
   type(general_auxvar_type) :: gen_auxvar
   type(global_auxvar_type) :: global_auxvar
   type(material_auxvar_type) :: material_auxvar
@@ -1593,7 +1572,7 @@ subroutine GeneralAuxVarUpdateState(x,gen_auxvar,global_auxvar, &
     end select
 
     call GeneralAuxVarCompute(x,gen_auxvar, global_auxvar,material_auxvar, &
-          characteristic_curves,material_transform,natural_id,option)
+          characteristic_curves,natural_id,option)
     state_change_string = 'State Transition: ' // trim(state_change_string)
     if (general_print_state_transition) then
       call PrintMsgByRank(option,state_change_string)
@@ -1613,8 +1592,7 @@ end subroutine GeneralAuxVarUpdateState
 
 subroutine GeneralAuxVarPerturb(gen_auxvar,global_auxvar, &
                                 material_auxvar, &
-                                characteristic_curves,material_transform, &
-                                natural_id, &
+                                characteristic_curves,natural_id, &
                                 option)
   ! 
   ! Calculates auxiliary variables for perturbed system
@@ -1625,7 +1603,6 @@ subroutine GeneralAuxVarPerturb(gen_auxvar,global_auxvar, &
 
   use Option_module
   use Characteristic_Curves_module
-  use Material_Transform_module
   use Global_Aux_module
   use Material_Aux_module
 
@@ -1637,7 +1614,6 @@ subroutine GeneralAuxVarPerturb(gen_auxvar,global_auxvar, &
   type(global_auxvar_type) :: global_auxvar
   type(material_auxvar_type) :: material_auxvar
   class(characteristic_curves_type) :: characteristic_curves
-  class(material_transform_type) :: material_transform
      
   PetscReal :: x(option%nflowdof), x_pert(option%nflowdof), &
                pert(option%nflowdof), x_pert_save(option%nflowdof)
@@ -1966,8 +1942,7 @@ subroutine GeneralAuxVarPerturb(gen_auxvar,global_auxvar, &
     x_pert_save = x_pert
     call GeneralAuxVarCompute(x_pert,gen_auxvar(idof),global_auxvar, &
                               material_auxvar, &
-                              characteristic_curves,material_transform, &
-                              natural_id,option)
+                              characteristic_curves,natural_id,option)
 #ifdef DEBUG_GENERAL
     call GlobalAuxVarCopy(global_auxvar,global_auxvar_debug,option)
     call GeneralAuxVarCopy(gen_auxvar(idof),general_auxvar_debug,option)
@@ -1975,7 +1950,6 @@ subroutine GeneralAuxVarPerturb(gen_auxvar,global_auxvar, &
                                   global_auxvar_debug, &
                                   material_auxvar, &
                                   characteristic_curves, &
-                                  material_transform, &
                                   natural_id,option)
     if (global_auxvar%istate /= global_auxvar_debug%istate) then
       write(option%io_buffer, &
