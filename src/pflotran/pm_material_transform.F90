@@ -151,9 +151,9 @@ subroutine PMMaterialTransformSetRealization(this,realization)
         ! find ID
         cur_material_property%material_transform_id = &
           MaterialTransformGetID( &
-          patch%material_transform_array, &
-          cur_material_property%material_transform_name, &
-          cur_material_property%name,option)
+            patch%material_transform_array, &
+            cur_material_property%material_transform_name, &
+            cur_material_property%name,option)
         
         ! determine which functions are applicable
         check_ilt = &
@@ -627,6 +627,43 @@ end subroutine PMMaterialTransformInputRecord
 
 ! ************************************************************************** !
 
+subroutine PMMaterialTransformStrip(this)
+  !
+  ! Strips the material transform process model
+  !
+  ! Author: Alex Salazar III
+  ! Date: 03/03/2022
+
+  implicit none
+
+! INPUT ARGUMENTS:
+! ================
+! this (input/output): material transform process model object
+! --------------------------------
+  class(pm_material_transform_type) :: this
+! --------------------------------
+! LOCAL VARIABLES:
+! ================
+! cur_mt: pointer to current material transform object
+! prev_mt: pointer to previous material transform object
+! --------------------------------
+  class(material_transform_type), pointer :: cur_mt, prev_mt
+! --------------------------------
+
+  nullify(this%realization)
+  cur_mt => this%mtl
+  do
+    if (.not.associated(cur_mt)) exit
+    prev_mt => cur_mt
+    cur_mt => cur_mt%next
+    call MaterialTransformDestroy(prev_mt)
+  enddo
+  nullify(this%mtl)
+
+end subroutine PMMaterialTransformStrip
+
+! ************************************************************************** !
+
 subroutine PMMaterialTransformDestroy(this)
   !
   ! Destroys auxiliary process model
@@ -644,10 +681,7 @@ subroutine PMMaterialTransformDestroy(this)
 ! --------------------------------
 
   call PMBaseDestroy(this)
-
-  nullify(this%realization)
-  nullify(this%option)
-  nullify(this%output_option)
+  call PMMaterialTransformStrip(this)
 
 end subroutine PMMaterialTransformDestroy
 
