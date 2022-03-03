@@ -2253,7 +2253,6 @@ recursive subroutine MaterialTransformDestroy(mtf)
     call BufferErosionDestroy(mtf%buffer_erosion)
   endif
 
-  deallocate(mtf)
   nullify(mtf)
 
 end subroutine MaterialTransformDestroy

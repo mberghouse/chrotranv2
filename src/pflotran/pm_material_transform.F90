@@ -202,6 +202,10 @@ subroutine PMMaterialTransformSetRealization(this,realization)
           cur_material_property%material_transform_id
       endif
     endif
+    
+    if (associated(patch%mtf_id)) then
+      call RealLocalToLocalWithArray(realization,MTF_ID_ARRAY)
+    endif
 
   enddo
 
