@@ -2066,7 +2066,7 @@ end subroutine MaterialTransformPrintPerm
 
 ! ************************************************************************** !
 
-subroutine MaterialTransformAuxVarInit(auxvar,option)
+function MaterialTransformAuxVarInit(auxvar)
   !
   ! Initializes a material transform auxiliary object
   !
@@ -2074,21 +2074,23 @@ subroutine MaterialTransformAuxVarInit(auxvar,option)
   ! Date: 02/10/2022
   !
 
-  use Option_module
-
   implicit none
 
-  class(material_transform_auxvar_type) :: auxvar
-  type(option_type) :: option
+  class(material_transform_auxvar_type), pointer :: MaterialTransformAuxVarInit
+  class(material_transform_auxvar_type), pointer :: auxvar
+
+  allocate(auxvar)
 
   nullify(auxvar%il_aux)
   nullify(auxvar%be_aux)
 
-end subroutine MaterialTransformAuxVarInit
+  MaterialTransformAuxVarInit => auxvar
+
+end function MaterialTransformAuxVarInit
 
 ! ************************************************************************** !
 
-subroutine IllitizationAuxVarInit(auxvar,option)
+function IllitizationAuxVarInit(option)
   !
   ! Initializes an illitization auxiliary object
   !
@@ -2100,31 +2102,33 @@ subroutine IllitizationAuxVarInit(auxvar,option)
 
   implicit none
 
-  class(material_transform_auxvar_type), intent(inout) :: auxvar
+  class(illitization_auxvar_type), pointer :: IllitizationAuxVarInit
+  class(illitization_auxvar_type), pointer :: auxvar
   type(option_type) :: option
 
-  call IllitizationAuxVarStrip(auxvar%il_aux)
-  allocate(auxvar%il_aux)
+  allocate(auxvar)
   ! auxvar%il_aux%initial_pressure = UNINITIALIZED_DOUBLE
-  auxvar%il_aux%fs0    = 1.0d+0               ! initial fraction of smectite in material
-  auxvar%il_aux%fs     = UNINITIALIZED_DOUBLE ! fraction of smectite in material
-  auxvar%il_aux%fi     = UNINITIALIZED_DOUBLE ! fraction of illite in material
-  auxvar%il_aux%ts     = UNINITIALIZED_DOUBLE ! track time of last change in smectite
-  auxvar%il_aux%scale  = UNINITIALIZED_DOUBLE ! scale factor
-  auxvar%il_aux%qperm0 = PETSC_FALSE          ! save initial permeability
+  auxvar%fs0    = 1.0d+0               ! initial fraction of smectite in material
+  auxvar%fs     = UNINITIALIZED_DOUBLE ! fraction of smectite in material
+  auxvar%fi     = UNINITIALIZED_DOUBLE ! fraction of illite in material
+  auxvar%ts     = UNINITIALIZED_DOUBLE ! track time of last change in smectite
+  auxvar%scale  = UNINITIALIZED_DOUBLE ! scale factor
+  auxvar%qperm0 = PETSC_FALSE          ! save initial permeability
 
   if (option%iflowmode /= NULL_MODE) then
     if (option%flow%full_perm_tensor) then
-      allocate(auxvar%il_aux%perm0(6))
+      allocate(auxvar%perm0(6))
     else
-      allocate(auxvar%il_aux%perm0(3))
+      allocate(auxvar%perm0(3))
     endif
-    auxvar%il_aux%perm0 = UNINITIALIZED_DOUBLE
+    auxvar%perm0 = UNINITIALIZED_DOUBLE
   else
-    ! nullify(auxvar%il_aux%perm0)
+    ! nullify(auxvar%perm0)
   endif
 
-end subroutine IllitizationAuxVarInit
+  IllitizationAuxVarInit => auxvar
+
+end function IllitizationAuxVarInit
 
 ! ************************************************************************** !
 
@@ -2153,7 +2157,7 @@ end subroutine IllitizationAuxVarStrip
 
 ! ************************************************************************** !
 
-subroutine BufferErosionAuxVarInit(auxvar,option)
+function BufferErosionAuxVarInit()
   !
   ! Initializes a buffer erosion auxiliary object
   !
@@ -2161,17 +2165,16 @@ subroutine BufferErosionAuxVarInit(auxvar,option)
   ! Date: 02/10/2022
   !
 
-  use Option_module
-
   implicit none
 
-  class(material_transform_auxvar_type), intent(inout) :: auxvar
-  type(option_type) :: option
+  class(buffer_erosion_auxvar_type), pointer :: BufferErosionAuxVarInit
+  class(buffer_erosion_auxvar_type), pointer :: auxvar
 
-  call BufferErosionAuxVarStrip(auxvar%be_aux)
-  allocate(auxvar%be_aux)
+  allocate(auxvar)
 
-end subroutine BufferErosionAuxVarInit
+  BufferErosionAuxVarInit => auxvar
+
+end function BufferErosionAuxVarInit
 
 ! ************************************************************************** !
 

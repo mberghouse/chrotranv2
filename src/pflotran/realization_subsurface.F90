@@ -2008,7 +2008,7 @@ subroutine RealizationUpdatePropertiesTS(realization)
   use Variables_module, only : POROSITY, TORTUOSITY, PERMEABILITY_X, &
                                PERMEABILITY_Y, PERMEABILITY_Z, &
                                PERMEABILITY_XY, PERMEABILITY_XZ, &
-                               PERMEABILITY_YZ, SMECTITE
+                               PERMEABILITY_YZ
 
   implicit none
 
@@ -2704,7 +2704,7 @@ subroutine RealizUnInitializedVarsFlow(realization)
   use Variables_module, only : VOLUME, BASE_POROSITY, PERMEABILITY_X, &
                                PERMEABILITY_Y, PERMEABILITY_Z, &
                                PERMEABILITY_XY, PERMEABILITY_XZ, &
-                               PERMEABILITY_YZ, SMECTITE
+                               PERMEABILITY_YZ
 
   implicit none
 
@@ -2719,7 +2719,6 @@ subroutine RealizUnInitializedVarsFlow(realization)
   call RealizUnInitializedVar1(realization,PERMEABILITY_X,'permeability X')
   call RealizUnInitializedVar1(realization,PERMEABILITY_Y,'permeability Y')
   call RealizUnInitializedVar1(realization,PERMEABILITY_Z,'permeability Z')
-  call RealizUnInitializedVar1(realization,SMECTITE,'smectite')
   if (realization%option%flow%full_perm_tensor) then
     call RealizUnInitializedVar1(realization,PERMEABILITY_XY,'permeability XY')
     call RealizUnInitializedVar1(realization,PERMEABILITY_XZ,'permeability XZ')
