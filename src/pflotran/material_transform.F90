@@ -71,12 +71,10 @@ module Material_Transform_module
   end type illitization_type
   !---------------------------------------------------------------------------
   type, public :: illitization_auxvar_type
-    ! These auxvars are intended to replace the ilt_auxvar_type currently in
-    !   material_aux
     PetscReal :: fs0    ! initial fraction of smectite in material
-    PetscReal :: fs     ! fraction of smectite in material (final)
-    PetscReal :: fi     ! fraction of illite in material (final)
-    PetscReal :: ts     ! track time of last change in smectite (final)
+    PetscReal :: fs     ! fraction of smectite in material
+    PetscReal :: fi     ! fraction of illite in material
+    PetscReal :: ts     ! track time of last change in smectite
     PetscBool :: qperm0 ! save initial permeability
     PetscReal :: scale  ! scale factor
     PetscReal, allocatable :: perm0(:) ! intiial permeability
@@ -92,6 +90,11 @@ module Material_Transform_module
   type, public :: buffer_erosion_auxvar_type
     ! Placeholder for buffer erosion model auxvars
   end type buffer_erosion_auxvar_type
+  !---------------------------------------------------------------------------
+  type, public :: material_transform_auxvar_type
+    class(illitization_auxvar_type), pointer :: il_aux ! auxvars for illitization class
+    class(buffer_erosion_auxvar_type), pointer :: be_aux ! auxvars for buffer erosion class
+  end type material_transform_auxvar_type
   !---------------------------------------------------------------------------
   type, public :: material_transform_type
     character(len=MAXWORDLENGTH) :: name
@@ -110,11 +113,6 @@ module Material_Transform_module
     class(material_transform_type), pointer :: next
   end type material_transform_type
   !---------------------------------------------------------------------------
-  type, public :: material_transform_auxvar_type
-    class(illitization_auxvar_type), pointer :: il_aux ! auxvars for illitization class
-    class(buffer_erosion_auxvar_type), pointer :: be_aux ! auxvars for buffer erosion class
-  end type material_transform_auxvar_type
-  !---------------------------------------------------------------------------
   type, public :: material_transform_ptr_type
     class(material_transform_type), pointer :: ptr
   end type material_transform_ptr_type
@@ -123,15 +121,17 @@ module Material_Transform_module
   public :: MaterialTransformCreate, &
             MaterialTransformGetID, &
             MaterialTransformCheckILT, &
+            MaterialTransformCheckBE, &
             MaterialTransformAddToList, &
             MaterialTransformConvertListToArray, &
             MaterialTransformDestroy, &
             MaterialTransformInputRecord, &
             MaterialTransformRead, &
+            MaterialTransformAuxVarInit, &
             IllitizationCreate, &
+            IllitizationAuxVarInit, &
             BufferErosionCreate, &
-            ILTBaseCreate, &
-            ILTDefaultCreate
+            BufferErosionAuxVarInit
 
 contains
 
@@ -2066,7 +2066,7 @@ end subroutine MaterialTransformPrintPerm
 
 ! ************************************************************************** !
 
-function MaterialTransformAuxVarInit(auxvar)
+subroutine MaterialTransformAuxVarInit(auxvar)
   !
   ! Initializes a material transform auxiliary object
   !
@@ -2076,17 +2076,13 @@ function MaterialTransformAuxVarInit(auxvar)
 
   implicit none
 
-  class(material_transform_auxvar_type), pointer :: MaterialTransformAuxVarInit
-  class(material_transform_auxvar_type), pointer :: auxvar
-
-  allocate(auxvar)
+  type(material_transform_auxvar_type) :: auxvar
 
   nullify(auxvar%il_aux)
   nullify(auxvar%be_aux)
 
-  MaterialTransformAuxVarInit => auxvar
 
-end function MaterialTransformAuxVarInit
+end subroutine MaterialTransformAuxVarInit
 
 ! ************************************************************************** !
 

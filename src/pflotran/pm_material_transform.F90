@@ -112,7 +112,6 @@ subroutine PMMaterialTransformSetRealization(this,realization)
   type(material_property_type), pointer :: cur_material_property
   type(material_property_type), pointer :: null_material_property
   type(grid_type), pointer :: grid
-  PetscBool :: check_ilt ! check if illitization is active
   PetscInt :: local_id, ghosted_id, material_id
 ! ----------------------------------
 
@@ -154,14 +153,7 @@ subroutine PMMaterialTransformSetRealization(this,realization)
             patch%material_transform_array, &
             cur_material_property%material_transform_name, &
             cur_material_property%name,option)
-        
-        ! determine which functions are applicable
-        check_ilt = &
-          MaterialTransformCheckILT(patch%material_transform_array, &
-            cur_material_property%material_transform_id)
-        
       endif
-      
     endif
 
     ! check for errors (0 = not found, -999 = not applicable)
@@ -178,7 +170,7 @@ subroutine PMMaterialTransformSetRealization(this,realization)
 
   ! create null material property for inactive cells
   null_material_property => MaterialPropertyCreate(option)
-  ! cell mapping for material transform id
+  ! cell mapping for material transform id and initialize auxilary variables
   do local_id = 1, grid%nlmax
     ghosted_id = grid%nL2G(local_id)
     material_id = patch%imat(ghosted_id)
@@ -200,13 +192,12 @@ subroutine PMMaterialTransformSetRealization(this,realization)
       if (associated(patch%mtf_id)) then
         patch%mtf_id(ghosted_id) = &  
           cur_material_property%material_transform_id
+
+        call RealLocalToLocalWithArray(realization,MTF_ID_ARRAY)
+
       endif
     endif
     
-    if (associated(patch%mtf_id)) then
-      call RealLocalToLocalWithArray(realization,MTF_ID_ARRAY)
-    endif
-
   enddo
 
   this%realization => realization
@@ -223,6 +214,12 @@ subroutine PMMaterialTransformSetup(this)
   ! Author: Alex Salazar III
   ! Date: 01/19/2022
 
+  use Realization_Subsurface_class
+  use Patch_module
+  use Option_module
+  use Material_module
+  use Grid_module
+
   implicit none
 
 ! INPUT ARGUMENTS:
@@ -231,6 +228,47 @@ subroutine PMMaterialTransformSetup(this)
 ! ----------------------------------
   class(pm_material_transform_type) :: this
 ! ----------------------------------
+! LOCAL VARIABLES:
+! ================
+  type(patch_type), pointer :: patch
+  type(option_type), pointer :: option
+  type(grid_type), pointer :: grid
+  class(material_transform_type), pointer :: mtf
+  type(material_transform_auxvar_type), pointer :: MT_auxvars(:)
+  PetscBool :: check_ilt ! check if illitization is active
+  PetscBool :: check_be  ! check if buffer erosion is active
+  PetscInt :: local_id, ghosted_id, material_id
+! ----------------------------------
+
+  patch => this%realization%patch
+  option => this%realization%option
+  grid => patch%grid
+
+  patch%aux%MT => MaterialTransformCreate()
+  allocate(MT_auxvars(grid%nlmax))
+  do local_id = 1, grid%nlmax
+    ghosted_id = grid%nL2G(local_id)
+    material_id = patch%imat(ghosted_id)
+    
+    call MaterialTransformAuxVarInit(MT_auxvars(ghosted_id))
+    
+    if (Initialized(patch%mtf_id(ghosted_id))) then
+      ! pointer to material transform in patch ghosted id
+      mtf => patch%material_transform_array(patch%mtf_id(ghosted_id))%ptr
+      
+      if (associated(mtf%illitization)) then
+        MT_auxvars(ghosted_id)%il_aux => IllitizationAuxVarInit(option)
+      endif
+
+      if (associated(mtf%buffer_erosion)) then
+        MT_auxvars(ghosted_id)%be_aux => BufferErosionAuxVarInit()
+      endif
+      
+    endif
+    
+  enddo
+  patch%aux%MT%auxvars => MT_auxvars
+  patch%aux%MT%num_aux = grid%nlmax
 
 end subroutine PMMaterialTransformSetup
 

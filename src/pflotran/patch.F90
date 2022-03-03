@@ -6279,6 +6279,20 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
         call PatchGetKOrthogonalityError(grid, material_auxvars, vec_ptr)
         !vec_ptr(:) = UNINITIALIZED_DOUBLE
       endif
+    ! PM Material Transform
+    case(SMECTITE)
+      if (associated(patch%aux%MT)) then
+        select case(ivar)
+        case(SMECTITE)
+            do local_id=1,grid%nlmax
+              if (associated(patch%aux%MT% &
+                  auxvars(grid%nL2G(local_id))%il_aux)) then
+                vec_ptr(local_id) = &
+                  patch%aux%MT%auxvars(grid%nL2G(local_id))%il_aux%fs
+              endif
+            enddo
+        end select
+      endif
     case default
       call PatchUnsupportedVariable(ivar,option)
   end select
