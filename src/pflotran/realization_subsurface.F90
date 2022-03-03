@@ -1627,14 +1627,12 @@ subroutine RealizationRevertFlowParameters(realization)
 
   use Option_module
   use Field_module
-  use Grid_module
-  use Material_Aux_module
   use Discretization_module
   use Material_Aux_module, only : material_type, &
                               POROSITY_CURRENT, POROSITY_BASE, POROSITY_INITIAL
   use Variables_module, only : PERMEABILITY_X, PERMEABILITY_Y, PERMEABILITY_Z, &
                                PERMEABILITY_XY, PERMEABILITY_XZ, &
-                               PERMEABILITY_YZ, POROSITY, SMECTITE
+                               PERMEABILITY_YZ, POROSITY
 
   implicit none
 
@@ -1644,31 +1642,11 @@ subroutine RealizationRevertFlowParameters(realization)
   type(option_type), pointer :: option
   type(discretization_type), pointer :: discretization
   type(material_type), pointer :: Material
-  class(material_auxvar_type), pointer :: material_auxvars(:)
-  type(grid_type), pointer :: grid
-  
-  PetscInt :: local_id, ghosted_id, ps, i
 
   option => realization%option
   field => realization%field
   discretization => realization%discretization
   Material => realization%patch%aux%Material
-  material_auxvars => Material%auxvars
-  grid => realization%patch%grid
-  
-  ! Save original permeability for illitization (material transform)
-  do local_id = 1, grid%nlmax
-    ghosted_id = grid%nL2G(local_id)
-    if (associated(material_auxvars(ghosted_id)%iltf)) then
-      ps = size(material_auxvars(ghosted_id)%permeability)
-      allocate(material_auxvars(ghosted_id)%iltf%perm0(ps))
-      do i = 1, ps
-        material_auxvars(ghosted_id)%iltf%perm0(i) = &
-          material_auxvars(ghosted_id)%permeability(i)
-      enddo
-      material_auxvars(ghosted_id)%iltf%set_perm0 = PETSC_TRUE
-    endif
-  enddo
 
   if (option%nflowdof > 0) then
     call DiscretizationGlobalToLocal(discretization,field%perm0_xx, &
@@ -1773,8 +1751,6 @@ subroutine RealizStoreRestartFlowParams(realization)
                                        field%perm0_yz,ONEDOF)
     endif
   endif
-  call MaterialGetAuxVarVecLoc(Material,field%work_loc,SMECTITE, &
-                               ZERO_INTEGER)
   call MaterialGetAuxVarVecLoc(Material,field%work_loc,POROSITY, &
                                POROSITY_BASE)
   ! might as well update initial and base at the same time
@@ -2986,7 +2962,7 @@ subroutine RealizationStrip(this)
   if (associated(this%material_transform)) then
     call MaterialTransformDestroy(this%material_transform)
   endif
-  
+
   call DatasetDestroy(this%datasets)
 
   call DatasetDestroy(this%uniform_velocity_dataset)

@@ -611,7 +611,7 @@ end subroutine ILTGeneralIllitization
 
 ! ************************************************************************** !
 
-subroutine ILTBaseShiftSorption(this,kd0,ele,material_auxvar,option)
+subroutine ILTBaseShiftSorption(this,kd0,ele,auxvar,option)
 
   use Option_module
   use Material_Aux_module
@@ -621,7 +621,7 @@ subroutine ILTBaseShiftSorption(this,kd0,ele,material_auxvar,option)
   class(illitization_base_type) :: this
   PetscReal, intent(inout) :: kd0
   character(len=MAXWORDLENGTH), intent(in) :: ele
-  class(material_auxvar_type), intent(in) :: material_auxvar
+  class(illitization_auxvar_type), intent(in) :: auxvar
   type(option_type), intent(inout) :: option
   
   option%io_buffer = 'Illitization function must be extended to modify ' &
@@ -632,7 +632,7 @@ end subroutine ILTBaseShiftSorption
 
 ! ************************************************************************** !
 
-subroutine ILTShiftSorption(this,kd0,ele,material_auxvar,option)
+subroutine ILTShiftSorption(this,kd0,ele,auxvar,option)
   !
   ! Modifies the kd of selected elements using results from the
   !   illitization model and a user-specified functional form.
@@ -648,7 +648,7 @@ subroutine ILTShiftSorption(this,kd0,ele,material_auxvar,option)
   class(ILT_default_type) :: this
   PetscReal, intent(inout) :: kd0
   character(len=MAXWORDLENGTH), intent(in) :: ele
-  class(material_auxvar_type), intent(in) :: material_auxvar
+  class(illitization_auxvar_type), intent(in) :: auxvar
   type(option_type), intent(inout) :: option
   
   class(ilt_kd_effects_type), pointer :: kdl
@@ -659,7 +659,6 @@ subroutine ILTShiftSorption(this,kd0,ele,material_auxvar,option)
   PetscReal :: scale, factor
   
   if (.not. associated(this%ilt_shift_kd_list)) return
-  if (.not. associated(material_auxvar%iltf)) return
 
   ! Find element and functional properties
   j = 0
@@ -697,7 +696,7 @@ subroutine ILTShiftSorption(this,kd0,ele,material_auxvar,option)
   enddo
   
   ! Apply function to modify kd
-  scale = material_auxvar%iltf%ilt_scale
+  scale = auxvar%scale
   factor = 1.0d0
   select case(fkdmode)
     case ('DEFAULT','LINEAR')
@@ -803,7 +802,7 @@ end subroutine ILTCheckElements
 
 ! ************************************************************************** !
 
-subroutine ILTBaseShiftPerm(this,material_auxvar,option)
+subroutine ILTBaseShiftPerm(this,material_auxvar,auxvar,option)
 
   use Option_module
   use Material_Aux_module
@@ -812,6 +811,7 @@ subroutine ILTBaseShiftPerm(this,material_auxvar,option)
 
   class(illitization_base_type), intent(inout) :: this
   class(material_auxvar_type), intent(inout) :: material_auxvar
+  class(illitization_auxvar_type), intent(inout) :: auxvar
   class(option_type), intent(inout) :: option
 
   option%io_buffer = 'Illitization function must be extended to modify ' &
@@ -822,7 +822,7 @@ end subroutine ILTBaseShiftPerm
 
 ! ************************************************************************** !
 
-subroutine ILTShiftPerm(this,material_auxvar,option)
+subroutine ILTShiftPerm(this,material_auxvar,auxvar,option)
   !
   ! Modifies the permeability tensor using results from the
   !   illitization model and a user-specified functional form.
@@ -838,6 +838,7 @@ subroutine ILTShiftPerm(this,material_auxvar,option)
 
   class(ILT_default_type), intent(inout) :: this
   class(material_auxvar_type), intent(inout) :: material_auxvar
+  class(illitization_auxvar_type), intent(inout) :: auxvar
   class(option_type), intent(inout) :: option
 
   PetscInt  :: ps, i, j, k
@@ -848,17 +849,16 @@ subroutine ILTShiftPerm(this,material_auxvar,option)
 
   ! Check whether illitization and permeability modification are active
   if (.not. associated(this%ilt_shift_perm)) return
-  if (.not. associated(material_auxvar%iltf)) return
 
   ! Assess whether original permeability was saved in the auxvar
   ps = size(material_auxvar%permeability)
-  if (.not. material_auxvar%iltf%set_perm0) then
-    allocate(material_auxvar%iltf%perm0(ps))
-    material_auxvar%iltf%perm0 = UNINITIALIZED_DOUBLE
+  if (.not. auxvar%qperm0) then
+    allocate(auxvar%perm0(ps))
+    auxvar%perm0 = UNINITIALIZED_DOUBLE
     do i = 1, ps
-      material_auxvar%iltf%perm0(i) = material_auxvar%permeability(i)
+      auxvar%perm0(i) = material_auxvar%permeability(i)
     enddo
-    material_auxvar%iltf%set_perm0 = PETSC_TRUE
+    auxvar%qperm0 = PETSC_TRUE
   endif
 
   ! Find functional properties
@@ -886,7 +886,7 @@ subroutine ILTShiftPerm(this,material_auxvar,option)
   enddo
 
   ! Apply function to modify permeability tensor
-  scale = material_auxvar%iltf%ilt_scale
+  scale = auxvar%scale
   factor = 1.0d0
   select case(fpermmode)
     case ('DEFAULT','LINEAR')
@@ -904,13 +904,13 @@ subroutine ILTShiftPerm(this,material_auxvar,option)
   end select
   
   do i = 1, ps
-    material_auxvar%permeability(i) = material_auxvar%iltf%perm0(i) * factor
+    material_auxvar%permeability(i) = auxvar%perm0(i) * factor
   enddo
   
   if (allocated(fperm)) deallocate(fperm)
 
   ! Save time of permeability modification
-  material_auxvar%iltf%ilt_tst = option%time
+  auxvar%ts = option%time
 
 end subroutine ILTShiftPerm
 

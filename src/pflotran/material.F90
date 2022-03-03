@@ -1789,12 +1789,6 @@ subroutine MaterialSetAuxVarScalar(Material,value,ivar,isubvar)
       do i=1, Material%num_aux
         material_auxvars(i)%electrical_conductivity(1) = value
       enddo
-    case(SMECTITE)
-      do i=1, Material%num_aux
-        if (associated(Material%auxvars(i)%iltf)) then
-          call Material%auxvars(i)%iltf%Set(value)
-        endif
-      enddo
   end select
 
 end subroutine MaterialSetAuxVarScalar
@@ -1905,12 +1899,6 @@ subroutine MaterialSetAuxVarVecLoc(Material,vec_loc,ivar,isubvar)
       do ghosted_id=1, Material%num_aux
         material_auxvars(ghosted_id)%electrical_conductivity(1) = &
           vec_loc_p(ghosted_id)
-      enddo
-    case(SMECTITE)
-      do ghosted_id=1, Material%num_aux
-        if (associated(Material%auxvars(ghosted_id)%iltf)) then
-          call Material%auxvars(ghosted_id)%iltf%Set(vec_loc_p(ghosted_id))
-        endif
       enddo
   end select
 
@@ -2024,12 +2012,6 @@ subroutine MaterialGetAuxVarVecLoc(Material,vec_loc,ivar,isubvar)
       do ghosted_id=1, Material%num_aux
         vec_loc_p(ghosted_id) = &
           material_auxvars(ghosted_id)%electrical_conductivity(1)
-      enddo
-    case(SMECTITE)
-      do ghosted_id=1, Material%num_aux
-        if (associated(Material%auxvars(ghosted_id)%iltf)) then
-          vec_loc_p(ghosted_id) = Material%auxvars(ghosted_id)%iltf%ilt_fs
-        endif
       enddo
   end select
 
@@ -2400,7 +2382,7 @@ subroutine MaterialPropInputRecord(material_property_list)
       write(id,'(a29)',advance='no') 'material transform function: '
       write(id,'(a)') adjustl(trim(cur_matprop%material_transform_name))
     endif
-  
+
     write(id,'(a29)') '---------------------------: '
     cur_matprop => cur_matprop%next
   enddo

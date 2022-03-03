@@ -64,32 +64,12 @@ module Material_Aux_module
     type(fracture_auxvar_type), pointer :: fracture
     PetscReal, pointer :: geomechanics_subsurface_prop(:)
     PetscInt :: creep_closure_id
-    type(ilt_auxvar_type), pointer :: iltf ! material transform - illitization
 
 !    procedure(SaturationFunction), nopass, pointer :: SaturationFunction
 !  contains
 !    procedure, public :: PermeabilityTensorToScalar
 !    procedure, public :: PermeabilityTensorToScalarSafe
   end type material_auxvar_type
-
-  type, public :: ilt_auxvar_type
-    PetscInt  :: mtf_fn_id ! material transform function id
-    PetscReal :: ilt_fs0   ! initial fraction of smectite in material
-    PetscReal :: ilt_fs    ! fraction of smectite in material (final)
-    PetscReal :: ilt_fi    ! fraction of illite in material (final)
-    PetscReal :: ilt_ts    ! track time of last change in smectite (final)
-    PetscReal :: ilt_fst   ! fraction of smectite in material (test)
-    PetscReal :: ilt_fit   ! fraction of illite in material (test)
-    PetscReal :: ilt_tst   ! track time of last change in smectite (test)
-    PetscBool :: set_perm0 ! save initial permeability
-    PetscReal :: ilt_scale ! scale factor
-    PetscReal, allocatable :: perm0(:) ! intiial permeability
-  contains
-    procedure, public :: Update => MaterialAuxUpdateSmectite
-    procedure, public :: Restore => MaterialAuxRestoreSmectite
-    procedure, public :: Set => MaterialAuxSetSmectite
-    procedure, public :: GetScale => MaterialAuxGetScaleFactor
-  end type ilt_auxvar_type
 
   type, public :: fracture_auxvar_type
     PetscBool :: fracture_is_on
@@ -143,7 +123,6 @@ module Material_Aux_module
   public :: PermeabilityTensorToScalar
 
   public :: MaterialAuxCreate, &
-            MaterialIlliteAuxCreate, &
             MaterialAuxVarInit, &
             MaterialAuxVarCopy, &
             MaterialAuxVarStrip, &
@@ -191,47 +170,6 @@ end function MaterialAuxCreate
 
 ! ************************************************************************** !
 
-function MaterialIlliteAuxCreate()
-  !
-  ! Allocate and initialize illitization object
-  !
-  ! Author: Alex Salazar III
-  ! Date: 03/31/2021
-  !
-
-  implicit none
-
-  type(ilt_auxvar_type), pointer :: MaterialIlliteAuxCreate
-  type(ilt_auxvar_type), pointer :: ilt_aux
-
-  allocate(ilt_aux)
-  
-  ! Model values
-  ilt_aux%mtf_fn_id = UNINITIALIZED_INTEGER ! material transform function id
-  ilt_aux%ilt_fs0   = 1.0d+0 ! initial fraction of smectite in material
-  
-  ! Solution values
-  ilt_aux%ilt_fs    = UNINITIALIZED_DOUBLE ! smectite fraction (final)
-  ilt_aux%ilt_fi    = UNINITIALIZED_DOUBLE ! illite fraction (final)
-  ilt_aux%ilt_ts    = UNINITIALIZED_DOUBLE ! time smectite last changed (final)
-  
-  ! Preliminary values
-  ilt_aux%ilt_fst   = UNINITIALIZED_DOUBLE ! smectite fraction (test)
-  ilt_aux%ilt_fit   = UNINITIALIZED_DOUBLE ! illite fraction (test)
-  ilt_aux%ilt_tst   = UNINITIALIZED_DOUBLE ! time smectite last changed (test)
-  
-  ! Save original permeability tensor
-  ilt_aux%set_perm0 = PETSC_FALSE ! one-time assignment of initial permeability
-
-  ! Output values
-  ilt_aux%ilt_scale = UNINITIALIZED_DOUBLE ! scale factor (output)
-  
-  MaterialIlliteAuxCreate => ilt_aux
-
-end function MaterialIlliteAuxCreate
-
-! ************************************************************************** !
-
 subroutine MaterialAuxVarInit(auxvar,option)
   !
   ! Initialize auxiliary object
@@ -268,7 +206,6 @@ subroutine MaterialAuxVarInit(auxvar,option)
   endif
   nullify(auxvar%sat_func_prop)
   nullify(auxvar%fracture)
-  nullify(auxvar%iltf)
   auxvar%creep_closure_id = 1
 
   if (max_material_index > 0) then
@@ -329,9 +266,6 @@ subroutine MaterialAuxVarCopy(auxvar,auxvar2,option)
   auxvar2%creep_closure_id = auxvar%creep_closure_id
   if (associated(auxvar%electrical_conductivity)) then
     auxvar2%electrical_conductivity = auxvar%electrical_conductivity
-  endif
-  if (associated(auxvar%iltf)) then
-    auxvar2%iltf = auxvar%iltf
   endif
 
 end subroutine MaterialAuxVarCopy
@@ -735,13 +669,6 @@ function MaterialAuxVarGetValue(material_auxvar,ivar)
                                  soil_properties(soil_reference_pressure_index)
     case(ELECTRICAL_CONDUCTIVITY)
       MaterialAuxVarGetValue = material_auxvar%electrical_conductivity(1)
-
-    case(SMECTITE)
-      if (associated(material_auxvar%iltf)) then
-        MaterialAuxVarGetValue = material_auxvar%iltf%ilt_fs
-      else
-        MaterialAuxVarGetValue = 0.0d+0
-      endif
   end select
 
 end function MaterialAuxVarGetValue
@@ -795,10 +722,6 @@ subroutine MaterialAuxVarSetValue(material_auxvar,ivar,value)
       material_auxvar%soil_properties(soil_reference_pressure_index) = value
     case(ELECTRICAL_CONDUCTIVITY)
       material_auxvar%electrical_conductivity(1) = value
-    case(SMECTITE)
-      if (associated(material_auxvar%iltf)) then
-        call material_auxvar%iltf%Set(value)
-      endif
   end select
 
 end subroutine MaterialAuxVarSetValue
@@ -991,107 +914,14 @@ end subroutine MaterialCompressSoilQuadratic
 
 ! ************************************************************************** !
 
-subroutine MaterialAuxGetScaleFactor(this)
-  !
-  ! Derives the scale factor from the illitization model.
-  !
-  ! Author: Alex Salazar III
-  ! Date: 10/29/2021
-  !
-  
-  implicit none
-  
-  class(ilt_auxvar_type) :: this
-  
-  this%ilt_scale = (this%ilt_fi - (1.0d+0 - this%ilt_fs0)) / this%ilt_fs0
-  
-end subroutine MaterialAuxGetScaleFactor
-
-! ************************************************************************** !
-
-subroutine MaterialAuxUpdateSmectite(this)
-  !
-  ! Updates the smectite fraction from the test value.
-  !
-  ! Author: Alex Salazar III
-  ! Date: 10/29/2021
-  !
-  
-  implicit none
-  
-  class(ilt_auxvar_type) :: this
-
-  this%ilt_ts = this%ilt_tst ! time of illitization
-
-  this%ilt_fs = this%ilt_fst ! smectite fraction
-
-  this%ilt_fi = this%ilt_fit ! illite fraction
-
-  call this%GetScale
-
-end subroutine MaterialAuxUpdateSmectite
-
-! ************************************************************************** !
-
-subroutine MaterialAuxRestoreSmectite(this)
-  !
-  ! Restores the smectite fraction from the stored value.
-  !
-  ! Author: Alex Salazar III
-  ! Date: 10/29/2021
-  !
-  
-  implicit none
-  
-  class(ilt_auxvar_type) :: this
-
-  this%ilt_tst = this%ilt_ts ! time of illitization
-
-  this%ilt_fst = this%ilt_fs ! smectite fraction
-
-  this%ilt_fit = this%ilt_fi ! illite fraction
-
-  call this%GetScale
-
-end subroutine MaterialAuxRestoreSmectite
-
-! ************************************************************************** !
-
-subroutine MaterialAuxSetSmectite(this,new)
-  !
-  ! Sets the smectite fraction and modifies related values.
-  !
-  ! Author: Alex Salazar III
-  ! Date: 10/29/2021
-  !
-  
-  implicit none
-  
-  class(ilt_auxvar_type) :: this
-  PetscReal, intent(in) :: new
-
-  this%ilt_fs = new ! stored smectite fraction
-
-  this%ilt_fst = new ! test smectite fraction
-
-  this%ilt_fi = 1.0d+0 - new ! stored illite fraction
-
-  this%ilt_fit = 1.0d+0 - new ! test illite fraction
-
-  call this%GetScale
-
-end subroutine MaterialAuxSetSmectite
-
-! ************************************************************************** !
-
 function MaterialAuxIndexToPropertyName(i)
-  ! 
+  !
   ! Returns the name of the soil property associated with an index
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 07/06/16
-  ! 
-  
+  !
+
   implicit none
 
   PetscInt :: i
@@ -1137,27 +967,6 @@ end subroutine MaterialAuxVarFractureStrip
 
 ! ************************************************************************** !
 
-subroutine MaterialAuxVarIlliteStrip(ilt)
-  !
-  ! Deallocates an illitization auxiliary object
-  !
-  ! Author: Alex Salazar III
-  ! Date: 03/31/2021
-  !
-
-  implicit none
-
-  type(ilt_auxvar_type), pointer :: ilt
-
-  if (.not.associated(ilt)) return
-
-  deallocate(ilt)
-  nullify(ilt)
-
-end subroutine MaterialAuxVarIlliteStrip
-
-! ************************************************************************** !
-
 subroutine MaterialAuxVarStrip(auxvar)
   !
   ! Deallocates a material auxiliary object
@@ -1175,9 +984,6 @@ subroutine MaterialAuxVarStrip(auxvar)
   call DeallocateArray(auxvar%sat_func_prop)
   call DeallocateArray(auxvar%soil_properties)
   call MaterialAuxVarFractureStrip(auxvar%fracture)
-  if (associated(auxvar%iltf)) then
-    call MaterialAuxVarIlliteStrip(auxvar%iltf)
-  endif
   if (associated(auxvar%geomechanics_subsurface_prop)) then
     call DeallocateArray(auxvar%geomechanics_subsurface_prop)
   endif
