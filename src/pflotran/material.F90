@@ -47,8 +47,6 @@ module Material_module
     PetscInt :: material_transform_id
     character(len=MAXWORDLENGTH) :: material_transform_name
     PetscBool :: mtf ! material transform is specified
-    PetscBool :: ilt ! material transform - illitization is active
-    PetscReal :: ilt_fs0 ! initial smectite fraction
     PetscReal :: rock_density ! kg/m^3
     PetscReal :: specific_heat ! J/kg-K
     PetscReal :: thermal_conductivity_dry
@@ -203,7 +201,6 @@ function MaterialPropertyCreate(option)
   material_property%saturation_function_id = 0
   material_property%thermal_conductivity_function_id = UNINITIALIZED_INTEGER
   material_property%mtf = PETSC_FALSE
-  material_property%ilt = PETSC_FALSE
   material_property%material_transform_id = UNINITIALIZED_INTEGER
   material_property%saturation_function_name = ''
   material_property%rock_density = UNINITIALIZED_DOUBLE
@@ -296,7 +293,6 @@ subroutine MaterialPropertyRead(material_property,input,option)
   character(len=MAXSTRINGLENGTH) :: string
   character(len=MAXSTRINGLENGTH) :: buffer_save
   character(len=MAXSTRINGLENGTH) :: tcc_name
-  character(len=MAXSTRINGLENGTH) :: mtf_name
 
   PetscInt :: length
   PetscReal :: tempreal
@@ -1033,12 +1029,6 @@ subroutine MaterialPropertyRead(material_property,input,option)
     endif
   endif
   
-  if (.not. material_property%mtf) then
-    write(mtf_name,*)material_property%external_id
-    material_property%material_transform_name = "_MTF_"// &
-      trim(adjustl(mtf_name))
-  endif
-
   if (Initialized(maxval(material_property%tensorial_rel_perm_exponent))) then
     select case(option%iflowmode)
       case(ZFLOW_MODE)
@@ -1705,14 +1695,6 @@ subroutine MaterialAssignPropertyToAux(material_auxvar,material_property, &
     endif
   endif
   
-  ! material transform - illitization 
-  if (material_property%ilt) then
-    material_auxvar%iltf => MaterialIlliteAuxCreate()
-    material_auxvar%iltf%mtf_fn_id = material_property%material_transform_id
-    material_auxvar%iltf%ilt_fs0 = material_property%ilt_fs0
-    call material_auxvar%iltf%Set(material_property%ilt_fs0)
-  endif
-    
 !  if (soil_heat_capacity_index > 0) then
 !    material_auxvar%soil_properties(soil_heat_capacity_index) = &
 !      material_property%specific_heat

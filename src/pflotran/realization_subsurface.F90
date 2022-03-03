@@ -760,7 +760,6 @@ subroutine RealProcessMatPropAndSatFunc(realization)
   use Dataset_Common_HDF5_class
   use Dataset_module
   use Characteristic_Curves_Thermal_module
-  use Material_Transform_module
   use TH_Aux_module, only : th_ice_model
 
 
@@ -777,7 +776,6 @@ subroutine RealProcessMatPropAndSatFunc(realization)
   character(len=MAXSTRINGLENGTH) :: string, verify_string, mat_string
   class(dataset_base_type), pointer :: dataset
   class(cc_thermal_type), pointer :: thermal_cc
-  class(material_transform_type), pointer :: material_transform
 
   option => realization%option
   patch => realization%patch
@@ -909,28 +907,6 @@ subroutine RealProcessMatPropAndSatFunc(realization)
   endif
   deallocate(check_thermal_conductivity)
 
-  ! set up mapping for material transform functions
-  do i = 1, num_mat_prop
-    if (associated(patch%material_property_array(i)%ptr)) then
-      if (.not. patch%material_property_array(i)%ptr%mtf) then
-        ! create base type functions for materials without transformations
-        material_transform => MaterialTransformCreate()
-        material_transform%illitization => IllitizationCreate()
-        material_transform%illitization%illitization_function => ILTBaseCreate()
-        material_transform%name = &
-          patch%material_property_array(i)%ptr%material_transform_name
-        call MaterialTransformAddToList(material_transform, &
-                                        realization%material_transform)
-      endif
-    endif
-  enddo
-  if (associated(realization%material_transform)) then
-    patch%material_transform => realization%material_transform
-    call MaterialTransformConvertListToArray(patch%material_transform, &
-                                             patch%material_transform_array, &
-                                             option)
-  endif
-  
   ! create mapping of internal to external material id
   call MaterialCreateIntToExtMapping(patch%material_property_array, &
                                      patch%imat_internal_to_external)
@@ -980,37 +956,6 @@ subroutine RealProcessMatPropAndSatFunc(realization)
         call PrintErrMsg(option)
     endif
     
-    ! material transform function id 
-    if (associated(patch%material_transform_array)) then
-      if (Uninitialized(cur_material_property%material_transform_id)) then
-        ! find ID
-        cur_material_property%material_transform_id = &
-           MaterialTransformGetID( &
-           patch%material_transform_array, &
-           cur_material_property%material_transform_name, &
-           cur_material_property%name,option)
-        
-        ! determine which functions are applicable
-        cur_material_property%ilt = &
-          MaterialTransformCheckILT(patch%material_transform_array, &
-            cur_material_property%material_transform_id)
-            
-        ! pass properties of functions to material property
-        if (cur_material_property%material_transform_id > 0) then
-          cur_material_property%ilt_fs0 = patch% &
-            material_transform_array(cur_material_property% &
-              material_transform_id)%ptr%illitization%illitization_function%ilt_fs0
-        endif
-        
-      endif
-    endif
-    if (cur_material_property%material_transform_id == 0) then
-      option%io_buffer = 'Material transform function "' // &
-        trim(cur_material_property%material_transform_name) // &
-        '" not found for material "'//trim(cur_material_property%name)//'."'
-      call PrintErrMsg(option)
-    endif
-
     ! if named, link dataset to property
     if (associated(cur_material_property%porosity_dataset)) then
       string = 'MATERIAL_PROPERTY(' // trim(cur_material_property%name) // &
@@ -2114,7 +2059,6 @@ subroutine RealizationUpdatePropertiesTS(realization)
   PetscReal, pointer :: perm0_xx_p(:), perm0_yy_p(:), perm0_zz_p(:)
   PetscReal, pointer :: perm0_xy_p(:), perm0_xz_p(:), perm0_yz_p(:)
   PetscReal, pointer :: perm_ptr(:)
-  PetscReal, pointer :: smec_ptr(:)
   PetscReal :: min_value
   PetscReal :: critical_porosity
   PetscReal :: porosity_base_

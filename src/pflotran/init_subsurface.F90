@@ -88,14 +88,9 @@ subroutine SubsurfAllocMatPropDataStructs(realization)
       cur_patch%imat = UNINITIALIZED_INTEGER
       select case(option%iflowmode)
         case(NULL_MODE,PNF_MODE)
-        case(WF_MODE,ZFLOW_MODE)
+        case(RICHARDS_MODE,WF_MODE,ZFLOW_MODE)
           allocate(cur_patch%cc_id(grid%ngmax))
           cur_patch%cc_id = UNINITIALIZED_INTEGER
-        case(RICHARDS_MODE)
-          allocate(cur_patch%cc_id(grid%ngmax))
-          cur_patch%cc_id = UNINITIALIZED_INTEGER
-          allocate(cur_patch%mtf_id(grid%ngmax)) 
-          cur_patch%mtf_id = UNINITIALIZED_INTEGER
         case default
           allocate(cur_patch%cc_id(grid%ngmax))
           cur_patch%cc_id = UNINITIALIZED_INTEGER
@@ -261,7 +256,7 @@ subroutine InitSubsurfAssignMatProperties(realization)
                                PERMEABILITY_Z, PERMEABILITY_XY, &
                                PERMEABILITY_YZ, PERMEABILITY_XZ, &
                                TORTUOSITY, POROSITY, SOIL_COMPRESSIBILITY, &
-                               EPSILON, ELECTRICAL_CONDUCTIVITY, SMECTITE
+                               EPSILON, ELECTRICAL_CONDUCTIVITY
 
   use HDF5_module
   use Utility_module, only : DeallocateArray
@@ -415,10 +410,6 @@ subroutine InitSubsurfAssignMatProperties(realization)
       if (associated(patch%cct_id)) then
         patch%cct_id(ghosted_id) = &
           material_property%thermal_conductivity_function_id
-      endif
-      if (associated(patch%mtf_id)) then
-        patch%mtf_id(ghosted_id) = &  
-          material_property%material_transform_id
       endif
       perm_xx_p(local_id) = material_property%permeability(1,1)
       perm_yy_p(local_id) = material_property%permeability(2,2)

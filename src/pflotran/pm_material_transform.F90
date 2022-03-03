@@ -88,6 +88,10 @@ subroutine PMMaterialTransformSetRealization(this,realization)
   ! Date: 01/19/2022
 
   use Realization_Subsurface_class
+  use Patch_module
+  use Option_module
+  use Material_module
+  use Grid_module
 
   implicit none
 
@@ -99,6 +103,106 @@ subroutine PMMaterialTransformSetRealization(this,realization)
   class(pm_material_transform_type) :: this
   class(realization_subsurface_type), pointer :: realization
 ! ----------------------------------
+! LOCAL VARIABLES:
+! ================
+  type(patch_type), pointer :: patch
+  type(option_type), pointer :: option
+  class(material_transform_type), pointer :: mtf
+  type(material_property_type), pointer :: cur_material_property
+  type(material_property_type), pointer :: null_material_property
+  type(grid_type), pointer :: grid
+  PetscBool :: check_ilt ! check if illitization is active
+  PetscInt :: local_id, ghosted_id, material_id
+! ----------------------------------
+
+  patch => realization%patch
+  option => realization%option
+  grid => patch%grid
+
+  ! pass material transform list from PM to realization
+  if (associated(this%mtl)) then
+
+    allocate(mtf)
+
+    mtf => this%mtl
+
+    call MaterialTransformAddToList(mtf,realization%material_transform)
+
+    nullify(mtf)
+
+  endif
+
+  ! set up mapping for material transform functions
+  patch%material_transform => realization%material_transform
+  call MaterialTransformConvertListToArray(patch%material_transform, &
+                                           patch%material_transform_array, &
+                                           option)
+
+  ! material property mapping to PM Material Transform
+  cur_material_property => realization%material_properties
+
+  do
+    if (.not.associated(cur_material_property)) exit
+    
+    ! material transform function id 
+    if (associated(patch%material_transform_array)) then
+      if (cur_material_property%mtf) then
+        ! find ID
+        cur_material_property%material_transform_id = &
+          MaterialTransformGetID( &
+          patch%material_transform_array, &
+          cur_material_property%material_transform_name, &
+          cur_material_property%name,option)
+        
+        ! determine which functions are applicable
+        check_ilt = &
+          MaterialTransformCheckILT(patch%material_transform_array, &
+            cur_material_property%material_transform_id)
+        
+      endif
+      
+    endif
+
+    ! check for errors (0 = not found, -999 = not applicable)
+    if (cur_material_property%material_transform_id == 0) then
+      option%io_buffer = 'Material transform function "' // &
+        trim(cur_material_property%material_transform_name) // &
+        '" not found for material "'//trim(cur_material_property%name) // '".'
+      call PrintErrMsg(option)
+    endif
+    
+    cur_material_property => cur_material_property%next
+    
+  enddo
+
+  ! create null material property for inactive cells
+  null_material_property => MaterialPropertyCreate(option)
+  ! cell mapping for material transform id
+  do local_id = 1, grid%nlmax
+    ghosted_id = grid%nL2G(local_id)
+    material_id = patch%imat(ghosted_id)
+    
+    ! get material property from id
+    if (material_id == 0) then
+      cur_material_property => null_material_property
+    else if (abs(material_id) <= size(patch%material_property_array)) then
+      ! error conditons already checked in InitSubsurfAssignMatProperties
+      if (material_id < 0) then
+        cur_material_property => null_material_property
+      else
+        cur_material_property => &
+          patch%material_property_array(material_id)%ptr
+      endif
+    endif
+
+    if (option%nflowdof > 0) then
+      if (associated(patch%mtf_id)) then
+        patch%mtf_id(ghosted_id) = &  
+          cur_material_property%material_transform_id
+      endif
+    endif
+
+  enddo
 
   this%realization => realization
   this%realization_base => realization
@@ -162,8 +266,8 @@ subroutine PMMaterialTransformReadPMBlock(this,input)
   type(option_type), pointer :: option
   character(len=MAXWORDLENGTH) :: word
   character(len=MAXSTRINGLENGTH) :: error_string
-  type(material_transform_type), pointer :: material_transform
-  type(material_transform_type), pointer :: prev_material_transform
+  class(material_transform_type), pointer :: material_transform
+  class(material_transform_type), pointer :: prev_material_transform
 ! ----------------------------------
 
   option => this%option
