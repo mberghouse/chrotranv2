@@ -75,6 +75,7 @@ function PMMaterialTransformCreate()
   pm%header = 'MATERIAL TRANSFORM'
 
   nullify(pm%realization)
+  nullify(pm%mtl)
 
   PMMaterialTransformCreate => pm
 

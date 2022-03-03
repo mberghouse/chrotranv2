@@ -955,7 +955,7 @@ subroutine RealProcessMatPropAndSatFunc(realization)
         '" not found.'
         call PrintErrMsg(option)
     endif
-    
+
     ! if named, link dataset to property
     if (associated(cur_material_property%porosity_dataset)) then
       string = 'MATERIAL_PROPERTY(' // trim(cur_material_property%name) // &

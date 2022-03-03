@@ -1028,7 +1028,7 @@ subroutine MaterialPropertyRead(material_property,input,option)
       call PrintErrMsg(option)
     endif
   endif
-  
+
   if (Initialized(maxval(material_property%tensorial_rel_perm_exponent))) then
     select case(option%iflowmode)
       case(ZFLOW_MODE)
@@ -1694,7 +1694,6 @@ subroutine MaterialAssignPropertyToAux(material_auxvar,material_property, &
         material_property%soil_reference_pressure
     endif
   endif
-  
 !  if (soil_heat_capacity_index > 0) then
 !    material_auxvar%soil_properties(soil_heat_capacity_index) = &
 !      material_property%specific_heat
