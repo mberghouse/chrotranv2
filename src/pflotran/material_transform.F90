@@ -1851,6 +1851,35 @@ end function MaterialTransformCheckILT
 
 ! ************************************************************************** !
 
+function MaterialTransformCheckBE(material_transform_array,id)
+  !
+  ! A logical check to determine whether a buffer erosion model is extended
+  !
+  ! Author: Alex Salazar III
+  ! Date: 03/03/2022
+  !
+  type(material_transform_ptr_type), pointer :: material_transform_array(:)
+  PetscInt, intent(in) :: id
+
+  PetscBool :: MaterialTransformCheckBE
+  ! type(buffer_erosion_base_type), pointer :: bem
+  
+  MaterialTransformCheckBE = PETSC_FALSE
+  
+  ! if (associated(material_transform_array(id)%ptr%buffer_erosion &
+  !       %buffer_erosion_model)) then
+  !   select type(bem => material_transform_array(id)%ptr%buffer_erosion &
+  !                 %buffer_erosion_model)
+  !     ! Type must be extended
+  !     class is(BE_default_type)
+  !       MaterialTransformCheckBE = PETSC_TRUE
+  !   end select
+  ! endif
+
+end function MaterialTransformCheckBE
+
+! ************************************************************************** !
+
 subroutine MaterialTransformInputRecord(material_transform_list)
   !
   ! Adds details on material transform functions to the input record file
