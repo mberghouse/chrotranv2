@@ -941,7 +941,9 @@ recursive subroutine PMUFDDecayInitializeRun(this)
   patch => this%realization%patch
   grid => patch%grid
   rt_auxvars => patch%aux%RT%auxvars
-  MT_auxvars => patch%aux%MT%auxvars
+  if (associated(patch%aux%MT)) then
+    MT_auxvars => patch%aux%MT%auxvars
+  endif
   
   ! set initial sorbed concentration in equilibrium with aqueous phase
   do local_id = 1, grid%nlmax
@@ -949,7 +951,7 @@ recursive subroutine PMUFDDecayInitializeRun(this)
     imat = patch%imat(ghosted_id) 
     if (imat <= 0) cycle
 
-    if (associated(patch%mtf_id)) then
+    if (associated(patch%material_transform_array)) then
       material_transform => &
         patch%material_transform_array(patch%mtf_id(ghosted_id))%ptr
       if (associated(MT_auxvars(ghosted_id)%il_aux)) then
@@ -964,16 +966,18 @@ recursive subroutine PMUFDDecayInitializeRun(this)
       kd_kgw_m3b = this%element_Kd(iele,imat)
       
       ! modify kd if needed
-      if (associated(MT_auxvars(ghosted_id)%il_aux)) then
-        ! if (this%option%time > MT_auxvars(ghosted_id)%il_aux%ts) then
-          if (this%option%dt > 0.d0 .or. this%option%restart_flag) then
-            call material_transform%illitization%illitization_function% &
-                   ShiftKd(kd_kgw_m3b, &
-                           this%element_name(iele), &
-                           MT_auxvars(ghosted_id)%il_aux, &
-                           this%option)
-          endif
-        ! endif
+      if (associated(patch%aux%MT)) then
+        if (associated(MT_auxvars(ghosted_id)%il_aux)) then
+          ! if (this%option%time > MT_auxvars(ghosted_id)%il_aux%ts) then
+            if (this%option%dt > 0.d0 .or. this%option%restart_flag) then
+              call material_transform%illitization%illitization_function% &
+                     ShiftKd(kd_kgw_m3b, &
+                             this%element_name(iele), &
+                             MT_auxvars(ghosted_id)%il_aux, &
+                             this%option)
+            endif
+          ! endif
+        endif
       endif
 
       do i = 1, this%element_isotopes(0,iele)
@@ -1208,7 +1212,10 @@ subroutine PMUFDDecaySolve(this,time,ierr)
   rt_auxvars => patch%aux%RT%auxvars
   global_auxvars => patch%aux%Global%auxvars
   material_auxvars => patch%aux%Material%auxvars
-  MT_auxvars => patch%aux%MT%auxvars
+
+  if (associated(patch%aux%MT)) then
+    MT_auxvars => patch%aux%MT%auxvars
+  endif
   
   dt = option%tran_dt
   one_over_dt = 1.d0 / dt
@@ -1227,7 +1234,7 @@ subroutine PMUFDDecaySolve(this,time,ierr)
     sat = global_auxvars(ghosted_id)%sat(1)
     vps = vol * por * sat ! m^3 water
     
-    if (associated(patch%mtf_id)) then
+    if (associated(patch%material_transform_array)) then
       material_transform => &
         patch%material_transform_array(patch%mtf_id(ghosted_id))%ptr
     endif
@@ -1401,16 +1408,18 @@ subroutine PMUFDDecaySolve(this,time,ierr)
       kd_kgw_m3b = this%element_Kd(iele,imat)
 
       ! modify kd if needed
-      if (associated(MT_auxvars(ghosted_id)%il_aux)) then
-        ! if (option%time > MT_auxvars(ghosted_id)%il_aux%ts) then
-          if (option%dt > 0.d0) then
-            call material_transform%illitization%illitization_function% &
-                   ShiftKd(kd_kgw_m3b, &
-                           this%element_name(iele), &
-                           MT_auxvars(ghosted_id)%il_aux, &
-                           option)
-          endif
-        ! endif
+      if (associated(patch%aux%MT)) then
+        if (associated(MT_auxvars(ghosted_id)%il_aux)) then
+          ! if (option%time > MT_auxvars(ghosted_id)%il_aux%ts) then
+            if (option%dt > 0.d0) then
+              call material_transform%illitization%illitization_function% &
+                     ShiftKd(kd_kgw_m3b, &
+                             this%element_name(iele), &
+                             MT_auxvars(ghosted_id)%il_aux, &
+                             option)
+            endif
+          ! endif
+        endif
       endif
 
       conc_ele_aq1 = mass_ele_tot1 / (1.d0+kd_kgw_m3b/(den_w_kg*por*sat)) / &
