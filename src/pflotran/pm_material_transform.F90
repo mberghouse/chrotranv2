@@ -474,6 +474,8 @@ subroutine PMMaterialTransformFinalizeTS(this)
   class(pm_material_transform_type) :: this
 ! --------------------------------
 
+  call RealizationUpdatePropertiesTS(this%realization)
+
 end subroutine PMMaterialTransformFinalizeTS
 
 ! ************************************************************************** !
