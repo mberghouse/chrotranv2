@@ -41,6 +41,8 @@ module PM_Material_Transform_class
     procedure, public :: FinalizeTimestep => PMMaterialTransformFinalizeTS
     procedure, public :: UpdateSolution => PMMaterialTransformUpdateSolution
     procedure, public :: Solve => PMMaterialTransformSolve
+    procedure, public :: TimeCut => PMMaterialTransformTimeCut
+    procedure, public :: UpdateAuxVars => PMMaterialTransformUpdateAuxVars
     ! procedure, public :: CheckpointHDF5 => PMMaterialTransformCheckpointHDF5
     ! procedure, public :: CheckpointBinary => PMMaterialTransformCheckpointBinary
     ! procedure, public :: RestartHDF5 => PMMaterialTransformRestartHDF5
@@ -376,8 +378,12 @@ recursive subroutine PMMaterialTransformInitializeRun(this)
   !
   ! Author: Alex Salazar III
   ! Date: 01/19/2022
-
-  use Reaction_Aux_module
+  use Realization_Subsurface_class
+  use Patch_module
+  use Material_module
+  use Material_Aux_module
+  use Grid_module
+  use Option_module
 
   implicit none
 
@@ -387,6 +393,50 @@ recursive subroutine PMMaterialTransformInitializeRun(this)
 ! --------------------------------
   class(pm_material_transform_type) :: this
 ! --------------------------------
+! LOCAL VARIABLES:
+! ================
+  type(patch_type), pointer :: patch
+  type(option_type), pointer :: option
+  type(grid_type), pointer :: grid
+  class(material_transform_type), pointer :: mtf
+  type(material_auxvar_type), pointer :: material_auxvars(:)
+  type(material_auxvar_type), pointer :: material_aux
+  type(material_transform_auxvar_type), pointer :: MT_auxvars(:)
+  type(material_transform_auxvar_type), pointer :: MT_aux
+  PetscBool :: check_ilt ! check if illitization is active
+  PetscBool :: check_be  ! check if buffer erosion is active
+  PetscInt :: local_id, ghosted_id, material_id
+! ----------------------------------
+
+  patch => this%realization%patch
+  option => this%realization%option
+  grid => patch%grid
+
+  material_auxvars => patch%aux%Material%auxvars
+  MT_auxvars => patch%aux%MT%auxvars
+
+  do local_id = 1, grid%nlmax
+    ghosted_id = grid%nL2G(local_id)
+    material_id = patch%imat(ghosted_id)
+    
+    material_aux => material_auxvars(ghosted_id)
+    MT_aux => MT_auxvars(ghosted_id)
+    
+    if (Initialized(patch%mtf_id(ghosted_id))) then
+      ! pointer to material transform in patch ghosted id
+      mtf => patch%material_transform_array(patch%mtf_id(ghosted_id))%ptr
+
+      if (associated(MT_aux%il_aux)) then
+        MT_aux%il_aux%fs0 = &
+          mtf%illitization%illitization_function%ilt_fs0
+        MT_aux%il_aux%fs = &
+          mtf%illitization%illitization_function%ilt_fs0
+        
+      endif
+      
+    endif
+    
+  enddo
 
 end subroutine PMMaterialTransformInitializeRun
 
@@ -452,6 +502,8 @@ end subroutine PMMaterialTransformFinalizeRun
 
 subroutine PMMaterialTransformUpdateSolution(this)
   !
+  ! Updates data in process model after a successful time step
+  !
   ! Author: Alex Salazar III
   ! Date: 01/19/2022
 
@@ -468,6 +520,46 @@ end subroutine PMMaterialTransformUpdateSolution
 
 ! ************************************************************************** !
 
+subroutine PMMaterialTransformUpdateAuxVars(this)
+  !
+  ! Updates the auxiliary variables associated with the process model
+  !
+  ! Author: Alex Salazar III
+  ! Date: 03/03/2022
+
+  implicit none
+
+! INPUT ARGUMENTS:
+! ================
+! this (input/output): material transform process model object
+! ----------------------------------
+  class(pm_material_transform_type) :: this
+! ----------------------------------
+
+end subroutine PMMaterialTransformUpdateAuxVars
+
+! ************************************************************************** !
+
+subroutine PMMaterialTransformTimeCut(this)
+  !
+  ! Resets arrays for time step cut
+  !
+  ! Author: Alex Salazar III
+  ! Date: 03/03/2022
+
+  implicit none
+
+! INPUT ARGUMENTS:
+! ================
+! this (input/output): material transform process model object
+! ----------------------------------
+  class(pm_material_transform_type) :: this
+! ----------------------------------
+
+end subroutine PMMaterialTransformTimeCut
+
+! ************************************************************************** !
+
 subroutine PMMaterialTransformSolve(this,time,ierr)
   !
   ! Updates the soil composition based on the model chosen
@@ -475,9 +567,13 @@ subroutine PMMaterialTransformSolve(this,time,ierr)
   ! Author: Alex Salazar III
   ! Date: 01/19/2022
   !
+  use Realization_Subsurface_class
+  use Patch_module
+  use Material_module
+  use Material_Aux_module
   use Global_Aux_module
+  use Grid_module
   use Option_module
-  use Utility_module
 
   implicit none
 
@@ -491,6 +587,64 @@ subroutine PMMaterialTransformSolve(this,time,ierr)
   PetscReal :: time
   PetscErrorCode :: ierr
 ! ---------------------------------
+! LOCAL VARIABLES:
+! ================
+  type(patch_type), pointer :: patch
+  type(option_type), pointer :: option
+  type(grid_type), pointer :: grid
+  class(material_transform_type), pointer :: mtf
+  type(material_auxvar_type), pointer :: material_auxvars(:)
+  type(material_auxvar_type), pointer :: material_aux
+  type(global_auxvar_type), pointer :: global_auxvars(:)
+  type(global_auxvar_type), pointer :: global_aux
+  type(material_transform_auxvar_type), pointer :: MT_auxvars(:)
+  type(material_transform_auxvar_type), pointer :: MT_aux
+  PetscBool :: check_ilt ! check if illitization is active
+  PetscBool :: check_be  ! check if buffer erosion is active
+  PetscInt :: local_id, ghosted_id, material_id
+! ----------------------------------
+
+  patch => this%realization%patch
+  option => this%realization%option
+  grid => patch%grid
+
+  global_auxvars => patch%aux%Global%auxvars
+  material_auxvars => patch%aux%Material%auxvars
+  MT_auxvars => patch%aux%MT%auxvars
+
+  do local_id = 1, grid%nlmax
+    ghosted_id = grid%nL2G(local_id)
+    material_id = patch%imat(ghosted_id)
+    
+    global_aux => global_auxvars(ghosted_id)
+    material_aux => material_auxvars(ghosted_id)
+    MT_aux => MT_auxvars(ghosted_id)
+    
+    if (Initialized(patch%mtf_id(ghosted_id))) then
+      ! pointer to material transform in patch ghosted id
+      mtf => patch%material_transform_array(patch%mtf_id(ghosted_id))%ptr
+      
+      if (associated(mtf%illitization)) then
+        call mtf%illitization%illitization_function%CalculateILT( &
+               MT_aux%il_aux%fs, &
+               global_aux%temp, &
+               time, &
+               MT_aux%il_aux%fi, &
+               MT_aux%il_aux%scale, &
+               option)
+        call mtf%illitization%illitization_function%ShiftPerm( &
+               material_aux, &
+               MT_aux%il_aux, &
+               option)
+      endif
+
+      ! if (associated(mtf%buffer_erosion)) then
+      ! endif
+      
+    endif
+    
+  enddo
+
 
   ierr = 0
 

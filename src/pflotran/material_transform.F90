@@ -853,7 +853,7 @@ subroutine ILTShiftPerm(this,material_auxvar,auxvar,option)
   ! Assess whether original permeability was saved in the auxvar
   ps = size(material_auxvar%permeability)
   if (.not. auxvar%qperm0) then
-    allocate(auxvar%perm0(ps))
+    ! allocate(auxvar%perm0(ps))
     auxvar%perm0 = UNINITIALIZED_DOUBLE
     do i = 1, ps
       auxvar%perm0(i) = material_auxvar%permeability(i)
