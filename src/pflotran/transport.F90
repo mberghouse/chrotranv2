@@ -4,7 +4,7 @@ module Transport_module
   use petscsnes
   use Reactive_Transport_Aux_module
   use Global_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Matrix_Block_Aux_module  
 
   use PFLOTRAN_Constants_module
@@ -74,7 +74,7 @@ subroutine TDispersion(global_auxvar_up,material_auxvar_up, &
   
   type(option_type) :: option
   type(global_auxvar_type) :: global_auxvar_up, global_auxvar_dn 
-  class(material_auxvar_type) :: material_auxvar_up, material_auxvar_dn
+  type(material_auxvar_type) :: material_auxvar_up, material_auxvar_dn
   PetscReal :: dispersivity_up(3), dispersivity_dn(3)
   PetscReal :: cell_centered_velocity_up(3,2), &
                cell_centered_velocity_dn(3,2)
@@ -107,6 +107,9 @@ subroutine TDispersion(global_auxvar_up,material_auxvar_up, &
   PetscReal :: v_up, v_dn
   PetscReal :: vi2_over_v_up, vj2_over_v_up, vk2_over_v_up
   PetscReal :: vi2_over_v_dn, vj2_over_v_dn, vk2_over_v_dn  
+
+  PetscReal, parameter :: s_pow = 7.d0/3.d0
+  PetscReal, parameter :: por_pow = 1.d0/3.d0
 
   nphase = rt_parameter%nphase
   
@@ -153,13 +156,22 @@ subroutine TDispersion(global_auxvar_up,material_auxvar_up, &
       molecular_diffusion_dn(:) = &
             rt_parameter%diffusion_coefficient(:,iphase)
     endif
+    if (rt_parameter%millington_quirk_tortuosity) then
+      molecular_diffusion_up(:) = &
+            molecular_diffusion_up(:) * &
+            sat_up**s_pow * &
+            material_auxvar_up%porosity**por_pow
+      molecular_diffusion_dn(:) = &
+            molecular_diffusion_dn(:) * &
+            sat_dn**s_pow * &
+            material_auxvar_dn%porosity**por_pow
+    endif
     q = qdarcy(iphase)
     if (rt_parameter%calculate_transverse_dispersion) then
       velocity_up = q*abs_dist(1:3) + (1.d0-abs_dist(1:3))* &
                     cell_centered_velocity_up(:,iphase)
       velocity_dn = q*abs_dist(1:3) + (1.d0-abs_dist(1:3))* &
                     cell_centered_velocity_dn(:,iphase)
-#if 1
       v_up = sqrt(dot_product(velocity_up,velocity_up))
       vi2_over_v_up = velocity_up(X_DIRECTION)**2/v_up
       vj2_over_v_up = velocity_up(Y_DIRECTION)**2/v_up
@@ -191,38 +203,6 @@ subroutine TDispersion(global_auxvar_up,material_auxvar_up, &
       Dzz_dn = dispersivity_dn(TRANSVERSE_VERTICAL)*vi2_over_v_dn + &
                dispersivity_dn(TRANSVERSE_VERTICAL)*vj2_over_v_dn + &
                dispersivity_dn(LONGITUDINAL)*vk2_over_v_dn
-#else
-      Dxx_dn = dispersivity_dn(LONGITUDINAL)* &
-                 dabs(velocity_dn(X_DIRECTION)) + &
-               dispersivity_dn(TRANSVERSE_HORIZONTAL)* &
-                 dabs(velocity_dn(Y_DIRECTION)) + &
-               dispersivity_dn(TRANSVERSE_VERTICAL)* &
-                 dabs(velocity_dn(Z_DIRECTION))
-      Dyy_up = dispersivity_up(TRANSVERSE_HORIZONTAL)* &
-                 dabs(velocity_up(X_DIRECTION)) + &
-               dispersivity_up(LONGITUDINAL)* &
-                 dabs(velocity_up(Y_DIRECTION)) + &
-               dispersivity_up(TRANSVERSE_VERTICAL)* &
-                 dabs(velocity_up(Z_DIRECTION))
-      Dyy_dn = dispersivity_dn(TRANSVERSE_HORIZONTAL)* &
-                 dabs(velocity_dn(X_DIRECTION)) + &
-               dispersivity_dn(LONGITUDINAL)* &
-                 dabs(velocity_dn(Y_DIRECTION)) + &
-               dispersivity_dn(TRANSVERSE_VERTICAL)* &
-                 dabs(velocity_dn(Z_DIRECTION))
-      Dzz_up = dispersivity_up(TRANSVERSE_HORIZONTAL)* &
-                 dabs(velocity_up(X_DIRECTION)) + &
-               dispersivity_up(TRANSVERSE_HORIZONTAL)* &
-                 dabs(velocity_up(Y_DIRECTION)) + &
-               dispersivity_up(LONGITUDINAL)* &
-                 dabs(velocity_up(Z_DIRECTION))
-      Dzz_dn = dispersivity_dn(TRANSVERSE_HORIZONTAL)* &
-                 dabs(velocity_dn(X_DIRECTION)) + &
-               dispersivity_dn(TRANSVERSE_HORIZONTAL)* &
-                 dabs(velocity_dn(Y_DIRECTION)) + &
-               dispersivity_dn(LONGITUDINAL)* &
-                 dabs(velocity_dn(Z_DIRECTION))
-#endif
       ! dot product on unit direction vector
       mechanical_dispersion_up = &
         max(dist(1)**2*Dxx_up+dist(2)**2*Dyy_up+dist(3)**2*Dzz_up,1.d-40)
@@ -280,7 +260,7 @@ subroutine TDispersionBC(ibndtype, &
   PetscInt :: ibndtype
   type(option_type) :: option
   type(global_auxvar_type) :: global_auxvar_up, global_auxvar_dn 
-  class(material_auxvar_type) :: material_auxvar_dn
+  type(material_auxvar_type) :: material_auxvar_dn
   PetscReal :: dispersivity_dn(3)
   PetscReal :: cell_centered_velocity_dn(3,2)
   PetscReal :: epsilon_dn
@@ -307,6 +287,9 @@ subroutine TDispersionBC(ibndtype, &
   PetscReal :: v_dn
   PetscReal :: vi2_over_v_dn, vj2_over_v_dn, vk2_over_v_dn  
   PetscReal :: t_ref_inv
+
+  PetscReal, parameter :: s_pow = 7.d0/3.d0
+  PetscReal, parameter :: por_pow = 1.d0/3.d0
 
   nphase = rt_parameter%nphase
   
@@ -337,13 +320,18 @@ subroutine TDispersionBC(ibndtype, &
       end select
     else
       molecular_diffusion(:) = &
-            rt_parameter%diffusion_coefficient(:,iphase)
+        rt_parameter%diffusion_coefficient(:,iphase)
+    endif
+    if (rt_parameter%millington_quirk_tortuosity) then
+      molecular_diffusion(:) = &
+            molecular_diffusion(:) * &
+            sat_dn**s_pow * &
+            material_auxvar_dn%porosity**por_pow
     endif
     q = qdarcy(iphase)
     if (rt_parameter%calculate_transverse_dispersion) then
       velocity_dn = q*abs_dist_dn(1:3) + (1.d0-abs_dist_dn(1:3))* &
                     cell_centered_velocity_dn(:,iphase)
-#if 1
       v_dn = sqrt(dot_product(velocity_dn,velocity_dn))
       vi2_over_v_dn = velocity_dn(X_DIRECTION)**2/v_dn
       vj2_over_v_dn = velocity_dn(Y_DIRECTION)**2/v_dn
@@ -359,26 +347,6 @@ subroutine TDispersionBC(ibndtype, &
       Dzz = dispersivity_dn(TRANSVERSE_VERTICAL)*vi2_over_v_dn + &
             dispersivity_dn(TRANSVERSE_VERTICAL)*vj2_over_v_dn + &
             dispersivity_dn(LONGITUDINAL)*vk2_over_v_dn
-#else
-      Dxx = dispersivity_dn(LONGITUDINAL)* &
-                 dabs(velocity_dn(X_DIRECTION)) + &
-               dispersivity_dn(TRANSVERSE_HORIZONTAL)* &
-                 dabs(velocity_dn(Y_DIRECTION)) + &
-               dispersivity_dn(TRANSVERSE_VERTICAL)* &
-                 dabs(velocity_dn(Z_DIRECTION))
-      Dyy = dispersivity_dn(TRANSVERSE_HORIZONTAL)* &
-                 dabs(velocity_dn(X_DIRECTION)) + &
-               dispersivity_dn(LONGITUDINAL)* &
-                 dabs(velocity_dn(Y_DIRECTION)) + &
-               dispersivity_dn(TRANSVERSE_VERTICAL)* &
-                 dabs(velocity_dn(Z_DIRECTION))
-      Dzz = dispersivity_dn(TRANSVERSE_HORIZONTAL)* &
-                 dabs(velocity_dn(X_DIRECTION)) + &
-               dispersivity_dn(TRANSVERSE_HORIZONTAL)* &
-                 dabs(velocity_dn(Y_DIRECTION)) + &
-               dispersivity_dn(LONGITUDINAL)* &
-                 dabs(velocity_dn(Z_DIRECTION))
-#endif
       ! dot product on unit direction vector
       mechanical_dispersion = &
         max(dist_dn(1)**2*Dxx+dist_dn(2)**2*Dyy+dist_dn(3)**2*Dzz,1.d-40)

@@ -39,7 +39,7 @@ contains
 
 ! ************************************************************************** !
 
-subroutine HDF5Init(option)
+subroutine HDF5Init()
   ! 
   ! From the HDF5 library documentation:
   !
@@ -53,9 +53,6 @@ subroutine HDF5Init(option)
   ! Author: Glenn Hammond
   ! Date: 07/06/20
   ! 
-  use Option_module
-  
-  type(option_type) :: option
   
   integer :: hdf5_err
 
@@ -131,7 +128,7 @@ subroutine HDF5ReadNDimRealArray(option,file_id,dataset_name,ndims,dims, &
   allocate(real_array(num_reals_in_dataset))
   real_array = 0.d0
 #ifdef HDF5_BROADCAST
-  if (option%myrank == option%io_rank) then                           
+  if (OptionIsIORank(option)) then                           
 #endif
     call PetscLogEventBegin(logging%event_h5dread_f,ierr);CHKERRQ(ierr)
     call h5dread_f(data_set_id,H5T_NATIVE_DOUBLE,real_array,length, &
@@ -139,7 +136,7 @@ subroutine HDF5ReadNDimRealArray(option,file_id,dataset_name,ndims,dims, &
     call PetscLogEventEnd(logging%event_h5dread_f,ierr);CHKERRQ(ierr)
 #ifdef HDF5_BROADCAST
   endif
-  if (option%mycommsize > 1) then
+  if (option%comm%mycommsize > 1) then
     int_mpi = num_reals_in_dataset
     call MPI_Bcast(real_array,int_mpi,MPI_DOUBLE_PRECISION, &
                    option%io_rank,option%mycomm,ierr)
@@ -211,9 +208,9 @@ subroutine HDF5ReadDatasetReal1D(filename,dataset_name,read_option,option, &
   ! Get size of each dimension
   call parallelIO_get_dataset_dims(dataset_dims, file_id, dataset_name, option%ioread_group_id, ierr)
   
-  data_dims(1) = dataset_dims(1)/option%mycommsize
+  data_dims(1) = dataset_dims(1)/option%comm%mycommsize
 
-  remainder = dataset_dims(1) - data_dims(1)*option%mycommsize
+  remainder = dataset_dims(1) - data_dims(1)*option%comm%mycommsize
   if (option%myrank < remainder) data_dims(1) = data_dims(1) + 1
 
   
@@ -303,7 +300,7 @@ function HDF5GroupExists(filename,group_name,option)
   call h5pset_fapl_mpio_f(prop_id,option%mycomm,MPI_INFO_NULL,hdf5_err)
 #endif
   ! open the file
-  call HDF5OpenFileReadOnly(filename,file_id,prop_id,option)
+  call HDF5OpenFileReadOnly(filename,file_id,prop_id,'',option)
   call h5pclose_f(prop_id,hdf5_err)
 
   option%io_buffer = 'Testing group: ' // trim(group_name)
@@ -373,7 +370,7 @@ function HDF5DatasetExists(filename,group_name,dataset_name,option)
   call h5pset_fapl_mpio_f(prop_id,option%mycomm,MPI_INFO_NULL,hdf5_err)
 #endif
   ! open the file
-  call HDF5OpenFileReadOnly(filename,file_id,prop_id,option)
+  call HDF5OpenFileReadOnly(filename,file_id,prop_id,'',option)
   call h5pclose_f(prop_id,hdf5_err)
 
   ! I turn off error messaging since if the group does not exist, an error
@@ -489,7 +486,7 @@ subroutine HDF5ReadDbase(filename,option)
 #ifndef SERIAL_HDF5
   call h5pset_fapl_mpio_f(prop_id,option%mycomm,MPI_INFO_NULL,hdf5_err)
 #endif
-  call HDF5OpenFileReadOnly(filename,file_id,prop_id,option)
+  call HDF5OpenFileReadOnly(filename,file_id,prop_id,'',option)
   call h5pclose_f(prop_id,hdf5_err)
   call h5gn_members_f(file_id, '.',num_objects, hdf5_err)
   num_ints = 0
@@ -615,7 +612,7 @@ subroutine HDF5ReadDbase(filename,option)
       call h5tget_class_f(datatype_id, class_id, hdf5_err)
       call h5tclose_f(datatype_id, hdf5_err)
 #ifdef HDF5_BROADCAST
-      if (option%myrank == option%io_rank) then                           
+      if (OptionIsIORank(option)) then                           
 #endif
       call PetscLogEventBegin(logging%event_h5dread_f,ierr);CHKERRQ(ierr)
       if (class_id == H5T_INTEGER_F) then
@@ -643,7 +640,7 @@ subroutine HDF5ReadDbase(filename,option)
       call PetscLogEventEnd(logging%event_h5dread_f,ierr);CHKERRQ(ierr)
 #ifdef HDF5_BROADCAST
       endif
-      if (option%mycommsize > 1) then
+      if (option%comm%mycommsize > 1) then
         int_mpi = num_values_in_dataset
         if (class_id == H5T_INTEGER_F) then
           call MPI_Bcast(ibuffer,int_mpi,MPI_INTEGER, &
@@ -687,7 +684,7 @@ end subroutine HDF5ReadDbase
 
 ! ************************************************************************** !
 
-subroutine HDF5OpenFileReadOnly(filename,file_id,prop_id,option)
+subroutine HDF5OpenFileReadOnly(filename,file_id,prop_id,error_string,option)
   ! 
   ! Opens an HDF5 file.  This wrapper provides error messaging if the file
   ! does not exist.
@@ -700,30 +697,36 @@ subroutine HDF5OpenFileReadOnly(filename,file_id,prop_id,option)
   character(len=*) :: filename  ! must be of variable length
   integer(HID_T) :: file_id
   integer(HID_T) :: prop_id
+  character(len=*) :: error_string
   type(option_type) :: option
   
+  PetscMPIInt, parameter :: ON=1, OFF=0
   integer :: hdf5_err
 
+  call h5eset_auto_f(OFF, hdf5_err)
   call h5fopen_f(filename,H5F_ACC_RDONLY_F,file_id,hdf5_err,prop_id)
   if (hdf5_err /= 0) then
-    option%io_buffer = 'HDF5 file "' // trim(filename) // '" not found.'
+    option%io_buffer = 'HDF5 ' 
+    if (len_trim(error_string) > 0) then
+      option%io_buffer = trim(error_string)
+    else
+      option%io_buffer = 'HDF5 file "' // trim(filename) // '" not found.'
+    endif
     call PrintErrMsg(option)
   endif
+  call h5eset_auto_f(ON, hdf5_err)
   
 end subroutine HDF5OpenFileReadOnly
 
 ! ************************************************************************** !
 
-subroutine HDF5Finalize(option)
+subroutine HDF5Finalize()
   ! 
   ! Closes the HDF5 library interface for Fortran.
   ! 
   ! Author: Glenn Hammond
   ! Date: 07/06/20
   ! 
-  use Option_module
-  
-  type(option_type) :: option
   
   call h5close_f(hdf5_err)
   

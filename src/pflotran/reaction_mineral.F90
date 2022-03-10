@@ -209,9 +209,9 @@ subroutine MineralReadKinetics(mineral,input,option)
               call InputErrorMsg(input,option,'rate_limiter',error_string)
             case('IRREVERSIBLE')
 !             read flag for irreversible reaction
-              option%io_buffer = 'IRREVERSIBLE mineral precipitation/' // &
-                'dissolution no longer supported.  The code is commented out.'
-              call PrintErrMsg(option)
+!              option%io_buffer = 'IRREVERSIBLE mineral precipitation/' // &
+!                'dissolution no longer supported.  The code is commented out.'
+!              call PrintErrMsg(option)
               tstrxn%irreversible = 1
               call InputErrorMsg(input,option,'irreversible',error_string)
             case('ARMOR_MINERAL')
@@ -640,7 +640,7 @@ subroutine RKineticMineral(Res,Jac,compute_derivative,rt_auxvar, &
   ! 
 
   use Option_module
-  use Material_Aux_class
+  use Material_Aux_module
 #ifdef SOLID_SOLUTION
   use Reaction_Solid_Soln_Aux_module
 #endif
@@ -654,7 +654,7 @@ subroutine RKineticMineral(Res,Jac,compute_derivative,rt_auxvar, &
   PetscReal :: Jac(reaction%ncomp,reaction%ncomp)
   type(reactive_transport_auxvar_type) :: rt_auxvar
   type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   
   PetscInt :: i, j, k, imnrl, icomp, jcomp, kcplx, iphase, ncomp
   PetscInt :: ipref, ipref_species
@@ -785,10 +785,11 @@ subroutine RKineticMineral(Res,Jac,compute_derivative,rt_auxvar, &
     sign_ = sign(1.d0,affinity_factor)
 
     if (rt_auxvar%mnrl_volfrac(imnrl) > 0 .or. sign_ < 0.d0) then
+      if (mineral%kinmnrl_irreversible(imnrl) == 1 .and. sign_ < 0.d0) cycle
 
-!   if ((mineral%kinmnrl_irreversible(imnrl) == 0 &
-!     .and. (rt_auxvar%mnrl_volfrac(imnrl) > 0 .or. sign_ < 0.d0)) &
-!     .or. (mineral%kinmnrl_irreversible(imnrl) == 1 .and. sign_ < 0.d0)) then
+!    if ((mineral%kinmnrl_irreversible(imnrl) == 0 &
+!      .and. (rt_auxvar%mnrl_volfrac(imnrl) > 0 .or. sign_ < 0.d0)) &
+!      .or. (mineral%kinmnrl_irreversible(imnrl) == 1 .and. sign_ < 0.d0)) then
     
 !     check for supersaturation threshold for precipitation
 !     if (associated(mineral%kinmnrl_affinity_threshold)) then
@@ -1136,10 +1137,14 @@ subroutine RMineralRate(imnrl,ln_act,ln_sec_act,rt_auxvar,global_auxvar, &
   sign_ = sign(1.d0,affinity_factor)
 
   if (rt_auxvar%mnrl_volfrac(imnrl) > 0 .or. sign_ < 0.d0) then
+    if (mineral%kinmnrl_irreversible(imnrl) == 1 .and. sign_ < 0.d0) then
+      cycle_ = PETSC_TRUE
+      return
+    endif
 
-!   if ((mineral%kinmnrl_irreversible(imnrl) == 0 &
-!     .and. (rt_auxvar%mnrl_volfrac(imnrl) > 0 .or. sign_ < 0.d0)) &
-!     .or. (mineral%kinmnrl_irreversible(imnrl) == 1 .and. sign_ < 0.d0)) then
+!  if ((mineral%kinmnrl_irreversible(imnrl) == 0 &
+!    .and. (rt_auxvar%mnrl_volfrac(imnrl) > 0 .or. sign_ < 0.d0)) &
+!    .or. (mineral%kinmnrl_irreversible(imnrl) == 1 .and. sign_ < 0.d0)) then
     
 !     check for supersaturation threshold for precipitation
 !     if (associated(mineral%kinmnrl_affinity_threshold)) then
@@ -1349,14 +1354,14 @@ subroutine MineralUpdateSpecSurfaceArea(reaction,rt_auxvar,material_auxvar, &
   ! Author: Glenn Hammond
   ! Date: 03/04/21
   ! 
-  use Material_Aux_class
+  use Material_Aux_module
   use Option_module
 
   implicit none
 
   class(reaction_rt_type) :: reaction
   type(reactive_transport_auxvar_type) :: rt_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   PetscReal :: porosity0
   type(option_type) :: option
 

@@ -1085,7 +1085,7 @@ subroutine PMUFDDecaySolve(this,time,ierr)
   use Field_module
   use Reactive_Transport_Aux_module
   use Global_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Utility_module
   use Secondary_Continuum_Aux_module
   
@@ -1178,8 +1178,8 @@ subroutine PMUFDDecaySolve(this,time,ierr)
   type(field_type), pointer :: field
   type(reactive_transport_auxvar_type), pointer :: rt_auxvars(:)
   type(global_auxvar_type), pointer :: global_auxvars(:)
-  class(material_auxvar_type), pointer :: material_auxvars(:)
   type(sec_transport_type) :: rt_sec_transport_vars
+  type(material_auxvar_type), pointer :: material_auxvars(:)
   PetscInt :: local_id
   PetscInt :: ghosted_id
   PetscInt :: iele, i, p, g, ip, ig, iiso, ipri, imnrl, imat
@@ -1261,15 +1261,10 @@ subroutine PMUFDDecaySolve(this,time,ierr)
     istart = (local_id-1) * reaction%ncomp + 1
     iend = istart + reaction%naqcomp - 1
     
-    ! sum up mass of each isotope across phases and decay
-    
-       
+    ! sum up mass of each isotope across phases and decay      
     call PMUFDDecaySolveISPDIAtCell(this,rt_auxvars(ghosted_id),reaction, &
                            vol,den_w_kg,por,sat,vps,dt,xx_p(istart:iend), &
-                           local_id,imat,this%element_Kd(:,:,1))
-
-
-    
+                           local_id,imat,this%element_Kd(:,:,1))    
   enddo
 
   call VecRestoreArrayF90(field%tran_xx,xx_p,ierr);CHKERRQ(ierr)
@@ -1301,7 +1296,7 @@ subroutine PMUFDDecaySolveISPDIAtCell(this,rt_auxvars,reaction,vol,den_w_kg,por,
   use Field_module
   use Reactive_Transport_Aux_module
   use Global_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Utility_module
 
   implicit none
@@ -1482,9 +1477,9 @@ subroutine PMUFDDecaySolveISPDIAtCell(this,rt_auxvars,reaction,vol,den_w_kg,por,
       enddo
       ! linear solve steps
       ! solve step 1/2: get LU decomposition
-      call ludcmp(Jacobian,this%num_isotopes,indices,i)
+      call LUDecomposition(Jacobian,this%num_isotopes,indices,i)
       ! solve step 2/2: LU back substitution linear solve
-      call lubksb(Jacobian,this%num_isotopes,indices,rhs)
+      call LUBackSubstitution(Jacobian,this%num_isotopes,indices,rhs)
       rhs = dsign(1.d0,rhs)*min(dabs(rhs),10.d0)
       ! update the solution
       solution = solution*exp(-rhs)

@@ -378,7 +378,7 @@ subroutine OutputFileRead(input,realization,output_option, &
         call StringToUpper(word)
         select case(trim(word))
           case('OFF')
-            option%print_to_screen = PETSC_FALSE
+            option%driver%print_to_screen = PETSC_FALSE
           case('PERIODIC')
             string = trim(string) // ',PERIODIC'
             call InputReadInt(input,option,output_option%screen_imod)
@@ -461,7 +461,7 @@ subroutine OutputFileRead(input,realization,output_option, &
                 call InputKeywordUnrecognized(input,word,string,option)
             end select
             if (output_option%tecplot_format == TECPLOT_POINT_FORMAT &
-                 .and. option%mycommsize > 1) then
+                 .and. option%comm%mycommsize > 1) then
               option%io_buffer = 'TECPLOT POINT format not supported in &
                 &parallel. Switching to TECPLOT BLOCK.'
               call PrintMsg(option)
@@ -913,6 +913,22 @@ subroutine OutputVariableRead(input,option,output_variable_list)
         output_variable%iformat = 0 ! double
         output_variable%plot_only = PETSC_TRUE ! toggle output off for observation
         call OutputVariableAddToList(output_variable_list,output_variable)
+      case('ELECTRICAL_POTENTIAL_DIPOLE')
+        call OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
+                                option)
+        call InputReadInt(input,option,subvar)
+        call InputErrorMsg(input,option,'Electrical Potential #1', &
+                           'VARIABLES,ELECTRICAL_DIPOLE')
+        call InputReadInt(input,option,subsubvar)
+        call InputErrorMsg(input,option,'Electrical Potential #2', &
+                           'VARIABLES,ELECTRICAL_DIPOLE')
+        output_variable => OutputVariableCreate(name,category,units,id)
+        output_variable%iformat = 0 ! double
+        output_variable%plot_only = PETSC_TRUE
+        name = trim(name) // '_' // trim(adjustl(StringWrite(subvar))) // &
+               '_' // trim(adjustl(StringWrite(subsubvar)))
+        call OutputVariableAddToList(output_variable_list,name, &
+                                     category,units,id,subvar,subsubvar)
       case('ELECTRICAL_POTENTIAL','ELECTRICAL_JACOBIAN')
         icount = 0
         do
@@ -1557,7 +1573,7 @@ subroutine ComputeFlowCellVelocityStats(realization_base)
       string = trim(string) // ' Velocity Statistics [m/' // &
                trim(output_option%tunit) // ']:'
 
-      if (option%myrank == option%io_rank) then
+      if (OptionIsIORank(option)) then
         write(*,'(/,a,/, &
                      &"Average:",1es12.4,/, &
                      &"Max:    ",1es12.4,"  Location:",i11,/, &
@@ -1689,7 +1705,7 @@ subroutine ComputeFlowFluxVelocityStats(realization_base)
       end select
       string = trim(string) // ' Flux Velocity Statistics [m/' // &
                trim(output_option%tunit) // ']:'
-      if (option%myrank == option%io_rank) then
+      if (OptionIsIORank(option)) then
         write(*,'(/,a,/, &
                      &"Average:",1es12.4,/, &
                      &"Max:    ",1es12.4,"  Location:",i11,/, &
@@ -1770,7 +1786,7 @@ subroutine OutputPrintCouplers(realization_base,istep)
   endif
 
   select case(option%iflowmode)
-    case(RICHARDS_MODE,RICHARDS_TS_MODE)
+    case(RICHARDS_MODE,RICHARDS_TS_MODE,ZFLOW_MODE,PNF_MODE)
       allocate(iauxvars(1),auxvar_names(1))
       iauxvars(1) = RICHARDS_PRESSURE_DOF
       auxvar_names(1) = 'pressure'
@@ -1930,7 +1946,7 @@ subroutine OutputPrintCouplersH5(realization_base,istep)
   endif
 
   select case(option%iflowmode)
-    case(RICHARDS_MODE,RICHARDS_TS_MODE)
+    case(RICHARDS_MODE,RICHARDS_TS_MODE,ZFLOW_MODE,PNF_MODE)
       allocate(iauxvars(1),auxvar_names(1))
       iauxvars(1) = RICHARDS_PRESSURE_DOF
       auxvar_names(1) = 'pressure'
@@ -1975,7 +1991,7 @@ subroutine OutputPrintCouplersH5(realization_base,istep)
   endif
 
   !TODO(geh): move conditional inside of OutputXMFHeader
-  if (option%myrank == option%io_rank) then
+  if (OptionIsIORank(option)) then
     call OutputXMFHeader(OUTPUT_UNIT, &
                          option%time/output_option%tconv, &
                          grid%nmax, &
@@ -2043,7 +2059,7 @@ subroutine OutputPrintCouplersH5(realization_base,istep)
       string2 = trim(h5_filename_without_path) // &
                      ":/" // trim(group_name) // "/" // trim(string)
       !TODO(geh): move conditional inside of OutputXMFAttribute
-      if (option%myrank == option%io_rank) then
+      if (OptionIsIORank(option)) then
         call OutputXMFAttribute(OUTPUT_UNIT,grid%nmax,string,string2, &
                                 CELL_CENTERED_OUTPUT_MESH)
       endif
@@ -2052,7 +2068,7 @@ subroutine OutputPrintCouplersH5(realization_base,istep)
   enddo
 
   !TODO(geh): move conditional inside of OutputXMFFooter
-  if (option%myrank == option%io_rank) then
+  if (OptionIsIORank(option)) then
     call OutputXMFFooter(OUTPUT_UNIT)
     close(OUTPUT_UNIT)
   endif
@@ -2197,7 +2213,7 @@ subroutine OutputPrintRegionsH5(realization_base)
   endif
 
   !TODO(geh): move conditional inside of OutputXMFHeader
-  if (option%myrank == option%io_rank) then
+  if (OptionIsIORank(option)) then
     call OutputXMFHeader(OUTPUT_UNIT, &
                          option%time/output_option%tconv, &
                          grid%nmax, &
@@ -2243,7 +2259,7 @@ subroutine OutputPrintRegionsH5(realization_base)
     string2 = trim(h5_filename_without_path) // &
                    ":/" // trim(group_name) // "/" // trim(string)
     !TODO(geh): move conditional inside of OutputXMFAttribute
-    if (option%myrank == option%io_rank) then
+    if (OptionIsIORank(option)) then
       call OutputXMFAttribute(OUTPUT_UNIT,grid%nmax,string,string2, &
                               CELL_CENTERED_OUTPUT_MESH)
     endif
@@ -2259,13 +2275,13 @@ subroutine OutputPrintRegionsH5(realization_base)
   string2 = trim(h5_filename_without_path) // &
                  ":/" // trim(group_name) // "/" // trim(string)
   !TODO(geh): move conditional inside of OutputXMFAttribute
-  if (option%myrank == option%io_rank) then
+  if (OptionIsIORank(option)) then
     call OutputXMFAttribute(OUTPUT_UNIT,grid%nmax,string,string2, &
                             CELL_CENTERED_OUTPUT_MESH)
   endif
 
   !TODO(geh): move conditional inside of OutputXMFFooter
-  if (option%myrank == option%io_rank) then
+  if (OptionIsIORank(option)) then
     call OutputXMFFooter(OUTPUT_UNIT)
     close(OUTPUT_UNIT)
   endif
@@ -2439,7 +2455,7 @@ subroutine OutputListEnsureVariablesExist(output_variable_list,option)
   ! Date: 03/02/17
   !
   use Option_module
-  use Material_Aux_class, only : soil_compressibility_index, &
+  use Material_Aux_module, only : soil_compressibility_index, &
                                  soil_reference_pressure_index
   use Variables_module
 

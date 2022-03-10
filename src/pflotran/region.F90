@@ -496,6 +496,7 @@ subroutine RegionRead(region,input,option)
       case('POLYGON')
         if (.not.associated(region%polygonal_volume)) then
           region%polygonal_volume => GeometryCreatePolygonalVolume()
+          region%def_type = DEFINED_BY_POLY_CELL_CENTER
         endif
         call InputPushBlock(input,option)
         do
@@ -530,8 +531,8 @@ subroutine RegionRead(region,input,option)
               call GeometryReadCoordinates(input,option,region%name, &
                                          region%polygonal_volume%yz_coordinates)
             case default
-              option%io_buffer = 'Keyword not recognized for REGION POLYGON.'
-              call PrintErrMsg(option)
+              call InputKeywordUnrecognized(input,word, &
+                                            'REGION POLYGON',option)
           end select
         enddo
         call InputPopBlock(input,option)
@@ -717,8 +718,8 @@ subroutine RegionReadFromFileId(region,input,option)
     enddo
 
     ! Depending on processor rank, save only a portion of data
-    region%num_cells = count/option%mycommsize
-      remainder = count - region%num_cells*option%mycommsize
+    region%num_cells = count/option%comm%mycommsize
+      remainder = count - region%num_cells*option%comm%mycommsize
     if (option%myrank < remainder) region%num_cells = region%num_cells + 1
     istart = 0
     iend   = 0
@@ -761,13 +762,16 @@ subroutine RegionReadFromFileId(region,input,option)
       face_ids_p(count) = temp_int
       if (count+1 > max_size) then ! resize temporary array
         call ReallocateArray(cell_ids_p, max_size)
+        ! since ReallocateArray doubles max_size, we need to divide by 2 
+        ! before calling again
+        max_size = max_size / 2
         call ReallocateArray(face_ids_p, max_size)
       endif
     enddo
 
     ! Depending on processor rank, save only a portion of data
-    region%num_cells = count/option%mycommsize
-      remainder = count - region%num_cells*option%mycommsize
+    region%num_cells = count/option%comm%mycommsize
+      remainder = count - region%num_cells*option%comm%mycommsize
     if (option%myrank < remainder) region%num_cells = region%num_cells + 1
     istart = 0
     iend   = 0
@@ -828,17 +832,23 @@ subroutine RegionReadFromFileId(region,input,option)
 
         if (count+1 > max_size) then ! resize temporary array
           call ReallocateArray(vert_id_0_p,max_size)
+          ! since ReallocateArray doubles max_size, we need to divide by 2 
+          ! before calling again
+          max_size = max_size / 2
           call ReallocateArray(vert_id_1_p,max_size)
+          max_size = max_size / 2
           call ReallocateArray(vert_id_2_p,max_size)
+          max_size = max_size / 2
           call ReallocateArray(vert_id_3_p,max_size)
+          max_size = max_size / 2
           call ReallocateArray(vert_id_4_p,max_size)
         endif
       enddo
     enddo
 
     ! Depending on processor rank, save only a portion of data
-    region%num_verts = count/option%mycommsize
-      remainder = count - region%num_verts*option%mycommsize
+    region%num_verts = count/option%comm%mycommsize
+      remainder = count - region%num_verts*option%comm%mycommsize
     if (option%myrank < remainder) region%num_verts = region%num_verts + 1
     istart = 0
     iend   = 0
@@ -957,9 +967,9 @@ subroutine RegionReadSideSet(sideset,filename,option)
   call InputErrorMsg(input,option,'number of faces',hint)
 
   ! divide faces across ranks
-  num_faces_local = sideset%nfaces/option%mycommsize 
+  num_faces_local = sideset%nfaces/option%comm%mycommsize 
   num_faces_local_save = num_faces_local
-  remainder = sideset%nfaces - num_faces_local*option%mycommsize
+  remainder = sideset%nfaces - num_faces_local*option%comm%mycommsize
   if (option%myrank < remainder) num_faces_local = &
                                  num_faces_local + 1
 
@@ -971,11 +981,11 @@ subroutine RegionReadSideSet(sideset,filename,option)
   ! for now, read all faces from ASCII file through io_rank and communicate
   ! to other ranks
   call OptionSetBlocking(option,PETSC_FALSE)
-  if (option%myrank == option%io_rank) then
+  if (OptionIsIORank(option)) then
     allocate(temp_int_array(max_nvert_per_face, &
                             num_faces_local_save+1))
     ! read for other processors
-    do irank = 0, option%mycommsize-1
+    do irank = 0, option%comm%mycommsize-1
       temp_int_array = UNINITIALIZED_INTEGER
       num_to_read = num_faces_local_save
       if (irank < remainder) num_to_read = num_to_read + 1
@@ -1003,7 +1013,7 @@ subroutine RegionReadSideSet(sideset,filename,option)
         enddo
       enddo
       ! if the faces reside on io_rank
-      if (irank == option%io_rank) then
+      if (OptionIsIORank(option,irank)) then
 #if UGRID_DEBUG
         write(string,*) num_faces_local
         string = trim(adjustl(string)) // ' faces stored on p0'
@@ -1039,7 +1049,7 @@ subroutine RegionReadSideSet(sideset,filename,option)
     sideset%nfaces = num_faces_local
     int_mpi = num_faces_local*max_nvert_per_face
     call MPI_Recv(sideset%face_vertices,int_mpi, &
-                  MPIU_INTEGER,option%io_rank, &
+                  MPIU_INTEGER,option%driver%io_rank, &
                   MPI_ANY_TAG,option%mycomm,status_mpi,ierr)
   endif
   call OptionSetBlocking(option,PETSC_TRUE)

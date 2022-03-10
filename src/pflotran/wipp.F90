@@ -92,11 +92,11 @@ subroutine FractureAuxVarInit(auxvar)
   ! Date: 7/8/2015, 6/15/17
   !
 
-  use Material_Aux_class
+  use Material_Aux_module
   
   implicit none
   
-  class(material_auxvar_type), intent(inout) :: auxvar
+  type(material_auxvar_type), intent(inout) :: auxvar
 
   call MaterialAuxVarFractureStrip(auxvar%fracture)
   allocate(auxvar%fracture)
@@ -114,7 +114,7 @@ subroutine FracturePropertytoAux(fracture_auxvar,fracture_property)
   ! Date: 7/8/2015
   !
 
-  use Material_Aux_class
+  use Material_Aux_module
   
   implicit none
 
@@ -224,7 +224,7 @@ subroutine FractureSetInitialPressure(fracture,initial_cell_pressure)
   !
   ! Sets the pressure referenced in fracture
   !
-  use Material_Aux_class
+  use Material_Aux_module
 
   implicit none
   
@@ -253,12 +253,12 @@ subroutine FracturePoroEvaluate(auxvar,pressure,compressed_porosity, &
   !
 
   use Option_module
-  use Material_Aux_class
+  use Material_Aux_module
   
   implicit none
   
 !  class(fracture_type) :: this
-  class(material_auxvar_type), intent(in) :: auxvar
+  type(material_auxvar_type), intent(in) :: auxvar
   PetscReal, intent(in) :: pressure
   PetscReal, intent(out) :: compressed_porosity
   PetscReal, intent(out) :: dcompressed_porosity_dp
@@ -331,12 +331,12 @@ subroutine FracturePermScale(auxvar,liquid_pressure,effective_porosity, &
   !
 
   use Option_module
-  use Material_Aux_class
+  use Material_Aux_module
   
   implicit none
   
 !  class(fracture_type) :: this
-  class(material_auxvar_type), intent(in) :: auxvar
+  type(material_auxvar_type), intent(in) :: auxvar
   PetscReal, intent(in) :: liquid_pressure
   PetscReal, intent(in) :: effective_porosity
   PetscReal, intent(out) :: scaling_factor
@@ -490,8 +490,8 @@ function CreepClosureCreate()
   CreepClosureCreate%num_values_per_time = UNINITIALIZED_INTEGER
   CreepClosureCreate%shutdown_pressure = 5.d7 ! set to BRAGFLO default
   CreepClosureCreate%porosity_minimum = 1.d-2 
-  CreepClosureCreate%time_closeoff = 1.d20 ! s
-  CreepClosureCreate%time_datamax =  1.d20 ! s
+  CreepClosureCreate%time_closeoff = MAX_DOUBLE ! s
+  CreepClosureCreate%time_datamax =  MAX_DOUBLE ! s
   nullify(CreepClosureCreate%lookup_table)
   nullify(CreepClosureCreate%next)
   
@@ -715,7 +715,7 @@ subroutine CreepClosureConvertListToArray(list,array,option)
     count = count + 1
     array(count)%ptr => cur_creep_closure
     !if (cur_creep_closure%test .and. &
-    !    option%myrank == option%io_rank) then
+    !    OptionIsIORank(option)) then
     !  call CreepClosureTest(cur_creep_closure,option)
     !endif
     cur_creep_closure => cur_creep_closure%next

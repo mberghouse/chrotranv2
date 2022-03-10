@@ -13,7 +13,10 @@ module TH_Aux_module
   PetscInt, public :: TH_ni_count
   PetscInt, public :: TH_ts_cut_count
   PetscInt, public :: TH_ts_count
+
   PetscInt, public :: th_ice_model
+
+  PetscInt, parameter, public :: TH_UPDATE_FOR_FIXED_ACCUM = 0
 
   type, public :: TH_auxvar_type
     PetscReal :: avgmw
@@ -141,6 +144,9 @@ function THAuxCreate(option)
   type(TH_type), pointer :: THAuxCreate
   
   type(TH_type), pointer :: aux
+
+  ! initialize module variables
+  th_ice_model = 0
 
   allocate(aux) 
   aux%auxvars_up_to_date = PETSC_FALSE
@@ -355,7 +361,7 @@ subroutine THAuxVarComputeNoFreezing(x,auxvar,global_auxvar, &
   use Characteristic_Curves_module
   use Characteristic_Curves_Common_module  
   use Characteristic_Curves_Thermal_module
-  use Material_Aux_class
+  use Material_Aux_module
   
   implicit none
 
@@ -368,7 +374,7 @@ subroutine THAuxVarComputeNoFreezing(x,auxvar,global_auxvar, &
   PetscInt :: iphase
   type(th_parameter_type) :: th_parameter
   PetscInt :: icct
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   PetscInt :: natural_id
   PetscBool :: update_porosity
 
@@ -495,7 +501,15 @@ subroutine THAuxVarComputeNoFreezing(x,auxvar,global_auxvar, &
     call EOSWaterViscosity(global_auxvar%temp,pw,sat_pressure,dpsat_dT,visl, &
                            dvis_dT,dvis_dp,ierr)
   else
-    aux(1) = global_auxvar%m_nacl(1)
+    if (option%iflag == TH_UPDATE_FOR_FIXED_ACCUM) then
+      ! For the computation of fixed accumulation term use NaCl
+      ! value, m_nacl(2), from the previous time step.
+      aux(1) = global_auxvar%m_nacl(2)
+    else
+      ! Use NaCl value for the current time step, m_nacl(1), for computing
+      ! the accumulation term
+      aux(1) = global_auxvar%m_nacl(1)
+    endif
     call EOSWaterDensityExt(global_auxvar%temp,pw,aux, &
                             dw_kg,dw_mol,dw_dp,dw_dT,ierr)
     if (ierr /= 0) then
@@ -561,12 +575,17 @@ subroutine THAuxVarComputeNoFreezing(x,auxvar,global_auxvar, &
 
   ! Effective thermal conductivity
   call thermal_cc%thermal_conductivity_function%CalculateTCond( &
-       global_auxvar%sat(1),global_auxvar%temp,auxvar%Dk_eff,dk_ds,dk_dT,option)
+       global_auxvar%sat(1),global_auxvar%temp, &
+       material_auxvar%porosity,auxvar%Dk_eff,dk_ds,dk_dT,option)
 
   ! Derivative of soil Kersten number
   auxvar%dKe_dp = alpha*(global_auxvar%sat(1) + epsilon)**(alpha - 1.d0)* &
                   auxvar%dsat_dp
   auxvar%dKe_dT = 0.d0
+
+  if (size(global_auxvar%sat) > 1) then
+    global_auxvar%sat(2) = 1.d0 - global_auxvar%sat(1)
+  endif
 
 end subroutine THAuxVarComputeNoFreezing
 
@@ -595,7 +614,7 @@ subroutine THAuxVarComputeFreezing(x, auxvar, global_auxvar, &
   use EOS_Water_module
   use Saturation_Function_module  
   use Characteristic_Curves_Thermal_module
-  use Material_Aux_class
+  use Material_Aux_module
   
   implicit none
 
@@ -605,7 +624,7 @@ subroutine THAuxVarComputeFreezing(x, auxvar, global_auxvar, &
   PetscReal :: x(option%nflowdof)
   type(TH_auxvar_type) :: auxvar
   type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   type(th_parameter_type) :: th_parameter
   PetscInt :: icct
   PetscInt :: iphase
@@ -860,7 +879,7 @@ subroutine THAuxVarComputeFreezing(x, auxvar, global_auxvar, &
   ! Effective thermal conductivity
   call thermal_cc%thermal_conductivity_function%CalculateFTCond( &
        global_auxvar%sat(1),auxvar%ice%sat_ice,global_auxvar%temp, &
-       auxvar%Dk_eff,dk_ds,dK_di,dk_dT,option)
+       material_auxvar%porosity,auxvar%Dk_eff,dk_ds,dK_di,dk_dT,option)
 
   ! Derivative of Kersten number
   auxvar%dKe_dp = alpha*(global_auxvar%sat(1) + epsilon)**(alpha - 1.d0)* &
@@ -914,7 +933,7 @@ subroutine THAuxVarCompute2ndOrderDeriv(TH_auxvar,global_auxvar, &
   use EOS_Water_module
   use Characteristic_Curves_module
   use Characteristic_Curves_Thermal_module
-  use Material_Aux_class
+  use Material_Aux_module
   
   implicit none
 
@@ -923,7 +942,7 @@ subroutine THAuxVarCompute2ndOrderDeriv(TH_auxvar,global_auxvar, &
   class(cc_thermal_type) :: thermal_cc
   type(TH_auxvar_type) :: TH_auxvar
   type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar  
+  type(material_auxvar_type) :: material_auxvar  
   PetscInt :: icct
   PetscErrorCode :: ierr
   
@@ -1030,7 +1049,7 @@ subroutine THPrintAuxVars(file_unit,th_auxvar,global_auxvar, &
   ! Date: 07/16/20
 
   use Global_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Option_module
 
   implicit none
@@ -1038,7 +1057,7 @@ subroutine THPrintAuxVars(file_unit,th_auxvar,global_auxvar, &
   PetscInt :: file_unit
   type(th_auxvar_type) :: th_auxvar
   type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   PetscInt :: natural_id
   character(len=*) :: string
   type(option_type) :: option
@@ -1159,3 +1178,4 @@ subroutine THAuxDestroy(aux)
   end subroutine THAuxDestroy
 
 end module TH_Aux_module
+

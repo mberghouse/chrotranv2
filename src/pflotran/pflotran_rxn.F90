@@ -78,7 +78,7 @@ subroutine BatchChemProcessConstraints(option, input, reaction, &
   use Reaction_Database_module
   use Reactive_Transport_Aux_module
   use Global_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Transport_Constraint_module
   use Transport_Constraint_RT_module
   use Transport_Constraint_Base_module
@@ -94,7 +94,7 @@ subroutine BatchChemProcessConstraints(option, input, reaction, &
   class(reaction_rt_type), pointer :: reaction
   type(global_auxvar_type), pointer :: global_auxvars
   type(reactive_transport_auxvar_type), pointer :: rt_auxvars
-  class(material_auxvar_type), pointer :: material_auxvars
+  type(material_auxvar_type), pointer :: material_auxvars
   class(tran_constraint_coupler_rt_type), pointer :: constraint_coupler 
   type(tran_constraint_list_type), pointer :: transport_constraints
 
@@ -203,9 +203,11 @@ program pflotran_rxn
   use Reaction_Aux_module
   use Reactive_Transport_Aux_module
   use Global_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Reaction_Database_module
+  use Communicator_Aux_module
   use Option_module
+  use Driver_module
   use Input_Aux_module
   use String_module
   
@@ -226,28 +228,24 @@ program pflotran_rxn
   class(reaction_rt_type), pointer :: reaction
   type(option_type), pointer :: option
   type(input_type), pointer :: input
+  class(driver_type), pointer :: driver
 
   type(global_auxvar_type), pointer :: global_auxvars
   type(reactive_transport_auxvar_type), pointer :: rt_auxvars
-  class(material_auxvar_type), pointer :: material_auxvars
+  type(material_auxvar_type), pointer :: material_auxvars
 
   character(len=MAXWORDLENGTH) :: card
   character(len=MAXWORDLENGTH) :: word
   type(tran_constraint_list_type), pointer :: transport_constraints
   class(tran_constraint_coupler_base_type), pointer :: constraint_coupler 
 
-  option => OptionCreate()
-  option%fid_out = OUT_UNIT
-
+  driver => DriverCreate()
   call MPI_Init(ierr)
-  option%global_comm = MPI_COMM_WORLD
-  call MPI_Comm_rank(MPI_COMM_WORLD, option%global_rank, ierr)
-  call MPI_Comm_size(MPI_COMM_WORLD, option%global_commsize, ierr)
-  call MPI_Comm_group(MPI_COMM_WORLD, option%global_group, ierr)
-  option%mycomm = option%global_comm
-  option%myrank = option%global_rank
-  option%mycommsize = option%global_commsize
-  option%mygroup = option%global_group
+  call CommInitPetsc(driver%comm,MPI_COMM_WORLD)
+
+  option => OptionCreate()
+  option%driver => driver
+  option%fid_out = FORWARD_OUT_UNIT
 
   ! check for non-default input filename
   option%input_filename = "pflotran.in"
@@ -265,7 +263,7 @@ program pflotran_rxn
   filename_out = trim(option%global_prefix) // trim(option%group_prefix) // &
                  '.out'
 
-  if (option%myrank == option%io_rank .and. option%print_to_file) then
+  if (driver%IsIORank() .and. driver%PrintToFile()) then
     open(option%fid_out, file=filename_out, action="write", status="unknown")
   endif
 
@@ -333,6 +331,7 @@ program pflotran_rxn
   nullify(material_auxvars)
   call InputDestroy(input)
   call OptionDestroy(option)
+  call DriverDestroy(driver)
   call PetscFinalize(ierr);CHKERRQ(ierr)
   call MPI_Finalize(ierr)
 

@@ -1134,7 +1134,7 @@ subroutine PMWSSSetRegionScaling(this,waste_panel)
   ! Date: 2/02/2017
   !
 
-  use Material_Aux_class
+  use Material_Aux_module
   use Grid_module
 
   implicit none
@@ -1160,7 +1160,7 @@ subroutine PMWSSSetRegionScaling(this,waste_panel)
 ! total_volume_global: [m3] total global volume of grid cells in a waste panel
 ! ierr: PETSc error integer
 ! -----------------------------------------------------------
-  class(material_auxvar_type), pointer :: material_auxvars(:)
+  type(material_auxvar_type), pointer :: material_auxvars(:)
   type(grid_type), pointer :: grid
   PetscInt :: k
   PetscInt :: local_id
@@ -2565,7 +2565,7 @@ subroutine PMWSSSetup(this)
   ! point the waste panel region to the desired region 
   call PMWSSAssociateRegion(this,this%realization%patch%region_list)
   
-  allocate(ranks(option%mycommsize))
+  allocate(ranks(option%comm%mycommsize))
   
   waste_panel_id = 0
   nullify(prev_waste_panel)
@@ -2589,19 +2589,20 @@ subroutine PMWSSSetup(this)
       ranks(option%myrank+1) = 0
     endif
     ! count the number of processes that own the waste panel
-    call MPI_Allreduce(MPI_IN_PLACE,ranks,option%mycommsize,MPI_INTEGER, &
+    call MPI_Allreduce(MPI_IN_PLACE,ranks,option%comm%mycommsize,MPI_INTEGER, &
                        MPI_SUM,option%mycomm,ierr)
     newcomm_size = sum(ranks)
     allocate(cur_waste_panel%rank_list(newcomm_size))
     j = 0
-    do i = 1,option%mycommsize
+    do i = 1,option%comm%mycommsize
       if (ranks(i) == 1) then
         j = j + 1
         cur_waste_panel%rank_list(j) = (i - 1)
       endif
     enddo
     ! create an MPI group and communicator for each waste panel
-    call MPI_Group_incl(option%mygroup,newcomm_size,cur_waste_panel%rank_list, &
+    call MPI_Group_incl(option%comm%mygroup,newcomm_size, &
+                        cur_waste_panel%rank_list, &
                         cur_waste_panel%myMPIgroup,ierr)
     call MPI_Comm_create(option%mycomm,cur_waste_panel%myMPIgroup, &
                          cur_waste_panel%myMPIcomm,ierr)
@@ -3146,7 +3147,7 @@ end subroutine PMWSSUpdateChemSpecies
   use Option_module
   use Grid_module
   use WIPP_Flow_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Global_Aux_module
   use EOS_Gas_module
   use EOS_Water_module
@@ -3197,7 +3198,7 @@ end subroutine PMWSSUpdateChemSpecies
   type(grid_type), pointer :: grid
   type(wippflo_auxvar_type), pointer :: wippflo_auxvars(:,:)
   type(global_auxvar_type), pointer :: global_auxvars(:)
-  class(material_auxvar_type), pointer :: material_auxvars(:)
+  type(material_auxvar_type), pointer :: material_auxvars(:)
   type(srcsink_panel_type), pointer :: cwp
   PetscInt :: i, p, k
   PetscInt :: local_id, ghosted_id
@@ -4349,7 +4350,7 @@ subroutine PMWSSCalcResidualValues(this,r_p,ss_flow_vol_flux)
   ! Date: 10/20/2017
   ! 
   use WIPP_Flow_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
   
   implicit none
   
@@ -4382,7 +4383,7 @@ subroutine PMWSSCalcResidualValues(this,r_p,ss_flow_vol_flux)
   PetscInt :: wat_comp_id, air_comp_id
   PetscInt :: k
   type(wippflo_auxvar_type), pointer :: wippflo_auxvars(:,:)
-  class(material_auxvar_type), pointer :: material_auxvars(:)
+  type(material_auxvar_type), pointer :: material_auxvars(:)
   PetscReal :: pflotran_to_bragflo(2)
   PetscInt :: local_start, local_end
 ! ----------------------------------------------------------
@@ -4446,7 +4447,7 @@ subroutine PMWSSCalcJacobianValues(this,A,ierr)
 #include "petsc/finclude/petscsnes.h"
   use petscsnes
   use WIPP_Flow_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
   
   implicit none
   
@@ -4479,7 +4480,7 @@ subroutine PMWSSCalcJacobianValues(this,A,ierr)
   PetscInt :: ghosted_id
   PetscInt :: wat_comp_id, air_comp_id
   type(wippflo_auxvar_type), pointer :: wippflo_auxvars(:,:)
-  class(material_auxvar_type), pointer :: material_auxvars(:)
+  type(material_auxvar_type), pointer :: material_auxvars(:)
   PetscReal :: J_block(this%option%nflowdof,this%option%nflowdof)
 ! ---------------------------------------------------------------
 
@@ -4760,13 +4761,13 @@ subroutine Radiolysis(rad_inventory, wippflo_auxvar, material_auxvar, dt, &
  
   use Option_module
   use WIPP_Flow_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
 
   implicit none
 
   type(rad_inventory_type), pointer :: rad_inventory
   type(wippflo_auxvar_type) :: wippflo_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   PetscReal :: dt
   type(radiolysis_parameter_type) :: radiolysis_parameters
   PetscReal :: salt_wtpercent, h2_produced, brine_consumed
@@ -4996,14 +4997,22 @@ subroutine Radiolysis(rad_inventory, wippflo_auxvar, material_auxvar, dt, &
           endif
         endif
       endif
-      if (id4 /= 0 .and. dt/rad_inventory%half_life(id4) > &
-          radiolysis_parameters%halfmax) id4 = 0
-      if (id3 /= 0 .and. dt/rad_inventory%half_life(id3) > &
-          radiolysis_parameters%halfmax) id3 = 0
-      if (id2 /= 0 .and. dt/rad_inventory%half_life(id2) > &
-          radiolysis_parameters%halfmax) id2 = 0
-      if (dt/rad_inventory%half_life(id1) > &
-          radiolysis_parameters%halfmax) id1 = 0
+      if (id4 /= 0) then
+        if (dt/rad_inventory%half_life(id4) > &
+            radiolysis_parameters%halfmax) id4 = 0
+      endif
+      if (id3 /= 0) then
+        if (dt/rad_inventory%half_life(id3) > &
+            radiolysis_parameters%halfmax) id3 = 0
+      endif
+      if (id2 /= 0) then
+        if (dt/rad_inventory%half_life(id2) > &
+            radiolysis_parameters%halfmax) id2 = 0
+      endif
+      if (id1 /= 0) then
+        if (dt/rad_inventory%half_life(id1) > &
+            radiolysis_parameters%halfmax) id1 = 0
+      endif
 
       if (id3 == 0) then
         id3 = id4

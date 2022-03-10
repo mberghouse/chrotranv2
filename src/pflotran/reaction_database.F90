@@ -61,7 +61,7 @@ subroutine DatabaseRead(reaction,option)
   type(mineral_type), pointer :: mineral
   type(immobile_type), pointer :: immobile
   
-  character(len=MAXSTRINGLENGTH) :: string
+  character(len=MAXSTRINGLENGTH) :: error_string
   character(len=MAXWORDLENGTH) :: name
   character(len=MAXWORDLENGTH) :: null_name
   
@@ -703,15 +703,21 @@ subroutine DatabaseRead(reaction,option)
   ! also check whether legitimate logK values exist if non-isothermal and
   ! a database reaction exists
   flag = PETSC_FALSE
+  error_string = ' Since the the number of characters in the name is greater &
+    &than or equal to MAXWORDLENGTH, it is likely that the name is too long. &
+    &Please limit to ' // trim(StringWrite(MAXWORDLENGTH)) // ' characters.'
   logK_error_flag = PETSC_FALSE
   cur_aq_spec => reaction%primary_species_list
   do
     if (.not.associated(cur_aq_spec)) exit
     if (cur_aq_spec%id < 0) then
       flag = PETSC_TRUE
-      option%io_buffer = 'Aqueous primary species (' // &
+      option%io_buffer = 'Aqueous primary species "' // &
                trim(cur_aq_spec%name) // &
-               ') not found in database.'
+               '" not found in database.'
+      if (len_trim(cur_aq_spec%name) >= MAXWORDLENGTH) then
+        option%io_buffer = trim(option%io_buffer) // error_string
+      endif
       call PrintMsg(option)
     endif
     if (.not.reaction%use_geothermal_hpt) then
@@ -730,8 +736,11 @@ subroutine DatabaseRead(reaction,option)
     if (cur_aq_spec%id < 0) then
       flag = PETSC_TRUE
       option%io_buffer = &
-               'Aqueous secondary species (' // trim(cur_aq_spec%name) // &
-               ') not found in database.'
+               'Aqueous secondary species "' // trim(cur_aq_spec%name) // &
+               '" not found in database.'
+      if (len_trim(cur_aq_spec%name) >= MAXWORDLENGTH) then
+        option%io_buffer = trim(option%io_buffer) // error_string
+      endif
       call PrintMsg(option)
     endif
     if (.not.reaction%use_geothermal_hpt) then
@@ -749,8 +758,11 @@ subroutine DatabaseRead(reaction,option)
     if (.not.associated(cur_gas_spec)) exit
     if (cur_gas_spec%id < 0) then
       flag = PETSC_TRUE
-      option%io_buffer = 'Gas species (' // trim(cur_gas_spec%name) // &
-                         ') not found in database.'
+      option%io_buffer = 'Gas species "' // trim(cur_gas_spec%name) // &
+                         '" not found in database.'
+      if (len_trim(cur_gas_spec%name) >= MAXWORDLENGTH) then
+        option%io_buffer = trim(option%io_buffer) // error_string
+      endif
       call PrintMsg(option)
     endif
     if (.not.reaction%use_geothermal_hpt) then
@@ -768,9 +780,12 @@ subroutine DatabaseRead(reaction,option)
     if (.not.associated(cur_mineral)) exit
     if (cur_mineral%id < 0) then
       flag = PETSC_TRUE
-      option%io_buffer = 'Mineral (' // trim(cur_mineral%name) // &
-               ') not found in database.'
-      call PrintErrMsg(option)
+      option%io_buffer = 'Mineral "' // trim(cur_mineral%name) // &
+               '" not found in database.'
+      if (len_trim(cur_mineral%name) >= MAXWORDLENGTH) then
+        option%io_buffer = trim(option%io_buffer) // error_string
+      endif
+      call PrintMsg(option)
     endif
     if (.not.reaction%use_geothermal_hpt) then
       if (.not.DatabaseCheckLegitimateLogKs(cur_mineral%dbaserxn, &
@@ -787,8 +802,11 @@ subroutine DatabaseRead(reaction,option)
     if (.not.associated(cur_srfcplx)) exit
     if (cur_srfcplx%id < 0) then
       flag = PETSC_TRUE
-      option%io_buffer = 'Surface species (' // trim(cur_srfcplx%name) // &
-                ') not found in database.'
+      option%io_buffer = 'Surface species "' // trim(cur_srfcplx%name) // &
+                '" not found in database.'
+      if (len_trim(cur_srfcplx%name) >= MAXWORDLENGTH) then
+        option%io_buffer = trim(option%io_buffer) // error_string
+      endif
       call PrintMsg(option)
     endif
     if (.not.reaction%use_geothermal_hpt) then
@@ -1297,11 +1315,11 @@ subroutine BasisInit(reaction,option)
   allocate(sec_matrix_inverse(ncomp_secondary,ncomp_secondary))
   sec_matrix_inverse = 0.d0
  
-  call ludcmp(sec_matrix,ncomp_secondary,indices,temp_int)
+  call LUDecomposition(sec_matrix,ncomp_secondary,indices,temp_int)
   do ispec = 1, ncomp_secondary
     unit_vector = 0.d0
     unit_vector(ispec) = 1.d0
-    call lubksb(sec_matrix,ncomp_secondary,indices,unit_vector)
+    call LUBackSubstitution(sec_matrix,ncomp_secondary,indices,unit_vector)
     sec_matrix_inverse(:,ispec) = unit_vector(:)
   enddo
 
@@ -1690,7 +1708,7 @@ subroutine BasisInit(reaction,option)
     allocate(reaction%eqcplxspecid(0:max_aq_species,reaction%neqcplx))
     reaction%eqcplxspecid = 0
 
-    allocate(reaction%eqcplxstoich(0:max_aq_species,reaction%neqcplx))
+    allocate(reaction%eqcplxstoich(max_aq_species,reaction%neqcplx))
     reaction%eqcplxstoich = 0.d0
 
     allocate(reaction%eqcplxh2oid(reaction%neqcplx))
@@ -2371,6 +2389,19 @@ subroutine BasisInit(reaction,option)
       cur_mineral => cur_mineral%next
       imnrl = imnrl + 1
     enddo
+
+    if (mineral%nkinmnrl > 0) then
+      if (maxval(mineral%kinmnrl_rate_limiter) > 0.d0 .and. &
+          associated(mineral%kinmnrl_affinity_power)) then
+        do ikinmnrl = 1, mineral%nkinmnrl
+          if (.not.Equal(mineral%kinmnrl_affinity_power(ikinmnrl),1.d0)) then
+            option%io_buffer = 'Mineral rate limiters cannot be used when &
+              &AFFINITY_POWER for any mineral is not equal to one.'
+            call PrintErrMsg(option)
+          endif
+        enddo
+      endif
+    endif
 
 #ifdef SOLID_SOLUTION    
     call SolidSolutionLinkNamesToIDs(reaction%solid_solution_list, &
@@ -4212,7 +4243,7 @@ subroutine ReactionDatabaseSetupGases(reaction,num_logKs,option,h2o_id, &
     gas_print = PETSC_FALSE
     allocate(eqspecid(0:max_aq_species,ngas))
     eqspecid = 0
-    allocate(eqstoich(0:max_aq_species,ngas))
+    allocate(eqstoich(max_aq_species,ngas))
     eqstoich = 0.d0
     allocate(eqh2oid(ngas))
     eqh2oid = 0

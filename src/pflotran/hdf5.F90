@@ -103,9 +103,9 @@ subroutine HDF5ReadIntegerArraySplit(option,file_id,dataset_name,local_size, &
                                       hdf5_err)
   ! divide across all processes
   temp_int = int(num_integers_in_file)
-  read_block_size = temp_int / option%mycommsize
-  remainder = temp_int - read_block_size*option%mycommsize
-  if (option%myrank < temp_int - read_block_size*option%mycommsize) &
+  read_block_size = temp_int / option%comm%mycommsize
+  remainder = temp_int - read_block_size*option%comm%mycommsize
+  if (option%myrank < temp_int - read_block_size*option%comm%mycommsize) &
     read_block_size = read_block_size + 1
   if (local_size > 0 .and. local_size /= read_block_size) then
     write(string,*) local_size, read_block_size
@@ -654,7 +654,7 @@ subroutine HDF5QueryRegionDefinition(region, filename, option, &
 #ifndef SERIAL_HDF5
   call h5pset_fapl_mpio_f(prop_id,option%mycomm,MPI_INFO_NULL,hdf5_err)
 #endif
-  call HDF5OpenFileReadOnly(filename,file_id,prop_id,option)
+  call HDF5OpenFileReadOnly(filename,file_id,prop_id,'',option)
   call h5pclose_f(prop_id,hdf5_err)
 
   ! Open the Regions group
@@ -726,7 +726,7 @@ subroutine HDF5ReadRegionFromFile(grid,region,filename,option)
 #ifndef SERIAL_HDF5
   call h5pset_fapl_mpio_f(prop_id,option%mycomm,MPI_INFO_NULL,hdf5_err)
 #endif
-  call HDF5OpenFileReadOnly(filename,file_id,prop_id,option)
+  call HDF5OpenFileReadOnly(filename,file_id,prop_id,'',option)
   call h5pclose_f(prop_id,hdf5_err)
 
   ! Open the Regions group
@@ -845,7 +845,7 @@ subroutine HDF5ReadRegionDefinedByVertex(option,region,filename)
 #endif
 
   ! Open the file collectively
-  call HDF5OpenFileReadOnly(filename,file_id,prop_id,option)
+  call HDF5OpenFileReadOnly(filename,file_id,prop_id,'',option)
   call h5pclose_f(prop_id,hdf5_err)
 
   ! Open dataset
@@ -881,8 +881,8 @@ subroutine HDF5ReadRegionDefinedByVertex(option,region,filename)
   region%sideset => RegionCreateSideset()
   sideset => region%sideset
 
-  sideset%nfaces = int(dims_h5(2)/option%mycommsize)
-  remainder = int(dims_h5(2)) - sideset%nfaces*option%mycommsize
+  sideset%nfaces = int(dims_h5(2)/option%comm%mycommsize)
+  remainder = int(dims_h5(2)) - sideset%nfaces*option%comm%mycommsize
   if (option%myrank < remainder) sideset%nfaces = sideset%nfaces + 1
 
   ! Find istart and iend
@@ -1017,7 +1017,7 @@ subroutine HDF5ReadCellIndexedIntegerArray(realization,global_vec,filename, &
 #ifndef SERIAL_HDF5
   call h5pset_fapl_mpio_f(prop_id,option%mycomm,MPI_INFO_NULL,hdf5_err)
 #endif
-  call HDF5OpenFileReadOnly(filename,file_id,prop_id,option)
+  call HDF5OpenFileReadOnly(filename,file_id,prop_id,'',option)
   call h5pclose_f(prop_id,hdf5_err)
 
   option%io_buffer = 'Setting up grid cell indices'
@@ -1151,7 +1151,7 @@ subroutine HDF5ReadCellIndexedRealArray(realization,global_vec,filename, &
 #ifndef SERIAL_HDF5
   call h5pset_fapl_mpio_f(prop_id,option%mycomm,MPI_INFO_NULL,hdf5_err)
 #endif
-  call HDF5OpenFileReadOnly(filename,file_id,prop_id,option)
+  call HDF5OpenFileReadOnly(filename,file_id,prop_id,'',option)
   call h5pclose_f(prop_id,hdf5_err)
 
   option%io_buffer = 'Setting up grid cell indices'

@@ -66,7 +66,7 @@ contains
     use Reaction_Aux_module
     use Reactive_Transport_Aux_module
     use Global_Aux_module
-    use Material_Aux_class
+    use Material_Aux_module
   
     implicit none
   
@@ -88,7 +88,7 @@ contains
     PetscReal :: Jacobian_nh4_to_no3(reaction%ncomp)
     type(reactive_transport_auxvar_type) :: rt_auxvar
     type(global_auxvar_type) :: global_auxvar
-    class(material_auxvar_type) :: material_auxvar
+    type(material_auxvar_type) :: material_auxvar
       
   end subroutine
 
@@ -1052,7 +1052,7 @@ subroutine CLMDec_React(this,Residual,Jacobian,compute_derivative,rt_auxvar, &
 
   use Option_module
   use Reaction_Aux_module
-  use Material_Aux_class, only : material_auxvar_type
+  use Material_Aux_module, only : material_auxvar_type
   use CLM_Rxn_Common_module, only: CalNLimitFunc
 
   implicit none
@@ -1062,7 +1062,7 @@ subroutine CLMDec_React(this,Residual,Jacobian,compute_derivative,rt_auxvar, &
   class(reaction_rt_type) :: reaction
   type(reactive_transport_auxvar_type) :: rt_auxvar
   type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
 
   PetscBool :: compute_derivative
   PetscReal :: Residual(reaction%ncomp)
@@ -1319,7 +1319,9 @@ subroutine CLMDec_React(this,Residual,Jacobian,compute_derivative,rt_auxvar, &
         if (stoich_c < 0.0d0) then
           option%io_buffer = 'CLMDec litter decomposition reaction has' // &
                              'negative respiration fraction!'
-          call PrintErrMsg(option)
+          call PrintErrMsgNoStopByRank(option)
+          option%ierror = 1
+          return
         endif
 
         this%mineral_c_stoich(irxn) = stoich_c
@@ -3304,7 +3306,7 @@ subroutine PlantNReact(this,Residual,Jacobian,compute_derivative,rt_auxvar, &
   use Option_module
   use Reaction_Aux_module
   use Reaction_Immobile_Aux_module
-  use Material_Aux_class, only : material_auxvar_type
+  use Material_Aux_module, only : material_auxvar_type
   use CLM_Rxn_Common_module, only: CalNLimitFunc
 
   implicit none
@@ -3314,7 +3316,7 @@ subroutine PlantNReact(this,Residual,Jacobian,compute_derivative,rt_auxvar, &
   class(reaction_rt_type) :: reaction
   type(reactive_transport_auxvar_type) :: rt_auxvar
   type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   PetscBool :: compute_derivative
 
   PetscReal :: Residual(reaction%ncomp)
@@ -3915,7 +3917,7 @@ subroutine NitrReact(this,Residual,Jacobian,compute_derivative, &
                      Rate_nh4_to_no3,Jacobian_nh4_to_no3)
   use Option_module
   use Reaction_Aux_module
-  use Material_Aux_class, only : material_auxvar_type
+  use Material_Aux_module, only : material_auxvar_type
   use CLM_Rxn_Common_module, only: CalNLimitFunc
   implicit none
 
@@ -3924,7 +3926,7 @@ subroutine NitrReact(this,Residual,Jacobian,compute_derivative, &
   class(reaction_rt_type) :: reaction
   type(reactive_transport_auxvar_type) :: rt_auxvar
   type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
 
   PetscBool :: compute_derivative
   PetscReal :: Residual(reaction%ncomp)
@@ -4567,7 +4569,7 @@ subroutine DeniReact(this,Residual,Jacobian,compute_derivative, &
 
   use Option_module
   use Reaction_Aux_module
-  use Material_Aux_class, only : material_auxvar_type
+  use Material_Aux_module, only : material_auxvar_type
   use CLM_Rxn_Common_module, only: CalNLimitFunc
 
   implicit none
@@ -4577,7 +4579,7 @@ subroutine DeniReact(this,Residual,Jacobian,compute_derivative, &
   class(reaction_rt_type) :: reaction
   type(reactive_transport_auxvar_type) :: rt_auxvar
   type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
 
   PetscBool :: compute_derivative
   PetscReal :: Residual(reaction%ncomp)
@@ -5008,7 +5010,7 @@ subroutine RCLMRxn(Residual,Jacobian,compute_derivative,rt_auxvar, &
   use Reactive_Transport_Aux_module
   use Global_Aux_module
   use Reaction_Immobile_Aux_module
-  use Material_Aux_class, only: material_auxvar_type
+  use Material_Aux_module, only: material_auxvar_type
   
   implicit none
 
@@ -5016,7 +5018,7 @@ subroutine RCLMRxn(Residual,Jacobian,compute_derivative,rt_auxvar, &
   class(reaction_rt_type) :: reaction
   type(reactive_transport_auxvar_type) :: rt_auxvar
   type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   class(clm_rxn_base_type), pointer :: cur_reaction
   PetscBool :: compute_derivative
   PetscReal :: Residual(reaction%ncomp)

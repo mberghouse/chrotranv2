@@ -766,6 +766,30 @@ subroutine OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
   subvar = UNINITIALIZED_DOUBLE
   subsubvar = UNINITIALIZED_DOUBLE
 
+  ! output variables supported when transport only
+  if (option%iflowmode == NULL_MODE) then
+    select case(word)
+      case('LIQUID_SATURATION','LIQUID_DENSITY','GAS_SATURATION', &
+           'GAS_DENSITY','TEMPERATURE','POROSITY','MINERAL_POROSITY', &
+           'TORTUOSITY','NATURAL_ID','PROCESS_ID','VOLUME','MATERIAL_ID', &
+           'MATERIAL_ID_KLUDGE_FOR_VISIT','X_COORDINATE','Y_COORDINATE', &
+           'Z_COORDINATE', &
+           'ELECTRICAL_CONDUCTIVITY','ELECTRICAL_POTENTIAL', &
+           'ELECTRICAL_JACOBIAN','ELECTRICAL_POTENTIAL_DIPOLE')
+      case default
+        call PrintErrMsg(option,'Output variable "' // trim(word) // &
+          '" not supported when not running a flow mode.')
+    end select
+  endif
+  if (option%igeopmode == NULL_MODE) then
+    select case(word)
+      case('ELECTRICAL_CONDUCTIVITY','ELECTRICAL_POTENTIAL', &
+           'ELECTRICAL_JACOBIAN','ELECTRICAL_POTENTIAL_DIPOLE')
+        call PrintErrMsg(option,'Output variable "' // trim(word) // &
+          '" not supported when not running a geophysics mode.')
+    end select
+  endif
+
   select case(word)
     case ('MAXIMUM_PRESSURE')
       name = 'Maximum Pressure'
@@ -959,9 +983,8 @@ subroutine OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
       category = OUTPUT_GENERIC
       id = BASE_POROSITY
     case ('EFFECTIVE_POROSITY')
-      option%io_buffer = 'EFFECTIVE_POROSITY no longer supported for &
-          &OUTPUT.  Please use POROSITY; it should be the same value.'
-      call PrintErrMsg(option)
+      call PrintErrMsg(option,'EFFECTIVE_POROSITY no longer supported for &
+          &OUTPUT.  Please use POROSITY; it should be the same value.')
     case ('TORTUOSITY')
       units = ''
       name = 'Tortuosity'
@@ -1079,9 +1102,8 @@ subroutine OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
       id = MATERIAL_ID
     case ('SALINITY')
       if (.not.option%flow%density_depends_on_salinity) then
-        option%io_buffer = 'SALINITY output only supported when the &
-          &SALINITY auxiliary process model is used.'
-        call PrintErrMsg(option)
+        call PrintErrMsg(option,trim(word)//' output only &
+          &supported when the SALINITY auxiliary process model is used.')
       endif
       units = ''
       name = 'Salinity (mass fraction)'
@@ -1109,9 +1131,8 @@ subroutine OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
       id = K_ORTHOGONALITY_ERROR
     case ('ELECTRICAL_CONDUCTIVITY')
       if (option%ngeopdof <= 0) then
-        option%io_buffer = 'ELECTRICAL_CONDUCTIVITY output only supported &
-          &when the GEOPHYSICS process model is used.'
-        call PrintErrMsg(option)
+        call PrintErrMsg(option,trim(word)//' output only &
+          &supported when the GEOPHYSICS process model is used.')
       endif
       units = 'S/m'
       name = 'Electrical Conductivity'
@@ -1119,9 +1140,8 @@ subroutine OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
       id = ELECTRICAL_CONDUCTIVITY
     case ('ELECTRICAL_POTENTIAL')
       if (option%ngeopdof <= 0) then
-        option%io_buffer = 'ELECTRICAL_POTENTIAL output only supported &
-          &when the GEOPHYSICS process model is used.'
-        call PrintErrMsg(option)
+        call PrintErrMsg(option,trim(word)//' output only &
+          &supported when the GEOPHYSICS process model is used.')
       endif
       units = 'V'
       name = 'Electrical Potential'
@@ -1129,14 +1149,27 @@ subroutine OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
       id = ELECTRICAL_POTENTIAL
     case ('ELECTRICAL_JACOBIAN')
       if (option%ngeopdof <= 0) then
-        option%io_buffer = 'ELECTRICAL_JACOBIAN output only supported &
-          &when the GEOPHYSICS process model is used.'
-        call PrintErrMsg(option)
+        call PrintErrMsg(option,trim(word)//' output only &
+          &supported when the GEOPHYSICS process model is used.')
       endif
       units = 'Vm/S'
       name = 'Electrical Jacobian'
       category = OUTPUT_GENERIC
       id = ELECTRICAL_JACOBIAN      
+    case ('ELECTRICAL_POTENTIAL_DIPOLE')
+      if (option%ngeopdof <= 0) then
+        call PrintErrMsg(option,trim(word)//' output only &
+          &supported when the GEOPHYSICS process model is used.')
+      endif
+      units = 'V'
+      name = 'Electrical Potential Dipole'
+      category = OUTPUT_GENERIC
+      id = ELECTRICAL_POTENTIAL_DIPOLE
+    case ('SOLUTE_CONCENTRATION')
+      units = 'M'
+      name = 'Solute Concentration'
+      category = OUTPUT_GENERIC
+      id = SOLUTE_CONCENTRATION
   end select
 
 end subroutine OutputVariableToID
@@ -1352,11 +1385,11 @@ subroutine OpenAndWriteInputRecord(option)
   id = option%fid_inputrecord
   ! the input record file has a .rec extension:
   filename = trim(option%global_prefix) // trim(option%group_prefix) // '.rec'
-  open(unit=id,file=filename,action="write",status="replace")
 !geh: this call does not work with IBM
 !  call fdate(word)
   call date_and_time(date_word,time_word,zone_word)
   if (OptionPrintToFile(option)) then
+    open(unit=id,file=filename,action="write",status="replace")
     write(id,'(a)') '---------------------------------------------------------&
                     &-----------------------'
     write(id,'(a)') '---------------------------------------------------------&
@@ -1376,7 +1409,7 @@ subroutine OpenAndWriteInputRecord(option)
     write(id,'(a18)',advance='no') 'group: '
     write(id,*) trim(option%group_prefix)
 
-    write(word,*) option%global_commsize
+    write(word,*) option%comm%mycommsize
     write(id,'(a18)',advance='no') 'n processors: '
     write(id,*) trim(adjustl(word))
   endif

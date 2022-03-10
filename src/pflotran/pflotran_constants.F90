@@ -12,19 +12,19 @@ module PFLOTRAN_Constants_module
   private
 
   PetscBool, parameter :: PFLOTRAN_RELEASE = PETSC_FALSE
-  PetscInt, parameter :: PFLOTRAN_VERSION_MAJOR = 3
+  PetscInt, parameter :: PFLOTRAN_VERSION_MAJOR = 4
   PetscInt, parameter :: PFLOTRAN_VERSION_MINOR = 0
   PetscInt, parameter :: PFLOTRAN_VERSION_PATCH = 0 ! (alpha < -1; beta = -1)
 
 #define VMAJOR 3
-#define VMINOR 13
-#define VSUBMINOR 0
+#define VMINOR 16
+#define VSUBMINOR 2
 #if (PETSC_VERSION_MAJOR < VMAJOR ||                    \
      (PETSC_VERSION_MAJOR == VMAJOR &&                  \
       (PETSC_VERSION_MINOR < VMINOR ||                  \
        (PETSC_VERSION_MINOR == VMINOR &&                \
         (PETSC_VERSION_SUBMINOR < VSUBMINOR)))))
-#error "Please use PETSc version 3.13: 'git checkout v3.13' in $PETSC_DIR"
+#error "Please use PETSc version 3.16.2 or later: 'git checkout v3.16.2' in $PETSC_DIR"
 #endif
   ! MUST INCREMENT THIS NUMBER EVERYTIME A CHECKPOINT FILE IS
   ! MODIFIED TO PREVENT COMPATIBILITY ISSUES - geh.
@@ -33,9 +33,10 @@ module PFLOTRAN_Constants_module
   PetscInt, parameter, public :: MAXSTRINGLENGTH = 512
   PetscInt, parameter, public :: MAXWORDLENGTH = 32
   PetscInt, parameter, public :: STDOUT_UNIT = stdout
-  PetscInt, parameter, public :: OUT_UNIT = 15
+  PetscInt, parameter, public :: DRIVER_OUT_UNIT = 14
+  PetscInt, parameter, public :: FORWARD_OUT_UNIT = 15
   PetscInt, parameter, public :: OUTPUT_UNIT = 16
-  PetscInt, parameter, public :: IN_UNIT = 17
+  PetscInt, parameter, public :: IN_UNIT = 17 ! 17-MAX_IN_UNIT are reserved
   ! If you increase MAX_IN_UNIT, you MUST ensure that no other units #
   ! lie between IN_UNIT and MAX_IN_UNIT, as these units are reserved
   ! for embedded input files.
@@ -157,6 +158,8 @@ module PFLOTRAN_Constants_module
   PetscInt, parameter, public :: RICHARDS_TS_MODE = 6
   PetscInt, parameter, public :: TH_TS_MODE = 7
   PetscInt, parameter, public :: H_MODE = 8
+  PetscInt, parameter, public :: ZFLOW_MODE = 9
+  PetscInt, parameter, public :: PNF_MODE = 10
 
   ! transport modes
   PetscInt, parameter, public :: RT_MODE = 1
@@ -309,6 +312,9 @@ module PFLOTRAN_Constants_module
   ! uninitialized values
   PetscInt, parameter, public :: UNINITIALIZED_INTEGER = -999
   PetscReal, parameter, public :: UNINITIALIZED_DOUBLE = -999.d0
+  
+  ! maximum values
+  PetscReal, parameter, public :: MAX_DOUBLE = 1.d20
 
   ! global solver convergence criteria
   PetscInt, parameter, public :: CONVERGENCE_OFF = -999

@@ -1,14 +1,14 @@
 module Option_module
 
-! IMPORTANT NOTE: This module can have no dependencies on other modules!!!
-
-
 #include "petsc/finclude/petscsys.h"
   use petscsys
   use PFLOTRAN_Constants_module
+  use Communicator_Aux_module
+  use Driver_module
   use Option_Flow_module
   use Option_Transport_module
   use Option_Geophysics_module
+  use Option_Inversion_module
 
   implicit none
 
@@ -20,24 +20,15 @@ module Option_module
     type(transport_option_type), pointer :: transport
     type(geophysics_option_type), pointer :: geophysics
 
+    type(inversion_option_type), pointer :: inversion
+    type(comm_type), pointer :: comm
+    class(driver_type), pointer :: driver
+
     PetscInt :: id                         ! id of realization
-    PetscInt :: exit_code                  ! code passed out of PFLOTRAN
-                                           ! at end of simulation
-    PetscMPIInt :: global_comm             ! MPI_COMM_WORLD
-    PetscMPIInt :: global_rank             ! rank in MPI_COMM_WORLD
-    PetscMPIInt :: global_commsize         ! size of MPI_COMM_WORLD
-    PetscMPIInt :: global_group            ! id of group for MPI_COMM_WORLD
 
     PetscMPIInt :: mycomm                  ! PETSC_COMM_WORLD
     PetscMPIInt :: myrank                  ! rank in PETSC_COMM_WORLD
-    PetscMPIInt :: mycommsize              ! size of PETSC_COMM_WORLD
-    PetscMPIInt :: mygroup                 ! id of group for PETSC_COMM_WORLD
-    PetscMPIInt :: mygroup_id
 
-! don't place a character string near here.  It causes the Windows Intel compiler
-! to crash.  Don't know why....
-
-    PetscMPIInt :: io_rank
     PetscMPIInt :: hdf5_read_group_size, hdf5_write_group_size
     PetscBool :: broadcast_read
     PetscBool :: blocking
@@ -91,11 +82,10 @@ module Option_module
     PetscInt :: ngeopdof ! geophysics # of dof
 
     PetscInt :: iflag
+    PetscInt :: ierror
     PetscInt :: status
     PetscBool :: input_record
     ! these flags are for printing outside of time step loop
-    PetscBool :: print_to_screen
-    PetscBool :: print_to_file
     ! these flags are for printing within time step loop where printing may
     ! need to be temporarily turned off to accommodate periodic screen outout.
     PetscBool :: print_screen_flag
@@ -143,7 +133,6 @@ module Option_module
     character(len=MAXSTRINGLENGTH) :: restart_filename
     character(len=MAXSTRINGLENGTH) :: input_filename
 
-    PetscLogDouble :: start_time
     PetscBool :: wallclock_stop_flag
     PetscLogDouble :: wallclock_stop_time
 
@@ -159,13 +148,8 @@ module Option_module
     character(len=MAXSTRINGLENGTH) :: initialize_flow_filename
     character(len=MAXSTRINGLENGTH) :: initialize_transport_filename
 
-    character(len=MAXSTRINGLENGTH) :: input_prefix
     character(len=MAXSTRINGLENGTH) :: global_prefix
     character(len=MAXWORDLENGTH) :: group_prefix
-    !PO
-    character(len=MAXSTRINGLENGTH) :: output_file_name_prefix
-    character(len=MAXSTRINGLENGTH) :: output_dir
-    !PO end
 
     PetscBool :: use_matrix_buffer
     PetscBool :: force_newton_iteration
@@ -175,18 +159,12 @@ module Option_module
     ! Specify secondary continuum solver
     PetscInt :: secondary_continuum_solver     ! Specify secondary continuum solver
 
-    PetscInt :: subsurface_simulation_type
-
     ! when the scaling factor is too small, stop in reactive transport
     PetscReal :: min_allowable_scale
 
     PetscBool :: print_ekg
 
   end type option_type
-
-  PetscInt, parameter, public :: SUBSURFACE_SIM_TYPE = 1
-  PetscInt, parameter, public :: MULTISIMULATION_SIM_TYPE = 2
-  PetscInt, parameter, public :: STOCHASTIC_SIM_TYPE = 3
 
   interface PrintMsg
     module procedure PrintMsg1
@@ -223,12 +201,15 @@ module Option_module
     module procedure PrintWrnMsg2
   end interface
 
-  interface OptionInitMPI
-    module procedure OptionInitMPI1
-    module procedure OptionInitMPI2
+  interface OptionIsIORank
+    module procedure OptionIsIORank1
+    module procedure OptionIsIORank2
   end interface
 
   public :: OptionCreate, &
+            OptionSetDriver, &
+            OptionSetInversionOption, &
+            OptionUpdateComm, &
             OptionCheckCommandLine, &
             PrintErrMsg, &
             PrintErrMsgToDev, &
@@ -249,16 +230,10 @@ module Option_module
             OptionInitRealization, &
             OptionMeanVariance, &
             OptionMaxMinMeanVariance, &
-            OptionInitMPI, &
-            OptionInitPetsc, &
-            OptionDivvyUpSimulations, &
-            OptionCreateProcessorGroups, &
-            OptionBeginTiming, &
-            OptionEndTiming, &
             OptionPrintPFLOTRANHeader, &
             OptionSetBlocking, &
             OptionCheckNonBlockingError, &
-            OptionFinalize, &
+            OptionIsIORank, &
             OptionDestroy
 
 contains
@@ -272,7 +247,6 @@ function OptionCreate()
   ! Author: Glenn Hammond
   ! Date: 10/25/07
   !
-
   implicit none
 
   type(option_type), pointer :: OptionCreate
@@ -283,6 +257,9 @@ function OptionCreate()
   option%flow => OptionFlowCreate()
   option%transport => OptionTransportCreate()
   option%geophysics => OptionGeophysicsCreate()
+  nullify(option%inversion)
+  nullify(option%driver)
+  nullify(option%comm)
 
   ! DO NOT initialize members of the option type here.  One must decide
   ! whether the member needs initialization once for all stochastic
@@ -293,6 +270,57 @@ function OptionCreate()
   OptionCreate => option
 
 end function OptionCreate
+
+! ************************************************************************** !
+
+subroutine OptionSetDriver(option,driver)
+
+  implicit none
+
+  type(option_type) :: option
+  class(driver_type), pointer :: driver
+
+  option%driver => driver
+  option%comm => driver%comm
+  call OptionUpdateComm(option)
+  if (option%comm%start_time < 1.d-40) then
+    option%io_buffer = 'option%comm%start_time not set. WALLCLOCK_STOP &
+      &will not function properly.'
+    call PrintErrMsg(option)
+  endif
+
+end subroutine OptionSetDriver
+
+! ************************************************************************** !
+
+subroutine OptionUpdateComm(option)
+
+  ! If the MPI communicator is split, we need to update the values local
+  ! values in option
+
+  use Communicator_Aux_module
+
+  implicit none
+
+  type(option_type) :: option
+
+  option%mycomm          = option%comm%mycomm
+  option%myrank          = option%comm%myrank
+
+end subroutine OptionUpdateComm
+
+! ************************************************************************** !
+
+subroutine OptionSetInversionOption(option,inversion_option)
+
+  implicit none
+
+  type(option_type) :: option
+  type(inversion_option_type), pointer :: inversion_option
+
+  option%inversion => inversion_option
+
+end subroutine OptionSetInversionOption
 
 ! ************************************************************************** !
 
@@ -315,27 +343,14 @@ subroutine OptionInitAll(option)
   call OptionTransportInitAll(option%transport)
 
   option%id = 0
-  option%exit_code = 0
-
-  option%global_comm = 0
-  option%global_rank = 0
-  option%global_commsize = 0
-  option%global_group = 0
 
   option%mycomm = 0
   option%myrank = 0
-  option%mycommsize = 0
-  option%mygroup = 0
-  option%mygroup_id = 0
 
-  option%input_prefix = 'pflotran'
   option%group_prefix = ''
   option%global_prefix = ''
-  option%output_file_name_prefix = ''
-  option%output_dir = ''
 
   option%broadcast_read = PETSC_FALSE
-  option%io_rank = 0
   option%hdf5_read_group_size = 0
   option%hdf5_write_group_size = 0
   option%blocking = PETSC_TRUE
@@ -344,8 +359,6 @@ subroutine OptionInitAll(option)
   option%input_record = PETSC_FALSE
   option%print_screen_flag = PETSC_FALSE
   option%print_file_flag = PETSC_FALSE
-  option%print_to_screen = PETSC_TRUE
-  option%print_to_file = PETSC_TRUE
   option%verbosity = 0
   option%keyword_logging = PETSC_TRUE
   option%keyword_logging_screen_output = PETSC_FALSE
@@ -359,8 +372,6 @@ subroutine OptionInitAll(option)
   option%use_upwinding = PETSC_TRUE
 
   option%out_of_table = PETSC_FALSE
-
-  option%subsurface_simulation_type = SUBSURFACE_SIM_TYPE
 
   call OptionInitRealization(option)
 
@@ -387,10 +398,11 @@ subroutine OptionInitRealization(option)
   call OptionTransportInitRealization(option%transport)
 
 
-  option%fid_out = OUT_UNIT
+  option%fid_out = FORWARD_OUT_UNIT
   option%fid_inputrecord = INPUT_RECORD_UNIT
 
   option%iflag = 0
+  option%ierror = 0
   option%io_buffer = ''
 
   option%use_isothermal = PETSC_FALSE
@@ -401,6 +413,7 @@ subroutine OptionInitRealization(option)
   option%iflowmode = NULL_MODE
   option%iflow_sub_mode = NULL_MODE
   option%nflowdof = 0
+  option%nflowspec = 0
   option%nmechdof = 0
   option%nsec_cells = 0
   option%num_table_indices = 0
@@ -474,7 +487,6 @@ subroutine OptionInitRealization(option)
   option%restart_filename = ""
   option%restart_time = UNINITIALIZED_DOUBLE
 
-  option%start_time = 0.d0
   option%wallclock_stop_flag = PETSC_FALSE
   option%wallclock_stop_time = 0.d0
 
@@ -624,9 +636,9 @@ subroutine PrintErrMsg2(option,string)
     if (petsc_initialized) then
       call PetscFinalize(ierr);CHKERRQ(ierr)
     endif
-    select case(option%exit_code)
+    select case(option%driver%exit_code)
       case(EXIT_FAILURE)
-        call exit(option%exit_code)
+        call exit(option%driver%exit_code)
       case default
         call exit(EXIT_USER_ERROR)
     end select
@@ -705,16 +717,16 @@ subroutine PrintErrMsgByRank2(option,string)
 
   character(len=MAXWORDLENGTH) :: word
 
-  if (option%print_to_screen) then
+  if (option%driver%PrintToScreen()) then
     write(word,*) option%myrank
     print *
     print *, 'ERROR(' // trim(adjustl(word)) // '): ' // trim(string)
     print *
     print *, 'Stopping!'
   endif
-  select case(option%exit_code)
+  select case(option%driver%exit_code)
     case(EXIT_FAILURE)
-      call exit(option%exit_code)
+      call exit(option%driver%exit_code)
     case default
       call exit(EXIT_USER_ERROR)
   end select
@@ -758,7 +770,7 @@ subroutine PrintErrMsgNoStopByRank2(option,string)
 
   character(len=MAXWORDLENGTH) :: word
 
-  if (option%print_to_screen) then
+  if (option%driver%PrintToScreen()) then
     write(word,*) option%myrank
     print *
     print *, 'ERROR(' // trim(adjustl(word)) // '): ' // trim(string)
@@ -913,7 +925,7 @@ subroutine PrintMsgAnyRank1(option)
 
   type(option_type) :: option
 
-  if (option%print_to_screen) call PrintMsgAnyRank2(option%io_buffer)
+  if (option%driver%PrintToScreen()) call PrintMsgAnyRank2(option%io_buffer)
 
 end subroutine PrintMsgAnyRank1
 
@@ -970,7 +982,7 @@ subroutine PrintMsgByRank2(option,string)
 
   character(len=MAXWORDLENGTH) :: word
 
-  if (option%print_to_screen) then
+  if (option%driver%PrintToScreen()) then
     write(word,*) option%myrank
     print *, '(' // trim(adjustl(word)) // '): ' // trim(string)
   endif
@@ -1037,20 +1049,23 @@ function OptionCheckTouch(option,filename)
   type(option_type) :: option
   character(len=MAXSTRINGLENGTH) :: filename
 
+  PetscBool :: OptionCheckTouch
+
   PetscInt :: ios
   PetscInt :: fid = 86
-  PetscBool :: OptionCheckTouch
+  PetscBool :: is_io_rank
   PetscErrorCode :: ierr
 
   OptionCheckTouch = PETSC_FALSE
 
-  if (option%myrank == option%io_rank) &
-    open(unit=fid,file=trim(filename),status='old',iostat=ios)
-  call MPI_Bcast(ios,ONE_INTEGER_MPI,MPIU_INTEGER,option%io_rank, &
+  is_io_rank = option%driver%IsIORank()
+
+  if (is_io_rank) open(unit=fid,file=trim(filename),status='old',iostat=ios)
+  call MPI_Bcast(ios,ONE_INTEGER_MPI,MPIU_INTEGER,option%driver%io_rank, &
                  option%mycomm,ierr)
 
   if (ios == 0) then
-    if (option%myrank == option%io_rank) close(fid,status='delete')
+    if (is_io_rank) close(fid,status='delete')
     OptionCheckTouch = PETSC_TRUE
   endif
 
@@ -1072,11 +1087,7 @@ function OptionPrintToScreen(option)
 
   PetscBool :: OptionPrintToScreen
 
-  if (option%myrank == option%io_rank .and. option%print_to_screen) then
-    OptionPrintToScreen = PETSC_TRUE
-  else
-    OptionPrintToScreen = PETSC_FALSE
-  endif
+  OptionPrintToScreen = option%driver%PrintToScreen()
 
 end function OptionPrintToScreen
 
@@ -1096,11 +1107,7 @@ function OptionPrintToFile(option)
 
   PetscBool :: OptionPrintToFile
 
-  if (option%myrank == option%io_rank .and. option%print_to_file) then
-    OptionPrintToFile = PETSC_TRUE
-  else
-    OptionPrintToFile = PETSC_FALSE
-  endif
+  OptionPrintToFile = option%driver%PrintToFile()
 
 end function OptionPrintToFile
 
@@ -1213,7 +1220,7 @@ subroutine OptionMeanVariance(value,mean,variance,calculate_variance,option)
 
   call MPI_Allreduce(value,temp_real,ONE_INTEGER_MPI,MPI_DOUBLE_PRECISION, &
                      MPI_SUM,option%mycomm,ierr)
-  mean = temp_real / dble(option%mycommsize)
+  mean = temp_real / dble(option%comm%mycommsize)
 
   if (calculate_variance) then
     temp_real = value-mean
@@ -1221,93 +1228,50 @@ subroutine OptionMeanVariance(value,mean,variance,calculate_variance,option)
     call MPI_Allreduce(temp_real,variance,ONE_INTEGER_MPI, &
                        MPI_DOUBLE_PRECISION, &
                        MPI_SUM,option%mycomm,ierr)
-    variance = variance / dble(option%mycommsize)
+    variance = variance / dble(option%comm%mycommsize)
   endif
 
 end subroutine OptionMeanVariance
 
 ! ************************************************************************** !
 
-subroutine OptionInitMPI1(option)
+function OptionIsIORank1(option)
   !
-  ! Initializes base MPI communicator
+  ! Returns PETSC_TRUE if I/O rank
   !
   ! Author: Glenn Hammond
-  ! Date: 06/06/13
+  ! Date: 06/07/21
   !
-
   implicit none
 
   type(option_type) :: option
 
-  PetscErrorCode :: ierr
+  PetscBool :: OptionIsIORank1
 
-  call MPI_Init(ierr)
-  call OptionInitMPI2(option,MPI_COMM_WORLD)
+  OptionIsIORank1 = option%driver%IsIORank()
 
-end subroutine OptionInitMPI1
+end function OptionIsIORank1
 
 ! ************************************************************************** !
 
-subroutine OptionInitMPI2(option,communicator)
+function OptionIsIORank2(option,irank)
   !
-  ! Initializes base MPI communicator
+  ! Returns PETSC_TRUE if I/O rank
   !
   ! Author: Glenn Hammond
-  ! Date: 06/06/13
+  ! Date: 06/07/21
   !
 
   implicit none
 
   type(option_type) :: option
+  PetscInt :: irank
 
-  PetscMPIInt :: communicator
-  PetscErrorCode :: ierr
+  PetscBool :: OptionIsIORank2
 
-  option%global_comm = communicator
-  call MPI_Comm_rank(communicator,option%global_rank, ierr)
-  call MPI_Comm_size(communicator,option%global_commsize,ierr)
-  call MPI_Comm_group(communicator,option%global_group,ierr)
-  option%mycomm = option%global_comm
-  option%myrank = option%global_rank
-  option%mycommsize = option%global_commsize
-  option%mygroup = option%global_group
+  OptionIsIORank2 = (irank == option%driver%io_rank)
 
-end subroutine OptionInitMPI2
-
-! ************************************************************************** !
-
-subroutine OptionInitPetsc(option)
-  !
-  ! Initialization of PETSc.
-  !
-  ! Author: Glenn Hammond
-  ! Date: 06/07/13
-  !
-
-  use Logging_module
-
-  implicit none
-
-  type(option_type) :: option
-
-  character(len=MAXSTRINGLENGTH) :: string
-  PetscErrorCode :: ierr
-
-  PETSC_COMM_WORLD = option%mycomm
-  call PetscInitialize(PETSC_NULL_CHARACTER, ierr);CHKERRQ(ierr)    !fmy: tiny memory leak here (don't know why)
-
-  if (option%verbosity > 0) then
-    call PetscLogDefaultBegin(ierr);CHKERRQ(ierr)
-    string = '-log_view'
-    call PetscOptionsInsertString(PETSC_NULL_OPTIONS, &
-                                  string, ierr);CHKERRQ(ierr)
-  endif
-
-  call OptionBeginTiming(option)
-  call LoggingCreate()
-
-end subroutine OptionInitPetsc
+end function OptionIsIORank2
 
 ! ************************************************************************** !
 
@@ -1327,181 +1291,21 @@ subroutine OptionPrintPFLOTRANHeader(option)
   character(len=MAXSTRINGLENGTH) :: string
 
   version = GetVersion()
-  if (option%myrank == option%io_rank) then
+  if (option%driver%IsIORank()) then
     write(string,*) len_trim(version)+4
     string = trim(adjustl(string)) // '("=")'
     string = '(/,' // trim(string) // ',/,"  '// &
              trim(version) // &
              '",/,' // trim(string) // ',/)'
-    if (option%print_to_screen) then
+    if (option%driver%PrintToScreen()) then
       write(*,string)
     endif
-    if (option%print_to_file) then
+    if (option%driver%PrintToFile()) then
       write(option%fid_out,string)
     endif
   endif
 
 end subroutine OptionPrintPFLOTRANHeader
-
-! ************************************************************************** !
-
-subroutine OptionBeginTiming(option)
-  !
-  ! Start outer timing.
-  !
-  ! Author: Glenn Hammond
-  ! Date: 06/07/13
-  !
-
-  use Logging_module
-
-  implicit none
-
-#include "petsc/finclude/petsclog.h"
-
-  type(option_type) :: option
-
-  PetscLogDouble :: timex_wall
-  PetscErrorCode :: ierr
-
-  call PetscTime(timex_wall, ierr);CHKERRQ(ierr)
-  option%start_time = timex_wall
-
-end subroutine OptionBeginTiming
-
-! ************************************************************************** !
-
-subroutine OptionEndTiming(option)
-  !
-  ! End timing.
-  !
-  ! Author: Glenn Hammond
-  ! Date: 06/07/13
-  !
-
-  use Logging_module
-
-  implicit none
-
-#include "petsc/finclude/petsclog.h"
-
-  type(option_type) :: option
-
-  PetscLogDouble :: timex_wall
-  PetscErrorCode :: ierr
-
-  ! Final Time
-  call PetscTime(timex_wall, ierr);CHKERRQ(ierr)
-
-  if (option%myrank == option%io_rank) then
-
-    if (option%print_to_screen) then
-      write(*,'(/," Wall Clock Time:", 1pe12.4, " [sec] ", &
-      & 1pe12.4, " [min] ", 1pe12.4, " [hr]")') &
-        timex_wall-option%start_time, &
-        (timex_wall-option%start_time)/60.d0, &
-        (timex_wall-option%start_time)/3600.d0
-    endif
-    if (option%print_to_file) then
-      write(option%fid_out,'(/," Wall Clock Time:", 1pe12.4, " [sec] ", &
-      & 1pe12.4, " [min] ", 1pe12.4, " [hr]")') &
-        timex_wall-option%start_time, &
-        (timex_wall-option%start_time)/60.d0, &
-        (timex_wall-option%start_time)/3600.d0
-    endif
-  endif
-
-end subroutine OptionEndTiming
-
-! ************************************************************************** !
-
-subroutine OptionDivvyUpSimulations(option,filenames)
-  !
-  ! Divides simulation in to multple simulations with
-  ! multiple input decks
-  !
-  ! Author: Glenn Hammond
-  ! Date: 06/06/13
-  !
-
-  implicit none
-
-  type(option_type) :: option
-
-  PetscInt :: i
-  character(len=MAXSTRINGLENGTH) :: string
-  character(len=MAXSTRINGLENGTH), pointer :: filenames(:)
-
-  i = size(filenames)
-  call OptionCreateProcessorGroups(option,i)
-  option%input_filename = filenames(option%mygroup_id)
-  i = index(option%input_filename,'.',PETSC_TRUE)
-  if (i > 1) then
-    i = i-1
-  else
-    ! for some reason len_trim doesn't work on MS Visual Studio in
-    ! this location
-    i = len(trim(option%input_filename))
-  endif
-  option%global_prefix = option%input_filename(1:i)
-  write(string,*) option%mygroup_id
-  option%group_prefix = 'G' // trim(adjustl(string))
-
-end subroutine OptionDivvyUpSimulations
-
-! ************************************************************************** !
-
-subroutine OptionCreateProcessorGroups(option,num_groups)
-  !
-  ! Splits MPI_COMM_WORLD into N separate
-  ! processor groups
-  !
-  ! Author: Glenn Hammond
-  ! Date: 08/11/09
-  !
-
-  implicit none
-
-  type(option_type) :: option
-  PetscInt :: num_groups
-
-  PetscInt :: local_commsize
-  PetscInt :: offset, delta, remainder
-  PetscInt :: igroup
-  PetscMPIInt :: mycolor_mpi, mykey_mpi
-  character(len=MAXWORDLENGTH) :: word
-  PetscErrorCode :: ierr
-
-  if (num_groups > option%global_commsize) then
-    write(word,*) num_groups
-    option%io_buffer = 'The number of process groups (' // adjustl(word)
-    write(word,*) option%global_commsize
-    option%io_buffer = trim(option%io_buffer) // &
-      ') must be equal to or less than the number of processes (' // &
-      adjustl(word)
-    option%io_buffer = trim(option%io_buffer) // ').'
-    call PrintErrMsg(option)
-  endif
-  local_commsize = option%global_commsize / num_groups
-  remainder = option%global_commsize - num_groups * local_commsize
-  offset = 0
-  do igroup = 1, num_groups
-    delta = local_commsize
-    if (igroup < remainder) delta = delta + 1
-    if (option%global_rank >= offset .and. &
-        option%global_rank < offset + delta) exit
-    offset = offset + delta
-  enddo
-  mycolor_mpi = igroup
-  option%mygroup_id = igroup
-  mykey_mpi = option%global_rank - offset
-  call MPI_Comm_split(MPI_COMM_WORLD,mycolor_mpi,mykey_mpi,option%mycomm,ierr)
-  call MPI_Comm_group(option%mycomm,option%mygroup,ierr)
-
-  call MPI_Comm_rank(option%mycomm,option%myrank, ierr)
-  call MPI_Comm_size(option%mycomm,option%mycommsize,ierr)
-
-end subroutine OptionCreateProcessorGroups
 
 ! ************************************************************************** !
 
@@ -1524,40 +1328,6 @@ end subroutine OptionSetBlocking
 
 ! ************************************************************************** !
 
-subroutine OptionFinalize(option)
-  !
-  ! End the simulation.
-  !
-  ! Author: Glenn Hammond
-  ! Date: 06/07/13
-  !
-
-  use Logging_module
-
-  implicit none
-
-  type(option_type), pointer :: option
-
-  PetscInt :: iflag
-  PetscErrorCode :: ierr
-
-  call LoggingDestroy()
-  call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
-                            '-options_left','no',ierr);CHKERRQ(ierr)
-  ! list any PETSc objects that have not been freed - for debugging
-  call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
-                            '-objects_left','yes',ierr);CHKERRQ(ierr)
-  call MPI_Barrier(option%global_comm,ierr)
-  iflag = option%exit_code
-  call OptionDestroy(option)
-  call PetscFinalize(ierr);CHKERRQ(ierr)
-  call MPI_Finalize(ierr)
-  call exit(iflag)
-
-end subroutine OptionFinalize
-
-! ************************************************************************** !
-
 subroutine OptionDestroy(option)
   !
   ! Deallocates an option
@@ -1565,6 +1335,8 @@ subroutine OptionDestroy(option)
   ! Author: Glenn Hammond
   ! Date: 10/26/07
   !
+  use Communicator_Aux_module
+  use Driver_module
 
   implicit none
 
@@ -1573,6 +1345,10 @@ subroutine OptionDestroy(option)
   call OptionFlowDestroy(option%flow)
   call OptionTransportDestroy(option%transport)
   call OptionGeophysicsDestroy(option%geophysics)
+  ! never destroy the driver as it was created elsewhere
+  nullify(option%inversion)
+  nullify(option%driver)
+  nullify(option%comm)
 
   ! all the below should be placed somewhere other than option.F90
 

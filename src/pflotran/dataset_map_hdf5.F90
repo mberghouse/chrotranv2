@@ -30,6 +30,7 @@ module Dataset_Map_HDF5_class
             DatasetMapHDF5Read, &
             DatasetMapHDF5Load, &
             DatasetMapHDF5Print, &
+            DatasetMapHDF5Strip, &
             DatasetMapHDF5Destroy
   
 contains
@@ -254,7 +255,7 @@ subroutine DatasetMapHDF5ReadData(this,option)
 #ifndef SERIAL_HDF5
   call h5pset_fapl_mpio_f(prop_id,option%mycomm,MPI_INFO_NULL,hdf5_err)
 #endif
-  call HDF5OpenFileReadOnly(this%filename,file_id,prop_id,option)
+  call HDF5OpenFileReadOnly(this%filename,file_id,prop_id,'',option)
   call h5pclose_f(prop_id,hdf5_err)
 
   ! the dataset is actually stored in a group.  the group contains
@@ -455,7 +456,7 @@ subroutine DatasetMapHDF5ReadMap(this,option)
 #ifndef SERIAL_HDF5
   call h5pset_fapl_mpio_f(prop_id,option%mycomm,MPI_INFO_NULL,hdf5_err)
 #endif
-  call HDF5OpenFileReadOnly(this%map_filename,file_id,prop_id,option)
+  call HDF5OpenFileReadOnly(this%map_filename,file_id,prop_id,'',option)
   call h5pclose_f(prop_id,hdf5_err)
 
   ! the dataset is actually stored in a group.  the group contains
@@ -482,8 +483,8 @@ subroutine DatasetMapHDF5ReadMap(this,option)
   allocate(max_dims_h5(ndims_hdf5))
   call h5sget_simple_extent_dims_f(file_space_id,dims_h5,max_dims_h5,hdf5_err)
   
-  nids_local=int(dims_h5(2)/option%mycommsize)
-  remainder =int(dims_h5(2))-nids_local*option%mycommsize
+  nids_local=int(dims_h5(2)/option%comm%mycommsize)
+  remainder =int(dims_h5(2))-nids_local*option%comm%mycommsize
   if (option%myrank<remainder) nids_local=nids_local+1
 
   ! Find istart and iend
