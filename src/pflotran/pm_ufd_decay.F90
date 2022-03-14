@@ -1235,7 +1235,7 @@ subroutine PMUFDDecaySolve(this,time,ierr)
     if (global_auxvars(ghosted_id)%sat(LIQUID_PHASE) < rt_min_saturation) then
       cycle
     endif
-
+    den_w_kg = global_auxvars(ghosted_id)%den_kg(1)
     if (option%use_mc) then
       rt_sec_transport_vars =  patch%aux%SC_RT%sec_transport_vars(ghosted_id)
       sat = global_auxvars(ghosted_id)%sat(1)
@@ -1253,7 +1253,6 @@ subroutine PMUFDDecaySolve(this,time,ierr)
       vol = material_auxvars(ghosted_id)%volume
     endif
     
-    den_w_kg = global_auxvars(ghosted_id)%den_kg(1)
     por = material_auxvars(ghosted_id)%porosity
     sat = global_auxvars(ghosted_id)%sat(1)
     vps = vol * por * sat  ! m^3 water
