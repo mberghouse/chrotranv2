@@ -1248,7 +1248,8 @@ subroutine PMUFDDecaySolve(this,time,ierr)
                                rt_sec_transport_vars%sec_rt_auxvar(cell)%pri_molal(:),&
                                local_id,imat,this%element_Kd(:,:,2))
       enddo
-      vol = material_auxvars(ghosted_id)%volume * material_auxvars(ghosted_id)%epsilon
+      vol = material_auxvars(ghosted_id)%volume * material_auxvars(ghosted_id)% &
+              soil_properties(epsilon_index)
     else
       vol = material_auxvars(ghosted_id)%volume
     endif
