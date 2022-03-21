@@ -199,8 +199,8 @@ subroutine PMCSubsurfaceSetupSolvers_TimestepperSNES(this)
         end select
       endif
 
-      call SNESGetType(solver%snes,snes_type,ierr);CHKERRQ(ierr)
       call SNESSetOptionsPrefix(solver%snes, "flow_",ierr);CHKERRQ(ierr)
+      call SNESGetType(solver%snes,snes_type,ierr);CHKERRQ(ierr)
       call SolverCheckCommandLine(solver)
 
 ! ----- Set up the J and Jpre matrices -----
@@ -300,11 +300,11 @@ subroutine PMCSubsurfaceSetupSolvers_TimestepperSNES(this)
 
       if (pm%check_post_convergence) then
         select case(snes_type)
-          case(SNESNEWTONTR)
-            call SNESNewtonTRSetPostCheck(solver%snes, &
-                                          PMCheckUpdatePostTRPtr, &
-                                          this%pm_ptr, &
-                                          ierr);CHKERRQ(ierr)
+          case(SNESNEWTONTRDC)
+            call SNESNewtonTRDCSetPostCheck(solver%snes, &
+                                            PMCheckUpdatePostTRPtr, &
+                                            this%pm_ptr, &
+                                            ierr);CHKERRQ(ierr)
           case default
             call SNESLineSearchSetPostCheck(linesearch, &
                                             PMCheckUpdatePostPtr, &
@@ -338,11 +338,11 @@ subroutine PMCSubsurfaceSetupSolvers_TimestepperSNES(this)
 
       if (add_pre_check) then
         select case(snes_type)
-          case(SNESNEWTONTR)
-            call SNESNewtonTRSetPreCheck(solver%snes, &
-                                         PMCheckUpdatePreTRPtr, &
-                                         this%pm_ptr, &
-                                         ierr);CHKERRQ(ierr)
+          case(SNESNEWTONTRDC)
+            call SNESNewtonTRDCSetPreCheck(solver%snes, &
+                                           PMCheckUpdatePreTRPtr, &
+                                           this%pm_ptr, &
+                                           ierr);CHKERRQ(ierr)
           case default
             call SNESLineSearchSetPreCheck(linesearch, &
                                            PMCheckUpdatePrePtr, &

@@ -281,6 +281,10 @@ subroutine PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
       call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
                                 trim(string),trim('newtontrdc'), &
                                 ierr);CHKERRQ(ierr)
+      string = '-snes_type'
+      call PetscOptionsSetValue(PETSC_NULL_OPTIONS, &
+                                trim(string),trim('newtontrdc'), &
+                                ierr);CHKERRQ(ierr)
       input%ierr = 0
       call InputPushBlock(input,option)
       do
