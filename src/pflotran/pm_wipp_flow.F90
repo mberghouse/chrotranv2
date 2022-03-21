@@ -1492,7 +1492,7 @@ subroutine PMWIPPFloCheckUpdatePost(this,snes,X0,dX,X1,dX_changed, &
   use Field_module
   use Patch_module
   use Option_module
-  use Material_Aux_class  
+  use Material_Aux_module  
   use WIPP_Flow_Aux_module
   
   implicit none
@@ -1831,7 +1831,7 @@ subroutine PMWIPPFloCheckConvergence(this,snes,it,xnorm,unorm, &
   use Field_module
   use Patch_module
   use Option_module
-  use Material_Aux_class  
+  use Material_Aux_module  
   use WIPP_Flow_Aux_module
   use Convergence_module
 
@@ -1860,7 +1860,7 @@ subroutine PMWIPPFloCheckConvergence(this,snes,it,xnorm,unorm, &
   type(field_type), pointer :: field
   type(patch_type), pointer :: patch
   type(wippflo_auxvar_type), pointer :: wippflo_auxvars(:,:)
-  class(material_auxvar_type), pointer :: material_auxvars(:)  
+  type(material_auxvar_type), pointer :: material_auxvars(:)  
 
   PetscInt :: local_id, ghosted_id
   PetscInt :: offset
