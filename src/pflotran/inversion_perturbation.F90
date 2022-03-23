@@ -49,6 +49,9 @@ module Inversion_Perturbation_class
     PetscInt :: num_constraints_total    ! Total number of constraints
     PetscInt, pointer :: rblock(:,:)     ! array stores info about reg.
     PetscReal, pointer :: Wm(:)          ! Regularization matrix
+    Vec :: natural_vec
+
+    type(constrained_block_type), pointer :: constrained_block
 
   contains
     procedure, public :: Init => InversionPerturbationInit
@@ -65,8 +68,44 @@ module Inversion_Perturbation_class
                            InvPerturbationCalculateSensitivity
     procedure, public :: WriteIterationInfo => &
                            InversionPerturbationWriteIterationInfo
+    procedure, public :: ScaleSensitivity => &
+                           InversionPerturbationScaleSensitivity
     procedure, public :: Strip => InversionPerturbationStrip
   end type inversion_perturbation_type
+
+  type, public :: constrained_block_type
+    PetscInt :: num_constrained_block
+    PetscInt :: max_num_block_link
+    type(constrained_block_par_type), pointer :: constrained_block_list
+
+    ! arrays from the linked list
+    character(len=MAXWORDLENGTH), pointer :: material_name(:)
+    PetscInt, pointer :: material_id(:)
+    PetscInt, pointer :: structure_metric(:)
+    PetscInt, pointer :: wf_type(:)
+    PetscInt, pointer :: block_link(:,:)
+    PetscReal, pointer :: wf_mean(:)
+    PetscReal, pointer :: wf_sdev(:)
+    PetscReal, pointer :: relative_weight(:)
+    PetscReal, pointer :: aniso_weight(:,:)
+    PetscReal, pointer :: reference_permeability(:)
+  end type constrained_block_type
+
+  type constrained_block_par_type
+    PetscInt :: id
+    character(len=MAXWORDLENGTH) :: name
+    PetscInt :: structure_metric
+    PetscInt :: weighing_function
+    PetscInt :: num_block_link
+    character(len=MAXWORDLENGTH), pointer :: block_link(:)
+
+    PetscReal :: aniso_weight(3)
+    PetscReal :: relative_weight
+    PetscReal :: weighing_function_mean
+    PetscReal :: weighing_function_std_dev
+    PetscReal :: reference_permeability
+    type(constrained_block_par_type), pointer :: next
+  end type constrained_block_par_type
 
   public :: InversionPerturbationCreate, &
             InversionPerturbationStrip, &
@@ -143,6 +182,8 @@ subroutine InversionPerturbationInit(this,driver)
   this%phi_data = UNINITIALIZED_DOUBLE
   this%phi_model = UNINITIALIZED_DOUBLE
 
+  this%natural_vec = PETSC_NULL_VEC
+
   nullify(this%b)
   nullify(this%p)
   nullify(this%q)
@@ -152,9 +193,261 @@ subroutine InversionPerturbationInit(this,driver)
   nullify(this%Wm)
   nullify(this%rblock)
 
+  this%constrained_block => ConstrainedBlockCreate()
+
   zflow_calc_adjoint = PETSC_FALSE
 
 end subroutine InversionPerturbationInit
+
+! ************************************************************************** !
+
+function ConstrainedBlockCreate()
+  !
+  ! Creates Constrained Block type
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 03/23/22
+  !
+
+  implicit none
+
+  type(constrained_block_type), pointer :: ConstrainedBlockCreate
+  type(constrained_block_type), pointer :: constrained_block
+
+  allocate(constrained_block)
+
+  constrained_block%num_constrained_block = 0
+  nullify(constrained_block%constrained_block_list)
+
+  nullify(constrained_block%material_name)
+  nullify(constrained_block%material_id)
+  nullify(constrained_block%structure_metric)
+  nullify(constrained_block%wf_type)
+  nullify(constrained_block%block_link)
+  nullify(constrained_block%wf_mean)
+  nullify(constrained_block%wf_sdev)
+  nullify(constrained_block%relative_weight)
+  nullify(constrained_block%aniso_weight)
+  nullify(constrained_block%reference_permeability)
+
+  ConstrainedBlockCreate => constrained_block
+
+end function ConstrainedBlockCreate
+
+! ************************************************************************** !
+
+function ConstrainedBlockParCreate()
+  !
+  ! Creates Constrained Block Par type
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 03/23/22
+  !
+
+  implicit none
+
+  type(constrained_block_par_type), pointer :: ConstrainedBlockParCreate
+  type(constrained_block_par_type), pointer :: constrained_block
+
+  allocate(constrained_block)
+  constrained_block%id = 0
+  constrained_block%name = ''
+
+  ! Deafult is set the smoothness constraint
+  constrained_block%structure_metric = 2
+  constrained_block%weighing_function = 1
+  constrained_block%num_block_link = 0
+  nullify(constrained_block%block_link)
+
+  constrained_block%aniso_weight = 1.d0
+  constrained_block%relative_weight = 1.d0
+  constrained_block%weighing_function_mean = 10.d0
+  constrained_block%weighing_function_std_dev = 0.001d0
+  constrained_block%reference_permeability = 0.d0
+  nullify(constrained_block%next)
+
+  ConstrainedBlockParCreate => constrained_block
+
+end function ConstrainedBlockParCreate
+
+! ************************************************************************** !
+
+subroutine InversionPerturbationAllocateWorkArrays(this)
+  !
+  ! Initialize inversion object
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 03/23/22
+  !
+
+  use Grid_module
+
+  implicit none
+
+  class(inversion_perturbation_type) :: this
+
+  type(grid_type), pointer :: grid
+
+  PetscInt :: num_measurement
+  PetscInt :: num_constraints
+
+  grid => this%realization%patch%grid
+
+  num_measurement = size(this%measurements)
+  num_constraints = this%num_constraints_local
+
+  allocate(this%b(num_measurement + num_constraints))
+  allocate(this%p(grid%nlmax))
+  allocate(this%q(num_measurement + num_constraints))
+  allocate(this%r(num_measurement + num_constraints))
+  allocate(this%s(grid%nlmax))
+  allocate(this%del_perm(grid%nlmax))
+
+  this%b = 0.d0
+  this%p = 0.d0
+  this%q = 0.d0
+  this%r = 0.d0
+  this%s = 0.d0
+  this%del_perm = 0.d0
+
+end subroutine InversionPerturbationAllocateWorkArrays
+
+! ************************************************************************** !
+
+subroutine InversionPerturbationDeallocateWorkArrays(this)
+  !
+  ! Initialize inversion object
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 03/23/22
+  !
+
+  use Utility_module, only : DeallocateArray
+
+  implicit none
+
+  class(inversion_perturbation_type) :: this
+
+  call DeallocateArray(this%b)
+  call DeallocateArray(this%p)
+  call DeallocateArray(this%q)
+  call DeallocateArray(this%r)
+  call DeallocateArray(this%s)
+  call DeallocateArray(this%del_perm)
+
+end subroutine InversionPerturbationDeallocateWorkArrays
+
+! ************************************************************************** !
+
+subroutine InversionPerturbationConstrainedArraysFromList(this)
+  !
+  ! Gets Constrained Block parameter arrays from linked list
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 03/23/22
+  !
+
+  use Option_module
+  use Material_module
+  use Patch_module
+
+  implicit none
+
+  class(inversion_perturbation_type) :: this
+
+  type(patch_type), pointer :: patch
+  type(option_type), pointer :: option
+  type(material_property_type), pointer :: material_property
+  type(constrained_block_type), pointer :: constrained_block
+  type(constrained_block_par_type), pointer :: cur_constrained_block
+
+  PetscInt :: i,iconblock
+  PetscInt :: nconblock
+
+  patch => this%realization%patch
+  option => this%realization%option
+
+  constrained_block => this%constrained_block
+  nconblock = constrained_block%num_constrained_block
+
+  if (nconblock > 0) then
+    allocate(constrained_block%material_name(nconblock))
+    constrained_block%material_name = ''
+    allocate(constrained_block%material_id(nconblock))
+    constrained_block%material_id = 0
+    allocate(constrained_block%structure_metric(nconblock))
+    constrained_block%structure_metric = 2
+    allocate(constrained_block%wf_type(nconblock))
+    constrained_block%wf_type = 1
+    allocate(constrained_block%wf_mean(nconblock))
+    constrained_block%wf_mean = 10.d0
+    allocate(constrained_block%wf_sdev(nconblock))
+    constrained_block%wf_sdev = 0.001d0
+    allocate(constrained_block%relative_weight(nconblock))
+    constrained_block%relative_weight = 1.d0
+    allocate(constrained_block%aniso_weight(nconblock,THREE_INTEGER))
+    constrained_block%aniso_weight = 1.d0
+    allocate(constrained_block%reference_permeability(nconblock))
+    constrained_block%reference_permeability = 0.d0
+    allocate(constrained_block%block_link(nconblock,&
+             constrained_block%max_num_block_link+1))
+    constrained_block%block_link = 0
+
+    cur_constrained_block => constrained_block%constrained_block_list
+    iconblock = 1
+    do
+      if (.not. associated(cur_constrained_block)) exit
+      constrained_block%material_name(iconblock) = cur_constrained_block%name
+      material_property => &
+          MaterialPropGetPtrFromArray(cur_constrained_block%name, &
+                                      patch%material_property_array)
+      if (.not.associated(material_property)) then
+        option%io_buffer = 'Contrained block " &
+                           &' // trim(cur_constrained_block%name) // &
+                           &'" not found in material list'
+        call PrintErrMsg(option)
+      endif
+
+      constrained_block%material_id(iconblock) = material_property%internal_id
+      constrained_block%structure_metric(iconblock) = &
+                        cur_constrained_block%structure_metric
+      constrained_block%wf_type(iconblock) = &
+                        cur_constrained_block%weighing_function
+      constrained_block%wf_mean(iconblock) = &
+                        cur_constrained_block%weighing_function_mean
+      constrained_block%wf_sdev(iconblock) = &
+                        cur_constrained_block%weighing_function_std_dev
+      constrained_block%relative_weight(iconblock) = &
+                        cur_constrained_block%relative_weight
+      constrained_block%aniso_weight(iconblock,:) = &
+                        cur_constrained_block%aniso_weight
+      constrained_block%reference_permeability(iconblock) = &
+                        cur_constrained_block%reference_permeability
+      constrained_block%block_link(iconblock,ONE_INTEGER) = &
+                        cur_constrained_block%num_block_link
+      do i=1,cur_constrained_block%num_block_link
+        material_property => &
+            MaterialPropGetPtrFromArray(cur_constrained_block%block_link(i), &
+                                      patch%material_property_array)
+        if (.not.associated(material_property)) then
+          option%io_buffer = 'Linked block "&
+                             &'//trim(cur_constrained_block%block_link(i)) // &
+                             &'" in contrained block "&
+                             &'//trim(cur_constrained_block%name) // &
+                             &'" not found in material list'
+          call PrintErrMsg(option)
+        endif
+        constrained_block%block_link(iconblock,i+1) = &
+                                      material_property%internal_id
+      enddo
+
+      cur_constrained_block => cur_constrained_block%next
+      iconblock = iconblock + 1
+
+    enddo
+  endif
+
+end subroutine InversionPerturbationConstrainedArraysFromList
 
 ! ************************************************************************** !
 
@@ -199,6 +492,34 @@ subroutine InversionPerturbationReadBlock(this,input,option)
       case('SELECT_CELLS')
         call UtilityReadArray(this%select_cells,ZERO_INTEGER,error_string, &
                               input,option)
+      case('MIN_PERMEABILITY')
+        call InputReadDouble(input,option,this%minperm)
+        call InputErrorMsg(input,option,'MIN_PERMEABILITY', &
+                           error_string)
+      case('MAX_PERMEABILITY')
+        call InputReadDouble(input,option,this%maxperm)
+        call InputErrorMsg(input,option,'MAX_PERMEABILITY', &
+                           error_string)
+      case('MIN_CGLS_ITERATION')
+        call InputReadInt(input,option,this%miniter)
+        call InputErrorMsg(input,option,'MIN_CGLS_ITERATION',error_string)
+      case('MAX_CGLS_ITERATION')
+        call InputReadInt(input,option,this%maxiter)
+        call InputErrorMsg(input,option,'MAX_CGLS_ITERATION',error_string)
+      case('BETA')
+        call InputReadDouble(input,option,this%beta)
+        call InputErrorMsg(input,option,'BETA',error_string)
+      case('BETA_REDUCTION_FACTOR')
+        call InputReadDouble(input,option,this%beta_red_factor)
+        call InputErrorMsg(input,option,'BETA_REDUCTION_FACTOR',error_string)
+      case('TARGET_CHI2')
+        call InputReadDouble(input,option,this%target_chi2)
+        call InputErrorMsg(input,option,'TARGET_CHI2',error_string)
+      case('MIN_COST_REDUCTION')
+        call InputReadDouble(input,option,this%min_phi_red)
+        call InputErrorMsg(input,option,'MIN_COST_REDUCTION',error_string)
+      case('CONSTRAINED_BLOCKS')
+        call ConstrainedBlockRead(this%constrained_block,input,option)
       case default
         call InputKeywordUnrecognized(input,keyword,error_string,option)
     end select
@@ -210,6 +531,153 @@ end subroutine InversionPerturbationReadBlock
 
 ! ************************************************************************** !
 
+subroutine ConstrainedBlockRead(constrained_block,input,option)
+  !
+  ! Read constrained blocks options
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 03/23/22
+
+  use Input_Aux_module
+  use Option_module
+  use String_module
+
+  implicit none
+
+  type(constrained_block_type) :: constrained_block
+  type(input_type), pointer :: input
+  type(option_type) :: option
+
+  type(constrained_block_par_type), pointer :: cur_constrained_block
+  type(constrained_block_par_type), pointer :: prev_constrained_block
+
+  character(len=MAXWORDLENGTH) :: error_string
+
+  error_string = 'INVERSION,CONSTRAINED_BLOCKS'
+
+  nullify(prev_constrained_block)
+  call InputPushBlock(input,option)
+  constrained_block%max_num_block_link = 0
+  do
+    call InputReadPflotranString(input,option)
+    if (InputError(input)) exit
+    if (InputCheckExit(input,option)) exit
+
+    constrained_block%num_constrained_block = &
+                          constrained_block%num_constrained_block + 1
+
+    cur_constrained_block => ConstrainedBlockParCreate()
+    call InputReadCard(input,option,cur_constrained_block%name)
+    call InputErrorMsg(input,option,'keyword',error_string)
+
+    call ConstrainedBlockParRead(cur_constrained_block,input,option)
+    if (constrained_block%max_num_block_link < &
+        cur_constrained_block%num_block_link) &
+      constrained_block%max_num_block_link = &
+        cur_constrained_block%num_block_link
+
+    if (.not.associated(constrained_block%constrained_block_list)) then
+      constrained_block%constrained_block_list => cur_constrained_block
+      cur_constrained_block%id = 1
+    endif
+    if (associated(prev_constrained_block)) then
+      prev_constrained_block%next => cur_constrained_block
+      cur_constrained_block%id = prev_constrained_block%id + 1
+    endif
+    prev_constrained_block => cur_constrained_block
+    nullify(cur_constrained_block)
+  enddo
+  call InputPopBlock(input,option)
+
+end subroutine ConstrainedBlockRead
+
+! ************************************************************************** !
+
+subroutine ConstrainedBlockParRead(constrained_block,input,option)
+  !
+  ! Read constrained blocks parameters options
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 03/23/22
+
+  use Input_Aux_module
+  use Option_module
+  use String_module
+
+  implicit none
+
+  type(constrained_block_par_type) :: constrained_block
+  type(input_type), pointer :: input
+  type(option_type) :: option
+
+  PetscInt :: i,num_block_link
+  PetscReal :: norm_factor
+  character(len=MAXWORDLENGTH) :: word
+  character(len=MAXWORDLENGTH) :: error_string
+
+  error_string = 'INVERSION,CONSTRAINED_BLOCKS'
+
+  word = ''
+
+  call InputPushBlock(input,option)
+  do
+    call InputReadPflotranString(input,option)
+    if (InputError(input)) exit
+    if (InputCheckExit(input,option)) exit
+
+    call InputReadCard(input,option,word)
+    call InputErrorMsg(input,option,'keyword',error_string)
+    call StringToUpper(word)
+    select case(trim(word))
+      case('STRUCTURE_METRIC')
+        call InputReadInt(input,option,constrained_block%structure_metric)
+        call InputErrorMsg(input,option,'STRUCTURE_METRIC',error_string)
+      case('WEIGHING_FUNCTION')
+        call InputReadInt(input,option,constrained_block%weighing_function)
+        call InputErrorMsg(input,option,'WEIGHING_FUNCTION',error_string)
+      case('WEIGHING_FUNCTION_MEAN')
+        call InputReadDouble(input,option, &
+                            constrained_block%weighing_function_mean)
+        call InputErrorMsg(input,option,'WEIGHING_FUNCTION_MEAN',error_string)
+      case('WEIGHING_FUNCTION_STD_DEVIATION')
+        call InputReadDouble(input,option, &
+                            constrained_block%weighing_function_std_dev)
+        call InputErrorMsg(input,option,'WEIGHING_FUNCTION_STD_DEVIATION', &
+                          error_string)
+      case('BLOCK_LINKS')
+        call InputReadInt(input,option,num_block_link)
+        call InputErrorMsg(input,option,'BLOCK_LINKS',error_string)
+        constrained_block%num_block_link = num_block_link
+        allocate(constrained_block%block_link(num_block_link))
+        do i=1,num_block_link
+          call InputReadCard(input,option,constrained_block%block_link(i))
+          call InputErrorMsg(input,option,'BLOCK_LINKS',error_string)
+        enddo
+      case('ANISOTROPIC_WEIGHTS')
+        do i=1,THREE_INTEGER
+          call InputReadDouble(input,option,constrained_block%aniso_weight(i))
+          call InputErrorMsg(input,option,'ANISOTROPY_WEIGHTS',error_string)
+        enddo
+        norm_factor = norm2(constrained_block%aniso_weight)
+        if (norm_factor > 0.) constrained_block%aniso_weight = &
+                                constrained_block%aniso_weight / norm_factor
+      case('RELATIVE_WEIGHT')
+        call InputReadDouble(input,option,constrained_block%relative_weight)
+        call InputErrorMsg(input,option,'RELATIVE_WEIGHT',error_string)
+      case('REFERENCE_PERMEABILITY')
+        call InputReadDouble(input,option, &
+                            constrained_block%reference_permeability)
+        call InputErrorMsg(input,option,'REFERENCE_PERMEABILITY',error_string)
+      case default
+        call InputKeywordUnrecognized(input,word,error_string,option)
+    end select
+  enddo
+  call InputPopBlock(input,option)
+
+end subroutine ConstrainedBlockParRead
+
+! ************************************************************************** !
+
 subroutine InversionPerturbationInitialize(this)
   !
   ! Initializes inversion
@@ -217,11 +685,16 @@ subroutine InversionPerturbationInitialize(this)
   ! Author: Glenn Hammond
   ! Date: 09/24/21
   !
+  use Discretization_module
   use Inversion_TS_Aux_module
+  use Option_module
   use String_module
+  use Variables_module, only : PERMEABILITY
 
   class(inversion_perturbation_type) :: this
 
+  PetscBool :: exists
+  character(len=MAXWORDLENGTH) :: word
   PetscErrorCode :: ierr
 
   call InversionSubsurfInitialize(this)
@@ -252,10 +725,35 @@ subroutine InversionPerturbationInitialize(this)
     endif
   endif
 
+  if (this%natural_vec == PETSC_NULL_VEC) then
+    call DiscretizationCreateVector(this%realization%discretization, &
+                                    ONEDOF,this%natural_vec,NATURAL, &
+                                    this%realization%option)
+  endif
+
   if (Uninitialized(this%iqoi(1))) then
     call this%driver%PrintErrMsg('Quantity of interest not specified in &
       &InversionPerturbationInitialize.')
   endif
+
+  ! check to ensure that quantity of interest exists
+  exists = PETSC_FALSE
+  select case(this%iqoi(1))
+    case(PERMEABILITY)
+      if (this%realization%option%iflowmode /= NULL_MODE) exists = PETSC_TRUE
+      word = 'PERMEABILITY'
+    case default
+  end select
+  if (.not.exists) then
+    this%realization%option%io_buffer = 'Inversion for ' // trim(word) // &
+      &' cannot be performed with the specified process models.'
+    call PrintErrMsg(this%realization%option)
+  endif
+
+  call InversionPerturbationConstrainedArraysFromList(this)
+
+  ! Build Wm matrix
+  !call InversionPerturbationBuildWm(this)
 
 end subroutine InversionPerturbationInitialize
 
@@ -281,6 +779,7 @@ subroutine InversionPerturbationStep(this)
   ! thereafter builds sensitivity matrix using perturbation
   call this%CalculateSensitivity()
   call this%OutputSensitivity('')
+  call this%ScaleSensitivity()
 
   nullify(this%realization)
   call this%forward_simulation%FinalizeRun()
@@ -561,12 +1060,37 @@ subroutine InvPerturbationEvaluateCostFunction(this)
   ! Author: Piyoosh Jaysaval
   ! Date: 03/22/22
 
+  use Realization_Base_class
+  use Option_module
+  use Patch_module
+  use Material_Aux_module
+
   implicit none
 
   class(inversion_perturbation_type) :: this
 
+  type(material_auxvar_type), pointer :: material_auxvars(:)
+  type(option_type), pointer :: option
+  type(patch_type), pointer :: patch
+  type(constrained_block_type), pointer :: constrained_block
+
   PetscInt :: idata,num_measurement
+  PetscInt :: iconst,num_constraints
+  PetscInt :: irb,ghosted_id,ghosted_id_nb
+  PetscInt, pointer :: rblock(:,:)
   PetscReal :: wd,tempreal
+  PetscReal, pointer :: vec_ptr(:)
+  PetscReal :: perm_ce,perm_nb              ! cell's and neighbor's
+  PetscReal :: wm,x
+  PetscReal, allocatable :: model_vector(:)
+  PetscErrorCode :: ierr
+
+  option => this%realization%option
+  patch => this%realization%patch
+  material_auxvars => patch%aux%Material%auxvars
+
+  constrained_block => this%constrained_block
+  rblock => this%rblock
 
   num_measurement = size(this%measurements)
 
@@ -584,6 +1108,80 @@ subroutine InvPerturbationEvaluateCostFunction(this)
   enddo
 
   this%current_chi2 = this%phi_data / num_measurement
+
+  ! model cost function
+  this%phi_model = 0.d0
+  num_constraints = this%num_constraints_local
+  allocate(model_vector(num_constraints))
+  model_vector = 0.d0
+
+  do iconst=1,num_constraints
+    if (this%Wm(iconst) == 0) cycle
+
+    wm = this%Wm(iconst)
+
+    ! get perm & block of the ith constrained eq.
+    ghosted_id = rblock(iconst,1)
+    ghosted_id_nb = rblock(iconst,2)
+    if ((patch%imat(ghosted_id) <= 0) .or. &
+        (patch%imat(ghosted_id_nb) <= 0)) cycle
+    irb = rblock(iconst,3)
+    perm_ce = material_auxvars(ghosted_id)%permeability(perm_xx_index)
+    x = 0.d0
+
+    select case(constrained_block%structure_metric(irb))
+      case(1)
+        perm_nb = material_auxvars(ghosted_id_nb)%permeability(perm_xx_index)
+        x = log(perm_ce) - log(perm_nb)
+      case(2)
+        perm_nb = material_auxvars(ghosted_id_nb)%permeability(perm_xx_index)
+        x = abs(log(perm_ce) - log(perm_nb))
+      case(3)
+        x = log(perm_ce) - log(constrained_block%reference_permeability(irb))
+      case(4)
+        x = abs(log(perm_ce) - &
+                log(constrained_block%reference_permeability(irb)))
+      case(5)
+        perm_nb = material_auxvars(ghosted_id_nb)%permeability(perm_xx_index)
+        x = log(perm_ce) - log(perm_nb)
+      case(6)
+        perm_nb = material_auxvars(ghosted_id_nb)%permeability(perm_xx_index)
+        x = abs(log(perm_ce) - log(perm_nb))
+      case(7)
+        perm_nb = material_auxvars(ghosted_id_nb)%permeability(perm_xx_index)
+        x = (log(perm_ce)- log(constrained_block%reference_permeability(irb))) &
+          -(log(perm_nb) - log(constrained_block%reference_permeability(irb)))
+      case(8)
+        perm_nb = material_auxvars(ghosted_id_nb)%permeability(perm_xx_index)
+        x = abs( &
+            (log(perm_ce)- log(constrained_block%reference_permeability(irb))) &
+          -(log(perm_nb) - log(constrained_block%reference_permeability(irb))) )
+      case(9)
+        perm_nb = material_auxvars(ghosted_id_nb)%permeability(perm_xx_index)
+        x = log(perm_ce) - log(perm_nb)
+      case(10)
+        perm_nb = material_auxvars(ghosted_id_nb)%permeability(perm_xx_index)
+        x = abs(log(perm_ce) - log(perm_nb))
+      case default
+
+    end select
+
+    model_vector(iconst) = wm * x
+
+  enddo
+
+  this%phi_model = this%beta * dot_product(model_vector,model_vector)
+  call MPI_Allreduce(MPI_IN_PLACE,this%phi_model,ONE_INTEGER_MPI, &
+                     MPI_DOUBLE_PRECISION,MPI_SUM,option%mycomm,ierr)
+  deallocate(model_vector)
+
+  this%phi_total = this%phi_data + this%phi_model
+
+  if (this%iteration == this%start_iteration) then
+    this%phi_data_0 = this%phi_data
+    this%phi_model_0 = this%phi_model
+    this%phi_total_0 = this%phi_total
+  endif
 
 end subroutine InvPerturbationEvaluateCostFunction
 
@@ -693,6 +1291,67 @@ subroutine InversionPerturbationWriteIterationInfo(this)
                  &'before Beta reduction:     ',2x,f15.4," %")
 
 end subroutine InversionPerturbationWriteIterationInfo
+
+! ************************************************************************** !
+
+subroutine InversionPerturbationScaleSensitivity(this)
+  !
+  ! Scales sensitivity Jacobian for ln(K)
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 03/23/22
+  !
+  use Discretization_module
+  use Realization_Base_class
+  use Variables_module, only : PERMEABILITY
+
+  class(inversion_perturbation_type) :: this
+
+  Vec :: wd_vec
+  PetscInt :: idata,num_measurement
+  PetscReal :: wd
+  PetscReal, pointer :: wdvec_ptr(:)
+  PetscErrorCode :: ierr
+
+  call RealizationGetVariable(this%realization, &
+                              this%realization%field%work, &
+                              PERMEABILITY,ZERO_INTEGER)
+  call DiscretizationGlobalToNatural(this%realization%discretization, &
+                                     this%realization%field%work, &
+                                     this%natural_vec,ONEDOF)
+
+  num_measurement = size(this%measurements)
+  call VecDuplicate(this%measurement_vec,wd_vec,ierr);CHKERRQ(ierr)
+  call VecZeroEntries(wd_vec,ierr);CHKERRQ(ierr)
+  call VecGetArrayF90(wd_vec,wdvec_ptr,ierr);CHKERRQ(ierr)
+  do idata = 1, num_measurement
+    wd = 0.05 * this%measurements(idata)%value
+    wd = 1/wd
+    wdvec_ptr(idata) = wd
+  enddo
+  call VecRestoreArrayF90(wd_vec,wdvec_ptr,ierr);CHKERRQ(ierr)
+  call VecScatterBegin(this%scatter_measure_to_dist_measure, &
+                       wd_vec,this%dist_measurement_vec, &
+                       INSERT_VALUES,SCATTER_FORWARD_LOCAL, &
+                       ierr);CHKERRQ(ierr)
+  call VecScatterEnd(this%scatter_measure_to_dist_measure, &
+                     wd_vec,this%dist_measurement_vec, &
+                     INSERT_VALUES,SCATTER_FORWARD_LOCAL, &
+                     ierr);CHKERRQ(ierr)
+
+  ! Column Scale with wd
+  call MatDiagonalScale(this%inversion_aux%JsensitivityT, &
+                        PETSC_NULL_VEC, & ! scales rows
+                        this%dist_measurement_vec, &  ! scales columns
+                        ierr);CHKERRQ(ierr)
+  ! Row scale with perm
+  call MatDiagonalScale(this%inversion_aux%JsensitivityT, &
+                        this%natural_vec, & ! scales rows
+                        PETSC_NULL_VEC, &  ! scales columns
+                        ierr);CHKERRQ(ierr)
+  call VecDestroy(wd_vec,ierr);CHKERRQ(ierr)
+
+end subroutine InversionPerturbationScaleSensitivity
 
 ! ************************************************************************** !
 
