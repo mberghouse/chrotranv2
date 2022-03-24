@@ -58,6 +58,9 @@ module Inversion_Perturbation_class
     procedure, public :: ReadBlock => InversionPerturbationReadBlock
     procedure, public :: Initialize => InversionPerturbationInitialize
     procedure, public :: Step => InversionPerturbationStep
+    procedure, public :: UpdateParameters => &
+                           InversionPerturbationUpdateParameters
+    procedure, public :: CalculateUpdate => InversionPerturbationCalculateUpdate
     procedure, public :: CheckConvergence => &
                            InversionPerturbationCheckConvergence
     procedure, public :: EvaluateCostFunction => &
@@ -66,6 +69,8 @@ module Inversion_Perturbation_class
                            InvPerturbationConnectForwardRun
     procedure, public :: CalculateSensitivity => &
                            InvPerturbationCalculateSensitivity
+    procedure, public :: UpdateRegularizParameters => &
+                           InvPerturbationUpdateRegularizParams
     procedure, public :: WriteIterationInfo => &
                            InversionPerturbationWriteIterationInfo
     procedure, public :: ScaleSensitivity => &
@@ -753,7 +758,7 @@ subroutine InversionPerturbationInitialize(this)
   call InversionPerturbationConstrainedArraysFromList(this)
 
   ! Build Wm matrix
-  !call InversionPerturbationBuildWm(this)
+  call InversionPerturbationBuildWm(this)
 
 end subroutine InversionPerturbationInitialize
 
@@ -779,7 +784,12 @@ subroutine InversionPerturbationStep(this)
   ! thereafter builds sensitivity matrix using perturbation
   call this%CalculateSensitivity()
   call this%OutputSensitivity('')
-  call this%ScaleSensitivity()
+  if (.not.this%converg_flag) then
+    call this%ScaleSensitivity()
+    call this%CalculateUpdate()
+    call this%UpdateParameters()
+    call this%UpdateRegularizParameters()
+  endif
 
   nullify(this%realization)
   call this%forward_simulation%FinalizeRun()
@@ -1187,6 +1197,907 @@ end subroutine InvPerturbationEvaluateCostFunction
 
 ! ************************************************************************** !
 
+subroutine InvPerturbationUpdateRegularizParams(this)
+  !
+  ! Check Beta if it needs cooling/reduction
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 03/23/22
+
+  implicit none
+
+  class(inversion_perturbation_type) :: this
+
+  if (this%iteration == this%start_iteration) return
+
+  if ( (this%phi_total_0 - this%phi_total)/this%phi_total_0 <= &
+                                                      this%min_phi_red ) then
+    this%beta = this%beta * this%beta_red_factor
+    this%phi_model = this%beta_red_factor * this%phi_model
+  endif
+
+  ! update the cost functions
+  this%phi_data_0 = this%phi_data
+  this%phi_model_0 = this%phi_model
+  this%phi_total_0 = this%phi_total
+
+end subroutine InvPerturbationUpdateRegularizParams
+
+! ************************************************************************** !
+
+subroutine InversionPerturbationUpdateParameters(this)
+  !
+  ! Updates input parameters
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 03/23/22
+  !
+
+  use Material_module
+  use Discretization_module
+  use Field_module
+
+  class(inversion_perturbation_type) :: this
+
+  type(field_type), pointer :: field
+  type(discretization_type), pointer :: discretization
+
+  PetscInt :: local_id,ghosted_id
+  PetscReal, pointer :: vec_ptr(:)
+  PetscErrorCode :: ierr
+
+  field => this%realization%field
+  discretization => this%realization%discretization
+
+  call DiscretizationGlobalToLocal(discretization,this%quantity_of_interest, &
+                                   field%work_loc,ONEDOF)
+  call MaterialSetAuxVarVecLoc(this%realization%patch%aux%Material, &
+                               field%work_loc,this%iqoi(1),this%iqoi(2))
+
+end subroutine InversionPerturbationUpdateParameters
+
+! ************************************************************************** !
+
+subroutine InversionPerturbationCalculateUpdate(this)
+  !
+  ! Calculates updated model parameters
+  ! using m_new = m_old + del_m
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 03/23/22
+  !
+  use Discretization_module
+  use Patch_module
+  use Grid_module
+
+  implicit none
+
+  class(inversion_perturbation_type) :: this
+
+  type(patch_type), pointer :: patch
+  type(grid_type), pointer :: grid
+
+  PetscInt :: local_id,ghosted_id
+  PetscReal, pointer :: vec_ptr(:)
+  PetscReal, pointer :: vec2_ptr(:)
+  PetscErrorCode :: ierr
+
+  patch => this%realization%patch
+  grid => patch%grid
+
+  if (this%quantity_of_interest /= PETSC_NULL_VEC) then
+
+    call InversionPerturbationAllocateWorkArrays(this)
+
+    ! get inversion%del_perm
+    call InversionPerturbationCGLSSolve(this)
+
+    call VecGetArrayF90(this%natural_vec,vec_ptr,ierr);CHKERRQ(ierr)
+    vec_ptr(:) = this%del_perm(:)
+    call VecRestoreArrayF90(this%natural_vec,vec_ptr,ierr);CHKERRQ(ierr)
+    call DiscretizationNaturalToGlobal(this%realization%discretization, &
+                                       this%natural_vec, &
+                                       this%realization%field%work,ONEDOF)
+
+    ! Get updated permeability as m_new = m_old + del_m (where m = log(perm))
+    call VecGetArrayF90(this%quantity_of_interest,vec_ptr,ierr);CHKERRQ(ierr)
+    call VecGetArrayF90(this%realization%field%work,vec2_ptr,ierr);CHKERRQ(ierr)
+    do local_id=1,grid%nlmax
+      ghosted_id = grid%nL2G(local_id)
+      if (patch%imat(ghosted_id) <= 0) cycle
+      vec_ptr(local_id) = exp(log(vec_ptr(local_id)) + vec2_ptr(local_id))
+      if (vec_ptr(local_id) > this%maxperm) vec_ptr(local_id) = this%maxperm
+      if (vec_ptr(local_id) < this%minperm) vec_ptr(local_id) = this%minperm
+    enddo
+    call VecRestoreArrayF90(this%quantity_of_interest,vec_ptr, &
+                            ierr);CHKERRQ(ierr)
+    call VecRestoreArrayF90(this%realization%field%work,vec2_ptr, &
+                            ierr);CHKERRQ(ierr)
+    call InversionPerturbationDeallocateWorkArrays(this)
+
+  endif
+
+end subroutine InversionPerturbationCalculateUpdate
+
+! ************************************************************************** !
+
+subroutine InversionPerturbationCGLSSolve(this)
+  !
+  ! Implements CGLS solver for least sqaure equivalent
+  !            of the Perturbation normal equations
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 03/23/22
+  !
+
+  use Option_module
+  use Timer_class
+  use String_module
+
+  implicit none
+
+  class(inversion_perturbation_type) :: this
+
+  type(option_type), pointer :: option
+  class(timer_type), pointer :: timer
+
+  PetscInt :: i,nm,ncons
+  PetscReal :: alpha,gbeta,gamma,gamma1,delta1,delta2,delta
+  PetscReal :: norms0,norms,normx,xmax
+  PetscReal :: resNE,resNE_old
+  PetscBool :: exit_info,indefinite
+  PetscBool :: lprint, l2print
+  PetscErrorCode :: ierr
+
+  PetscReal, parameter :: delta_initer = 1e-23
+  PetscReal, parameter :: initer_conv  = 1e-24
+
+  option => this%realization%option
+
+  this%del_perm = 0.0d0
+
+  timer => TimerCreate()
+  call timer%Start()
+
+  if (OptionPrintToScreen(option)) then
+    write(*,'(" --> Solving Perturbation normal equation using CGLS solver:")')
+  endif
+
+  nm = size(this%measurements)
+  ncons = this%num_constraints_local
+
+  ! Get RHS vector this%b
+  call InversionPerturbationCGLSRhs(this)
+
+  this%r = this%b
+
+  ! get this%s = J^tr
+  call InversionPerturbationComputeMatVecProductJtr(this)
+  this%p = this%s
+
+  gamma = dot_product(this%s,this%s)
+  call MPI_Allreduce(MPI_IN_PLACE,gamma,ONE_INTEGER_MPI, &
+                     MPI_DOUBLE_PRECISION,MPI_SUM,option%mycomm,ierr)
+
+  norms0 = sqrt(gamma)
+  xmax = 0.d0
+  normx = 0.d0
+  resNE = 0.d0
+  exit_info = PETSC_FALSE
+  indefinite = PETSC_FALSE
+
+  do i=1,this%maxiter
+
+    if (exit_info) exit
+
+    ! get this%q = Jp
+    call InversionPerturbationComputeMatVecProductJp(this)
+
+    delta1 = dot_product(this%q(1:nm),this%q(1:nm))
+    delta2 = dot_product(this%q(nm+1:nm+ncons),this%q(nm+1:nm+ncons))
+    call MPI_Allreduce(MPI_IN_PLACE,delta2,ONE_INTEGER_MPI, &
+                       MPI_DOUBLE_PRECISION,MPI_SUM,option%mycomm,ierr)
+    delta = delta1 + delta2
+
+    if (delta < 0) indefinite = PETSC_TRUE
+    if (delta == 0) delta = epsilon(delta)
+
+    alpha = gamma / delta
+
+    this%del_perm = this%del_perm + alpha * this%p
+    this%r = this%r - alpha * this%q
+
+    ! get this%s = J^tr
+    call InversionPerturbationComputeMatVecProductJtr(this)
+
+    gamma1 = gamma
+    gamma = dot_product(this%s,this%s)
+    call MPI_Allreduce(MPI_IN_PLACE,gamma,ONE_INTEGER_MPI, &
+                       MPI_DOUBLE_PRECISION,MPI_SUM,option%mycomm,ierr)
+
+    norms = sqrt(gamma)
+    gbeta = gamma / gamma1
+    this%p = this%s + gbeta * this%p
+
+    normx = dot_product(this%del_perm,this%del_perm)
+    call MPI_Allreduce(MPI_IN_PLACE,normx,ONE_INTEGER_MPI, &
+                       MPI_DOUBLE_PRECISION,MPI_SUM,option%mycomm,ierr)
+    normx = sqrt(normx)
+    if (xmax < normx) xmax = normx
+    if ( (norms <= norms0 * initer_conv) .or. (normx * initer_conv >= 1)) &
+                               exit_info = PETSC_TRUE
+
+    resNE_old = resNE
+    resNE = norms / norms0
+
+    if ( abs((resNE_old - resNe) /resNE_old) < delta_initer .and. &
+        i > this%miniter) exit_info = PETSC_TRUE
+
+  enddo
+
+  call timer%Stop()
+  option%io_buffer = '    ' // &
+    trim(StringWrite('(f20.1)',timer%GetCumulativeTime())) &
+    // ' seconds and ' // trim(StringWrite(i)) // &
+    ' iterations to solve Perturbation normal equation.'
+  call PrintMsg(option)
+  call TimerDestroy(timer)
+
+end subroutine InversionPerturbationCGLSSolve
+
+! ************************************************************************** !
+
+subroutine InversionPerturbationCGLSRhs(this)
+  !
+  ! Builds RHS for least-square equation for CGLS solver
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 03/23/22
+  !
+
+  use Realization_Base_class
+  use Patch_module
+  use Material_Aux_module
+  use Option_module
+
+  implicit none
+
+  class(inversion_perturbation_type) :: this
+
+  type(material_auxvar_type), pointer :: material_auxvars(:)
+  type(option_type), pointer :: option
+  type(patch_type), pointer :: patch
+  type(constrained_block_type), pointer :: constrained_block
+
+  PetscInt :: idata,iconst,irb,num_measurement
+  PetscInt, pointer :: rblock(:,:)
+  PetscReal :: perm_ce,perm_nb,x     ! cell's and neighbor's
+  PetscReal :: wm,beta
+  PetscReal :: wd
+  PetscReal, pointer :: vec_ptr(:)
+  PetscErrorCode :: ierr
+
+  option => this%realization%option
+  patch => this%realization%patch
+  material_auxvars => patch%aux%Material%auxvars
+
+  constrained_block => this%constrained_block
+  rblock => this%rblock
+
+  this%b = 0.0d0
+
+  num_measurement = size(this%measurements)
+
+  ! Data part
+  do idata=1,num_measurement
+
+    wd = 0.05 * this%measurements(idata)%value
+    wd = 1/wd
+
+    this%b(idata) = wd * (this%measurements(idata)%value - &
+                          this%measurements(idata)%simulated_value)
+  enddo
+
+  ! Model part
+  beta = this%beta
+
+  do iconst=1,this%num_constraints_local
+    if (this%Wm(iconst) == 0) cycle
+
+    wm = this%Wm(iconst)
+
+    perm_ce = material_auxvars(rblock(iconst,1))%permeability(perm_xx_index)
+    irb = rblock(iconst,3)
+
+    select case(constrained_block%structure_metric(irb))
+      case(1)
+        perm_nb = material_auxvars(rblock(iconst,2))%permeability(perm_xx_index)
+        x = log(perm_ce) - log(perm_nb)
+      case(2)
+        perm_nb = material_auxvars(rblock(iconst,2))%permeability(perm_xx_index)
+        x = log(perm_ce) - log(perm_nb)
+      case(3)
+        x = log(perm_ce) - log(constrained_block%reference_permeability(irb))
+      case(4)
+        x = log(perm_ce) - log(constrained_block%reference_permeability(irb))
+      case(5)
+        perm_nb = material_auxvars(rblock(iconst,2))%permeability(perm_xx_index)
+        x = log(perm_ce) - log(perm_nb)
+        ! TODO: compute rx,ry, and rz
+      case(6)
+        perm_nb = material_auxvars(rblock(iconst,2))%permeability(perm_xx_index)
+        x = log(perm_ce) - log(perm_nb)
+        ! TODO: compute rx,ry, and rz
+      case(7)
+        perm_nb = material_auxvars(rblock(iconst,2))%permeability(perm_xx_index)
+        x = (log(perm_ce)- log(constrained_block%reference_permeability(irb))) &
+          -(log(perm_nb) - log(constrained_block%reference_permeability(irb)))
+      case(8)
+        perm_nb = material_auxvars(rblock(iconst,2))%permeability(perm_xx_index)
+        x = (log(perm_ce)- log(constrained_block%reference_permeability(irb))) &
+          -(log(perm_nb) - log(constrained_block%reference_permeability(irb)))
+      case(9)
+        perm_nb = material_auxvars(rblock(iconst,2))%permeability(perm_xx_index)
+        x = log(perm_ce) - log(perm_nb)
+      case(10)
+        perm_nb = material_auxvars(rblock(iconst,2))%permeability(perm_xx_index)
+        x = log(perm_ce) - log(perm_nb)
+      case default
+        option%io_buffer = 'Supported STRUCTURE_METRIC in INVERSION, &
+                            &CONSTRAINED_BLOCKS is between 1 to 10'
+        call PrintErrMsg(option)
+    end select
+
+    this%b(num_measurement + iconst) = - sqrt(beta) * wm * x
+
+  enddo
+
+end subroutine InversionPerturbationCGLSRhs
+
+! ************************************************************************** !
+
+subroutine InversionPerturbationBuildWm(this)
+  !
+  ! Builds model regularization matrix: Wm
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 03/23/22
+  !
+
+  use Patch_module
+  use Grid_module
+  use Material_Aux_module
+  use Option_module
+
+  implicit none
+
+  class(inversion_perturbation_type) :: this
+
+  type(material_auxvar_type), pointer :: material_auxvars(:)
+  type(option_type), pointer :: option
+  type(patch_type), pointer :: patch
+  type(grid_type), pointer :: grid
+  type(constrained_block_type), pointer :: constrained_block
+
+  PetscInt :: i
+
+  option => this%realization%option
+  patch => this%realization%patch
+  grid => patch%grid
+  material_auxvars => patch%aux%Material%auxvars
+
+  constrained_block => this%constrained_block
+
+  if ((.not.associated(this%Wm)).or.(.not.associated(this%rblock))) &
+                                 call InversionPerturbationAllocateWm(this)
+
+  do i=1,this%num_constraints_local
+    call ComputeWm(i,this%Wm(i))
+  enddo
+
+contains
+
+  subroutine ComputeWm(iconst,wm)
+    ! computes an element of Wm matrix
+    !
+    ! Author: Piyoosh Jaysaval
+    ! Date: 03/23/22
+
+    implicit none
+
+    PetscInt :: iconst
+    PetscReal :: wm
+
+    PetscInt :: irb,ghosted_id,ghosted_id_nb
+    PetscReal :: x,awx,awy,awz
+    PetscReal :: perm_ce,perm_nb     ! cell's and neighbor's
+    PetscReal :: mn,sd
+    PetscReal :: rx,ry,rz,r
+    PetscInt, pointer :: rblock(:,:)
+
+    rblock => this%rblock
+
+    ! get perm & block of the ith constrained eq.
+    ghosted_id = rblock(iconst,1)
+    ghosted_id_nb = rblock(iconst,2)
+    if (patch%imat(ghosted_id) <= 0 .or.   &
+        patch%imat(ghosted_id_nb) <=0 ) return
+    irb = rblock(iconst,3)
+    perm_ce = material_auxvars(ghosted_id)%permeability(perm_xx_index)
+    x = 0.d0
+
+    select case(constrained_block%structure_metric(irb))
+      case(1)
+        perm_nb = material_auxvars(ghosted_id_nb)%permeability(perm_xx_index)
+        x = log(perm_ce) - log(perm_nb)
+      case(2)
+        perm_nb = material_auxvars(ghosted_id_nb)%permeability(perm_xx_index)
+        x = abs(log(perm_ce) - log(perm_nb))
+      case(3)
+        x = log(perm_ce) - log(constrained_block%reference_permeability(irb))
+      case(4)
+        x = abs(log(perm_ce) - &
+                log(constrained_block%reference_permeability(irb)))
+      case(5)
+        !perm_nb = material_auxvars(ghosted_id_nb)%permeability(perm_xx_index)
+        !x = log(perm_ce) - log(perm_nb)
+
+        ! compute unit vectors: rx,ry, and rz
+        rx = grid%x(ghosted_id) - grid%x(ghosted_id_nb)
+        ry = grid%y(ghosted_id) - grid%y(ghosted_id_nb)
+        rz = grid%z(ghosted_id) - grid%z(ghosted_id_nb)
+        r = sqrt(rx*rx + ry*ry + rz*rz)
+        rx = rx / r
+        ry = ry / r
+        rz = rz / r
+      case(6)
+        !perm_nb = material_auxvars(ghosted_id_nb)%permeability(perm_xx_index)
+        !x = abs(log(perm_ce) - log(perm_nb))
+
+        ! compute unit vectors: rx,ry, and rz
+        rx = abs(grid%x(ghosted_id) - grid%x(ghosted_id_nb))
+        ry = abs(grid%y(ghosted_id) - grid%y(ghosted_id_nb))
+        rz = abs(grid%z(ghosted_id) - grid%z(ghosted_id_nb))
+        r = sqrt(rx*rx + ry*ry + rz*rz)
+        rx = rx / r
+        ry = ry / r
+        rz = rz / r
+      case(7)
+        perm_nb = material_auxvars(ghosted_id_nb)%permeability(perm_xx_index)
+        x = (log(perm_ce)- log(constrained_block%reference_permeability(irb))) &
+          -(log(perm_nb) - log(constrained_block%reference_permeability(irb)))
+      case(8)
+        perm_nb = material_auxvars(ghosted_id_nb)%permeability(perm_xx_index)
+        x = abs( &
+            (log(perm_ce)- log(constrained_block%reference_permeability(irb))) &
+          -(log(perm_nb) - log(constrained_block%reference_permeability(irb))) )
+      case(9)
+        perm_nb = material_auxvars(ghosted_id_nb)%permeability(perm_xx_index)
+        x = log(perm_ce) - log(perm_nb)
+      case(10)
+        perm_nb = material_auxvars(ghosted_id_nb)%permeability(perm_xx_index)
+        x = abs(log(perm_ce) - log(perm_nb))
+      case default
+        option%io_buffer = 'Supported STRUCTURE_METRIC in INVERSION, &
+                            &CONSTRAINED_BLOCKS is between 1 to 10'
+        call PrintErrMsg(option)
+    end select
+
+    mn = constrained_block%wf_mean(irb)
+    sd = constrained_block%wf_sdev(irb)
+    ! Get weight w
+    select case(constrained_block%wf_type(irb))
+    case(1)
+      wm = 0.5 * (1 - erf( (x-mn)/sqrt(2*sd*sd) ))
+    case(2)
+      wm = 0.5 * (1 + erf( (x-mn)/sqrt(2*sd*sd) ))
+    case(3)
+      wm = 1 - exp(-((x-mn)*(x-mn)) / (2*sd*sd))
+    case(4)
+      wm = exp(-((x-mn)*(x-mn)) / (2*sd*sd))
+    case(5)
+      if ((x-mn) < 0) then
+         wm = 1 / (sd*sd)
+      else
+         wm = sd*sd / (((x-mn)*(x-mn) + sd*sd)*((x-mn)*(x-mn) + sd*sd))
+      end if
+    case(6)
+      if ((x-mn) > 0) then
+         wm = 1 / (sd*sd)
+      else
+        wm = sd*sd / (((x-mn)*(x-mn) + sd*sd)*((x-mn)*(x-mn) + sd*sd))
+      end if
+    case default
+      option%io_buffer = 'Supported WEIGHING_FUNCTION in INVERSION, &
+                          &CONSTRAINED_BLOCKS is between 1 to 6'
+      call PrintErrMsg(option)
+    end select
+
+    if (constrained_block%structure_metric(irb) == 5 .or. &
+        constrained_block%structure_metric(irb) == 6) then
+      awx = constrained_block%aniso_weight(irb,1)
+      awy = constrained_block%aniso_weight(irb,2)
+      awz = constrained_block%aniso_weight(irb,3)
+      wm = (1 - abs( awx*rx + awy*ry + awz*rz))**2
+    end if
+
+    wm = constrained_block%relative_weight(irb) * wm
+
+  end subroutine ComputeWm
+
+end subroutine InversionPerturbationBuildWm
+
+! ************************************************************************** !
+
+subroutine InversionPerturbationAllocateWm(this)
+  !
+  ! Allocate and get info on Wm and rblock
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 03/23/22
+  !
+
+  use Patch_module
+  use Grid_module
+  use Option_module
+
+  implicit none
+
+  class(inversion_perturbation_type) :: this
+
+  type(option_type), pointer :: option
+  type(patch_type), pointer :: patch
+  type(grid_type), pointer :: grid
+  type(constrained_block_type), pointer :: constrained_block
+
+  PetscInt :: local_id,ghosted_id,ghosted_id_nbr
+  PetscInt :: iconblock,inbr,ilink
+  PetscInt :: num_constraints
+  PetscInt :: num_neighbor
+  PetscErrorCode :: ierr
+
+  option => this%realization%option
+  patch => this%realization%patch
+  grid => patch%grid
+
+  constrained_block => this%constrained_block
+
+  num_constraints = 0
+  do local_id=1,grid%nlmax
+    ghosted_id = grid%nL2G(local_id)
+    if (patch%imat(ghosted_id) <= 0) cycle
+    do iconblock=1,constrained_block%num_constrained_block
+      if (constrained_block%structure_metric(iconblock) > 0) then
+        if (constrained_block%material_id(iconblock) == &
+            patch%imat(ghosted_id)) then
+          if (constrained_block%structure_metric(iconblock) == 3 .or. &
+              constrained_block%structure_metric(iconblock) == 4) then
+            num_constraints = num_constraints + 1
+          else
+            num_neighbor = grid%cell_neighbors_local_ghosted(0,local_id)
+            do inbr=1,num_neighbor
+              ghosted_id_nbr = abs( &
+                            grid%cell_neighbors_local_ghosted(inbr,local_id))
+              if (patch%imat(ghosted_id_nbr) <= 0) cycle
+              if (patch%imat(ghosted_id_nbr) /= patch%imat(ghosted_id)) then
+                do ilink=1,constrained_block%block_link(iconblock,1)
+                  if (constrained_block%block_link(iconblock,ilink+1) == &
+                      patch%imat(ghosted_id_nbr)) then
+                    num_constraints = num_constraints + 1
+                  endif
+                enddo
+              else
+                if (constrained_block%structure_metric(iconblock) < 9 .or. &
+                    constrained_block%structure_metric(iconblock) > 10) then
+                  num_constraints = num_constraints + 1
+                endif
+              endif
+            enddo
+          endif
+        endif
+      endif
+    enddo
+  enddo
+
+  this%num_constraints_local = num_constraints
+  call MPI_Allreduce(num_constraints,this%num_constraints_total, &
+                     ONE_INTEGER_MPI,MPIU_INTEGER,MPI_SUM,option%mycomm,ierr)
+  allocate(this%Wm(num_constraints))
+  allocate(this%rblock(num_constraints,THREE_INTEGER))
+  this%Wm = 0.d0
+  this%rblock = 0
+
+  ! repeat once num_constraints is known
+  num_constraints = 0
+  do local_id=1,grid%nlmax
+    ghosted_id = grid%nL2G(local_id)
+    if (patch%imat(ghosted_id) <= 0) cycle
+    do iconblock=1,constrained_block%num_constrained_block
+      if (constrained_block%structure_metric(iconblock) > 0) then
+        if (constrained_block%material_id(iconblock) == &
+            patch%imat(ghosted_id)) then
+          if (constrained_block%structure_metric(iconblock) == 3 .or. &
+              constrained_block%structure_metric(iconblock) == 4) then
+            num_constraints = num_constraints + 1
+            this%rblock(num_constraints,1) = ghosted_id
+            this%rblock(num_constraints,3) = iconblock
+          else
+            num_neighbor = grid%cell_neighbors_local_ghosted(0,local_id)
+            do inbr=1,num_neighbor
+              ghosted_id_nbr = abs( &
+                            grid%cell_neighbors_local_ghosted(inbr,local_id))
+              if (patch%imat(ghosted_id_nbr) <= 0) cycle
+              if (patch%imat(ghosted_id_nbr) /= patch%imat(ghosted_id)) then
+                do ilink=1,constrained_block%block_link(iconblock,1)
+                  if (constrained_block%block_link(iconblock,ilink+1) == &
+                      patch%imat(ghosted_id_nbr)) then
+                    num_constraints = num_constraints + 1
+                    this%rblock(num_constraints,1) = ghosted_id
+                    this%rblock(num_constraints,2) = ghosted_id_nbr
+                    this%rblock(num_constraints,3) = iconblock
+                  endif
+                enddo
+              else
+                if (constrained_block%structure_metric(iconblock) < 9 .or. &
+                    constrained_block%structure_metric(iconblock) > 10) then
+                  num_constraints = num_constraints + 1
+                  this%rblock(num_constraints,1) = ghosted_id
+                  this%rblock(num_constraints,2) = ghosted_id_nbr
+                  this%rblock(num_constraints,3) = iconblock
+                endif
+              endif
+            enddo
+          endif
+        endif
+      endif
+    enddo
+  enddo
+
+end subroutine InversionPerturbationAllocateWm
+
+! ************************************************************************** !
+
+subroutine InversionPerturbationComputeMatVecProductJp(this)
+  !
+  ! Computes product of Jacobian J with a vector p = Jp
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 03/23/22
+  !
+
+  use Patch_module
+  use Grid_module
+  use Field_module
+  use Discretization_module
+  use Option_module
+  use Inversion_Aux_module
+
+  implicit none
+
+  class(inversion_perturbation_type) :: this
+
+  type(patch_type), pointer :: patch
+  type(grid_type), pointer :: grid
+  type(option_type), pointer :: option
+  type(field_type), pointer :: field
+  type(discretization_type), pointer :: discretization
+  type(constrained_block_type), pointer :: constrained_block
+  type(inversion_aux_type), pointer :: inversion_aux
+
+  PetscInt :: iconst,irb,num_measurement
+  PetscInt :: ghosted_id,ghosted_id_nb
+  PetscInt, pointer :: rblock(:,:)
+  PetscReal :: beta,wm
+  PetscReal, pointer :: pvec_ptr(:)
+  PetscReal, pointer :: q1vec_ptr(:)
+  PetscErrorCode :: ierr
+
+  Vec :: p1
+  Vec :: q1
+  Vec :: q1_dist
+
+  option => this%realization%option
+  field => this%realization%field
+  discretization => this%realization%discretization
+  patch => this%realization%patch
+  grid => patch%grid
+  inversion_aux => this%inversion_aux
+
+  constrained_block => this%constrained_block
+  rblock => this%rblock
+
+  this%q = 0.d0
+
+  num_measurement = size(this%measurements)
+
+  ! Data part
+  call VecDuplicate(this%natural_vec,p1,ierr);CHKERRQ(ierr)
+  call VecDuplicate(this%dist_measurement_vec,q1_dist,ierr);CHKERRQ(ierr)
+  call VecDuplicate(this%measurement_vec,q1,ierr);CHKERRQ(ierr)
+
+  call VecGetArrayF90(p1,pvec_ptr,ierr);CHKERRQ(ierr)
+  pvec_ptr = this%p
+  call VecRestoreArrayF90(p1,pvec_ptr,ierr);CHKERRQ(ierr)
+
+  ! q = Jp -> data part
+  call MatMultTranspose(inversion_aux%JsensitivityT,p1,q1_dist, &
+                        ierr);CHKERRQ(ierr)
+
+  call VecScatterBegin(this%scatter_measure_to_dist_measure, &
+                       q1_dist,q1, &
+                       INSERT_VALUES,SCATTER_REVERSE, &
+                       ierr);CHKERRQ(ierr)
+  call VecScatterEnd(this%scatter_measure_to_dist_measure, &
+                     q1_dist,q1, &
+                     INSERT_VALUES,SCATTER_REVERSE, &
+                     ierr);CHKERRQ(ierr)
+  call VecGetArrayF90(q1,q1vec_ptr,ierr);CHKERRQ(ierr)
+  this%q(1:num_measurement) = q1vec_ptr
+  call VecRestoreArrayF90(q1,q1vec_ptr,ierr);CHKERRQ(ierr)
+
+  ! Model part -> q2
+  ! Get local this%p to ghosted in pvec_ptr
+  call DiscretizationNaturalToGlobal(discretization,p1, &
+                                     field%work,ONEDOF)
+  call DiscretizationGlobalToLocal(discretization,field%work, &
+                                   field%work_loc,ONEDOF)
+  call VecGetArrayF90(field%work_loc,pvec_ptr,ierr);CHKERRQ(ierr)
+
+  beta = this%beta
+
+  do iconst=1,this%num_constraints_local
+    if (this%Wm(iconst) == 0) cycle
+
+    wm = this%Wm(iconst)
+    irb = rblock(iconst,3)
+    ghosted_id = rblock(iconst,1)
+    if (patch%imat(ghosted_id) <= 0) cycle
+
+    if (constrained_block%structure_metric(irb) == 3 .or. &
+        constrained_block%structure_metric(irb) == 4) then
+      this%q(num_measurement + iconst) = &
+        sqrt(beta) * wm * pvec_ptr(ghosted_id)
+    else
+      ghosted_id_nb = rblock(iconst,2)
+      if (patch%imat(ghosted_id_nb) <= 0) cycle
+      this%q(num_measurement + iconst) = &
+          sqrt(beta) * wm * (pvec_ptr(ghosted_id) - pvec_ptr(ghosted_id_nb))
+    endif
+  enddo
+
+  call VecRestoreArrayF90(field%work_loc,pvec_ptr,ierr);CHKERRQ(ierr)
+
+  call VecDestroy(p1,ierr);CHKERRQ(ierr)
+  call VecDestroy(q1,ierr);CHKERRQ(ierr)
+  call VecDestroy(q1_dist,ierr);CHKERRQ(ierr)
+
+end subroutine InversionPerturbationComputeMatVecProductJp
+
+!************************************************************************** !
+
+subroutine InversionPerturbationComputeMatVecProductJtr(this)
+  !
+  ! Computes product of Jacobian J transpose with a vector r = J^t x r
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 03/23/22
+  !
+
+  use Patch_module
+  use Grid_module
+  use Field_module
+  use Discretization_module
+  use Inversion_Aux_module
+
+  implicit none
+
+  class(inversion_perturbation_type) :: this
+
+  type(patch_type), pointer :: patch
+  type(grid_type), pointer :: grid
+  type(field_type), pointer :: field
+  type(discretization_type), pointer :: discretization
+  type(constrained_block_type), pointer :: constrained_block
+  type(inversion_aux_type), pointer :: inversion_aux
+
+  PetscInt :: iconst,irb,num_measurement
+  PetscInt :: ghosted_id,ghosted_id_nb
+  PetscInt, pointer :: rblock(:,:)
+  PetscReal :: beta,wm
+  PetscReal, pointer :: r1vec_ptr(:)
+  PetscReal, pointer :: s1vec_ptr(:)
+  PetscReal, pointer :: s2vec_ptr(:)
+  PetscErrorCode :: ierr
+
+  Vec :: r1
+  Vec :: s1
+
+  field => this%realization%field
+  discretization => this%realization%discretization
+  patch => this%realization%patch
+  grid => patch%grid
+  inversion_aux => this%inversion_aux
+
+  constrained_block => this%constrained_block
+  rblock => this%rblock
+
+  this%s = 0.0d0
+
+  num_measurement = size(this%measurements)
+
+  ! Model part -> s2
+  call VecGetArrayF90(field%work_loc,s2vec_ptr,ierr);CHKERRQ(ierr)
+  s2vec_ptr = 0.d0
+
+  beta = this%beta
+
+  do iconst=1,this%num_constraints_local
+    if (this%Wm(iconst) == 0) cycle
+
+    wm = this%Wm(iconst)
+    irb = rblock(iconst,3)
+    ghosted_id = rblock(iconst,1)
+    if (patch%imat(ghosted_id) <= 0) cycle
+
+    if (constrained_block%structure_metric(irb) == 3 .or. &
+        constrained_block%structure_metric(irb) == 4) then
+      s2vec_ptr(ghosted_id) = s2vec_ptr(ghosted_id) + &
+        sqrt(beta) * wm * this%r(num_measurement + iconst)
+    else
+      ghosted_id_nb = rblock(iconst,2)
+      if (patch%imat(ghosted_id_nb) <= 0) cycle
+      s2vec_ptr(ghosted_id) = s2vec_ptr(ghosted_id) + &
+              sqrt(beta) * wm * this%r(num_measurement + iconst)
+      s2vec_ptr(ghosted_id_nb) = s2vec_ptr(ghosted_id_nb) - &
+              sqrt(beta) * wm * this%r(num_measurement + iconst)
+    endif
+  enddo
+
+  call VecRestoreArrayF90(field%work_loc,s2vec_ptr,ierr);CHKERRQ(ierr)
+
+  ! s2 in field%work
+  call VecZeroEntries(field%work,ierr);CHKERRQ(ierr)
+  call DiscretizationLocalToGlobalAdd(discretization,field%work_loc, &
+                                      field%work,ONEDOF)
+  call DiscretizationGlobalToNatural(discretization,field%work, &
+                                     this%natural_vec,ONEDOF)
+
+  ! Data part
+  call VecDuplicate(this%measurement_vec,r1,ierr);CHKERRQ(ierr)
+  call VecDuplicate(this%natural_vec,s1,ierr);CHKERRQ(ierr)
+
+  call VecGetArrayF90(r1,r1vec_ptr,ierr);CHKERRQ(ierr)
+  r1vec_ptr = this%r(1:num_measurement)
+  call VecRestoreArrayF90(r1,r1vec_ptr,ierr);CHKERRQ(ierr)
+  call VecScatterBegin(this%scatter_measure_to_dist_measure, &
+                       r1,this%dist_measurement_vec, &
+                       INSERT_VALUES,SCATTER_FORWARD_LOCAL, &
+                       ierr);CHKERRQ(ierr)
+  call VecScatterEnd(this%scatter_measure_to_dist_measure, &
+                     r1,this%dist_measurement_vec, &
+                     INSERT_VALUES,SCATTER_FORWARD_LOCAL, &
+                     ierr);CHKERRQ(ierr)
+
+  call VecGetArrayF90(this%dist_measurement_vec,r1vec_ptr,ierr);CHKERRQ(ierr)
+  call VecRestoreArrayF90(this%dist_measurement_vec,r1vec_ptr,ierr);CHKERRQ(ierr)
+
+  ! s = J^T*r -> data part
+  call MatMult(inversion_aux%JsensitivityT,this%dist_measurement_vec, &
+               s1,ierr);CHKERRQ(ierr)
+
+  call VecGetArrayF90(s1,s1vec_ptr,ierr);CHKERRQ(ierr)
+  call VecGetArrayF90(this%natural_vec,s2vec_ptr,ierr);CHKERRQ(ierr)
+  this%s = s1vec_ptr + s2vec_ptr
+  call VecRestoreArrayF90(s1,s1vec_ptr,ierr);CHKERRQ(ierr)
+  call VecRestoreArrayF90(this%natural_vec,s2vec_ptr,ierr);CHKERRQ(ierr)
+
+  call VecDestroy(r1,ierr);CHKERRQ(ierr)
+  call VecDestroy(s1,ierr);CHKERRQ(ierr)
+
+end subroutine InversionPerturbationComputeMatVecProductJtr
+
+! ************************************************************************** !
+
 subroutine InversionPerturbationWriteIterationInfo(this)
   !
   ! Writes inversion run info
@@ -1352,6 +2263,24 @@ subroutine InversionPerturbationScaleSensitivity(this)
   call VecDestroy(wd_vec,ierr);CHKERRQ(ierr)
 
 end subroutine InversionPerturbationScaleSensitivity
+
+! ************************************************************************** !
+
+subroutine InversionPerturbationFinalize(this)
+  !
+  ! Finalizes inversion
+  !
+  ! Author: Piyoosh Jaysaval
+  ! Date: 03/22/22
+  !
+
+  implicit none
+
+  class(inversion_perturbation_type) :: this
+
+  call InversionBaseFinalize(this)
+
+end subroutine InversionPerturbationFinalize
 
 ! ************************************************************************** !
 
