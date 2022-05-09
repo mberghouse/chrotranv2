@@ -270,7 +270,7 @@ subroutine InversionSubsurfReadSelectCase(this,input,keyword,found, &
   use Input_Aux_module
   use Option_module
   use String_module
-  use Variables_module, only : ELECTRICAL_CONDUCTIVITY, &
+  use Variables_module, only : ELECTRICAL_POTENTIAL, &
                                PERMEABILITY, POROSITY, &
                                LIQUID_PRESSURE, LIQUID_SATURATION, &
                                SOLUTE_CONCENTRATION, VG_SR, VG_ALPHA
@@ -321,6 +321,8 @@ subroutine InversionSubsurfReadSelectCase(this,input,keyword,found, &
           this%iobsfunc = LIQUID_SATURATION
         case('SOLUTE_CONCENTRATION')
           this%iobsfunc = SOLUTE_CONCENTRATION
+        case('ELECTRICAL_POTENTIAL')
+          this%iobsfunc = ELECTRICAL_POTENTIAL
         case default
           call InputKeywordUnrecognized(input,word,trim(error_string)// &
                                         & ','//trim(keyword),option)
@@ -638,17 +640,19 @@ subroutine InversionSubsurfInitialize(this)
     call MPI_Allreduce(MPI_IN_PLACE,int_array,mpi_int,MPIU_INTEGER,MPI_MAX, &
                        this%driver%comm%mycomm,ierr)
     do i = 1, num_measurements
-      if (int_array(i) > 0) then
-        this%measurements(i)%cell_id = int_array(i)
-      endif
-      if (Uninitialized(this%measurements(i)%cell_id)) then
-        string = 'Measurement ' // trim(StringWrite(i)) // &
-          ' at coordinate (' // &
-          trim(StringWrite(this%measurements(i)%coordinate%x)) // ',' // &
-          trim(StringWrite(this%measurements(i)%coordinate%y)) // ',' // &
-          trim(StringWrite(this%measurements(i)%coordinate%z)) // &
-          ') not mapped properly.'
-        call this%driver%PrintErrMsg(string)
+      if (Uninitialized(this%measurements(i)%ert_measurement_id)) then
+        if (int_array(i) > 0) then
+          this%measurements(i)%cell_id = int_array(i)
+        endif
+        if (Uninitialized(this%measurements(i)%cell_id)) then
+          string = 'Measurement ' // trim(StringWrite(i)) // &
+            ' at coordinate (' // &
+            trim(StringWrite(this%measurements(i)%coordinate%x)) // ',' // &
+            trim(StringWrite(this%measurements(i)%coordinate%y)) // ',' // &
+            trim(StringWrite(this%measurements(i)%coordinate%z)) // &
+            ') not mapped properly.'
+          call this%driver%PrintErrMsg(string)
+        endif
       endif
     enddo
 

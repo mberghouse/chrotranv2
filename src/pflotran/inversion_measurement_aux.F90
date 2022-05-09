@@ -14,6 +14,7 @@ module Inversion_Measurement_Aux_module
     PetscReal :: time
     character(len=4) :: time_units
     PetscInt :: cell_id
+    PetscInt :: ert_measurement_id
     PetscReal :: value
     PetscReal :: simulated_value
     PetscBool :: first_lambda
@@ -72,6 +73,7 @@ subroutine InversionMeasurementAuxInit(measurement)
   measurement%time = UNINITIALIZED_DOUBLE
   measurement%time_units = ''
   measurement%cell_id = UNINITIALIZED_INTEGER
+  measurement%ert_measurement_id = UNINITIALIZED_INTEGER
   measurement%value = UNINITIALIZED_DOUBLE
   measurement%simulated_value = UNINITIALIZED_DOUBLE
   measurement%first_lambda = PETSC_FALSE
@@ -100,6 +102,7 @@ subroutine InversionMeasurementAuxCopy(measurement,measurement2)
   measurement2%time = measurement%time
   measurement2%time_units = measurement%time_units
   measurement2%cell_id = measurement%cell_id
+  measurement2%ert_measurement_id = measurement%ert_measurement_id
   measurement2%value = measurement%value
   measurement2%simulated_value = measurement%simulated_value
   call GeometryCopyCoordinate(measurement%coordinate,measurement2%coordinate)
@@ -231,6 +234,9 @@ function InversionMeasurementAuxRead(input,error_string,option)
       case('VALUE')
         call InputReadDouble(input,option,new_measurement%value)
         call InputErrorMsg(input,option,keyword,error_string)
+      case('ERT_MEASUREMENT_ID')
+        call InputReadInt(input,option,new_measurement%ert_measurement_id)
+        call InputErrorMsg(input,option,keyword,error_string)
       case default
         call InputKeywordUnrecognized(input,keyword,error_string,option)
     end select
@@ -239,8 +245,16 @@ function InversionMeasurementAuxRead(input,error_string,option)
   call InputPopBlock(input,option)
 
   if (UnInitialized(new_measurement%cell_id) .and. &
-      UnInitialized(new_measurement%coordinate%x)) then
-    option%io_buffer = 'CELL_ID or COORDINATE not specified for measurement.'
+      UnInitialized(new_measurement%coordinate%x).and. &
+      UnInitialized(new_measurement%ert_measurement_id)) then
+    option%io_buffer = 'CELL_ID, COORDINATE, or ERT_MEASUREMENT_ID not &
+                        &specified for measurement.'
+    call PrintErrMsg(option)
+  elseif ((Initialized(new_measurement%cell_id) .or. &
+    Initialized(new_measurement%coordinate%x)).and. &
+    Initialized(new_measurement%ert_measurement_id)) then
+    option%io_buffer = 'Specify only CELL_ID and/or COORDINATE Or &
+                        &ERT_MEASUREMENT_ID for measurement not both.'
     call PrintErrMsg(option)
   endif
   if (UnInitialized(new_measurement%value)) then
