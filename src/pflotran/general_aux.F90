@@ -1633,7 +1633,7 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
   use EOS_Water_module
   use EOS_Gas_module
   use Characteristic_Curves_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Creep_Closure_module
   use Fracture_module
   use WIPP_module
