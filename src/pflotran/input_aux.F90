@@ -604,6 +604,8 @@ subroutine InputReadDouble1(input, option, double)
 
     if (.not.InputError(input)) then
       read(word,*,iostat=input%ierr) double
+      ! catch NaNs
+      if (double /= double) input%ierr = 1
     endif
   endif
 
@@ -641,6 +643,8 @@ subroutine InputReadDouble2(string, option, double, ierr)
 
     if (.not.InputError(ierr)) then
       read(word,*,iostat=ierr) double
+      ! catch NaNs
+      if (double /= double) ierr = 1
     endif
   endif
 
@@ -723,12 +727,12 @@ subroutine InputReadPflotranString(input, option)
       call InputReadPflotranStringSlave(input, option)
     endif
     flag = input%ierr
-    call MPI_Bcast(flag,ONE_INTEGER_MPI,MPIU_INTEGER, &
-                   option%driver%io_rank,option%mycomm,ierr)
+    call MPI_Bcast(flag,ONE_INTEGER_MPI,MPIU_INTEGER,option%driver%io_rank, &
+                   option%mycomm,ierr);CHKERRQ(ierr)
     input%ierr = flag
     if (.not.InputError(input)) then
       call MPI_Bcast(input%buf,MAXSTRINGLENGTH,MPI_CHARACTER, &
-                     option%driver%io_rank,option%mycomm,ierr)
+                     option%driver%io_rank,option%mycomm,ierr);CHKERRQ(ierr)
     endif
   else
     call InputReadPflotranStringSlave(input, option)
@@ -813,17 +817,20 @@ subroutine InputReadPflotranStringSlave(input, option)
         call InputReadWord(tempstring,word,PETSC_FALSE,input%ierr)
         call StringToUpper(word)
         if (word(1:4) == 'SKIP') then
-          skip_count = skip_count + 1
-          call InputPushCard(input,word,option)
+          ! to avoid keywords that start with SKIP
+          if (len_trim(word) == 4) then
+            skip_count = skip_count + 1
+            call InputPushCard(input,word,option)
+          endif
         endif
-        if (word(1:4) == 'NOSK') then
+        if (word(1:6) == 'NOSKIP') then
           call InputPushCard(input,word,option)
           skip_count = skip_count - 1
           if (skip_count == 0) exit
         endif
       enddo
       if (InputError(input)) exit
-    else if (word(1:1) /= ' ' .and. word(1:4) /= 'NOSK') then
+    else if (word(1:1) /= ' ' .and. word(1:6) /= 'NOSKIP') then
       exit
     endif
   enddo
@@ -2939,13 +2946,13 @@ end subroutine InputRewind
 ! ************************************************************************** !
 
 subroutine InputCheckKeywordBlockCount(option)
-  ! 
-  ! Checks to ensure that the number of entered blocks due to nesting of 
+  !
+  ! Checks to ensure that the number of entered blocks due to nesting of
   ! keyword blocks in the input file is zero at the end of reading.
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 02/17/21
-  ! 
+  !
   use Option_module
 
   implicit none

@@ -1,5 +1,5 @@
 module Characteristic_Curves_Base_module
- 
+
 #include "petsc/finclude/petscsys.h"
   use petscsys
   use PFLOTRAN_Constants_module
@@ -7,15 +7,15 @@ module Characteristic_Curves_Base_module
   implicit none
 
   private
-  
+
   PetscReal, parameter, public :: DEFAULT_PCMAX = 1.d9
-  
+
   type, public :: polynomial_type
     PetscReal :: low
     PetscReal :: high
     PetscReal :: coefficients(4)
-  end type polynomial_type  
-  
+  end type polynomial_type
+
 !-----------------------------------------------------------------------------
 !-- Saturation Functions -----------------------------------------------------
 !-----------------------------------------------------------------------------
@@ -26,6 +26,7 @@ module Characteristic_Curves_Base_module
     PetscReal :: pcmax
     PetscBool :: analytical_derivative_available
     PetscBool :: calc_int_tension
+    PetscBool :: calc_vapor_pressure
   contains
     procedure, public :: Init => SFBaseInit
     procedure, public :: Verify => SFBaseVerify
@@ -33,13 +34,20 @@ module Characteristic_Curves_Base_module
     procedure, public :: SetupPolynomials => SFBaseSetupPolynomials
     procedure, public :: CapillaryPressure => SFBaseCapillaryPressure
     procedure, public :: Saturation => SFBaseSaturation
+    procedure, public :: EffectiveSaturation => SFBaseEffectiveSaturation
     procedure, public :: D2SatDP2 => SFBaseD2SatDP2
-    procedure, public :: CalcInterfacialTension => SFBaseSurfaceTension
+!    procedure, public :: CalcInterfacialTension => SFBaseSurfaceTension
+    procedure, public :: GetResidualSaturation => SFBaseGetResidualSaturation
+    procedure, public :: GetAlpha_ => SFBaseGetNeedsToBeExtended
+    procedure, public :: GetM_ => SFBaseGetNeedsToBeExtended
+    procedure, public :: SetResidualSaturation => SFBaseSetResidualSaturation
+    procedure, public :: SetAlpha_ => SFBaseSetNeedsToBeExtended
+    procedure, public :: SetM_ => SFBaseSetNeedsToBeExtended
   end type sat_func_base_type
 
 !-----------------------------------------------------------------------------
 !-- Relative Permeability Functions ------------------------------------------
-!-----------------------------------------------------------------------------  
+!-----------------------------------------------------------------------------
   type, public :: rel_perm_func_base_type
     type(polynomial_type), pointer :: poly
     PetscReal :: Sr
@@ -51,8 +59,16 @@ module Characteristic_Curves_Base_module
     procedure, public :: Test => RPFBaseTest
     procedure, public :: SetupPolynomials => RPFBaseSetupPolynomials
     procedure, public :: RelativePermeability => RPFBaseRelPerm
+    procedure, public :: EffectiveSaturation => &
+                           RPFBaseLiqEffectiveSaturation
+    procedure, public :: EffectiveGasSaturation => &
+                           RPFBaseGasEffectiveSaturation
+    procedure, public :: GetResidualSaturation => RPFBaseGetResidualSaturation
+    procedure, public :: GetM_ => RPFBaseGetNeedsToBeExtended
+    procedure, public :: SetResidualSaturation => RPFBaseSetResidualSaturation
+    procedure, public :: SetM_ => RPFBaseSetNeedsToBeExtended
   end type rel_perm_func_base_type
-  
+
   public :: PolynomialCreate, &
             PolynomialDestroy, &
             SFBaseInit, &
@@ -74,14 +90,14 @@ contains
 function PolynomialCreate()
 
   implicit none
-  
-  type(polynomial_type), pointer :: PolynomialCreate  
+
+  type(polynomial_type), pointer :: PolynomialCreate
 
   allocate(PolynomialCreate)
   PolynomialCreate%low = 0.d0
   PolynomialCreate%high = 0.d0
   PolynomialCreate%coefficients(:) = 0.d0
-  
+
 end function PolynomialCreate
 
 ! ************************************************************************** !
@@ -90,8 +106,8 @@ end function PolynomialCreate
 subroutine SFBaseInit(this)
 
   implicit none
-  
-  class(sat_func_base_type) :: this  
+
+  class(sat_func_base_type) :: this
 
   ! Cannot allocate here.  Allocation takes place in daughter class
   nullify(this%sat_poly)
@@ -100,7 +116,8 @@ subroutine SFBaseInit(this)
   this%pcmax = DEFAULT_PCMAX
   this%analytical_derivative_available = PETSC_FALSE
   this%calc_int_tension = PETSC_FALSE
-  
+  this%calc_vapor_pressure = PETSC_FALSE
+
 end subroutine SFBaseInit
 
 ! ************************************************************************** !
@@ -108,19 +125,19 @@ end subroutine SFBaseInit
 subroutine SFBaseVerify(this,name,option)
 
   use Option_module
-  
+
   implicit none
-  
-  class(sat_func_base_type) :: this  
+
+  class(sat_func_base_type) :: this
   character(len=MAXSTRINGLENGTH) :: name
-  type(option_type) :: option  
-  
+  type(option_type) :: option
+
   if (Uninitialized(this%Sr)) then
     option%io_buffer = UninitializedMessage('LIQUID_RESIDUAL_SATURATION', &
                                             name)
     call PrintErrMsg(option)
   endif
-  
+
   if ((.not.this%analytical_derivative_available) .and. &
       (.not.option%flow%numerical_derivatives)) then
     option%io_buffer = 'Analytical derivatives are not available for the &
@@ -128,7 +145,7 @@ subroutine SFBaseVerify(this,name,option)
       trim(name)
     call PrintErrMsg(option)
   endif
-  
+
 end subroutine SFBaseVerify
 
 ! ************************************************************************** !
@@ -136,15 +153,15 @@ end subroutine SFBaseVerify
 subroutine RPFBaseInit(this)
 
   implicit none
-  
-  class(rel_perm_func_base_type) :: this  
+
+  class(rel_perm_func_base_type) :: this
 
   ! Cannot allocate here.  Allocation takes place in daughter class
   nullify(this%poly)
   this%Sr = UNINITIALIZED_DOUBLE
   this%Srg = UNINITIALIZED_DOUBLE
   this%analytical_derivative_available = PETSC_FALSE
-  
+
 end subroutine RPFBaseInit
 
 ! ************************************************************************** !
@@ -152,26 +169,26 @@ end subroutine RPFBaseInit
 subroutine RPFBaseVerify(this,name,option)
 
   use Option_module
-  
+
   implicit none
-  
-  class(rel_perm_func_base_type) :: this  
+
+  class(rel_perm_func_base_type) :: this
   character(len=MAXSTRINGLENGTH) :: name
-  type(option_type) :: option  
+  type(option_type) :: option
 
   if (Uninitialized(this%Sr)) then
     option%io_buffer = UninitializedMessage('LIQUID_RESIDUAL_SATURATION', &
                                             name)
     call PrintErrMsg(option)
   endif
-  
+
   if ((.not.this%analytical_derivative_available) .and. &
       (.not.option%flow%numerical_derivatives)) then
     option%io_buffer = 'Analytical derivatives are not available for the &
       &relative permeability function chosen: ' // trim(name)
     call PrintErrMsg(option)
   endif
-  
+
 end subroutine RPFBaseVerify
 
 ! ************************************************************************** !
@@ -181,16 +198,16 @@ subroutine SFBaseSetupPolynomials(this,option,error_string)
   ! Sets up polynomials for smoothing saturation functions
 
   use Option_module
-  
+
   implicit none
-  
+
   class(sat_func_base_type) :: this
   type(option_type) :: option
   character(len=MAXSTRINGLENGTH) :: error_string
-  
+
   option%io_buffer = 'SF Smoothing not supported for ' // trim(error_string)
   call PrintErrMsg(option)
-  
+
 end subroutine SFBaseSetupPolynomials
 
 ! ************************************************************************** !
@@ -200,35 +217,35 @@ subroutine RPFBaseSetupPolynomials(this,option,error_string)
   ! Sets up polynomials for smoothing relative permeability functions
 
   use Option_module
-  
+
   implicit none
-  
+
   class(rel_perm_func_base_type) :: this
   type(option_type) :: option
   character(len=MAXSTRINGLENGTH) :: error_string
-  
+
   option%io_buffer = 'RPF Smoothing not supported for ' // trim(error_string)
   call PrintErrMsg(option)
-  
+
 end subroutine RPFBaseSetupPolynomials
 
 ! ************************************************************************** !
 
-subroutine SFBaseCapillaryPressure(this,liquid_saturation, & 
+subroutine SFBaseCapillaryPressure(this,liquid_saturation, &
                                    capillary_pressure,dpc_dsatl,option)
   use Option_module
-  
+
   implicit none
-  
+
   class(sat_func_base_type) :: this
   PetscReal, intent(in) :: liquid_saturation
   PetscReal, intent(out) :: capillary_pressure
   PetscReal, intent(out) :: dpc_dsatl
   type(option_type), intent(inout) :: option
-  
+
   option%io_buffer = 'SFBaseCapillaryPressure must be extended.'
   call PrintErrMsg(option)
-  
+
 end subroutine SFBaseCapillaryPressure
 
 ! ************************************************************************** !
@@ -238,17 +255,93 @@ subroutine SFBaseSaturation(this,capillary_pressure, &
   use Option_module
 
   implicit none
-  
+
   class(sat_func_base_type) :: this
   PetscReal, intent(in) :: capillary_pressure
   PetscReal, intent(out) :: liquid_saturation
   PetscReal, intent(out) :: dsat_dpres
   type(option_type), intent(inout) :: option
-  
+
   option%io_buffer = 'SFBaseSaturation must be extended.'
   call PrintErrMsg(option)
-  
+
 end subroutine SFBaseSaturation
+
+! ************************************************************************** !
+
+function SFBaseGetResidualSaturation(this)
+
+  implicit none
+
+  class(sat_func_base_type) :: this
+
+  PetscReal :: SFBaseGetResidualSaturation
+
+  SFBaseGetResidualSaturation = this%Sr
+
+end function SFBaseGetResidualSaturation
+
+! ************************************************************************** !
+
+function SFBaseGetNeedsToBeExtended(this)
+
+  implicit none
+
+  class(sat_func_base_type) :: this
+
+  PetscReal :: SFBaseGetNeedsToBeExtended
+
+  print *, 'A SFBaseGetXXX routine needs to be extended'
+  stop
+
+end function SFBaseGetNeedsToBeExtended
+
+! ************************************************************************** !
+
+subroutine SFBaseSetResidualSaturation(this,tempreal)
+
+  implicit none
+
+  class(sat_func_base_type) :: this
+  PetscReal :: tempreal
+
+  this%Sr = tempreal
+
+end subroutine SFBaseSetResidualSaturation
+
+! ************************************************************************** !
+
+subroutine SFBaseSetNeedsToBeExtended(this,tempreal)
+
+  implicit none
+
+  class(sat_func_base_type) :: this
+  PetscReal :: tempreal
+
+  print *, 'A SFBaseSetXXX routine needs to be extended'
+  stop
+
+end subroutine SFBaseSetNeedsToBeExtended
+
+! ************************************************************************** !
+
+subroutine SFBaseEffectiveSaturation(this,liquid_saturation, &
+                                     effective_saturation,deffsat_dsat, &
+                                     option)
+  use Option_module
+
+  implicit none
+
+  class(sat_func_base_type) :: this
+  PetscReal, intent(in) :: liquid_saturation
+  PetscReal, intent(out) :: effective_saturation
+  PetscReal, intent(out) :: deffsat_dsat
+  type(option_type), intent(inout) :: option
+
+  deffsat_dsat = 1.d0 / (1.d0 - this%Sr)
+  effective_saturation = (liquid_saturation - this%Sr) * deffsat_dsat
+
+end subroutine SFBaseEffectiveSaturation
 
 ! ************************************************************************** !
 
@@ -257,15 +350,15 @@ subroutine SFBaseD2SatDP2(this,pc,d2s_dp2,option)
   use Option_module
 
   implicit none
-  
+
   class(sat_func_base_type) :: this
   PetscReal, intent(in) :: pc
   PetscReal, intent(out) :: d2s_dp2
   type(option_type), intent(inout) :: option
-  
+
   option%io_buffer = 'SFBaseD2SatDP2 must be extended.'
   call PrintErrMsg(option)
-  
+
 end subroutine SFBaseD2SatDP2
 
 ! ************************************************************************** !
@@ -273,14 +366,14 @@ end subroutine SFBaseD2SatDP2
 subroutine SFBaseTest(this,cc_name,option)
 
   use Option_module
-  use Material_Aux_class
+  use Material_Aux_module
 
   implicit none
-  
+
   class(sat_func_base_type) :: this
   character(len=MAXWORDLENGTH) :: cc_name
   type(option_type), intent(inout) :: option
-  
+
   character(len=MAXSTRINGLENGTH) :: string
   PetscInt, parameter :: num_values = 101
   PetscReal :: pc, pc_increment
@@ -296,7 +389,7 @@ subroutine SFBaseTest(this,cc_name,option)
   PetscReal :: pert
   PetscReal :: dummy_real
   PetscInt :: count, i
- 
+
   ! calculate saturation as a function of capillary pressure
   ! start at 1 Pa up to maximum capillary pressure
   pc = 1.d0
@@ -349,7 +442,7 @@ subroutine SFBaseTest(this,cc_name,option)
     call this%CapillaryPressure(liquid_saturation_pert, &
                                 capillary_pressure_pert,dummy_real,option)
     dpc_dsatl_numerical(i) = (capillary_pressure_pert - &
-         & capillary_pressure(i))/pert 
+         & capillary_pressure(i))/pert
   enddo
   count = num_values
 
@@ -374,17 +467,116 @@ subroutine RPFBaseRelPerm(this,liquid_saturation,relative_permeability, &
   use Option_module
 
   implicit none
-  
+
   class(rel_perm_func_base_type) :: this
   PetscReal, intent(in) :: liquid_saturation
   PetscReal, intent(out) :: relative_permeability
   PetscReal, intent(out) :: dkr_sat
   type(option_type), intent(inout) :: option
-  
+
   option%io_buffer = 'RPFBaseRelPerm must be extended.'
   call PrintErrMsg(option)
-  
+
 end subroutine RPFBaseRelPerm
+
+! ************************************************************************** !
+
+function RPFBaseGetResidualSaturation(this)
+
+  implicit none
+
+  class(rel_perm_func_base_type) :: this
+
+  PetscReal :: RPFBaseGetResidualSaturation
+
+  RPFBaseGetResidualSaturation = this%Sr
+
+end function RPFBaseGetResidualSaturation
+
+! ************************************************************************** !
+
+function RPFBaseGetNeedsToBeExtended(this)
+
+  implicit none
+
+  class(rel_perm_func_base_type) :: this
+
+  PetscReal :: RPFBaseGetNeedsToBeExtended
+
+  print *, 'A RPFBaseGetXXX routine needs to be extended'
+  stop
+
+end function RPFBaseGetNeedsToBeExtended
+
+! ************************************************************************** !
+
+subroutine RPFBaseSetResidualSaturation(this,tempreal)
+
+  implicit none
+
+  class(rel_perm_func_base_type) :: this
+  PetscReal :: tempreal
+
+  this%Sr = tempreal
+
+end subroutine RPFBaseSetResidualSaturation
+
+! ************************************************************************** !
+
+subroutine RPFBaseSetNeedsToBeExtended(this,tempreal)
+
+  implicit none
+
+  class(rel_perm_func_base_type) :: this
+  PetscReal :: tempreal
+
+  print *, 'A RPFBaseSetXXX routine needs to be extended'
+  stop
+
+end subroutine RPFBaseSetNeedsToBeExtended
+
+! ************************************************************************** !
+
+subroutine RPFBaseLiqEffectiveSaturation(this,liquid_saturation, &
+                                         effective_saturation,deffsat_dsat, &
+                                         option)
+  use Option_module
+
+  implicit none
+
+  class(rel_perm_func_base_type) :: this
+  PetscReal, intent(in) :: liquid_saturation
+  PetscReal, intent(out) :: effective_saturation
+  PetscReal, intent(out) :: deffsat_dsat
+  type(option_type), intent(inout) :: option
+
+  deffsat_dsat = 1.d0 / (1.d0 - this%Sr)
+  effective_saturation = (liquid_saturation - this%Sr) * deffsat_dsat
+
+end subroutine RPFBaseLiqEffectiveSaturation
+
+! ************************************************************************** !
+
+subroutine RPFBaseGasEffectiveSaturation(this,liquid_saturation, &
+                                         effective_saturation,deffsat_dsat, &
+                                         option)
+  use Option_module
+
+  implicit none
+
+  class(rel_perm_func_base_type) :: this
+  PetscReal, intent(in) :: liquid_saturation
+  PetscReal, intent(out) :: effective_saturation
+  PetscReal, intent(out) :: deffsat_dsat
+  type(option_type), intent(inout) :: option
+
+  PetscReal :: tempreal
+
+  option%io_buffer = 'RPFBaseGasEffectiveSaturation must be extended for the &
+                     &current relative permeability function.'
+  call PrintErrMsg(option)
+
+end subroutine RPFBaseGasEffectiveSaturation
 
 ! ************************************************************************** !
 
@@ -393,12 +585,12 @@ subroutine RPFBaseTest(this,cc_name,phase,option)
   use Option_module
 
   implicit none
-  
+
   class(rel_perm_func_base_type) :: this
   character(len=MAXWORDLENGTH) :: cc_name
   character(len=MAXWORDLENGTH) :: phase
   type(option_type), intent(inout) :: option
-  
+
   character(len=MAXSTRINGLENGTH) :: string
   PetscInt :: i
   PetscInt, parameter :: num_values = 101
@@ -410,7 +602,7 @@ subroutine RPFBaseTest(this,cc_name,phase,option)
   PetscReal :: dkr_dsat(num_values)
   PetscReal :: dkr_dsat_numerical(num_values)
   PetscReal :: dummy_real(num_values)
-  
+
   perturbation = 1.d-6
 
   do i = 1, num_values
@@ -465,7 +657,7 @@ subroutine PolynomialDestroy(poly)
   nullify(poly)
 
 end subroutine PolynomialDestroy
-  
+
 ! ************************************************************************** !
 
 subroutine SaturationFunctionDestroy(sf)
@@ -481,7 +673,7 @@ subroutine SaturationFunctionDestroy(sf)
   class(sat_func_base_type), pointer :: sf
 
   if (.not.associated(sf)) return
-  
+
   call PolynomialDestroy(sf%sat_poly)
   call PolynomialDestroy(sf%sat_poly)
   deallocate(sf)
@@ -492,59 +684,23 @@ end subroutine SaturationFunctionDestroy
 ! ************************************************************************** !
 
 subroutine PermeabilityFunctionDestroy(rpf)
-  ! 
+  !
   ! Destroys a saturuation function
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 09/24/14
-  ! 
+  !
 
   implicit none
-  
+
   class(rel_perm_func_base_type), pointer :: rpf
-  
+
   if (.not.associated(rpf)) return
-  
+
   call PolynomialDestroy(rpf%poly)
   deallocate(rpf)
   nullify(rpf)
 
 end subroutine PermeabilityFunctionDestroy
 
-subroutine SFBaseSurfaceTension(this,T,sigma)
-  
-  !Surface tension of water equation from Revised Release on Surface
-  !Tension of Ordinary Water Substance, June 2014. Valid from -25C to
-  !373 C
-  
-  implicit none
-  
-  class(sat_func_base_type) :: this
-  PetscReal, intent(in) :: T
-  PetscReal, intent(out) :: sigma
-  
-  PetscReal, parameter :: Tc = 647.096d0
-  PetscReal, parameter :: B = 235.8d0
-  PetscReal, parameter :: b_2 = -0.625d0
-  PetscReal, parameter :: mu = 1.256d0
-  PetscReal, parameter :: sigma_base = 0.073d0
-  PetscReal :: Temp
-  PetscReal :: tao
-  
-  Temp=T+273.15d0
-  
-  if (T <= 373.d0) then
-    tao = 1.d0-Temp/Tc
-    sigma = B*(tao**mu)*(1+b_2*tao)
-    sigma = sigma * 1.d-3
-  else
-    sigma = 0.d0
-  endif
-  sigma= sigma/sigma_base
-
-  !TOUGH3 way (not pressure-dependent)
-  !if (Temp >= 101) sigma = 0
-  
-end subroutine SFBaseSurfaceTension
-  
 end module Characteristic_Curves_Base_module

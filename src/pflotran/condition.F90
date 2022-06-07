@@ -147,8 +147,10 @@ module Condition_module
   end type geop_condition_list_type
 
   public :: FlowConditionCreate, FlowConditionDestroy, FlowConditionRead, &
+            FlowGeneralConditionCreate, &
             FlowConditionGeneralRead, &
             FlowConditionHydrateRead, &
+            FlowGeneralSubConditionPtr, &
             FlowConditionAddToList, FlowConditionInitList, &
             FlowConditionDestroyList, &
             FlowConditionGetPtrFromList, FlowConditionUpdate, &
@@ -159,6 +161,7 @@ module Condition_module
             TranConditionRead, &
             TranConditionUpdate, &
             FlowConditionIsTransient, &
+            FlowConditionIsHydrostatic, &
             ConditionReadValues, &
             GetSubConditionName, &
             FlowConditionUnknownItype, &
@@ -763,7 +766,9 @@ subroutine FlowConditionRead(condition,input,option)
   use String_module
   use Logging_module
   use Time_Storage_module
+  use ZFlow_Aux_module
   use Dataset_module
+  use Utility_module
 
   implicit none
 
@@ -1498,7 +1503,7 @@ subroutine FlowConditionRead(condition,input,option)
       if (associated(energy_rate)) &
         condition%itype(TWO_INTEGER) = energy_rate%itype
 
-    case(RICHARDS_MODE,RICHARDS_TS_MODE,ZFLOW_MODE)
+    case(RICHARDS_MODE,RICHARDS_TS_MODE)
       if (.not.associated(pressure) .and. .not.associated(rate) .and. &
           .not.associated(saturation) .and. .not.associated(well)) then
         option%io_buffer = 'pressure, rate and saturation condition null in &
@@ -1545,6 +1550,79 @@ subroutine FlowConditionRead(condition,input,option)
       ! these are not used with richards
       if (associated(temperature)) call FlowSubConditionDestroy(temperature)
       if (associated(enthalpy)) call FlowSubConditionDestroy(enthalpy)
+
+    case(ZFLOW_MODE)
+
+      condition%num_sub_conditions = 0
+      ! deallocate, if allocated, as we will not use itype
+      call DeallocateArray(condition%itype)
+
+      ! IMPORTANT - at this point zflow_liq_flow_eq, zflow_heat_tran_eq and
+      ! zflow_sol_tran_eq are solely flags set to 0 or 1. They cannot
+      ! index any arrays
+
+      if (zflow_liq_flow_eq > 0) then
+        condition%num_sub_conditions = condition%num_sub_conditions + 1
+        if (.not.associated(pressure) .and. .not.associated(rate)) then
+          option%io_buffer = 'pressure and rate null in &
+                             &condition: ' // trim(condition%name)
+          call PrintErrMsg(option)
+        endif
+      endif
+
+      if (zflow_heat_tran_eq > 0) then
+        condition%num_sub_conditions = condition%num_sub_conditions + 1
+        if (.not.associated(temperature) .and. .not.associated(enthalpy)) then
+          option%io_buffer = 'temperature and enthalpy null in &
+                             &condition: ' // trim(condition%name)
+          call PrintErrMsg(option)
+        endif
+      endif
+
+      if (zflow_sol_tran_eq > 0) then
+        condition%num_sub_conditions = condition%num_sub_conditions + 1
+        if (.not.associated(concentration)) then
+          option%io_buffer = 'concentration null in condition: ' // &
+            trim(condition%name)
+          call PrintErrMsg(option)
+        endif
+      endif
+
+      allocate(condition%sub_condition_ptr(condition%num_sub_conditions))
+      do idof = 1, condition%num_sub_conditions
+        nullify(condition%sub_condition_ptr(idof)%ptr)
+      enddo
+
+      idof = 0
+      if (zflow_liq_flow_eq > 0) then
+        idof = idof + 1
+        if (associated(pressure)) then
+          condition%pressure => pressure
+          condition%sub_condition_ptr(idof)%ptr => pressure
+        elseif (associated(rate)) then
+          condition%rate => rate
+          condition%sub_condition_ptr(idof)%ptr => rate
+        endif
+      endif
+
+      if (zflow_heat_tran_eq > 0) then
+        idof = idof + 1
+        if (associated(temperature)) then
+          condition%temperature => temperature
+          condition%sub_condition_ptr(idof)%ptr => temperature
+        elseif (associated(enthalpy)) then
+          condition%enthalpy => enthalpy
+          condition%sub_condition_ptr(idof)%ptr => enthalpy
+        endif
+      endif
+
+      if (zflow_sol_tran_eq > 0) then
+        idof = idof + 1
+        if (associated(concentration)) then
+          condition%concentration => concentration
+          condition%sub_condition_ptr(idof)%ptr => concentration
+        endif
+      endif
 
     case(PNF_MODE)
       if (.not.associated(pressure) .and. .not.associated(rate)) then
@@ -2326,6 +2404,8 @@ subroutine FlowConditionHydrateRead(condition,input,option)
               sub_condition_ptr%itype = HYDROSTATIC_CONDUCTANCE_BC
             case('SEEPAGE')
               sub_condition_ptr%itype = HYDROSTATIC_SEEPAGE_BC
+            case('DIRICHLET_SEEPAGE')
+              sub_condition_ptr%itype = DIRICHLET_SEEPAGE_BC
             case('MASS_RATE')
               sub_condition_ptr%itype = MASS_RATE_SS
               rate_string = 'kg/sec'
@@ -3128,7 +3208,7 @@ subroutine GeopConditionRead(condition,input,option)
             case('DIRICHLET')
               condition%itype = DIRICHLET_BC
             case('ZERO_GRADIENT')
-              condition%itype = ZERO_GRADIENT_BC  
+              condition%itype = ZERO_GRADIENT_BC
             case default ! only Dirichlet/Zero Flux implemented for now!
               call InputKeywordUnrecognized(input,word, &
                                             'geophysics condition type', &
@@ -3850,6 +3930,75 @@ function GeopConditionGetPtrFromList(condition_name,condition_list)
   enddo
 
 end function GeopConditionGetPtrFromList
+
+! ************************************************************************** !
+
+function FlowConditionIsHydrostatic(condition)
+  !
+  ! Returns PETSC_TRUE if a flow condition is hydrostatic for pressure
+  !
+  ! Author: Glenn Hammond
+  ! Date: 03/29/22
+  !
+  implicit none
+
+  type(flow_condition_type) :: condition
+
+  PetscBool :: FlowConditionIsHydrostatic
+
+  FlowConditionIsHydrostatic = PETSC_FALSE
+
+  if (associated(condition%pressure)) then
+    if (condition%pressure%itype == HYDROSTATIC_BC .or. &
+        condition%pressure%itype == HYDROSTATIC_CONDUCTANCE_BC .or. &
+        condition%pressure%itype == HYDROSTATIC_SEEPAGE_BC) then
+      FlowConditionIsHydrostatic = PETSC_TRUE
+    endif
+  endif
+
+  if (associated(condition%general)) then
+    if (associated(condition%general%liquid_pressure)) then
+      if (condition%general%liquid_pressure%itype == HYDROSTATIC_BC .or. &
+          condition%general%liquid_pressure%itype == &
+            HYDROSTATIC_CONDUCTANCE_BC .or. &
+          condition%general%liquid_pressure%itype == &
+            HYDROSTATIC_SEEPAGE_BC) then
+        FlowConditionIsHydrostatic = PETSC_TRUE
+      endif
+    endif
+    if (associated(condition%general%gas_pressure)) then
+      if (condition%general%gas_pressure%itype == HYDROSTATIC_BC .or. &
+          condition%general%gas_pressure%itype == &
+            HYDROSTATIC_CONDUCTANCE_BC .or. &
+          condition%general%gas_pressure%itype == &
+            HYDROSTATIC_SEEPAGE_BC) then
+        FlowConditionIsHydrostatic = PETSC_TRUE
+      endif
+    endif
+  endif
+
+  if (associated(condition%hydrate)) then
+    if (associated(condition%hydrate%liquid_pressure)) then
+      if (condition%hydrate%liquid_pressure%itype == HYDROSTATIC_BC .or. &
+          condition%hydrate%liquid_pressure%itype == &
+            HYDROSTATIC_CONDUCTANCE_BC .or. &
+          condition%hydrate%liquid_pressure%itype == &
+            HYDROSTATIC_SEEPAGE_BC) then
+        FlowConditionIsHydrostatic = PETSC_TRUE
+      endif
+    endif
+    if (associated(condition%hydrate%gas_pressure)) then
+      if (condition%hydrate%gas_pressure%itype == HYDROSTATIC_BC .or. &
+          condition%hydrate%gas_pressure%itype == &
+            HYDROSTATIC_CONDUCTANCE_BC .or. &
+          condition%hydrate%gas_pressure%itype == &
+            HYDROSTATIC_SEEPAGE_BC) then
+        FlowConditionIsHydrostatic = PETSC_TRUE
+      endif
+    endif
+  endif
+
+end function FlowConditionIsHydrostatic
 
 ! ************************************************************************** !
 

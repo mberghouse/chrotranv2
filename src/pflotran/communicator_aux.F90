@@ -19,6 +19,8 @@ module Communicator_Aux_module
     PetscMPIInt :: mycommsize       ! size of PETSC_COMM_WORLD
     PetscMPIInt :: mygroup          ! id of group in PETSC_COMM_WORLD
     PetscMPIInt :: mygroup_id
+
+    PetscLogDouble :: start_time
   end type comm_type
 
   public :: CommCreate, &
@@ -26,19 +28,19 @@ module Communicator_Aux_module
             CommPopulate, &
             CommCreateProcessorGroups, &
             CommDestroy
-  
+
 contains
 
 ! ************************************************************************** !
 
 function CommCreate()
   !
-  ! Creates a comm object that holds global and local communicators, sizes 
+  ! Creates a comm object that holds global and local communicators, sizes
   ! and ranks
   !
   ! Author: Glenn Hammond
   ! Date: 05/12/21
-  
+
   implicit none
 
   type(comm_type), pointer :: comm
@@ -54,8 +56,9 @@ function CommCreate()
   comm%myrank = 0
   comm%mycommsize = 0
   comm%mygroup = 0
-
   comm%mygroup_id = 0
+
+  comm%start_time = 0.d0
 
   CommCreate => comm
 
@@ -74,9 +77,10 @@ subroutine CommInitPetsc(comm,communicator)
 
   if (.not.associated(comm)) comm => CommCreate()
   if (present(communicator)) PETSC_COMM_WORLD = communicator
-  call PetscInitialize(PETSC_NULL_CHARACTER, ierr);CHKERRQ(ierr)
+  call PetscInitialize(PETSC_NULL_CHARACTER,ierr);CHKERRQ(ierr)
 
   comm%global_comm = PETSC_COMM_WORLD
+  call PetscTime(comm%start_time,ierr);CHKERRQ(ierr)
   call CommPopulate(comm)
 
 end subroutine CommInitPetsc
@@ -91,9 +95,10 @@ subroutine CommPopulate(comm)
 
   PetscErrorCode :: ierr
 
-  call MPI_Comm_rank(comm%global_comm,comm%global_rank, ierr)
-  call MPI_Comm_size(comm%global_comm,comm%global_commsize,ierr)
-  call MPI_Comm_group(comm%global_comm,comm%global_group,ierr)
+  call MPI_Comm_rank(comm%global_comm,comm%global_rank,ierr);CHKERRQ(ierr)
+  call MPI_Comm_size(comm%global_comm,comm%global_commsize, &
+                     ierr);CHKERRQ(ierr)
+  call MPI_Comm_group(comm%global_comm,comm%global_group,ierr);CHKERRQ(ierr)
   comm%mycomm = comm%global_comm
   comm%myrank = comm%global_rank
   comm%mycommsize = comm%global_commsize
@@ -104,13 +109,13 @@ end subroutine CommPopulate
 ! ************************************************************************** !
 
 subroutine CommCreateProcessorGroups(comm,num_groups)
-  ! 
+  !
   ! Splits MPI_COMM_WORLD into N separate
   ! processor groups
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 08/11/09
-  ! 
+  !
   implicit none
 
   type(comm_type) :: comm
@@ -135,11 +140,12 @@ subroutine CommCreateProcessorGroups(comm,num_groups)
   mycolor_mpi = igroup
   comm%mygroup_id = igroup
   mykey_mpi = comm%global_rank - offset
-  call MPI_Comm_split(comm%global_comm,mycolor_mpi,mykey_mpi,comm%mycomm,ierr)
-  call MPI_Comm_group(comm%mycomm,comm%mygroup,ierr)
+  call MPI_Comm_split(comm%global_comm,mycolor_mpi,mykey_mpi,comm%mycomm, &
+                      ierr);CHKERRQ(ierr)
+  call MPI_Comm_group(comm%mycomm,comm%mygroup,ierr);CHKERRQ(ierr)
 
-  call MPI_Comm_rank(comm%mycomm,comm%myrank, ierr)
-  call MPI_Comm_size(comm%mycomm,comm%mycommsize,ierr)
+  call MPI_Comm_rank(comm%mycomm,comm%myrank,ierr);CHKERRQ(ierr)
+  call MPI_Comm_size(comm%mycomm,comm%mycommsize,ierr);CHKERRQ(ierr)
 
 end subroutine CommCreateProcessorGroups
 

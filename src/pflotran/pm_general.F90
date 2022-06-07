@@ -4,7 +4,7 @@ module PM_General_class
   use petscsnes
   use PM_Base_class
   use PM_Subsurface_Flow_class
-  
+
   use PFLOTRAN_Constants_module
 
   implicit none
@@ -67,18 +67,20 @@ contains
 ! ************************************************************************** !
 
 function PMGeneralCreate()
-  ! 
+  !
   ! Creates General process models shell
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 03/14/13
-  ! 
-
+  !
+  use Variables_module, only : LIQUID_PRESSURE, GAS_PRESSURE, AIR_PRESSURE, &
+                               LIQUID_MOLE_FRACTION, TEMPERATURE, &
+                               GAS_SATURATION
   use Upwind_Direction_module
   use Option_module
 
   implicit none
-  
+
   class(pm_general_type), pointer :: PMGeneralCreate
 
   class(pm_general_type), pointer :: this
@@ -127,7 +129,7 @@ subroutine PMGeneralSetFlowMode(pm,option)
   PetscReal, parameter :: ref_pres = 101325.d0 !Pa
   PetscReal, parameter :: ref_sat = 0.5
   PetscReal, parameter :: ref_xmol = 1.d-6
-                                             
+
   !MAN optimized:
   PetscReal, parameter :: pres_abs_inf_tol = 1.d0 ! Reference tolerance [Pa]
   PetscReal, parameter :: temp_abs_inf_tol = 1.d-5
@@ -282,9 +284,9 @@ end subroutine PMGeneralSetFlowMode
 
 ! ************************************************************************** !
 subroutine PMGeneralReadSimOptionsBlock(this,input)
-  ! 
+  !
   ! Read simulation options for GENERAL mode
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 03/04/15
   !
@@ -293,11 +295,11 @@ subroutine PMGeneralReadSimOptionsBlock(this,input)
   use Input_Aux_module
   use String_module
   use Option_module
-  
+
   implicit none
-  
+
   type(input_type), pointer :: input
-  
+
   character(len=MAXWORDLENGTH) :: keyword, word
   class(pm_general_type) :: this
   type(option_type), pointer :: option
@@ -316,24 +318,24 @@ subroutine PMGeneralReadSimOptionsBlock(this,input)
   sid = option%solute_id
 
   error_string = 'General Options'
-  
+
   input%ierr = 0
   call InputPushBlock(input,option)
   do
-  
+
     call InputReadPflotranString(input,option)
 
-    if (InputCheckExit(input,option)) exit  
+    if (InputCheckExit(input,option)) exit
 
     call InputReadCard(input,option,keyword)
     call InputErrorMsg(input,option,'keyword',error_string)
     call StringToUpper(keyword)
-    
+
     found = PETSC_FALSE
     call PMSubsurfFlowReadSimOptionsSC(this,input,keyword,found, &
-                                       error_string,option)    
+                                       error_string,option)
     if (found) cycle
-    
+
     select case(trim(keyword))
       case('DIFFUSE_XMASS')
         general_diffuse_xmol = PETSC_FALSE
@@ -359,6 +361,10 @@ subroutine PMGeneralReadSimOptionsBlock(this,input)
         ! this%rel_update_inf_tol(2,2)=this%rel_update_inf_tol(2,1)
       case('HARMONIC_GAS_DIFFUSIVE_DENSITY')
         general_harmonic_diff_density = PETSC_TRUE
+      case('NEWTONTRDC_HOLD_INNER_ITERATIONS',&
+           'HOLD_INNER_ITERATIONS','NEWTONTRDC_HOLD_INNER')
+        !heeho: only used when using newtontrd-c
+        general_newtontrdc_hold_inner = PETSC_TRUE
       case('IMMISCIBLE')
         general_immiscible = PETSC_TRUE
       case('ISOTHERMAL')
@@ -370,7 +376,7 @@ subroutine PMGeneralReadSimOptionsBlock(this,input)
         call InputErrorMsg(input,option,keyword,error_string)
          non_darcy_B = tempreal
       case('LIQUID_COMPONENT_FORMULA_WEIGHT')
-         !heeho: assuming liquid component is index 1
+        !heeho: assuming liquid component is index 1
         call InputReadDouble(input,option,fmw_comp(1))
         call InputErrorMsg(input,option,keyword,error_string)
       case('NO_AIR')
@@ -392,7 +398,7 @@ subroutine PMGeneralReadSimOptionsBlock(this,input)
         call InputReadCard(input,option,word)
         call InputErrorMsg(input,option,keyword,error_string)
         call GeneralAuxSetEnergyDOF(word,option)
-      case('WINDOW_EPSILON') 
+      case('WINDOW_EPSILON')
         call InputReadDouble(input,option,window_epsilon)
         call InputErrorMsg(input,option,keyword,error_string)
       case('NUMBER_OF_EQUATIONS')
@@ -420,11 +426,15 @@ subroutine PMGeneralReadSimOptionsBlock(this,input)
       case('SOLUTE')
         call InputReadWord(input,option,word,PETSC_TRUE)
         call InputErrorMsg(input,option,'solute',error_string)
+      case('CALCULATE_SURFACE_TENSION')
+        general_compute_surface_tension = PETSC_TRUE
+      case('VAPOR_PRESSURE_KELVIN')
+        general_kelvin_equation = PETSC_TRUE
       case default
         call InputKeywordUnrecognized(input,keyword,'GENERAL Mode',option)
     end select
-    
-  enddo  
+
+  enddo
   call InputPopBlock(input,option)
 
   if (general_isothermal .and. &
@@ -440,10 +450,10 @@ end subroutine PMGeneralReadSimOptionsBlock
 
 subroutine PMGeneralReadNewtonSelectCase(this,input,keyword,found, &
                                          error_string,option)
-  ! 
+  !
   ! Reads input file parameters associated with the GENERAL process model
   ! Newton solver convergence
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 03/23/20
 
@@ -452,9 +462,9 @@ subroutine PMGeneralReadNewtonSelectCase(this,input,keyword,found, &
   use Utility_module
   use Option_module
   use General_Aux_module
- 
+
   implicit none
-  
+
   class(pm_general_type) :: this
   type(input_type), pointer :: input
   character(len=MAXWORDLENGTH) :: keyword
@@ -473,19 +483,19 @@ subroutine PMGeneralReadNewtonSelectCase(this,input,keyword,found, &
   sid = option%solute_id
 
   error_string = 'GENERAL Newton Solver'
-  
+
   found = PETSC_FALSE
   call PMSubsurfaceFlowReadNewtonSelectCase(this,input,keyword,found, &
                                             error_string,option)
   if (found) return
-    
+
   found = PETSC_TRUE
   select case(trim(keyword))
     case('MAX_NEWTON_ITERATIONS')
       call InputKeywordDeprecated('MAX_NEWTON_ITERATIONS', &
                                   'MAXIMUM_NUMBER_OF_ITERATIONS.',option)
     ! Tolerances
-    
+
     ! All Residual
     case('RESIDUAL_INF_TOL')
       call InputReadDouble(input,option,tempreal)
@@ -619,7 +629,7 @@ subroutine PMGeneralReadNewtonSelectCase(this,input,keyword,found, &
       found = PETSC_FALSE
 
   end select
-  
+
 end subroutine PMGeneralReadNewtonSelectCase
 
 ! ************************************************************************** !
@@ -635,10 +645,10 @@ subroutine PMGeneralInitializeSolver(this)
 
   class(pm_general_type) :: this
 
-  call PMBaseInitializeSolver(this) 
+  call PMBaseInitializeSolver(this)
 
   ! helps accommodate rise in residual due to change in state
-  this%solver%newton_dtol = 1.d9  
+  this%solver%newton_dtol = 1.d9
   this%solver%newton_max_iterations = 8
 
 end subroutine PMGeneralInitializeSolver
@@ -646,18 +656,18 @@ end subroutine PMGeneralInitializeSolver
 ! ************************************************************************** !
 
 recursive subroutine PMGeneralInitializeRun(this)
-  ! 
+  !
   ! Initializes the time stepping
-  ! 
+  !
   ! Author: Glenn Hammond
-  ! Date: 04/21/14 
+  ! Date: 04/21/14
 
   use Realization_Base_class
-  
+
   implicit none
-  
+
   class(pm_general_type) :: this
-  
+
   PetscInt :: i
   PetscErrorCode :: ierr
 
@@ -681,39 +691,39 @@ end subroutine PMGeneralInitializeRun
 ! ************************************************************************** !
 
 subroutine PMGeneralInitializeTimestep(this)
-  ! 
+  !
   ! Should not need this as it is called in PreSolve.
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 03/14/13
-  ! 
+  !
 
   use General_module, only : GeneralInitializeTimestep
   use Global_module
   use Variables_module, only : TORTUOSITY
   use Material_module, only : MaterialAuxVarCommunicate
   use Option_module
-  
+
   implicit none
-  
+
   class(pm_general_type) :: this
 
-  call PMSubsurfaceFlowInitializeTimestepA(this)                                 
-!geh:remove   everywhere                                
+  call PMSubsurfaceFlowInitializeTimestepA(this)
+!geh:remove   everywhere
   call MaterialAuxVarCommunicate(this%comm1, &
                                  this%realization%patch%aux%Material, &
                                  this%realization%field%work_loc,TORTUOSITY, &
                                  ZERO_INTEGER)
-                                 
+
   call GeneralInitializeTimestep(this%realization)
-  call PMSubsurfaceFlowInitializeTimestepB(this)                                 
-  
+  call PMSubsurfaceFlowInitializeTimestepB(this)
+
 end subroutine PMGeneralInitializeTimestep
 
 ! ************************************************************************** !
 
 subroutine PMGeneralPreSolve(this)
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 03/14/13
 
@@ -728,7 +738,7 @@ end subroutine PMGeneralPreSolve
 ! ************************************************************************** !
 
 subroutine PMGeneralPostSolve(this)
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 03/14/13
 
@@ -743,10 +753,10 @@ end subroutine PMGeneralPostSolve
 subroutine PMGeneralUpdateTimestep(this,dt,dt_min,dt_max,iacceleration, &
                                    num_newton_iterations,tfac, &
                                    time_step_max_growth_factor)
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 03/14/13
-  ! 
+  !
 
   use Realization_Base_class, only : RealizationGetVariable
   use Realization_Subsurface_class, only : RealizationLimitDTByCFL
@@ -758,7 +768,7 @@ subroutine PMGeneralUpdateTimestep(this,dt,dt_min,dt_max,iacceleration, &
   use String_module
 
   implicit none
-  
+
   class(pm_general_type) :: this
   PetscReal :: dt
   PetscReal :: dt_min,dt_max
@@ -766,7 +776,7 @@ subroutine PMGeneralUpdateTimestep(this,dt,dt_min,dt_max,iacceleration, &
   PetscInt :: num_newton_iterations
   PetscReal :: tfac(:)
   PetscReal :: time_step_max_growth_factor
-  
+
   PetscReal :: fac
   PetscInt :: ifac
   PetscReal :: up, ut, ux, us, umin
@@ -777,11 +787,11 @@ subroutine PMGeneralUpdateTimestep(this,dt,dt_min,dt_max,iacceleration, &
   PetscReal :: governor_value
   character(MAXSTRINGLENGTH) :: string
   type(field_type), pointer :: field
-  
-#ifdef PM_GENERAL_DEBUG  
+
+#ifdef PM_GENERAL_DEBUG
   call PrintMsg(this%option,'PMGeneral%UpdateTimestep()')
 #endif
-  
+
   fac = 0.5d0
   if (num_newton_iterations >= iacceleration) then
     fac = 0.33d0
@@ -859,21 +869,21 @@ end subroutine PMGeneralUpdateTimestep
 ! ************************************************************************** !
 
 subroutine PMGeneralResidual(this,snes,xx,r,ierr)
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 03/14/13
-  ! 
+  !
 
   use General_module, only : GeneralResidual
 
   implicit none
-  
+
   class(pm_general_type) :: this
   SNES :: snes
   Vec :: xx
   Vec :: r
   PetscErrorCode :: ierr
-  
+
   call PMSubsurfaceFlowUpdatePropertiesNI(this)
   call GeneralResidual(snes,xx,r,this%realization,ierr)
 
@@ -882,21 +892,21 @@ end subroutine PMGeneralResidual
 ! ************************************************************************** !
 
 subroutine PMGeneralJacobian(this,snes,xx,A,B,ierr)
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 03/14/13
-  ! 
+  !
 
   use General_module, only : GeneralJacobian
 
   implicit none
-  
+
   class(pm_general_type) :: this
   SNES :: snes
   Vec :: xx
   Mat :: A, B
   PetscErrorCode :: ierr
-  
+
   call GeneralJacobian(snes,xx,A,B,this%realization,ierr)
 
 end subroutine PMGeneralJacobian
@@ -904,11 +914,11 @@ end subroutine PMGeneralJacobian
 ! ************************************************************************** !
 
 subroutine PMGeneralCheckUpdatePre(this,snes,X,dX,changed,ierr)
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 11/21/18
-  ! 
-  
+  !
+
   use Realization_Subsurface_class
   use Grid_module
   use Field_module
@@ -919,17 +929,17 @@ subroutine PMGeneralCheckUpdatePre(this,snes,X,dX,changed,ierr)
   use Global_Aux_module
 
   implicit none
-  
+
   class(pm_general_type) :: this
   SNES :: snes
   Vec :: X
   Vec :: dX
   PetscBool :: changed
   PetscErrorCode :: ierr
-  
-  type(patch_type), pointer :: patch  
-  type(grid_type), pointer :: grid 
-  type(option_type), pointer :: option 
+
+  type(patch_type), pointer :: patch
+  type(grid_type), pointer :: grid
+  type(option_type), pointer :: option
   type(general_auxvar_type), pointer :: gen_auxvars(:,:)
   type(global_auxvar_type), pointer :: global_auxvars(:)
   PetscInt :: local_id, ghosted_id
@@ -962,7 +972,7 @@ subroutine PMGeneralCheckUpdatePre(this,snes,X,dX,changed,ierr)
   PetscReal, parameter :: initial_scale = 1.d0
   PetscInt :: newton_iteration
 
-  call VecGetArrayF90(dX,dX_p,ierr); CHKERRQ(ierr)
+  call VecGetArrayF90(dX,dX_p,ierr);CHKERRQ(ierr)
   call VecGetArrayReadF90(X,X_p,ierr);CHKERRQ(ierr)
 
   grid => this%realization%patch%grid
@@ -970,8 +980,8 @@ subroutine PMGeneralCheckUpdatePre(this,snes,X,dX,changed,ierr)
   option => this%realization%option
   gen_auxvars => this%realization%patch%aux%General%auxvars
   global_auxvars => this%realization%patch%aux%Global%auxvars
-  
-  changed = PETSC_TRUE 
+
+  changed = PETSC_TRUE
 
   ! MAN: OLD
   field => this%realization%field
@@ -979,7 +989,7 @@ subroutine PMGeneralCheckUpdatePre(this,snes,X,dX,changed,ierr)
   spid = option%saturation_pressure_id
   apid = option%air_pressure_id
 
-  call SNESGetIterationNumber(snes,newton_iteration,ierr)
+  call SNESGetIterationNumber(snes,newton_iteration,ierr);CHKERRQ(ierr)
 
   ! MAN: END OLD
   if (this%check_post_convergence) then
@@ -1043,10 +1053,10 @@ subroutine PMGeneralCheckUpdatePre(this,snes,X,dX,changed,ierr)
       dX_p = dX_p*this%damping_factor
       changed = PETSC_TRUE
     endif
-  
+
 ! MAN OLD
   else
-    
+
     do local_id = 1, grid%nlmax
       ghosted_id = grid%nL2G(local_id)
       if (patch%imat(ghosted_id) <= 0) cycle
@@ -1082,7 +1092,7 @@ subroutine PMGeneralCheckUpdatePre(this,snes,X,dX,changed,ierr)
           endif
       end select
     enddo
-    
+
     scale = initial_scale
     if (general_max_it_before_damping > 0 .and. &
         newton_iteration > general_max_it_before_damping) then
@@ -1165,16 +1175,15 @@ subroutine PMGeneralCheckUpdatePre(this,snes,X,dX,changed,ierr)
     enddo
 
     temp_scale = scale
-    call MPI_Allreduce(temp_scale,scale,ONE_INTEGER_MPI, &
-                       MPI_DOUBLE_PRECISION, &
-                       MPI_MIN,option%mycomm,ierr)
+    call MPI_Allreduce(temp_scale,scale,ONE_INTEGER_MPI,MPI_DOUBLE_PRECISION, &
+                       MPI_MIN,option%mycomm,ierr);CHKERRQ(ierr)
 
     if (scale < 0.9999d0) then
       dX_p = scale*dX_p
     endif
   endif
 
-  call VecRestoreArrayF90(dX,dX_p,ierr); CHKERRQ(ierr)
+  call VecRestoreArrayF90(dX,dX_p,ierr);CHKERRQ(ierr)
   call VecRestoreArrayReadF90(X,X_p,ierr);CHKERRQ(ierr)
 
 end subroutine PMGeneralCheckUpdatePre
@@ -1183,10 +1192,10 @@ end subroutine PMGeneralCheckUpdatePre
 
 subroutine PMGeneralCheckUpdatePost(this,snes,X0,dX,X1,dX_changed, &
                                     X1_changed,ierr)
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 11/20/18
-  ! 
+  !
   use General_Aux_module
   use Global_Aux_module
   use Grid_module
@@ -1196,9 +1205,9 @@ subroutine PMGeneralCheckUpdatePost(this,snes,X0,dX,X1,dX_changed, &
   use Field_module
   use Patch_module
   use Option_module
-  
+
   implicit none
-  
+
   class(pm_general_type) :: this
   SNES :: snes
   Vec :: X0
@@ -1214,7 +1223,7 @@ subroutine PMGeneralCheckUpdatePost(this,snes,X0,dX,X1,dX_changed, &
   type(option_type), pointer :: option
   type(field_type), pointer :: field
   type(patch_type), pointer :: patch
-  type(global_auxvar_type), pointer :: global_auxvars(:)  
+  type(global_auxvar_type), pointer :: global_auxvars(:)
   PetscInt :: local_id, ghosted_id, natural_id
   PetscInt :: offset, ival, idof
   PetscReal :: dX_abs, dX_X0
@@ -1227,7 +1236,7 @@ subroutine PMGeneralCheckUpdatePost(this,snes,X0,dX,X1,dX_changed, &
   PetscInt :: istate
   PetscBool :: converged_absolute
   PetscBool :: converged_relative
-  
+
   grid => this%realization%patch%grid
   option => this%realization%option
   field => this%realization%field
@@ -1252,18 +1261,18 @@ subroutine PMGeneralCheckUpdatePost(this,snes,X0,dX,X1,dX_changed, &
   converged_rel_update_cell = ZERO_INTEGER
   converged_abs_update_real = 0.d0
   converged_rel_update_real = 0.d0
-  
+
   do local_id = 1, grid%nlmax
     offset = (local_id-1)*option%nflowdof
     ghosted_id = grid%nL2G(local_id)
     natural_id = grid%nG2A(ghosted_id)
     if (patch%imat(ghosted_id) <= 0) cycle
     istate = global_auxvars(ghosted_id)%istate
-    
+
     do idof = 1, option%nflowdof
-      
+
       ival = offset+idof
-      
+
       ! infinity norms on update
       converged_absolute = PETSC_TRUE
       converged_relative = PETSC_TRUE
@@ -1273,7 +1282,7 @@ subroutine PMGeneralCheckUpdatePost(this,snes,X0,dX,X1,dX_changed, &
       else
         dX_X0 = dabs(dX_abs/1.d-40)
       endif
-      
+
       if (dX_abs > this%abs_update_inf_tol(idof,istate)) then
         converged_absolute = PETSC_FALSE
       endif
@@ -1344,7 +1353,7 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
   type(option_type), pointer :: option
   type(field_type), pointer :: field
   type(patch_type), pointer :: patch
-  type(global_auxvar_type), pointer :: global_auxvars(:)  
+  type(global_auxvar_type), pointer :: global_auxvars(:)
   PetscReal, pointer :: r_p(:)
   PetscReal, pointer :: accum2_p(:)
   PetscInt :: local_id, ghosted_id, natural_id
@@ -1363,11 +1372,23 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
   PetscMPIInt :: mpi_int
   PetscBool, pointer :: flags(:)
   character(len=MAXSTRINGLENGTH) :: string
+
   character(len=12), pointer :: state_string(:)
   character(len=17), pointer :: dof_string(:,:)
+
+  PetscBool :: rho_flag
+
+  ! character(len=12), parameter :: state_string(3) = &
+  !   ['Liquid State','Gas State   ','2Phase State']
+  ! character(len=17), parameter :: dof_string(3,3) = &
+  !   reshape(['Liquid Pressure  ','Air Mole Fraction','Temperature      ', &
+  !            'Gas Pressure     ','Air Pressure     ','Temperature      ', &
+  !            'Gas Pressure     ','Gas Saturation   ','Temperature      '], &
+  !            shape(dof_string))
+
   character(len=15), parameter :: tol_string(MAX_INDEX) = &
     ['Absolute Update','Relative Update','Residual       ','Scaled Residual']
-  
+
   patch => this%realization%patch
   option => this%realization%option
   field => this%realization%field
@@ -1384,6 +1405,7 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
   allocate(converged_scaled_residual_flag(option%nflowdof,general_max_states))
   allocate(converged_scaled_residual_real(option%nflowdof,general_max_states))
   allocate(converged_scaled_residual_cell(option%nflowdof,general_max_states))
+  call SNESNewtonTRDCGetRhoFlag(snes,rho_flag,ierr);CHKERRQ(ierr);
 
   if (option%nflowdof == 3) then
     state_string = &
@@ -1413,6 +1435,12 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
              'Precipitate Sat. ',&
              'Gas Pressure     ','Gas Saturation   ','Temperature      ',&
              'Precipitate Sat. '],shape(dof_string))
+
+  if (this%option%flow%using_newtontrdc) then
+    if (general_newtontrdc_prev_iter_num == it) then
+      general_sub_newton_iter_num = general_sub_newton_iter_num + 1
+    endif
+    general_newtontrdc_prev_iter_num = it
   endif
 
   if (this%check_post_convergence) then
@@ -1438,7 +1466,7 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
         R = dabs(r_p(ival))
         A = dabs(accum2_p(ival))
 !         R_A = R/A
-        
+
         !TOUGH3 way:
         if (A > 1.d0) then
           R_A = R/A
@@ -1449,7 +1477,7 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
         if (R > this%residual_abs_inf_tol(idof)) then
           converged_absolute = PETSC_FALSE
         endif
-        
+
         ! find max value regardless of convergence
         if (converged_abs_residual_real(idof,istate) < R) then
           converged_abs_residual_real(idof,istate) = R
@@ -1473,8 +1501,9 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
       enddo
     enddo
     call VecRestoreArrayReadF90(field%flow_r,r_p,ierr);CHKERRQ(ierr)
-    call VecRestoreArrayReadF90(field%flow_accum2,accum2_p,ierr);CHKERRQ(ierr)
-  
+    call VecRestoreArrayReadF90(field%flow_accum2,accum2_p, &
+                                ierr);CHKERRQ(ierr)
+
     this%converged_flag(:,:,RESIDUAL_INDEX) = converged_abs_residual_flag(:,:)
     this%converged_real(:,:,RESIDUAL_INDEX) = converged_abs_residual_real(:,:)
     this%converged_cell(:,:,RESIDUAL_INDEX) = converged_abs_residual_cell(:,:)
@@ -1484,7 +1513,7 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
                                        converged_scaled_residual_real(:,:)
     this%converged_cell(:,:,SCALED_RESIDUAL_INDEX) = &
                                        converged_scaled_residual_cell(:,:)
-    ! do not perform an all reduce on cell id as this info is not printed 
+    ! do not perform an all reduce on cell id as this info is not printed
     ! in parallel
 
     ! geh: since we need to pack other flags into this global reduction,
@@ -1505,10 +1534,11 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
 
     mpi_int = option%nflowdof*general_max_index*MAX_INDEX
     call MPI_Allreduce(MPI_IN_PLACE,this%converged_real,mpi_int, &
-                       MPI_DOUBLE_PRECISION,MPI_MAX,option%mycomm,ierr)
-                                          
+                       MPI_DOUBLE_PRECISION,MPI_MAX,option%mycomm, &
+                       ierr);CHKERRQ(ierr)
+
     option%convergence = CONVERGENCE_CONVERGED
-    
+
     do itol = 1, MAX_INDEX
       do istate = 1, general_max_states
         do idof = 1, option%nflowdof
@@ -1517,7 +1547,7 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
             if (this%logging_verbosity > 0) then
               if (trim(tol_string(itol)) == 'Residual' .or. &
                   trim(tol_string(itol)) == 'Scaled Residual') then
-                if (idof == 1) then 
+                if (idof == 1) then
                   string = '   ' // trim(tol_string(itol)) // ', ' // &
                    trim(state_string(istate)) // ', Water Mass'
                 elseif (idof == 2) then
@@ -1537,7 +1567,7 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
               if (option%comm%mycommsize == 1) then
                 string = trim(string) // ' (' // &
                   trim(StringFormatInt(this%converged_cell(idof,istate,itol))) &
-                  // ')' 
+                  // ')'
               endif
               string = trim(string) // ' : ' // &
                 StringFormatDouble(this%converged_real(idof,istate,itol))
@@ -1547,6 +1577,42 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
         enddo
       enddo
     enddo
+    
+    if (option%flow%using_newtontrdc .and. &
+        general_state_changed .and. &
+        .not.rho_flag) then
+      if (general_newtontrdc_hold_inner) then
+        ! if we hold inner iterations, we must not change state in
+        ! the inner iteration. If we reach convergence in an inner 
+        ! newtontrdc iteration, then we must force an outer iteration 
+        ! to allow state change in case the solutions are 
+        ! out-of-bounds of the states -hdp
+        general_force_iteration = PETSC_TRUE
+        general_state_changed = PETSC_FALSE
+      else
+        ! if we have state changes, we exit out of inner iteration
+        ! and go to the next newton iteration. the tr inner iteration
+        !  should only be used when there is no state changes
+        ! if rho is satisfied in inner iteration, the algorithm already
+        ! exited the inner iteration. -heeho
+        general_force_iteration = PETSC_TRUE
+        general_state_changed = PETSC_FALSE
+      endif
+    endif
+
+    call MPI_Allreduce(MPI_IN_PLACE,general_force_iteration,ONE_INTEGER, &
+                       MPI_LOGICAL,MPI_LOR,option%mycomm,ierr)
+    if (general_force_iteration) then
+      if (.not.general_newtontrdc_hold_inner) then
+        option%convergence = CONVERGENCE_BREAKOUT_INNER_ITER
+        general_force_iteration = PETSC_FALSE
+      else if (general_newtontrdc_hold_inner .and. &
+               option%convergence == CONVERGENCE_CONVERGED) then
+        option%convergence = CONVERGENCE_BREAKOUT_INNER_ITER
+        general_force_iteration = PETSC_FALSE
+      endif
+    endif 
+
     if (this%logging_verbosity > 0 .and. it > 0 .and. &
         option%convergence == CONVERGENCE_CONVERGED) then
       string = '   Converged'
@@ -1563,10 +1629,10 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
         this%converged_real(:,:,REL_UPDATE_INDEX)
       call OptionPrint(string,option)
     endif
-  
+
     if (it >= this%solver%newton_max_iterations) then
       option%convergence = CONVERGENCE_CUT_TIMESTEP
-    
+
       if (this%logging_verbosity > 0) then
         string = '    Exceeded General Mode Max Newton Iterations'
         call OptionPrint(string,option)
@@ -1578,32 +1644,11 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
       call OptionPrint(string,option)
       option%convergence = CONVERGENCE_CUT_TIMESTEP
     endif
-
-    if (general_using_newtontr .and. general_state_changed) then
-        ! if we reach convergence in an inner newton iteration of TR
-        ! then we must force an outer iteration to allow state change
-        ! in case the solutions are out-of-bounds of the states -hdp
-        general_force_iteration = PETSC_TRUE
-    endif
-
-    if (general_using_newtontr .and. &
-        general_sub_newton_iter_num > 1 .and. &
-        general_force_iteration .and. &
-        option%convergence == CONVERGENCE_CONVERGED) then
-        ! This is a complicated case but necessary.
-        ! right now PFLOTRAN declares convergence with a negative rho in tr.c
-        ! this should not be happening thus cutting timestep.
-        option%convergence = CONVERGENCE_CUT_TIMESTEP
-    endif
- 
-    call MPI_Allreduce(MPI_IN_PLACE,general_force_iteration,ONE_INTEGER, &
-                       MPI_LOGICAL,MPI_LOR,option%mycomm,ierr)
-    option%force_newton_iteration = general_force_iteration
     if (general_sub_newton_iter_num > 20) then
       ! cut time step in case PETSC solvers are missing inner iterations
       option%convergence = CONVERGENCE_CUT_TIMESTEP
     endif
-      
+
   endif
 
   call PMSubsurfaceFlowCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
@@ -1621,17 +1666,17 @@ end subroutine PMGeneralCheckConvergence
 ! ************************************************************************** !
 
 subroutine PMGeneralTimeCut(this)
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 03/14/13
-  ! 
+  !
 
   use General_module, only : GeneralTimeCut
 
   implicit none
-  
+
   class(pm_general_type) :: this
-  
+
   call PMSubsurfaceFlowTimeCut(this)
   call GeneralTimeCut(this%realization)
 
@@ -1640,48 +1685,48 @@ end subroutine PMGeneralTimeCut
 ! ************************************************************************** !
 
 subroutine PMGeneralUpdateSolution(this)
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 03/14/13
-  ! 
+  !
 
   use General_module, only : GeneralUpdateSolution, &
                              GeneralMapBCAuxVarsToGlobal
 
   implicit none
-  
+
   class(pm_general_type) :: this
-  
+
   call PMSubsurfaceFlowUpdateSolution(this)
   call GeneralUpdateSolution(this%realization)
   call GeneralMapBCAuxVarsToGlobal(this%realization)
 
-end subroutine PMGeneralUpdateSolution     
+end subroutine PMGeneralUpdateSolution
 
 ! ************************************************************************** !
 
 subroutine PMGeneralUpdateAuxVars(this)
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 04/21/14
   use General_module, only : GeneralUpdateAuxVars
 
   implicit none
-  
+
   class(pm_general_type) :: this
 
                                                 !update BCs (second PETSC_TRUE)
   call GeneralUpdateAuxVars(this%realization,PETSC_FALSE,PETSC_TRUE)
 
-end subroutine PMGeneralUpdateAuxVars   
+end subroutine PMGeneralUpdateAuxVars
 
 ! ************************************************************************** !
 
 subroutine PMGeneralMaxChange(this)
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 03/14/13
-  ! 
+  !
 
   use Realization_Base_class
   use Realization_Subsurface_class
@@ -1695,9 +1740,9 @@ subroutine PMGeneralMaxChange(this)
                                GAS_SATURATION, PRECIPITATE_SATURATION, &
                                POROSITY
   implicit none
-  
+
   class(pm_general_type) :: this
-  
+
   class(realization_subsurface_type), pointer :: realization
   type(option_type), pointer :: option
   type(field_type), pointer :: field
@@ -1710,9 +1755,9 @@ subroutine PMGeneralMaxChange(this)
   PetscInt :: i, j, max_change_index
   PetscInt :: local_id, ghosted_id
 
-  
+
   PetscErrorCode :: ierr
-  
+
   realization => this%realization
   option => realization%option
   field => realization%field
@@ -1729,7 +1774,7 @@ subroutine PMGeneralMaxChange(this)
   allocate(max_change_global(max_change_index))
   max_change_global = 0.d0
   max_change_local = 0.d0
-  
+
   ! max change variables: [LIQUID_PRESSURE, GAS_PRESSURE, AIR_PRESSURE, &
   !                        LIQUID_MOLE_FRACTION, TEMPERATURE, GAS_SATURATION(]), &
   !                        POROSITY (OR) PRECIPITATE_SATURATION]
@@ -1750,7 +1795,7 @@ subroutine PMGeneralMaxChange(this)
         endif
       enddo
     endif
-    
+
     do j = 1, grid%nlmax
       ! have to weed out cells that changed state
       if (dabs(vec_ptr(j)) > 1.d-40 .and. dabs(vec_ptr2(j)) > 1.d-40) then
@@ -1765,7 +1810,8 @@ subroutine PMGeneralMaxChange(this)
     call VecCopy(field%work,field%max_change_vecs(i),ierr);CHKERRQ(ierr)
   enddo
   call MPI_Allreduce(max_change_local,max_change_global,max_change_index, &
-                      MPI_DOUBLE_PRECISION,MPI_MAX,option%mycomm,ierr)
+                     MPI_DOUBLE_PRECISION,MPI_MAX,option%mycomm,&
+                     ierr);CHKERRQ(ierr)
   ! print them out
   if (option%print_screen_flag) then
     if (option%nflowdof == 3) then
@@ -1810,18 +1856,18 @@ end subroutine PMGeneralMaxChange
 ! ************************************************************************** !
 
 subroutine PMGeneralComputeMassBalance(this,mass_balance_array)
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 03/14/13
-  ! 
+  !
 
   use General_module, only : GeneralComputeMassBalance
 
   implicit none
-  
+
   class(pm_general_type) :: this
   PetscReal :: mass_balance_array(:)
-  
+
   call GeneralComputeMassBalance(this%realization,mass_balance_array)
 
 end subroutine PMGeneralComputeMassBalance
@@ -1829,15 +1875,15 @@ end subroutine PMGeneralComputeMassBalance
 ! ************************************************************************** !
 
 subroutine PMGeneralInputRecord(this)
-  ! 
+  !
   ! Writes ingested information to the input record file.
-  ! 
+  !
   ! Author: Jenn Frederick, SNL
   ! Date: 03/21/2016
-  ! 
-  
+  !
+
   implicit none
-  
+
   class(pm_general_type) :: this
 
   character(len=MAXWORDLENGTH) :: word
@@ -1861,9 +1907,9 @@ end subroutine PMGeneralInputRecord
 ! ************************************************************************** !
 
 subroutine PMGeneralCheckpointBinary(this,viewer)
-  ! 
+  !
   ! Checkpoints data associated with General PM
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 02/18/15
 
@@ -1872,21 +1918,21 @@ subroutine PMGeneralCheckpointBinary(this,viewer)
   use Variables_module, only : STATE
 
   implicit none
-#include "petsc/finclude/petscviewer.h"      
+#include "petsc/finclude/petscviewer.h"
 
   class(pm_general_type) :: this
   PetscViewer :: viewer
-  
+
   call PMSubsurfaceFlowCheckpointBinary(this,viewer)
-  
+
 end subroutine PMGeneralCheckpointBinary
 
 ! ************************************************************************** !
 
 subroutine PMGeneralRestartBinary(this,viewer)
-  ! 
+  !
   ! Restarts data associated with General PM
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 02/18/15
 
@@ -1895,30 +1941,30 @@ subroutine PMGeneralRestartBinary(this,viewer)
   use Variables_module, only : STATE
 
   implicit none
-#include "petsc/finclude/petscviewer.h"      
+#include "petsc/finclude/petscviewer.h"
 
   class(pm_general_type) :: this
   PetscViewer :: viewer
-  
+
   call PMSubsurfaceFlowRestartBinary(this,viewer)
-  
+
 end subroutine PMGeneralRestartBinary
 ! ************************************************************************** !
 
 subroutine PMGeneralDestroy(this)
-  ! 
+  !
   ! Destroys General process model
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 03/14/13
-  ! 
+  !
 
   use General_module, only : GeneralDestroy
 
   implicit none
-  
+
   class(pm_general_type) :: this
-  
+
   if (associated(this%next)) then
     call this%next%Destroy()
   endif
@@ -1931,7 +1977,7 @@ subroutine PMGeneralDestroy(this)
   ! preserve this ordering
   call GeneralDestroy(this%realization)
   call PMSubsurfaceFlowDestroy(this)
-  
+
 end subroutine PMGeneralDestroy
-  
+
 end module PM_General_class

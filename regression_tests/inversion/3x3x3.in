@@ -7,7 +7,7 @@ SIMULATION
       MODE ZFLOW
       OPTIONS
         STEADY_STATE
-#        ADJOINT
+        EXTERNAL_FILE zflow_standard_options.txt
       /
     /
   /

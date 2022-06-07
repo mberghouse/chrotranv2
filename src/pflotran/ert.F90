@@ -4,7 +4,7 @@ module ERT_module
   use petscksp
 
   use ERT_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
 
   use PFLOTRAN_Constants_module
 
@@ -38,14 +38,14 @@ subroutine ERTSetup(realization)
 
   implicit none
 
-  type(realization_subsurface_type) :: realization
+  class(realization_subsurface_type) :: realization
 
   type(option_type), pointer :: option
   type(patch_type),pointer :: patch
   type(grid_type), pointer :: grid
   type(survey_type), pointer :: survey
 
-  class(material_auxvar_type), pointer :: material_auxvars(:)
+  type(material_auxvar_type), pointer :: material_auxvars(:)
   type(ert_auxvar_type), pointer :: ert_auxvars(:)
 
   PetscInt :: flag(1)
@@ -81,7 +81,7 @@ subroutine ERTSetup(realization)
 
   error_found = error_found .or. (maxval(flag) > 0)
   call MPI_Allreduce(MPI_IN_PLACE,error_found,ONE_INTEGER_MPI,MPI_LOGICAL, &
-                     MPI_LOR,option%mycomm,ierr)
+                     MPI_LOR,option%mycomm,ierr);CHKERRQ(ierr)
   if (error_found) then
     option%io_buffer = 'Material property errors found in ERTSetup.'
     call PrintErrMsg(option)
@@ -120,11 +120,11 @@ subroutine ERTCalculateMatrix(realization,M,compute_delM)
 
   implicit none
 
-  type(realization_subsurface_type) :: realization
+  class(realization_subsurface_type) :: realization
   Mat :: M
   PetscBool :: compute_delM
 
-  class(material_auxvar_type), pointer :: material_auxvars(:)
+  type(material_auxvar_type), pointer :: material_auxvars(:)
   type(ert_auxvar_type), pointer :: ert_auxvars(:)
   type(option_type), pointer :: option
   type(patch_type), pointer :: patch
@@ -162,7 +162,7 @@ subroutine ERTCalculateMatrix(realization,M,compute_delM)
   grid => patch%grid
 
   ! Pre-set Matrix to zeros
-  call MatZeroEntries(M,ierr); CHKERRQ(ierr)
+  call MatZeroEntries(M,ierr);CHKERRQ(ierr)
 
   ! Setting matrix enteries for Internal Flux terms/connections
   connection_set_list => grid%internal_connection_set_list
@@ -224,10 +224,10 @@ subroutine ERTCalculateMatrix(realization,M,compute_delM)
 
       if (local_id_up > 0) then
         ! set matrix coefficients for the upwind cell
-        call MatSetValuesLocal(M,1,ghosted_id_up-1,1,ghosted_id_up-1, &
-                               coef_up,ADD_VALUES,ierr);CHKERRQ(ierr)
-        call MatSetValuesLocal(M,1,ghosted_id_up-1,1,ghosted_id_dn-1, &
-                               coef_dn,ADD_VALUES,ierr);CHKERRQ(ierr)
+        call MatSetValuesLocal(M,1,ghosted_id_up-1,1,ghosted_id_up-1,coef_up, &
+                               ADD_VALUES,ierr);CHKERRQ(ierr)
+        call MatSetValuesLocal(M,1,ghosted_id_up-1,1,ghosted_id_dn-1,coef_dn, &
+                               ADD_VALUES,ierr);CHKERRQ(ierr)
 
         if (compute_delM) then
           ! For dM/dcond_up matrix
@@ -257,10 +257,10 @@ subroutine ERTCalculateMatrix(realization,M,compute_delM)
         dcoef_up =   dcond_avg_dn * area
         dcoef_dn = - dcoef_up               ! - dcond_avg_dn * area
 
-        call MatSetValuesLocal(M,1,ghosted_id_dn-1,1,ghosted_id_dn-1, &
-                               coef_dn,ADD_VALUES,ierr);CHKERRQ(ierr)
-        call MatSetValuesLocal(M,1,ghosted_id_dn-1,1,ghosted_id_up-1, &
-                               coef_up,ADD_VALUES,ierr);CHKERRQ(ierr)
+        call MatSetValuesLocal(M,1,ghosted_id_dn-1,1,ghosted_id_dn-1,coef_dn, &
+                               ADD_VALUES,ierr);CHKERRQ(ierr)
+        call MatSetValuesLocal(M,1,ghosted_id_dn-1,1,ghosted_id_up-1,coef_up, &
+                               ADD_VALUES,ierr);CHKERRQ(ierr)
 
         if (compute_delM) then
           ! For dM/dcond_dn matrix
@@ -404,8 +404,8 @@ end subroutine ERTCalculateMatrix
 
 ! ************************************************************************** !
 
-subroutine ERTConductivityFromEmpiricalEqs(por,sat,a,m,n,Vc,cond_w,cond_c, &
-                                           cond)
+subroutine ERTConductivityFromEmpiricalEqs(por,sat,a,m,n,Vc,cond_w,cond_s, &
+                                           cond_c,empirical_law,cond)
   !
   ! Calculates conductivity using petrophysical empirical relations
   ! using Archie's law or Waxman-Smits equation
@@ -418,11 +418,14 @@ subroutine ERTConductivityFromEmpiricalEqs(por,sat,a,m,n,Vc,cond_w,cond_c, &
 
   PetscReal :: por, sat  ! porosity and saturation
 
+  PetscInt :: empirical_law
+
   ! Archie's law parameters
   PetscReal :: a        ! Tortuosity factor constant
   PetscReal :: m        ! Cementation exponent
   PetscReal :: n        ! Saturation exponent
   PetscReal :: cond_w   ! Water conductivity
+  PetscReal :: cond_s   ! surface conductivity
 
   ! Waxman-Smits additional paramters
   PetscReal :: cond_c   ! Clay conductivity
@@ -433,9 +436,16 @@ subroutine ERTConductivityFromEmpiricalEqs(por,sat,a,m,n,Vc,cond_w,cond_c, &
 
   ! Archie's law
   cond = cond_w * (por**m) * (sat**n) / a
+  ! Modify by adding surface conductivity
+  cond = cond + cond_s
 
-  ! Waxmax-Smits equations/Dual-Water model
-  cond = cond + cond_c * Vc * (1-por) * sat**(n-1)
+  select case(empirical_law)
+    case(ARCHIE)
+      ! do nothing
+    case(WAXMAN_SMITS)
+      ! Waxmax-Smits equations/Dual-Water model
+      cond = cond + cond_c * Vc * (1-por) * sat**(n-1)
+  end select
 
 end subroutine ERTConductivityFromEmpiricalEqs
 
@@ -457,7 +467,7 @@ subroutine ERTCalculateAnalyticPotential(realization,ielec,average_conductivity)
 
   implicit none
 
-  type(realization_subsurface_type) :: realization
+  class(realization_subsurface_type) :: realization
   PetscInt :: ielec
   PetscReal, optional :: average_conductivity
 
@@ -529,13 +539,13 @@ subroutine ERTCalculateAverageConductivity(realization)
 
   implicit none
 
-  type(realization_subsurface_type) :: realization
+  class(realization_subsurface_type) :: realization
 
   type(option_type), pointer :: option
   type(patch_type), pointer :: patch
   type(grid_type), pointer :: grid
   type(survey_type), pointer :: survey
-  class(material_auxvar_type), pointer :: material_auxvars(:)
+  type(material_auxvar_type), pointer :: material_auxvars(:)
 
   PetscInt :: local_id
   PetscInt :: ghosted_id
@@ -559,8 +569,9 @@ subroutine ERTCalculateAverageConductivity(realization)
   local_average_cond = local_average_cond / grid%nmax
 
   ! get the average conductivity
-  call MPI_Allreduce(MPI_IN_PLACE,local_average_cond,ONE_INTEGER_MPI,   &
-                     MPI_DOUBLE_PRECISION,MPI_SUM,option%mycomm,ierr)
+  call MPI_Allreduce(MPI_IN_PLACE,local_average_cond,ONE_INTEGER_MPI, &
+                     MPI_DOUBLE_PRECISION,MPI_SUM,option%mycomm, &
+                     ierr);CHKERRQ(ierr)
 
   survey%average_conductivity = local_average_cond
 

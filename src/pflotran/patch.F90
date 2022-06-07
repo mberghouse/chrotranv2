@@ -20,6 +20,7 @@ module Patch_module
   use Saturation_Function_module
   use Characteristic_Curves_Thermal_module
   use Characteristic_Curves_module
+  use Material_Transform_module
   use Auxiliary_module
 
   use General_Aux_module
@@ -40,6 +41,7 @@ module Patch_module
     PetscInt, pointer :: imat_internal_to_external(:)
     PetscInt, pointer :: cc_id(:)    ! characteristic curves id
     PetscInt, pointer :: cct_id(:)   ! thermal characteristic curves id
+    PetscInt, pointer :: mtf_id(:)   ! material transform id
 
     PetscReal, pointer :: internal_velocities(:,:)
     PetscReal, pointer :: boundary_velocities(:,:)
@@ -75,6 +77,8 @@ module Patch_module
     type(characteristic_curves_ptr_type), pointer :: characteristic_curves_array(:)
     class(cc_thermal_type), pointer :: characteristic_curves_thermal
     type(cc_thermal_ptr_type), pointer :: char_curves_thermal_array(:)
+    class(material_transform_type), pointer :: material_transform
+    type(material_transform_ptr_type), pointer :: material_transform_array(:)
 
     type(strata_list_type), pointer :: strata_list
     type(observation_list_type), pointer :: observation_list
@@ -161,6 +165,7 @@ function PatchCreate()
   nullify(patch%imat_internal_to_external)
   nullify(patch%cc_id)
   nullify(patch%cct_id)
+  nullify(patch%mtf_id)
   nullify(patch%internal_velocities)
   nullify(patch%boundary_velocities)
   nullify(patch%internal_tran_coefs)
@@ -196,6 +201,8 @@ function PatchCreate()
   nullify(patch%characteristic_curves_array)
   nullify(patch%characteristic_curves_thermal)
   nullify(patch%char_curves_thermal_array)
+  nullify(patch%material_transform)
+  nullify(patch%material_transform_array)
 
   allocate(patch%observation_list)
   call ObservationInitList(patch%observation_list)
@@ -660,8 +667,8 @@ subroutine PatchProcessCouplers(patch,flow_conditions,transport_conditions, &
           call PrintErrMsg(option)
         endif
         call MPI_Allreduce(observation%region%num_cells,temp_int, &
-                           ONE_INTEGER_MPI,MPIU_INTEGER,MPI_SUM, &
-                           option%mycomm,ierr)
+                           ONE_INTEGER_MPI,MPIU_INTEGER,MPI_SUM,option%mycomm, &
+                           ierr);CHKERRQ(ierr)
         if (temp_int == 0) then
           option%io_buffer = 'Region "' // trim(observation%region%name) // &
             '" is used in an observation point but lies outside the &
@@ -848,10 +855,12 @@ subroutine PatchInitCouplerAuxVars(coupler_list,patch,option)
 
   PetscInt :: num_connections
   PetscBool :: force_update_flag
+  PetscBool :: iflag
 
   type(coupler_type), pointer :: coupler
   class(tran_constraint_coupler_base_type), pointer :: cur_constraint_coupler
   PetscInt :: idof
+  PetscInt :: ndof
   character(len=MAXSTRINGLENGTH) :: string
   PetscInt :: temp_int
 
@@ -898,21 +907,25 @@ subroutine PatchInitCouplerAuxVars(coupler_list,patch,option)
                 coupler%flow_aux_int_var = 0
 
               case(ZFLOW_MODE)
-                temp_int = 1
+                ndof = option%nflowdof
+                temp_int = 0
+                iflag = PETSC_FALSE
                 select case(coupler%flow_condition%pressure%itype)
                   case(HYDROSTATIC_CONDUCTANCE_BC, &
                        DIRICHLET_CONDUCTANCE_BC, &
                        HET_HYDROSTATIC_CONDUCTANCE_BC)
                     temp_int = temp_int + 1
+                    iflag = PETSC_TRUE
                 end select
-                allocate(coupler%flow_bc_type(1))
-                allocate(coupler%flow_aux_mapping(ZFLOW_MAX_INDEX))
-                allocate(coupler%flow_aux_real_var(temp_int,num_connections))
-                allocate(coupler%flow_aux_int_var(1,num_connections))
+                allocate(coupler%flow_bc_type(ndof))
+                allocate(coupler%flow_aux_real_var(ndof+temp_int, &
+                                                   num_connections))
+                !geh: don't need this
+                !allocate(coupler%flow_aux_int_var(1,num_connections))
                 coupler%flow_bc_type = 0
-                coupler%flow_aux_mapping = 0
                 coupler%flow_aux_real_var = 0.d0
-                coupler%flow_aux_int_var = 0
+                !coupler%flow_aux_int_var = 0
+                coupler%flow_aux_mapping => ZFlowAuxMapConditionIndices(iflag)
 
               case(PNF_MODE)
                 allocate(coupler%flow_bc_type(1))
@@ -993,42 +1006,58 @@ subroutine PatchInitCouplerAuxVars(coupler_list,patch,option)
 
           if (associated(coupler%flow_condition%rate)) then
 
-            select case(coupler%flow_condition%rate%itype)
-              case(SCALED_MASS_RATE_SS,SCALED_VOLUMETRIC_RATE_SS, &
-                   VOLUMETRIC_RATE_SS,MASS_RATE_SS, &
-                   HET_VOL_RATE_SS,HET_MASS_RATE_SS)
-                select case(option%iflowmode)
-                  case(RICHARDS_MODE,RICHARDS_TS_MODE,PNF_MODE)
-                    allocate(coupler%flow_aux_real_var(1,num_connections))
-                    coupler%flow_aux_real_var = 0.d0
-                  case(ZFLOW_MODE)
-                    select case(coupler%flow_condition%rate%itype)
-                      case(SCALED_MASS_RATE_SS,MASS_RATE_SS, &
-                           HET_VOL_RATE_SS,HET_MASS_RATE_SS)
-                        option%io_buffer = 'Mass rate source/sinks not &
-                          &supported in ZFLOW mode.'
-                        call PrintErrMsg(option)
-                    end select
-                    allocate(coupler%flow_aux_real_var(1,num_connections))
-                    coupler%flow_aux_real_var = 0.d0
-                  case(TH_MODE,TH_TS_MODE)
-                    allocate(coupler%flow_aux_real_var(option%nflowdof,num_connections))
-                    coupler%flow_aux_real_var = 0.d0
-                  case(MPH_MODE)
-                    ! do nothing
-                  case default
-                    string = GetSubConditionName(coupler%flow_condition%rate%itype)
-                    option%io_buffer='Source/Sink of rate%itype = "' // &
-                      trim(adjustl(string)) // '", not implemented in this mode.'
-                    call PrintErrMsg(option)
-                end select
-              case default
-                string = GetSubConditionName(coupler%flow_condition%rate%itype)
-                option%io_buffer = &
-                  FlowConditionUnknownItype(coupler%flow_condition,'rate', &
-                                            string)
-                call PrintErrMsg(option)
-            end select
+            if (option%iflowmode == ZFLOW_MODE) then
+              ndof = option%nflowdof
+              iflag = PETSC_FALSE
+              temp_int = 0
+              select case(coupler%flow_condition%rate%itype)
+                case(SCALED_VOLUMETRIC_RATE_SS)
+                  temp_int = 1
+                  iflag = PETSC_TRUE
+                case(SCALED_MASS_RATE_SS,MASS_RATE_SS, &
+                     HET_VOL_RATE_SS,HET_MASS_RATE_SS)
+                  option%io_buffer = 'Mass rate source/sinks not &
+                    &supported in ZFLOW mode.'
+                  call PrintErrMsg(option)
+              end select
+              allocate(coupler%flow_bc_type(ndof))
+              allocate(coupler%flow_aux_real_var(ndof+temp_int,num_connections))
+              coupler%flow_bc_type = 0
+              coupler%flow_aux_real_var = 0.d0
+              coupler%flow_aux_mapping => &
+                ZFlowAuxMapConditionIndices(iflag)
+            else
+              select case(coupler%flow_condition%rate%itype)
+                case(SCALED_MASS_RATE_SS,SCALED_VOLUMETRIC_RATE_SS, &
+                     VOLUMETRIC_RATE_SS,MASS_RATE_SS, &
+                     HET_VOL_RATE_SS,HET_MASS_RATE_SS)
+                  select case(option%iflowmode)
+                    case(RICHARDS_MODE,RICHARDS_TS_MODE,PNF_MODE)
+                      allocate(coupler%flow_aux_real_var(1,num_connections))
+                      coupler%flow_aux_real_var = 0.d0
+                    case(TH_MODE,TH_TS_MODE)
+                      allocate(coupler%flow_aux_real_var(option%nflowdof, &
+                                                         num_connections))
+                      coupler%flow_aux_real_var = 0.d0
+                    case(MPH_MODE)
+                      ! do nothing
+                    case default
+                      string = GetSubConditionName(coupler%flow_condition%&
+                                                   rate%itype)
+                      option%io_buffer='Source/Sink of rate%itype = "' // &
+                        trim(adjustl(string)) // &
+                        '", not implemented in this mode.'
+                      call PrintErrMsg(option)
+                  end select
+                case default
+                  string = GetSubConditionName(coupler%flow_condition% &
+                                               rate%itype)
+                  option%io_buffer = &
+                    FlowConditionUnknownItype(coupler%flow_condition,'rate', &
+                                              string)
+                  call PrintErrMsg(option)
+              end select
+            endif
           ! handles source/sinks in general mode
           else if (associated(coupler%flow_condition%general)) then
             if (associated(coupler%flow_condition%general%rate)) then
@@ -2367,16 +2396,18 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
   if (dof1) dof_count_local(1) = 1
   if (dof2) dof_count_local(2) = 1
   if (dof3) dof_count_local(3) = 1
+
   if (option%nflowdof == 4) then
     if (dof4) then
       dof_count_local(4) = 1
       call MPI_Allreduce(dof_count_local,dof_count_global,FOUR_INTEGER_MPI, &
-           MPI_INTEGER,MPI_SUM,option%mycomm,ierr)
+           MPI_INTEGER,MPI_SUM,option%mycomm,ierr);CHKERRQ(ierr)
     endif
   else
       call MPI_Allreduce(dof_count_local,dof_count_global,THREE_INTEGER_MPI, &
-                         MPI_INTEGER,MPI_SUM,option%mycomm,ierr)
+                         MPI_INTEGER,MPI_SUM,option%mycomm,ierr);CHKERRQ(ierr)
   endif
+
   if (dof_count_global(1) > 0) dof1 = PETSC_TRUE
   if (dof_count_global(2) > 0) dof2 = PETSC_TRUE
   if (dof_count_global(3) > 0) dof3 = PETSC_TRUE
@@ -2676,7 +2707,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
           else
           ! liquid pressure; 1st dof --------------------- !
             select case(hydrate%liquid_pressure%itype)
-              case(DIRICHLET_BC)
+              case(DIRICHLET_BC,DIRICHLET_SEEPAGE_BC)
                 call PatchGetCouplerValueFromDataset(coupler,option, &
                   patch%grid,hydrate%liquid_pressure%dataset,iconn,liq_pressure)
                 coupler%flow_aux_real_var(ONE_INTEGER,iconn) = liq_pressure
@@ -2728,12 +2759,13 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
           temperature = UNINITIALIZED_DOUBLE
           ! gas pressure; 1st dof ------------------------ !
           select case(hydrate%gas_pressure%itype)
-            case(DIRICHLET_BC)
+            case(DIRICHLET_BC,DIRICHLET_SEEPAGE_BC)
               call PatchGetCouplerValueFromDataset(coupler,option, &
                   patch%grid,hydrate%gas_pressure%dataset,iconn,gas_pressure)
               coupler%flow_aux_real_var(ONE_INTEGER,iconn) = gas_pressure
               dof1 = PETSC_TRUE
-              coupler%flow_bc_type(HYDRATE_GAS_EQUATION_INDEX) = DIRICHLET_BC
+              coupler%flow_bc_type(HYDRATE_GAS_EQUATION_INDEX) = &
+                      hydrate%gas_pressure%itype !DIRICHLET_BC
             case default
               string = GetSubConditionName(hydrate%gas_pressure%itype)
               option%io_buffer = &
@@ -2925,7 +2957,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
         case(GA_STATE, HG_STATE)
           ! gas pressure; 1st dof ------------------------ !
           select case(hydrate%gas_pressure%itype)
-            case(DIRICHLET_BC)
+            case(DIRICHLET_BC,DIRICHLET_SEEPAGE_BC)
               call PatchGetCouplerValueFromDataset(coupler,option, &
                      patch%grid,hydrate%gas_pressure%dataset,iconn,gas_pressure)
               coupler%flow_aux_real_var(ONE_INTEGER,iconn) = gas_pressure
@@ -3446,7 +3478,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
   if (dof2) dof_count_local(2) = 1
   if (dof3) dof_count_local(3) = 1
   call MPI_Allreduce(dof_count_local,dof_count_global,THREE_INTEGER_MPI, &
-                     MPI_INTEGER,MPI_SUM,option%mycomm,ierr)
+                     MPI_INTEGER,MPI_SUM,option%mycomm,ierr);CHKERRQ(ierr)
   if (dof_count_global(1) > 0) dof1 = PETSC_TRUE
   if (dof_count_global(2) > 0) dof2 = PETSC_TRUE
   if (dof_count_global(3) > 0) dof3 = PETSC_TRUE
@@ -4045,33 +4077,33 @@ subroutine PatchUpdateCouplerAuxVarsZFlow(patch,coupler,option)
 
   type(flow_condition_type), pointer :: flow_condition
   class(dataset_common_hdf5_type), pointer :: dataset
-  PetscBool :: update
-  PetscBool :: dof1, dof2, dof3
-  PetscReal :: temperature, p_sat
-  PetscReal :: x(option%nflowdof)
-  character(len=MAXSTRINGLENGTH) :: string, string2
-  PetscErrorCode :: ierr
-
-  PetscInt :: idof, num_connections,sum_connection
+  PetscInt :: water_index, water_aux_index, energy_index, solute_index
+  PetscInt :: num_connections,sum_connection
   PetscInt :: iconn, local_id, ghosted_id
+  PetscBool :: hydrostatic_update_called
 
+  hydrostatic_update_called = PETSC_FALSE
   num_connections = coupler%connection_set%num_connections
+
+  water_index = coupler%flow_aux_mapping(ZFLOW_COND_WATER_INDEX)
+  water_aux_index = coupler%flow_aux_mapping(ZFLOW_COND_WATER_AUX_INDEX)
+  energy_index = coupler%flow_aux_mapping(ZFLOW_COND_ENERGY_INDEX)
+  solute_index = coupler%flow_aux_mapping(ZFLOW_COND_SOLUTE_INDEX)
 
   flow_condition => coupler%flow_condition
   if (associated(flow_condition%pressure)) then
-    coupler%flow_aux_mapping(ZFLOW_PRESSURE_DOF) = ZFLOW_PRESSURE_DOF
+    coupler%flow_bc_type(water_index) = flow_condition%pressure%itype
     select case(flow_condition%pressure%itype)
       case(DIRICHLET_BC,NEUMANN_BC,ZERO_GRADIENT_BC, &
            DIRICHLET_SEEPAGE_BC,DIRICHLET_CONDUCTANCE_BC)
         select type(dataset => &
                     flow_condition%pressure%dataset)
           class is(dataset_ascii_type)
-            coupler%flow_aux_real_var(ZFLOW_PRESSURE_DOF, &
-                                      1:num_connections) = dataset%rarray(1)
+            coupler%flow_aux_real_var(water_index,1:num_connections) = &
+              dataset%rarray(1)
           class is(dataset_gridded_hdf5_type)
-            call PatchUpdateCouplerGridDataset(coupler,option, &
-                                            patch%grid,dataset, &
-                                            ZFLOW_PRESSURE_DOF)
+            call PatchUpdateCouplerGridDataset(coupler,option,patch%grid, &
+                                               dataset,water_index)
           class is(dataset_common_hdf5_type)
             ! skip cell indexed datasets used in initial conditions
           class default
@@ -4081,44 +4113,54 @@ subroutine PatchUpdateCouplerAuxVarsZFlow(patch,coupler,option)
         end select
         select case(flow_condition%pressure%itype)
           case(DIRICHLET_CONDUCTANCE_BC)
-            coupler%flow_aux_mapping(ZFLOW_CONDUCTANCE_DOF) = &
-              ZFLOW_CONDUCTANCE_DOF
-            coupler%flow_aux_real_var(ZFLOW_CONDUCTANCE_DOF, &
-                                      1:num_connections) = &
+            coupler%flow_aux_real_var(water_aux_index,1:num_connections) = &
                                            flow_condition%pressure%aux_real(1)
         end select
       case(HYDROSTATIC_BC,HYDROSTATIC_SEEPAGE_BC,HYDROSTATIC_CONDUCTANCE_BC)
+        hydrostatic_update_called = PETSC_TRUE
         call HydrostaticUpdateCoupler(coupler,option,patch%grid)
-   !  case(SATURATION_BC)
       case(HET_DIRICHLET_BC,HET_HYDROSTATIC_SEEPAGE_BC, &
            HET_HYDROSTATIC_CONDUCTANCE_BC)
         call PatchUpdateHetroCouplerAuxVars(patch,coupler, &
                 flow_condition%pressure%dataset, &
-                ZFLOW_PRESSURE_DOF,option)
+                water_index,option)
         if (flow_condition%pressure%itype == &
             HET_HYDROSTATIC_CONDUCTANCE_BC) then
-          coupler%flow_aux_real_var(ZFLOW_CONDUCTANCE_DOF, &
+          coupler%flow_aux_real_var(water_aux_index, &
                                     1:num_connections) = &
             flow_condition%pressure%aux_real(1)
         endif
     end select
-    coupler%flow_bc_type(ZFLOW_LIQUID_EQUATION_INDEX) = &
-      flow_condition%pressure%itype
   endif
-  if (associated(flow_condition%saturation)) then
-    call PatchUpdateCouplerSaturation(coupler,option,patch%grid, &
-                                 patch%characteristic_curves_array, &
-                                 patch%cc_id)
-  endif
+
   if (associated(flow_condition%rate)) then
+    coupler%flow_bc_type(water_index) = flow_condition%rate%itype
+    coupler%flow_aux_real_var(water_index,1:num_connections) = &
+          flow_condition%rate%dataset%rarray(1)
     select case(flow_condition%rate%itype)
       case(SCALED_VOLUMETRIC_RATE_SS)
         call PatchScaleSourceSink(patch,coupler, &
                                   flow_condition%rate%isubtype,option)
-      case (HET_VOL_RATE_SS)
-        call PatchUpdateHetroCouplerAuxVars(patch,coupler, &
-                flow_condition%rate%dataset, &
-                ZFLOW_PRESSURE_DOF,option)
+! not yet supported
+!      case(HET_VOL_RATE_SS)
+!        call PatchUpdateHetroCouplerAuxVars(patch,coupler, &
+!                flow_condition%rate%dataset, &
+!                water_index,option)
+      case default
+    end select
+  endif
+
+  if (associated(flow_condition%concentration)) then
+    coupler%flow_bc_type(solute_index) = flow_condition%concentration%itype
+    select case(flow_condition%concentration%itype)
+      case(DIRICHLET_BC,ZERO_GRADIENT_BC)
+        if (.not.hydrostatic_update_called) then
+          coupler%flow_aux_real_var(solute_index,1:num_connections) = &
+            flow_condition%concentration%dataset%rarray(1)
+        endif
+      case(NEUMANN_BC)
+        option%io_buffer = 'NEUMANN_BC not supported for ZFLOW concentration'
+        call PrintErrMsg(option)
     end select
   endif
 
@@ -4172,12 +4214,12 @@ subroutine PatchUpdateCouplerAuxVarsPNF(patch,coupler,option)
         select type(dataset => &
                     flow_condition%pressure%dataset)
           class is(dataset_ascii_type)
-            coupler%flow_aux_real_var(ZFLOW_PRESSURE_DOF, &
+            coupler%flow_aux_real_var(PNF_LIQUID_PRESSURE_DOF, &
                                       1:num_connections) = dataset%rarray(1)
           class is(dataset_gridded_hdf5_type)
             call PatchUpdateCouplerGridDataset(coupler,option, &
                                             patch%grid,dataset, &
-                                            ZFLOW_PRESSURE_DOF)
+                                            PNF_LIQUID_PRESSURE_DOF)
           class is(dataset_common_hdf5_type)
             ! skip cell indexed datasets used in initial conditions
           class default
@@ -4396,7 +4438,8 @@ subroutine PatchScaleSourceSink(patch,source_sink,iscale_type,option)
   use Connection_module
   use Condition_module
   use Grid_module
-  use Material_Aux_class
+  use Material_Aux_module
+  use ZFlow_Aux_module
   use Variables_module, only : PERMEABILITY_X, PERMEABILITY_Y, PERMEABILITY_Z
 
   implicit none
@@ -4421,7 +4464,7 @@ subroutine PatchScaleSourceSink(patch,source_sink,iscale_type,option)
   PetscInt, parameter :: x_width = 1, y_width = 1, z_width = 0
   PetscInt :: ghosted_neighbors(27)
   PetscBool :: inactive_found
-  class(material_auxvar_type), pointer :: material_auxvars(:)
+  type(material_auxvar_type), pointer :: material_auxvars(:)
 
   field => patch%field
   grid => patch%grid
@@ -4450,10 +4493,7 @@ subroutine PatchScaleSourceSink(patch,source_sink,iscale_type,option)
         ghosted_id = grid%nL2G(local_id)
         if (patch%imat(ghosted_id) <= 0) inactive_found = PETSC_TRUE
         vec_ptr(local_id) = vec_ptr(local_id) + &
-          ! this function protects from error in gfortran compiler when indexing
-          ! the permeability array
-          MaterialAuxVarGetValue(material_auxvars(ghosted_id), &
-                                 PERMEABILITY_X) * &
+          material_auxvars(ghosted_id)%permeability(perm_xx_index) * &
           material_auxvars(ghosted_id)%volume
       enddo
     case(SCALE_BY_NEIGHBOR_PERM)
@@ -4528,16 +4568,25 @@ subroutine PatchScaleSourceSink(patch,source_sink,iscale_type,option)
   scale = 1.d0/scale
   call VecScale(field%work,scale,ierr);CHKERRQ(ierr)
 
-  call VecGetArrayF90(field%work,vec_ptr, ierr);CHKERRQ(ierr)
+  call VecGetArrayF90(field%work,vec_ptr,ierr);CHKERRQ(ierr)
   do iconn = 1, cur_connection_set%num_connections
     local_id = cur_connection_set%id_dn(iconn)
     select case(option%iflowmode)
       !geh: This is a scaling factor that is stored that would be applied to
       !     all phases.
       case(RICHARDS_MODE,RICHARDS_TS_MODE,G_MODE,H_MODE,TH_MODE,TH_TS_MODE, &
-           ZFLOW_MODE,WF_MODE)
+           WF_MODE)
         source_sink%flow_aux_real_var(ONE_INTEGER,iconn) = &
           vec_ptr(local_id)
+      case(ZFLOW_MODE)
+        if (zflow_calc_adjoint .and. iscale_type /= SCALE_BY_VOLUME) then
+          option%io_buffer = 'ZFLOW inversion must factor in derivative &
+            &of scaled source/sink by permeability'
+          call PrintErrMsg(option)
+        endif
+        source_sink%flow_aux_real_var( &
+            source_sink%flow_aux_mapping(ZFLOW_COND_WATER_AUX_INDEX),&
+            iconn) = vec_ptr(local_id)
       case(MPH_MODE,PNF_MODE)
         option%io_buffer = 'PatchScaleSourceSink not set up for flow mode'
         call PrintErrMsg(option)
@@ -4697,16 +4746,16 @@ subroutine PatchCreateFlowConditionDatasetMap(grid,dataset_map_hdf5,cell_ids,nce
   ! Step-1: Rearrange map dataset
   max_id_loc = maxval(dataset_map_hdf5%mapping(2,:))
   call MPI_Allreduce(max_id_loc,max_id_global,ONE_INTEGER,MPIU_INTEGER, &
-                     MPI_MAX,option%mycomm,ierr)
-  call VecCreateMPI(option%mycomm,dataset_map_hdf5%map_dims_local(2),&
+                     MPI_MAX,option%mycomm,ierr);CHKERRQ(ierr)
+  call VecCreateMPI(option%mycomm,dataset_map_hdf5%map_dims_local(2), &
                     PETSC_DETERMINE,map_ids_1,ierr);CHKERRQ(ierr)
   call VecCreateMPI(option%mycomm,PETSC_DECIDE,max_id_global,map_ids_2, &
                     ierr);CHKERRQ(ierr)
   call VecSet(map_ids_2,0.d0,ierr);CHKERRQ(ierr)
 
   istart = 0
-  call MPI_Exscan(dataset_map_hdf5%map_dims_local(2), istart, ONE_INTEGER_MPI, &
-                  MPIU_INTEGER, MPI_SUM, option%mycomm, ierr)
+  call MPI_Exscan(dataset_map_hdf5%map_dims_local(2),istart,ONE_INTEGER_MPI, &
+                  MPIU_INTEGER,MPI_SUM,option%mycomm,ierr);CHKERRQ(ierr)
 
   allocate(int_array(dataset_map_hdf5%map_dims_local(2)))
   do ii=1,dataset_map_hdf5%map_dims_local(2)
@@ -4743,10 +4792,10 @@ subroutine PatchCreateFlowConditionDatasetMap(grid,dataset_map_hdf5,cell_ids,nce
   enddo
   call VecRestoreArrayF90(map_ids_1,vec_ptr,ierr);CHKERRQ(ierr)
 
-  call VecScatterBegin(vec_scatter,map_ids_1,map_ids_2, &
-                       INSERT_VALUES,SCATTER_FORWARD,ierr);CHKERRQ(ierr)
-  call VecScatterEnd(vec_scatter,map_ids_1,map_ids_2, &
-                     INSERT_VALUES,SCATTER_FORWARD,ierr);CHKERRQ(ierr)
+  call VecScatterBegin(vec_scatter,map_ids_1,map_ids_2,INSERT_VALUES, &
+                       SCATTER_FORWARD,ierr);CHKERRQ(ierr)
+  call VecScatterEnd(vec_scatter,map_ids_1,map_ids_2,INSERT_VALUES, &
+                     SCATTER_FORWARD,ierr);CHKERRQ(ierr)
   call VecScatterDestroy(vec_scatter,ierr);CHKERRQ(ierr)
 
   ! Step-2: Get ids in map dataset for cells
@@ -4754,12 +4803,12 @@ subroutine PatchCreateFlowConditionDatasetMap(grid,dataset_map_hdf5,cell_ids,nce
   allocate(dataset_map_hdf5%cell_ids_local(ncells))
   int_array=cell_ids-1
 
-  call ISCreateBlock(option%mycomm,1,ncells,int_array,PETSC_COPY_VALUES,is_from, &
-                     ierr);CHKERRQ(ierr)
+  call ISCreateBlock(option%mycomm,1,ncells,int_array,PETSC_COPY_VALUES, &
+                     is_from,ierr);CHKERRQ(ierr)
 
   istart = 0
-  call MPI_Exscan(ncells, istart, ONE_INTEGER_MPI, &
-                  MPIU_INTEGER, MPI_SUM, option%mycomm, ierr)
+  call MPI_Exscan(ncells,istart,ONE_INTEGER_MPI,MPIU_INTEGER,MPI_SUM, &
+                  option%mycomm,ierr);CHKERRQ(ierr)
 
   do local_id=1,ncells
     int_array(local_id)=local_id+istart
@@ -4779,10 +4828,10 @@ subroutine PatchCreateFlowConditionDatasetMap(grid,dataset_map_hdf5,cell_ids,nce
   call ISDestroy(is_from,ierr);CHKERRQ(ierr)
   call ISDestroy(is_to,ierr);CHKERRQ(ierr)
 
-  call VecScatterBegin(vec_scatter,map_ids_2,map_ids_3, &
-                       INSERT_VALUES,SCATTER_FORWARD,ierr);CHKERRQ(ierr)
-  call VecScatterEnd(vec_scatter,map_ids_2,map_ids_3, &
-                     INSERT_VALUES,SCATTER_FORWARD,ierr);CHKERRQ(ierr)
+  call VecScatterBegin(vec_scatter,map_ids_2,map_ids_3,INSERT_VALUES, &
+                       SCATTER_FORWARD,ierr);CHKERRQ(ierr)
+  call VecScatterEnd(vec_scatter,map_ids_2,map_ids_3,INSERT_VALUES, &
+                     SCATTER_FORWARD,ierr);CHKERRQ(ierr)
   call VecScatterDestroy(vec_scatter,ierr);CHKERRQ(ierr)
 
   ! Step-3: Save the datatocell_ids
@@ -4844,7 +4893,7 @@ subroutine PatchInitCouplerConstraints(coupler_list,reaction_base,option)
   use NWT_Equilibrium_module
   use Reaction_Aux_module
   use Global_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Transport_Constraint_Base_module
   use Transport_Constraint_NWT_module
   use Transport_Constraint_RT_module
@@ -4862,7 +4911,7 @@ subroutine PatchInitCouplerConstraints(coupler_list,reaction_base,option)
   type(reactive_transport_auxvar_type), pointer :: rt_auxvar
   type(nw_transport_auxvar_type), pointer :: nwt_auxvar
   type(global_auxvar_type), pointer :: global_auxvar
-  class(material_auxvar_type), allocatable :: material_auxvar
+  type(material_auxvar_type), allocatable :: material_auxvar
   type(coupler_type), pointer :: cur_coupler
   class(tran_constraint_coupler_base_type), pointer :: cur_constraint_coupler
   class(reaction_rt_type), pointer :: reaction
@@ -5100,7 +5149,7 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
   use ZFlow_Aux_module
   use Output_Aux_module
   use Variables_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Reaction_Base_module
 
   implicit none
@@ -5118,7 +5167,7 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
 
   PetscInt :: local_id, ghosted_id
   type(grid_type), pointer :: grid
-  class(material_auxvar_type), pointer :: material_auxvars(:)
+  type(material_auxvar_type), pointer :: material_auxvars(:)
   class(reaction_rt_type), pointer :: reaction
   PetscReal, pointer :: vec_ptr(:), vec_ptr2(:)
   PetscReal :: xmass, lnQKgas, ehfac, eh0, pe0, ph0, tk
@@ -5145,7 +5194,8 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
          GAS_VISCOSITY,CAPILLARY_PRESSURE,LIQUID_DENSITY_MOL, &
          LIQUID_MOBILITY,GAS_MOBILITY,SC_FUGA_COEFF,ICE_DENSITY, &
          LIQUID_HEAD,VAPOR_PRESSURE,SATURATION_PRESSURE,PRECIPITATE_SATURATION,&
-         MAXIMUM_PRESSURE,LIQUID_MASS_FRACTION,GAS_MASS_FRACTION)
+         MAXIMUM_PRESSURE,LIQUID_MASS_FRACTION,GAS_MASS_FRACTION
+         SOLUTE_CONCENTRATION,DERIVATIVE)
 
       if (associated(patch%aux%TH)) then
         select case(ivar)
@@ -5338,6 +5388,23 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
               vec_ptr(local_id) = &
                 patch%aux%ZFlow%auxvars(ZERO_INTEGER,grid%nL2G(local_id))%sat
             enddo
+          case(SOLUTE_CONCENTRATION)
+            do local_id=1,grid%nlmax
+              vec_ptr(local_id) = &
+                patch%aux%ZFlow%auxvars(ZERO_INTEGER,grid%nL2G(local_id))%conc
+            enddo
+          case(DERIVATIVE)
+            select case(isubvar)
+              case(ZFLOW_LIQ_SAT_WRT_LIQ_PRES)
+                do local_id=1,grid%nlmax
+                  vec_ptr(local_id) = &
+                    patch%aux%ZFlow%auxvars(ZERO_INTEGER, &
+                                            grid%nL2G(local_id))%dsat_dp
+                enddo
+              case default
+                call PatchUnsupportedVariable('ZFLOW','DERIVATIVE', &
+                                              isubvar,option)
+            end select
           case default
             call PatchUnsupportedVariable('ZFLOW',ivar,option)
         end select
@@ -6022,6 +6089,16 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
           case default
             call PatchUnsupportedVariable('WIPP_FLOW',ivar,option)
         end select
+      else ! null flow mode
+        select case(ivar)
+          case(LIQUID_SATURATION)
+            do local_id=1,grid%nlmax
+              vec_ptr(local_id) = patch%aux%Global%auxvars( &
+                  grid%nL2G(local_id))%sat(option%liquid_phase)
+            enddo
+          case default
+            call PatchUnsupportedVariable('NULL_FLOW',ivar,option)
+        end select
       endif
 
     ! NUCLEAR_WASTE_TRANSPORT:
@@ -6554,7 +6631,7 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
       do local_id=1,grid%nlmax
         vec_ptr(local_id) = &
           patch%aux%ERT%auxvars(grid%nL2G(local_id))%jacobian(isubvar)
-      enddo      
+      enddo
     case(PROCESS_ID)
       do local_id=1,grid%nlmax
         vec_ptr(local_id) = option%myrank
@@ -6570,7 +6647,8 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
       enddo
     case(RESIDUAL)
       call VecRestoreArrayF90(vec,vec_ptr,ierr);CHKERRQ(ierr)
-      call VecStrideGather(field%flow_r,isubvar-1,vec,INSERT_VALUES,ierr)
+      call VecStrideGather(field%flow_r,isubvar-1,vec,INSERT_VALUES, &
+                           ierr);CHKERRQ(ierr)
       call VecGetArrayF90(vec,vec_ptr,ierr);CHKERRQ(ierr)
     case(X_COORDINATE)
       do local_id=1,grid%nlmax
@@ -6588,6 +6666,20 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
       if (grid%itype == IMPLICIT_UNSTRUCTURED_GRID) then
         call PatchGetKOrthogonalityError(grid, material_auxvars, vec_ptr)
         !vec_ptr(:) = UNINITIALIZED_DOUBLE
+      endif
+    ! PM Material Transform
+    case(SMECTITE)
+      if (associated(patch%aux%MTransform)) then
+        select case(ivar)
+          case(SMECTITE)
+            do local_id=1,grid%nlmax
+              if (associated(patch%aux%MTransform% &
+                  auxvars(grid%nL2G(local_id))%il_aux)) then
+                vec_ptr(local_id) = &
+                  patch%aux%MTransform%auxvars(grid%nL2G(local_id))%il_aux%fs
+              endif
+            enddo
+        end select
       endif
     case default
       call PatchUnsupportedVariable(ivar,option)
@@ -6630,7 +6722,7 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
                                  GAS_STATE, LIQUID_STATE
   use WIPP_Flow_Aux_module, only : WIPPFloScalePerm
   use ZFlow_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
 
   implicit none
 
@@ -6640,7 +6732,7 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
   type(output_option_type), pointer :: output_option
   type(field_type), pointer :: field
   type(patch_type), pointer :: patch
-  class(material_auxvar_type), pointer :: material_auxvars(:)
+  type(material_auxvar_type), pointer :: material_auxvars(:)
   class(reaction_rt_type), pointer :: reaction
   PetscInt :: ivar
   PetscInt :: isubvar
@@ -6683,7 +6775,7 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
          LIQUID_MOBILITY,GAS_MOBILITY,SC_FUGA_COEFF,ICE_DENSITY, &
          SECONDARY_TEMPERATURE,LIQUID_DENSITY_MOL, &
          LIQUID_HEAD,VAPOR_PRESSURE,SATURATION_PRESSURE,MAXIMUM_PRESSURE, &
-         LIQUID_MASS_FRACTION,GAS_MASS_FRACTION)
+         LIQUID_MASS_FRACTION,GAS_MASS_FRACTION,SOLUTE_CONCENTRATION)
 
       if (associated(patch%aux%TH)) then
         select case(ivar)
@@ -6785,6 +6877,8 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
                     EARTH_GRAVITY/zflow_density_kg
           case(LIQUID_SATURATION)
             value = patch%aux%ZFlow%auxvars(ZERO_INTEGER,ghosted_id)%sat
+          case(SOLUTE_CONCENTRATION)
+            value = patch%aux%ZFlow%auxvars(ZERO_INTEGER,ghosted_id)%conc
           case default
             call PatchUnsupportedVariable('ZFLOW',ivar,option)
         end select
@@ -7196,11 +7290,19 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
           case default
             call PatchUnsupportedVariable('WIPP_FLOW',ivar,option)
         end select
+      else ! null flow mode
+        select case(ivar)
+          case(LIQUID_SATURATION)
+            value = patch%aux%Global%auxvars(ghosted_id)% &
+                      sat(option%liquid_phase)
+          case default
+            call PatchUnsupportedVariable('NULL_FLOW',ivar,option)
+        end select
       endif
 
     ! NUCLEAR_WASTE_TRANSPORT:
     case(TOTAL_BULK_CONC,AQUEOUS_EQ_CONC,MNRL_EQ_CONC,SORB_EQ_CONC, &
-         MNRL_VOLUME_FRACTION)
+         MNRL_VOLUME_FRACTION,NWT_AUXILIARY)
       select case(ivar)
         case(TOTAL_BULK_CONC)
           value = patch%aux%NWT%auxvars(ghosted_id)%total_bulk_conc(isubvar)
@@ -7212,6 +7314,8 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
           value = patch%aux%NWT%auxvars(ghosted_id)%sorb_eq_conc(isubvar)
         case(MNRL_VOLUME_FRACTION)
           value = patch%aux%NWT%auxvars(ghosted_id)%mnrl_vol_frac(isubvar)
+        case(NWT_AUXILIARY)
+          value = patch%aux%NWT%auxvars(ghosted_id)%auxiliary_data(isubvar)
       end select
       if ( (patch%aux%NWT%truncate_output) .and. &
            ((value < 1.d-99) .and. (value > 0.d0)) ) then
@@ -7501,7 +7605,11 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
       ! Note that the units are in mol/kg
       local_id = grid%nG2L(ghosted_id)
       value = patch%aux%SC_RT%sec_transport_vars(local_id)% &
-              sec_rt_auxvar(isubvar)%pri_molal(isubvar2)
+                                   sec_rt_auxvar(isubvar)%total(isubvar2,1)
+    case(SECONDARY_CONCENTRATION_GAS)
+      local_id = grid%nG2L(ghosted_id)
+      value = patch%aux%SC_RT%sec_transport_vars(local_id)% &
+                                   sec_rt_auxvar(isubvar)%gas_pp(isubvar2)
     case(SEC_MIN_VOLFRAC)
       local_id = grid%nG2L(ghosted_id)
       value = patch%aux%SC_RT%sec_transport_vars(local_id)% &
@@ -7555,7 +7663,7 @@ subroutine PatchSetVariable(patch,field,option,vec,vec_format,ivar,isubvar)
   use Variables_module
   use General_Aux_module
   use WIPP_Flow_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
 
   implicit none
 
@@ -7570,7 +7678,7 @@ subroutine PatchSetVariable(patch,field,option,vec,vec_format,ivar,isubvar)
 
   PetscInt :: local_id, ghosted_id
   type(grid_type), pointer :: grid
-  class(material_auxvar_type), pointer :: material_auxvars(:)
+  type(material_auxvar_type), pointer :: material_auxvars(:)
   PetscReal, pointer :: vec_ptr(:), vec_ptr2(:)
   PetscErrorCode :: ierr
 
@@ -8247,7 +8355,8 @@ subroutine PatchSetVariable(patch,field,option,vec,vec_format,ivar,isubvar)
             enddo
           endif
       end select
-    case(PRIMARY_MOLARITY,SECONDARY_MOLALITY,SECONDARY_MOLARITY,TOTAL_MOLALITY, &
+    case(PRIMARY_MOLARITY,TOTAL_MOLALITY, &
+         SECONDARY_MOLALITY,SECONDARY_MOLARITY, &
          COLLOID_MOBILE,COLLOID_IMMOBILE)
       select case(ivar)
         case(PRIMARY_MOLARITY)
@@ -8312,7 +8421,7 @@ subroutine PatchSetVariable(patch,field,option,vec,vec_format,ivar,isubvar)
       do local_id=1,grid%nlmax
         patch%aux%ERT%auxvars(grid%nL2G(local_id))%jacobian(isubvar) = &
           vec_ptr(local_id)
-      enddo      
+      enddo
     case(PROCESS_ID)
       call PrintErrMsg(option, &
                        'Cannot set PROCESS_ID through PatchSetVariable()')
@@ -8379,7 +8488,7 @@ subroutine PatchCalculateCFL1Timestep(patch,option,max_dt_cfl_1, &
   use Coupler_module
   use Field_module
   use Global_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
 
   implicit none
 
@@ -8392,7 +8501,7 @@ subroutine PatchCalculateCFL1Timestep(patch,option,max_dt_cfl_1, &
   type(field_type), pointer :: field
   type(coupler_type), pointer :: boundary_condition
   type(global_auxvar_type), pointer :: global_auxvars(:)
-  class(material_auxvar_type), pointer :: material_auxvars(:)
+  type(material_auxvar_type), pointer :: material_auxvars(:)
   type(connection_set_list_type), pointer :: connection_set_list
   type(connection_set_type), pointer :: cur_connection_set
   PetscInt :: iconn
@@ -8487,8 +8596,8 @@ subroutine PatchCalculateCFL1Timestep(patch,option,max_dt_cfl_1, &
   tempreal(1) = max_dt_cfl_1
   tempreal(2) = -max_pore_velocity
   call MPI_Allreduce(MPI_IN_PLACE,tempreal,TWO_INTEGER_MPI, &
-                     MPI_DOUBLE_PRECISION,MPI_MIN, &
-                     option%mycomm,ierr)
+                     MPI_DOUBLE_PRECISION,MPI_MIN,option%mycomm, &
+                     ierr);CHKERRQ(ierr)
 
   max_dt_cfl_1 = tempreal(1)
   max_pore_velocity = -tempreal(2)
@@ -8749,7 +8858,7 @@ subroutine PatchGetKOrthogonalityError(grid, material_auxvars, error)
   use Option_module
   use Connection_module
   use Geometry_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Variables_module, only : PERMEABILITY_X, PERMEABILITY_Y, &
                                PERMEABILITY_Z, PERMEABILITY_XY, &
                                PERMEABILITY_XZ, PERMEABILITY_YZ
@@ -8759,7 +8868,7 @@ subroutine PatchGetKOrthogonalityError(grid, material_auxvars, error)
   implicit none
 
   type(grid_type), pointer :: grid
-  class(material_auxvar_type), pointer :: material_auxvars(:)
+  type(material_auxvar_type), pointer :: material_auxvars(:)
   PetscReal, pointer :: error(:)
   class (connection_set_type), pointer :: cur_connection_set
 
@@ -9307,8 +9416,8 @@ subroutine PatchGetIntegralFluxConnections(patch,integral_flux,option)
   if (associated(integral_flux%boundary_connections)) then
     icount = icount + size(integral_flux%boundary_connections)
   endif
-  call MPI_Allreduce(MPI_IN_PLACE,icount,ONE_INTEGER_MPI,MPIU_INTEGER, &
-                     MPI_SUM,option%mycomm,ierr)
+  call MPI_Allreduce(MPI_IN_PLACE,icount,ONE_INTEGER_MPI,MPIU_INTEGER,MPI_SUM, &
+                     option%mycomm,ierr);CHKERRQ(ierr)
   if (icount == 0) then
     option%io_buffer = 'Zero connections found for INTEGRAL_FLUX "' // &
       trim(adjustl(integral_flux%name)) // &
@@ -9455,7 +9564,7 @@ subroutine PatchGetWaterMassInRegion(cell_ids,num_cells,patch,option, &
   ! Date: 09/20/2016
   !
   use Global_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Grid_module
   use Option_module
 
@@ -9468,7 +9577,7 @@ subroutine PatchGetWaterMassInRegion(cell_ids,num_cells,patch,option, &
   PetscReal :: global_water_mass
 
   type(global_auxvar_type), pointer :: global_auxvars(:)
-  class(material_auxvar_type), pointer :: material_auxvars(:)
+  type(material_auxvar_type), pointer :: material_auxvars(:)
   PetscReal :: m3_water, kg_water
   PetscInt :: k, j, m
   PetscInt :: local_id, ghosted_id
@@ -9495,7 +9604,8 @@ subroutine PatchGetWaterMassInRegion(cell_ids,num_cells,patch,option, &
 
   ! Sum the local_water_mass across all processes that own the region:
   call MPI_Allreduce(local_water_mass,global_water_mass,ONE_INTEGER_MPI, &
-                     MPI_DOUBLE_PRECISION,MPI_SUM,option%mycomm,ierr)
+                     MPI_DOUBLE_PRECISION,MPI_SUM,option%mycomm, &
+                     ierr);CHKERRQ(ierr)
 
 end subroutine PatchGetWaterMassInRegion
 
@@ -9848,6 +9958,7 @@ subroutine PatchDestroy(patch)
   call DeallocateArray(patch%imat_internal_to_external)
   call DeallocateArray(patch%cc_id)
   call DeallocateArray(patch%cct_id)
+  call DeallocateArray(patch%mtf_id)
   call DeallocateArray(patch%internal_velocities)
   call DeallocateArray(patch%boundary_velocities)
   call DeallocateArray(patch%internal_tran_coefs)
@@ -9884,6 +9995,11 @@ subroutine PatchDestroy(patch)
        deallocate(patch%char_curves_thermal_array)
   nullify(patch%char_curves_thermal_array)
   nullify(patch%characteristic_curves_thermal)
+
+  if (associated(patch%material_transform_array)) &
+    deallocate(patch%material_transform_array)
+  nullify(patch%material_transform_array)
+  nullify(patch%material_transform)
 
   ! solely nullify grid since destroyed in discretization
   nullify(patch%grid)

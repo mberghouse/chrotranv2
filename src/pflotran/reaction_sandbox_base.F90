@@ -1,14 +1,14 @@
 module Reaction_Sandbox_Base_class
-  
+
 #include "petsc/finclude/petscsys.h"
   use petscsys
 
   use PFLOTRAN_Constants_module
 
   implicit none
-  
+
   private
-  
+
   type, abstract, public :: reaction_sandbox_base_type
     class(reaction_sandbox_base_type), pointer :: next
   contains
@@ -17,15 +17,15 @@ module Reaction_Sandbox_Base_class
     procedure, public :: Evaluate => BaseEvaluate
     procedure, public :: UpdateKineticState => BaseUpdateKineticState
     procedure, public :: AuxiliaryPlotVariables => BaseAuxiliaryPlotVariables
-    procedure, public :: Destroy => BaseDestroy    
+    procedure, public :: Destroy => BaseDestroy
   end type reaction_sandbox_base_type
-  
+
 contains
 
 ! ************************************************************************** !
 
 subroutine BaseSetup(this,reaction,option)
-  
+
   use Option_module
   use Reaction_Aux_module
 
@@ -35,12 +35,12 @@ subroutine BaseSetup(this,reaction,option)
   class(reaction_rt_type) :: reaction
   type(option_type) :: option
 
-end subroutine BaseSetup 
+end subroutine BaseSetup
 
 ! ************************************************************************** !
 
 subroutine BaseReadInput(this,input,option)
-  
+
   use Option_module
   use Input_Aux_module
 
@@ -55,7 +55,7 @@ end subroutine BaseReadInput
 ! ************************************************************************** !
 
 subroutine BaseAuxiliaryPlotVariables(this,list,reaction,option)
-  
+
   use Option_module
   use Reaction_Aux_module
   use Output_Aux_module
@@ -78,7 +78,7 @@ subroutine BaseEvaluate(this,Residual,Jacobian,compute_derivative, &
   use Reaction_Aux_module
   use Reactive_Transport_Aux_module
   use Global_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
 
   implicit none
 
@@ -90,13 +90,13 @@ subroutine BaseEvaluate(this,Residual,Jacobian,compute_derivative, &
   PetscBool :: compute_derivative
   type(reactive_transport_auxvar_type) :: rt_auxvar
   type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   type(option_type) :: option
 
   option%io_buffer = 'Subroutine BaseEvaluate must be extended by child &
     &Reaction Sandbox classes.'
   call PrintErrMsg(option)
-    
+
 end subroutine BaseEvaluate
 
 ! ************************************************************************** !
@@ -107,19 +107,19 @@ subroutine BaseUpdateKineticState(this,rt_auxvar,global_auxvar, &
   use Reaction_Aux_module
   use Reactive_Transport_Aux_module
   use Global_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
 
   implicit none
 
   class(reaction_sandbox_base_type) :: this
   type(reactive_transport_auxvar_type) :: rt_auxvar
   type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   class(reaction_rt_type) :: reaction
   type(option_type) :: option
-    
+
 end subroutine BaseUpdateKineticState
-  
+
 ! ************************************************************************** !
 
 subroutine BaseDestroy(this)
@@ -128,6 +128,6 @@ subroutine BaseDestroy(this)
 
   class(reaction_sandbox_base_type) :: this
 
-end subroutine BaseDestroy  
+end subroutine BaseDestroy
 
 end module Reaction_Sandbox_Base_class

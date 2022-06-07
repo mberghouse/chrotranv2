@@ -475,6 +475,7 @@ end subroutine TimestepperBaseUpdateDT
 ! ************************************************************************** !
 
 subroutine TimestepperBaseSetTargetTime(this,sync_time,option,stop_flag, &
+                                        sync_flag, &
                                         snapshot_plot_flag, &
                                         observation_plot_flag, &
                                         massbal_plot_flag,checkpoint_flag)
@@ -493,6 +494,7 @@ subroutine TimestepperBaseSetTargetTime(this,sync_time,option,stop_flag, &
   PetscReal :: sync_time
   type(option_type) :: option
   PetscInt :: stop_flag
+  PetscBool :: sync_flag
   PetscBool :: snapshot_plot_flag
   PetscBool :: observation_plot_flag
   PetscBool :: massbal_plot_flag
@@ -613,6 +615,7 @@ subroutine TimestepperBaseSetTargetTime(this,sync_time,option,stop_flag, &
           ! the time step back to its prior value after the waypoint is met.
           ! %revert_dt is a flag that does so above.
           if (force_to_match_waypoint) revert_due_to_waypoint = PETSC_TRUE
+          if (cur_waypoint%sync) sync_flag = PETSC_TRUE
           if (cur_waypoint%print_snap_output) snapshot_plot_flag = PETSC_TRUE
           if (cur_waypoint%print_obs_output) observation_plot_flag = PETSC_TRUE
           if (cur_waypoint%print_msbl_output) massbal_plot_flag = PETSC_TRUE
@@ -945,8 +948,8 @@ subroutine TimestepperBaseRegisterHeader(this,bag,header)
   call PetscBagRegisterInt(bag,header%num_contig_revert_due_to_sync,0, &
                            "num_contig_revert_due_to_sync","", &
                            ierr);CHKERRQ(ierr)
-  call PetscBagRegisterInt(bag,header%revert_dt,0, &
-                           "revert_dt","",ierr);CHKERRQ(ierr)
+  call PetscBagRegisterInt(bag,header%revert_dt,0,"revert_dt","", &
+                           ierr);CHKERRQ(ierr)
 
 end subroutine TimestepperBaseRegisterHeader
 
@@ -1089,8 +1092,8 @@ function TimestepperBaseWallClockStop(this,option)
   ! checkpoint and exit
   TimestepperBaseWallclockStop = PETSC_FALSE
   if (option%wallclock_stop_flag) then
-    call PetscTime(current_time, ierr)
-    average_step_time = (current_time-option%start_time)/ &
+    call PetscTime(current_time,ierr);CHKERRQ(ierr)
+    average_step_time = (current_time-option%comm%start_time)/ &
                         dble(this%steps-this%start_time_step+1) &
                         *2.d0  ! just to be safe, double it
     if (average_step_time + current_time > option%wallclock_stop_time) then

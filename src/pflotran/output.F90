@@ -391,60 +391,80 @@ subroutine OutputFileRead(input,realization,output_option, &
       case('FORMAT')
         string = 'OUTPUT,' // trim(block_name) // ',FORMAT'
         select case(trim(block_name))
-          case('OBSERVATION_FILE')
-            option%io_buffer = 'FORMAT cannot be specified within &
-                 &the OUTPUT,OBSERVATION_FILE block. Observation output is &
-                 &written in TECPLOT format only.'
-            call PrintErrMsg(option)
           case('MASS_BALANCE_FILE')
             option%io_buffer = 'FORMAT cannot be specified within &
                  &the OUTPUT,MASS_BALANCE_FILE block. Mass balance output is &
                  &written in TECPLOT format only.'
             call PrintErrMsg(option)
         end select
+
         call InputReadCard(input,option,word)
         call InputErrorMsg(input,option,'keyword',string)
         call StringToUpper(word)
+
         select case(trim(word))
         !..............
           case ('HDF5')
-            string = trim(string) // ',HDF5'
-            output_option%print_hdf5 = PETSC_TRUE
-            call InputReadCard(input,option,word)
-            if (input%ierr /= 0) then
-              call InputDefaultMsg(input,option,string)
-              output_option%print_single_h5_file = PETSC_TRUE
-            else
-              call StringToUpper(word)
-              select case(trim(word))
-              !....................
-                case('SINGLE_FILE')
+
+            select case(trim(block_name))
+              case('OBSERVATION_FILE')
+                string = trim(string) // ',HDF5'
+                output_option%print_obs_hdf5 = PETSC_TRUE
+
+              case default  ! SNAPSHOT
+                string = trim(string) // ',HDF5'
+                output_option%print_hdf5 = PETSC_TRUE
+                call InputReadCard(input,option,word)
+                if (input%ierr /= 0) then
+                  call InputDefaultMsg(input,option,string)
                   output_option%print_single_h5_file = PETSC_TRUE
-              !.......................
-                case('MULTIPLE_FILES')
-                  string = trim(string) // ',MULTIPLE_FILES'
-                  output_option%print_single_h5_file = PETSC_FALSE
-                  output_option%times_per_h5_file = 1
-                  call InputReadCard(input,option,word)
-                  if (input%ierr == 0) then
-                    select case(trim(word))
-                      case('TIMES_PER_FILE')
-                        string = trim(string) // ',TIMES_PER_FILE'
-                        call InputReadInt(input,option, &
-                             output_option%times_per_h5_file)
-                        call InputErrorMsg(input,option,'timestep increment', &
-                                           string)
-                      case default
-                        call InputKeywordUnrecognized(input,word,string,option)
-                    end select
-                  endif
-              !.............
-                case default
-                  call InputKeywordUnrecognized(input,word,string,option)
-              end select
-            endif
+                else
+                  call StringToUpper(word)
+                  select case(trim(word))
+                  !....................
+                    case('SINGLE_FILE')
+                      output_option%print_single_h5_file = PETSC_TRUE
+                  !.......................
+                    case('MULTIPLE_FILES')
+                      string = trim(string) // ',MULTIPLE_FILES'
+                      output_option%print_single_h5_file = PETSC_FALSE
+                      output_option%times_per_h5_file = 1
+                      call InputReadCard(input,option,word)
+                      if (input%ierr == 0) then
+                        select case(trim(word))
+                          case('TIMES_PER_FILE')
+                            string = trim(string) // ',TIMES_PER_FILE'
+                            call InputReadInt(input,option, &
+                                 output_option%times_per_h5_file)
+                            call InputErrorMsg(input,option, &
+                                               'timestep increment', &
+                                               string)
+                          case default
+                            call InputKeywordUnrecognized(input,word, &
+                                                          string,option)
+                        end select
+                      endif
+                  !.............
+                    case default
+                      call InputKeywordUnrecognized(input,word,string,option)
+                  end select
+                endif
+
+            end select  ! Observation or snapshot file
+
         !.................
           case ('TECPLOT')
+
+            ! error if in OBSERVATION_FILE block
+            if (trim(block_name) == 'OBSERVATION_FILE') then
+              option%io_buffer = 'TECPLOT is not a FORMAT option for &
+                  &the OUTPUT,OBSERVATION_FILE block. TECPLOT format &
+                  &files are always written. Remove FORMAT TECPLOT &
+                  &specification from the OBSERVATION_FILE block in &
+                  &the input deck.'
+              call PrintErrMsg(option)
+            endif
+
             string = trim(string) // ',TECPLOT'
             output_option%print_tecplot = PETSC_TRUE
             call InputReadCard(input,option,word)
@@ -476,6 +496,16 @@ subroutine OutputFileRead(input,realization,output_option, &
             endif
         !.............
           case ('VTK')
+
+            ! error if in OBSERVATION_FILE block
+            if (trim(block_name) == 'OBSERVATION_FILE') then
+              option%io_buffer = 'VTK is not a FORMAT option for the &
+                  &OUTPUT,OBSERVATION_FILE block. Remove FORMAT VTK &
+                  &specification from the OBSERVATION_FILE block in &
+                  &the input deck.'
+              call PrintErrMsg(option)
+            endif
+
             output_option%print_vtk = PETSC_TRUE
         !.............
           case default
@@ -1061,7 +1091,8 @@ subroutine Output(realization_base,snapshot_plot_flag,observation_plot_flag, &
 
     if (realization_base%output_option%print_tecplot) then
       call PetscTime(tstart,ierr);CHKERRQ(ierr)
-      call PetscLogEventBegin(logging%event_output_tecplot,ierr);CHKERRQ(ierr)
+      call PetscLogEventBegin(logging%event_output_tecplot, &
+                              ierr);CHKERRQ(ierr)
       select case(realization_base%output_option%tecplot_format)
         case (TECPLOT_POINT_FORMAT)
           call OutputTecplotPoint(realization_base)
@@ -1077,7 +1108,8 @@ subroutine Output(realization_base,snapshot_plot_flag,observation_plot_flag, &
 
     if (realization_base%output_option%print_explicit_flowrate) then
       call PetscTime(tstart,ierr);CHKERRQ(ierr)
-      call PetscLogEventBegin(logging%event_output_tecplot,ierr);CHKERRQ(ierr)
+      call PetscLogEventBegin(logging%event_output_tecplot, &
+                              ierr);CHKERRQ(ierr)
       call OutputPrintExplicitFlowrates(realization_base)
       call PetscLogEventEnd(logging%event_output_tecplot,ierr);CHKERRQ(ierr)
       call PetscTime(tend,ierr);CHKERRQ(ierr)
@@ -2469,7 +2501,7 @@ subroutine OutputListEnsureVariablesExist(output_variable_list,option)
   ! Date: 03/02/17
   !
   use Option_module
-  use Material_Aux_class, only : soil_compressibility_index, &
+  use Material_Aux_module, only : soil_compressibility_index, &
                                  soil_reference_pressure_index
   use Variables_module
 
@@ -2563,8 +2595,8 @@ subroutine OutputFindNaNOrInfInVec(vec,grid,option)
   call VecRestoreArrayReadF90(vec,vec_p,ierr);CHKERRQ(ierr)
 
   exscan_count = 0
-  call MPI_Exscan(local_count,exscan_count,ONE_INTEGER_MPI, &
-                MPIU_INTEGER,MPI_SUM,option%mycomm,ierr)
+  call MPI_Exscan(local_count,exscan_count,ONE_INTEGER_MPI,MPIU_INTEGER, &
+                  MPI_SUM,option%mycomm,ierr);CHKERRQ(ierr)
   do i = 1, min(max_number_to_print-exscan_count,local_count)
     idof = iarray(2,i)
     if (idof > 0) then

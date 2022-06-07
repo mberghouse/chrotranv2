@@ -7,8 +7,8 @@ module Hydrate_Aux_module
   use Matrix_Zeroing_module
 
   implicit none
-  
-  private 
+
+  private
 
   PetscBool, public :: hydrate_print_state_transition = PETSC_TRUE
   PetscBool, public :: hydrate_analytical_derivatives = PETSC_FALSE
@@ -29,6 +29,7 @@ module Hydrate_Aux_module
   PetscBool, public :: hydrate_allow_state_change = PETSC_TRUE
   PetscBool, public :: hydrate_force_iteration = PETSC_FALSE
   PetscBool, public :: hydrate_state_changed = PETSC_FALSE
+  PetscReal, public :: hydrate_bc_reference_pressure = 101325
 
   !Salinity
   PetscReal, public :: hydrate_xmol_nacl = 0.d0
@@ -48,7 +49,7 @@ module Hydrate_Aux_module
   !PetscInt, parameter, public :: GA_STATE = 3
   !PetscInt, parameter, public :: ANY_STATE = 4
   !PetscInt, parameter, public :: MULTI_STATE = 5
-  
+
   PetscInt, parameter, public :: PREV_TS = 1
   PetscInt, parameter, public :: PREV_IT = 2
 
@@ -57,15 +58,15 @@ module Hydrate_Aux_module
   PetscInt, parameter, public :: HYDRATE_2PH_STATE_AIR_PRESSURE_DOF = 3
   PetscInt, parameter, public :: HYDRATE_G_STATE_AIR_PRESSURE_DOF = 2
   PetscInt, parameter, public :: HYDRATE_GAS_SATURATION_DOF = 2
-  
+
   PetscInt, parameter, public :: HYDRATE_ENERGY_DOF = 3
   PetscInt, parameter, public :: HYDRATE_L_STATE_X_MOLE_DOF = 2
-  
+
   PetscInt, parameter, public :: HYDRATE_STATE_INDEX = 1
   PetscInt, parameter, public :: HYDRATE_LIQUID_EQUATION_INDEX = 1
   PetscInt, parameter, public :: HYDRATE_GAS_EQUATION_INDEX = 2
   PetscInt, parameter, public :: HYDRATE_ENERGY_EQUATION_INDEX = 3
-  
+
   PetscInt, parameter, public :: HYDRATE_LIQUID_PRESSURE_INDEX = 2
   PetscInt, parameter, public :: HYDRATE_GAS_PRESSURE_INDEX = 3
   PetscInt, parameter, public :: HYDRATE_AIR_PRESSURE_INDEX = 4
@@ -83,7 +84,7 @@ module Hydrate_Aux_module
   PetscInt, parameter, public :: HYDRATE_LIQUID_CONDUCTANCE_INDEX = 16
   PetscInt, parameter, public :: HYDRATE_GAS_CONDUCTANCE_INDEX = 17
   PetscInt, parameter, public :: HYDRATE_MAX_INDEX = 18
-  
+
   PetscInt, parameter, public :: HYDRATE_UPDATE_FOR_DERIVATIVE = -1
   PetscInt, parameter, public :: HYDRATE_UPDATE_FOR_FIXED_ACCUM = 0
   PetscInt, parameter, public :: HYDRATE_UPDATE_FOR_ACCUM = 1
@@ -92,17 +93,17 @@ module Hydrate_Aux_module
 
   PetscReal, parameter, public :: HYDRATE_IMMISCIBLE_VALUE = 1.d-10
   PetscReal, parameter, public :: HYDRATE_PRESSURE_SCALE = 1.d0
-  
+
   ! these variables, which are global to hydrate, can be modified
   PetscInt, public :: dof_to_primary_variable(3,15)
   PetscInt, public :: hydrate_2ph_energy_dof = HYDRATE_TEMPERATURE_INDEX
 
-  PetscInt, parameter, public :: HYD_MULTI_STATE = -2 
-  PetscInt, parameter, public :: HYD_ANY_STATE = -1 
+  PetscInt, parameter, public :: HYD_MULTI_STATE = -2
+  PetscInt, parameter, public :: HYD_ANY_STATE = -1
   PetscInt, parameter, public :: NULL_STATE = 0
   PetscInt, parameter, public :: L_STATE = 1
   PetscInt, parameter, public :: G_STATE = 2
-  PetscInt, parameter, public :: H_STATE = 3 !5 (4 and 5 conflict with 
+  PetscInt, parameter, public :: H_STATE = 3 !5 (4 and 5 conflict with
   PetscInt, parameter, public :: I_STATE = 4 !4 ANY_STATE and MULTI_STATE)
   PetscInt, parameter, public :: GA_STATE = 5
   PetscInt, parameter, public :: HG_STATE = 6
@@ -133,7 +134,7 @@ module Hydrate_Aux_module
 
   PetscReal, parameter :: TQD = 1.d-2 !0.d0 !1.0d-2 !Quad point temperature (C)
 
-  !Ice: 
+  !Ice:
   PetscReal, parameter :: ICE_DENSITY_KG = 920.d0 !kg/m^3
   PetscReal, parameter :: ICE_DENSITY = 50.86d0 !mol/L
 
@@ -152,6 +153,7 @@ module Hydrate_Aux_module
   PetscBool, public :: hydrate_with_sedimentation = PETSC_FALSE
   PetscBool, public :: hydrate_no_pc = PETSC_FALSE
   PetscBool, public :: hydrate_with_methanogenesis = PETSC_FALSE
+  PetscBool, public :: hydrate_compute_surface_tension = PETSC_FALSE
 
   type, public :: hydrate_auxvar_type
     PetscInt :: istate_store(2) ! 1 = previous timestep; 2 = previous iteration
@@ -182,9 +184,9 @@ module Hydrate_Aux_module
     PetscReal :: denl_T
     PetscReal :: deng_pg
     PetscReal :: deng_pa
-    PetscReal :: deng_T    
+    PetscReal :: deng_T
     PetscReal :: dengkg_pg
-    PetscReal :: dengkg_T    
+    PetscReal :: dengkg_T
     PetscReal :: Ul_pl
     PetscReal :: Ul_T
     PetscReal :: Hl_pl
@@ -194,7 +196,7 @@ module Hydrate_Aux_module
     PetscReal :: Ug_T
     PetscReal :: Hg_pg
     PetscReal :: Hg_pa
-    PetscReal :: Hg_T 
+    PetscReal :: Hg_T
 
     PetscReal :: Hv
     PetscReal :: Ha
@@ -202,24 +204,24 @@ module Hydrate_Aux_module
     PetscReal :: Ua
     PetscReal :: Hv_pg
     PetscReal :: Hv_pa
-    PetscReal :: Hv_T 
+    PetscReal :: Hv_T
     PetscReal :: Ha_pg
     PetscReal :: Ha_pa
-    PetscReal :: Ha_T 
+    PetscReal :: Ha_T
     PetscReal :: Uv_pg
     PetscReal :: Uv_pa
-    PetscReal :: Uv_T 
+    PetscReal :: Uv_T
     PetscReal :: Ua_pg
     PetscReal :: Ua_pa
-    PetscReal :: Ua_T 
+    PetscReal :: Ua_T
     PetscReal :: denv
-    PetscReal :: dena 
-    PetscReal :: denv_T 
-    PetscReal :: dena_T 
+    PetscReal :: dena
+    PetscReal :: denv_T
+    PetscReal :: dena_T
     PetscReal :: denv_pg
     PetscReal :: dena_pg
-    PetscReal :: Hc 
-    
+    PetscReal :: Hc
+
     PetscReal :: psat_p
     PetscReal :: psat_T
     PetscReal :: pv_p
@@ -238,9 +240,9 @@ module Hydrate_Aux_module
     PetscReal :: mug_T
     PetscReal :: mug_pg
     PetscReal :: xmol_p(2,2)
-    PetscReal :: xmol_T(2,2)    
+    PetscReal :: xmol_T(2,2)
   end type hydrate_derivative_auxvar_type
-  
+
   type, public :: hydrate_parameter_type
     PetscReal, pointer :: diffusion_coefficient(:) ! (iphase)
     PetscReal :: newton_inf_scaled_res_tol
@@ -257,7 +259,7 @@ module Hydrate_Aux_module
     PetscReal :: z_smt
     type(methanogenesis_type), pointer :: next
   end type methanogenesis_type
-  
+
   type, public :: hydrate_type
     PetscBool :: auxvars_up_to_date
     PetscBool :: inactive_cells_exist
@@ -274,12 +276,12 @@ module Hydrate_Aux_module
     module procedure HydrateAuxVarArray1Destroy
     module procedure HydrateAuxVarArray2Destroy
   end interface HydrateAuxVarDestroy
-  
+
   interface HydrateOutputAuxVars
     module procedure HydrateOutputAuxVars1
     module procedure HydrateOutputAuxVars2
   end interface HydrateOutputAuxVars
-  
+
   public :: HydrateAuxCreate, &
             HydrateMethanogenesisCreate, &
             HydrateAuxDestroy, &
@@ -308,21 +310,21 @@ contains
 ! ************************************************************************** !
 
 function HydrateAuxCreate(option)
-  ! 
+  !
   ! Allocate and initialize auxiliary object
-  ! 
+  !
   ! Author: Michael Nole
   ! Date: 07/23/19
-  ! 
+  !
 
   use Option_module
 
   implicit none
 
   type(option_type) :: option
-    
+
   type(hydrate_type), pointer :: HydrateAuxCreate
-  
+
   type(hydrate_type), pointer :: aux
 
   ! L_STATE,G_STATE,H_STATE,I_STATE,GA_STATE,HG_STATE,HA_STATE,HI_STATE,
@@ -359,8 +361,8 @@ function HydrateAuxCreate(option)
              HYDRATE_LIQ_SATURATION_INDEX, HYDRATE_GAS_SATURATION_INDEX, &
              HYDRATE_ICE_SATURATION_INDEX &
              ],shape(dof_to_primary_variable))
-  
-  allocate(aux) 
+
+  allocate(aux)
   aux%auxvars_up_to_date = PETSC_FALSE
   aux%inactive_cells_exist = PETSC_FALSE
   aux%num_aux = 0
@@ -373,7 +375,7 @@ function HydrateAuxCreate(option)
 
   allocate(aux%hydrate_parameter)
   allocate(aux%hydrate_parameter%diffusion_coefficient(option%nphase))
-  !geh: there is no point in setting default lquid diffusion coeffcient values 
+  !geh: there is no point in setting default lquid diffusion coeffcient values
   !     here as they will be overwritten by the fluid property defaults.
   aux%hydrate_parameter%diffusion_coefficient(LIQUID_PHASE) = &
                                                            UNINITIALIZED_DOUBLE
@@ -382,19 +384,19 @@ function HydrateAuxCreate(option)
   aux%hydrate_parameter%check_post_converged = PETSC_FALSE
 
   HydrateAuxCreate => aux
-  
+
 end function HydrateAuxCreate
 
 ! ************************************************************************** !
 
 function HydrateMethanogenesisCreate()
 
-  ! 
+  !
   ! Allocate and initialize methanogenesis object
-  ! 
+  !
   ! Author: Michael Nole
   ! Date: 11/21/19
-  ! 
+  !
 
   type(methanogenesis_type), pointer :: HydrateMethanogenesisCreate
   type(methanogenesis_type), pointer :: methanogenesis
@@ -414,17 +416,17 @@ end function HydrateMethanogenesisCreate
 
 ! ************************************************************************** !
 subroutine HydrateAuxVarInit(auxvar,allocate_derivative,option)
-  ! 
+  !
   ! Initialize auxiliary object
-  ! 
+  !
   ! Author: Michael Nole
   ! Date: 07/23/19
-  ! 
+  !
 
   use Option_module
 
   implicit none
-  
+
   type(hydrate_auxvar_type) :: auxvar
   PetscBool :: allocate_derivative
   type(option_type) :: option
@@ -438,7 +440,7 @@ subroutine HydrateAuxVarInit(auxvar,allocate_derivative,option)
   auxvar%srg = 0.d0
   auxvar%pert = 0.d0
   auxvar%istatechng = PETSC_FALSE
-  
+
   allocate(auxvar%pres(option%nphase+FOUR_INTEGER))
   auxvar%pres = 0.d0
   allocate(auxvar%sat(option%nphase))
@@ -502,7 +504,7 @@ subroutine HydrateAuxVarInit(auxvar,allocate_derivative,option)
     auxvar%d%denv_pg = 0.d0
     auxvar%d%dena_pg = 0.d0
     auxvar%d%Hc = 0.d0
-        
+
     auxvar%d%psat_p = 0.d0
     auxvar%d%psat_T = 0.d0
     auxvar%d%pv_p = 0.d0
@@ -525,23 +527,23 @@ subroutine HydrateAuxVarInit(auxvar,allocate_derivative,option)
   else
     nullify(auxvar%d)
   endif
-  
+
 end subroutine HydrateAuxVarInit
 
 ! ************************************************************************** !
 
 subroutine HydrateAuxVarCopy(auxvar,auxvar2,option)
-  ! 
+  !
   ! Copies an auxiliary variable
-  ! 
+  !
   ! Author: Michael Nole
   ! Date: 07/23/19
-  ! 
+  !
 
   use Option_module
 
   implicit none
-  
+
   type(hydrate_auxvar_type) :: auxvar, auxvar2
   type(option_type) :: option
 
@@ -568,18 +570,18 @@ end subroutine HydrateAuxVarCopy
 ! ************************************************************************** !
 
 subroutine HydrateAuxSetEnergyDOF(energy_keyword,option)
-  ! 
-  ! Sets the two phase primary dependent variable for energy based on user 
+  !
+  ! Sets the two phase primary dependent variable for energy based on user
   ! input.
-  ! 
+  !
   ! Author: Michael Nole
   ! Date: 07/23/19
-  ! 
+  !
   use Option_module
   use String_module
 
   implicit none
-  
+
   character(len=MAXWORDLENGTH) :: energy_keyword
   type(option_type) :: option
 
@@ -591,7 +593,7 @@ subroutine HydrateAuxSetEnergyDOF(energy_keyword,option)
       hydrate_2ph_energy_dof = HYDRATE_AIR_PRESSURE_INDEX
     case default
       option%io_buffer = 'Energy Keyword: ' // trim(energy_keyword) // &
-                          ' not recognized in Hydrate Mode'    
+                          ' not recognized in Hydrate Mode'
       call PrintErrMsg(option)
   end select
 
@@ -611,7 +613,7 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
   use EOS_Water_module
   use EOS_Gas_module
   use Characteristic_Curves_module
-  use Material_Aux_class
+  use Material_Aux_module
 
   implicit none
 
@@ -620,7 +622,7 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
   PetscReal :: x(option%nflowdof)
   type(hydrate_auxvar_type) :: hyd_auxvar
   type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   PetscInt :: natural_id
 
   PetscInt :: gid, lid, acid, wid, eid, hid, iid
@@ -648,7 +650,7 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
   PetscReal :: dden_ice_dT, dden_ice_dP
   character(len=8) :: state_char
   PetscErrorCode :: ierr, eos_henry_ierr
-  PetscReal :: dTf, h_sat_eff, i_sat_eff, liq_sat_eff, gas_sat_eff
+  PetscReal :: dTf,dTfs, h_sat_eff, i_sat_eff, liq_sat_eff, gas_sat_eff
   PetscReal :: solid_sat_eff
   PetscReal :: sigma, dP
 
@@ -695,6 +697,10 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
   hyd_auxvar%den(hid) = HYDRATE_DENSITY
   hyd_auxvar%den_kg(hid) = HYDRATE_DENSITY_KG
 
+  if (option%flow%density_depends_on_salinity) then
+    hydrate_xmol_nacl = global_auxvar%m_nacl(1)
+  endif
+
   select case(global_auxvar%istate)
     case(L_STATE)
 !     ********* Aqueous State (A) ********************************
@@ -720,7 +726,7 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
                      material_auxvar,option)
       call HenrysConstantMethane(hyd_auxvar%temp,K_H_tilde)
 
-      K_H_tilde_hyd = K_H_tilde      
+      K_H_tilde_hyd = K_H_tilde
 
       if (hydrate_adjust_ghsz_solubility) then
         call HydrateGHSZSolubilityCorrection(hyd_auxvar%temp,hyd_auxvar% &
@@ -780,7 +786,7 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
              CapillaryPressure(hyd_auxvar%sat(lid), &
                                hyd_auxvar%pres(cpid),dpc_dsatl,option)
       endif
-      
+
       hyd_auxvar%pres(lid) = hyd_auxvar%pres(gid) - &
                              hyd_auxvar%pres(cpid)
 
@@ -865,12 +871,11 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
              CapillaryPressure(hyd_auxvar%sat(lid), hyd_auxvar%pres(cpid), &
                                dpc_dsatl,option)
       endif
-      
+
       !IFT calculation
       sigma=1.d0
-      if (characteristic_curves%saturation_function%calc_int_tension) then
-       call characteristic_curves%saturation_function% &
-           CalcInterfacialTension(hyd_auxvar%temp,sigma)
+      if (hydrate_compute_surface_tension) then
+       call EOSWaterSurfaceTension(hyd_auxvar%temp,sigma)
       endif
       hyd_auxvar%pres(cpid) = hyd_auxvar%pres(cpid)*sigma
 
@@ -1042,8 +1047,14 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
       else
         dTf = 0.d0
       endif
-      
-      hyd_auxvar%temp = TQD-dTf
+
+      if (hydrate_xmol_nacl > 0.d0) then
+        call IceSalinityOffset(hydrate_xmol_nacl,dTfs)
+      else
+        dTfs = 0.d0
+      endif
+
+      hyd_auxvar%temp = TQD-dTf+dTfs
 
       call EOSWaterSaturationPressure(hyd_auxvar%temp, &
                                           hyd_auxvar%pres(spid),ierr)
@@ -1082,23 +1093,23 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
 
       if (hydrate_gt_3phase) then
         if (hyd_auxvar%sat(hid) > hyd_auxvar%sat(gid)) then
-          h_sat_eff = hyd_auxvar%sat(hid) + hyd_auxvar%sat(gid) 
+          h_sat_eff = hyd_auxvar%sat(hid) + hyd_auxvar%sat(gid)
           gas_sat_eff = 2.d0 * hyd_auxvar%sat(gid)
         else
-          gas_sat_eff = hyd_auxvar%sat(hid) + hyd_auxvar%sat(gid) 
+          gas_sat_eff = hyd_auxvar%sat(hid) + hyd_auxvar%sat(gid)
           h_sat_eff = 2.d0 * hyd_auxvar%sat(hid)
         endif
       endif
 
       h_sat_eff = hyd_auxvar%sat(hid)
-      
+
       if (hydrate_eff_sat_scaling) then
         liq_sat_eff = hyd_auxvar%sat(lid)/(hyd_auxvar%sat(lid)+ &
                     hyd_auxvar%sat(gid))
       else
         liq_sat_eff = hyd_auxvar%sat(lid)
       endif
-      
+
       call HydratePE(hyd_auxvar%temp, h_sat_eff, PE_hyd, dP,&
                       characteristic_curves, material_auxvar,option)
       if (hydrate_no_pc) then
@@ -1108,7 +1119,7 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
                 liq_sat_eff, hyd_auxvar%pres(cpid), &
                 dpc_dsatl,option)
       endif
-      
+
       hyd_auxvar%pres(apid) = PE_hyd
 
       call EOSWaterSaturationPressure(hyd_auxvar%temp, &
@@ -1122,9 +1133,8 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
 
       !IFT calculation
       sigma=1.d0
-      if (characteristic_curves%saturation_function%calc_int_tension) then
-       call characteristic_curves%saturation_function% &
-           CalcInterfacialTension(hyd_auxvar%temp,sigma)
+      if (hydrate_compute_surface_tension) then
+       call EOSWaterSurfaceTension(hyd_auxvar%temp,sigma)
       endif
       hyd_auxvar%pres(cpid) = hyd_auxvar%pres(cpid)*sigma
 
@@ -1161,7 +1171,15 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
         dTf = 0.d0
       endif
 
-      hyd_auxvar%temp = TQD-dTf
+      if (hydrate_xmol_nacl > 0.d0) then
+        call IceSalinityOffset(hydrate_xmol_nacl,dTfs)
+      else
+        dTfs = 0.d0
+      endif
+
+
+      hyd_auxvar%temp = TQD-dTf+dTfs
+
       call HenrysConstantMethane(hyd_auxvar%temp,K_H_tilde)
       call HydratePE(hyd_auxvar%temp,h_sat_eff, PE_hyd, dP,&
           characteristic_curves, material_auxvar,option)
@@ -1257,12 +1275,11 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
              CapillaryPressure(hyd_auxvar%sat(lid), &
                              hyd_auxvar%pres(cpid),dpc_dsatl,option)
       endif
-      
+
       !IFT calculation
       sigma=1.d0
-      if (characteristic_curves%saturation_function%calc_int_tension) then
-       call characteristic_curves%saturation_function% &
-           CalcInterfacialTension(hyd_auxvar%temp,sigma)
+      if (hydrate_compute_surface_tension) then
+       call EOSWaterSurfaceTension(hyd_auxvar%temp,sigma)
       endif
       hyd_auxvar%pres(cpid) = hyd_auxvar%pres(cpid)*sigma
 
@@ -1295,7 +1312,7 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
       else
         dTf = 0.d0
       endif
-      
+
       !if (hyd_auxvar%sat(hid) > hyd_auxvar%sat(iid)) then
       !  if (hyd_auxvar%sat(hid) > hyd_auxvar%sat(gid)) then
       !    call HydratePE(hyd_auxvar%temp, 1.d0 - hyd_auxvar%sat(lid), &
@@ -1324,7 +1341,13 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
       !  endif
       !endif
 
-      hyd_auxvar%temp = TQD - dTf
+      if (hydrate_xmol_nacl > 0.d0) then
+        call IceSalinityOffset(hydrate_xmol_nacl,dTfs)
+      else
+        dTfs = 0.d0
+      endif
+
+      hyd_auxvar%temp = TQD - dTf + dTfs
       call HydratePE(hyd_auxvar%temp,h_sat_eff, PE_hyd, dP, &
           characteristic_curves, material_auxvar, option)
       hyd_auxvar%pres(apid) = PE_hyd
@@ -1348,9 +1371,8 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
       endif
       !IFT calculation
       sigma=1.d0
-      if (characteristic_curves%saturation_function%calc_int_tension) then
-       call characteristic_curves%saturation_function% &
-           CalcInterfacialTension(hyd_auxvar%temp,sigma)
+      if (hydrate_compute_surface_tension) then
+       call EOSWaterSurfaceTension(hyd_auxvar%temp,sigma)
       endif
       hyd_auxvar%pres(cpid) = hyd_auxvar%pres(cpid)*sigma
 
@@ -1425,7 +1447,15 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
                            hyd_auxvar%den_kg(lid),hyd_auxvar%den(lid),ierr)
     endif
   else
-    aux(1) = global_auxvar%m_nacl(1)
+    if (option%iflag == HYDRATE_UPDATE_FOR_FIXED_ACCUM) then
+      ! For the computation of fixed accumulation term use NaCl
+      ! value, m_nacl(2), from the previous time step.
+      aux(1) = global_auxvar%m_nacl(2)
+    else
+      ! Use NaCl value for the current time step, m_nacl(1), for computing
+      ! the accumulation term
+      aux(1) = global_auxvar%m_nacl(1)
+    endif
     call EOSWaterDensityExt(hyd_auxvar%temp,cell_pressure,aux, &
                               hyd_auxvar%den_kg(lid),hyd_auxvar%den(lid),ierr)
   endif
@@ -1475,7 +1505,7 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
 
   if (hydrate_eff_sat_scaling) then
     if (hyd_auxvar%sat(lid) > 0.d0 .or. hyd_auxvar%sat(gid) > 0.d0) then
-      liq_sat_eff = hyd_auxvar%sat(lid) / (hyd_auxvar%sat(lid)+hyd_auxvar%sat(gid)) 
+      liq_sat_eff = hyd_auxvar%sat(lid) / (hyd_auxvar%sat(lid)+hyd_auxvar%sat(gid))
       gas_sat_eff = 1.d0 - liq_sat_eff
     else
       liq_sat_eff = 0.d0
@@ -1558,8 +1588,8 @@ subroutine HydrateEOSGasError(natural_id,ierr,hyd_auxvar,option)
   PetscInt :: ierr
   type(hydrate_auxvar_type) :: hyd_auxvar
   type(option_type) :: option
-  
-  
+
+
   call PrintMsgByCell(option,natural_id, &
                       'Error in HydrateAuxVarCompute->EOSGasHenry')
   if (ierr == EOS_GAS_TEMP_BOUND_EXCEEDED) then
@@ -1570,7 +1600,7 @@ subroutine HydrateEOSGasError(natural_id,ierr,hyd_auxvar,option)
     hydrate_high_temp_ts_cut = PETSC_TRUE
   endif
 
-  
+
 end subroutine HydrateEOSGasError
 
 ! ************************************************************************** !
@@ -1580,10 +1610,10 @@ subroutine HydrateAuxVarUpdateState(x,hyd_auxvar,global_auxvar, &
                                     characteristic_curves,natural_id, &
                                     option)
 
-  ! 
-  ! Decides on state changes and adds epsilons to new primary variables 
+  !
+  ! Decides on state changes and adds epsilons to new primary variables
   ! accordingly.
-  ! 
+  !
   ! Author: Michael Nole
   ! Date: 01/28/18
   !
@@ -1592,7 +1622,7 @@ subroutine HydrateAuxVarUpdateState(x,hyd_auxvar,global_auxvar, &
   use Global_Aux_module
   use EOS_Water_module
   use Characteristic_Curves_module
-  use Material_Aux_class
+  use Material_Aux_module
 
   implicit none
 
@@ -1601,13 +1631,13 @@ subroutine HydrateAuxVarUpdateState(x,hyd_auxvar,global_auxvar, &
   class(characteristic_curves_type) :: characteristic_curves
   type(hydrate_auxvar_type) :: hyd_auxvar
   type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
 
   PetscReal, parameter :: epsilon = 0.d0
   PetscReal :: liq_epsilon, gas_epsilon, hyd_epsilon, two_phase_epsilon
   PetscReal :: ga_epsilon, ha_epsilon
   PetscReal :: x(option%nflowdof)
-  PetscReal :: PE_hyd, dP, K_H, Tf_ice, dTf, dTfs, h_sat_eff, i_sat_eff 
+  PetscReal :: PE_hyd, dP, K_H, Tf_ice, dTf, dTfs, h_sat_eff, i_sat_eff
   PetscReal :: K_H_tilde, K_H_tilde_hyd
   PetscInt :: apid, cpid, vpid, spid
   PetscInt :: gid, lid, hid, iid, acid, wid
@@ -1639,7 +1669,7 @@ subroutine HydrateAuxVarUpdateState(x,hyd_auxvar,global_auxvar, &
   two_phase_epsilon = 0.d0
 
   !man: right now comparing hydrate equilib pressure to gas
-  !pressure (assuming low water solubility in methane). 
+  !pressure (assuming low water solubility in methane).
   !Ideally would compare to partial pressure of methane.
 
   if (global_auxvar%istate == ZERO_INTEGER .and. hyd_auxvar%sat(gid) &
@@ -1676,14 +1706,18 @@ subroutine HydrateAuxVarUpdateState(x,hyd_auxvar,global_auxvar, &
     dTf = 0.d0
   endif
 
+  if (option%flow%density_depends_on_salinity) then
+    hydrate_xmol_nacl = global_auxvar%m_nacl(1)
+  endif
+
   if (hydrate_xmol_nacl > 0.d0) then
-    call HydrateSalinityOffset(hydrate_xmol_nacl,dTfs)
+    call IceSalinityOffset(hydrate_xmol_nacl,dTfs)
   else
     dTfs = 0.d0
   endif
 
   dTf = dTf - dTfs
-  
+
 
   Tf_ice = TQD - dTf
   !Update State
@@ -1693,7 +1727,7 @@ subroutine HydrateAuxVarUpdateState(x,hyd_auxvar,global_auxvar, &
   select case(global_auxvar%istate)
     case(L_STATE)
       if (hyd_auxvar%temp > Tf_ice) then
-        !if (hyd_auxvar%pres(apid) >= hyd_auxvar% & 
+        !if (hyd_auxvar%pres(apid) >= hyd_auxvar% &
         !     pres(lid)*(1.d0-window_epsilon)) then
         !  !if (hyd_auxvar%pres(apid) >= PE_hyd) then
         !  if (hyd_auxvar%pres(gid) >= PE_hyd) then
@@ -1923,7 +1957,7 @@ subroutine HydrateAuxVarUpdateState(x,hyd_auxvar,global_auxvar, &
       endif
     case(AI_STATE)
       !if (hyd_auxvar%pres(apid) >= hyd_auxvar% &
-      !       pres(lid)*(1.d0-window_epsilon)) then 
+      !       pres(lid)*(1.d0-window_epsilon)) then
       !  if (hyd_auxvar%pres(apid) < PE_hyd) then
       if (hyd_auxvar%pres(apid) > PE_hyd*(1.d0-window_epsilon)) then
         if (hyd_auxvar%pres(lid) < PE_hyd*(1.d0+window_epsilon)) then
@@ -2139,7 +2173,7 @@ subroutine HydrateAuxVarUpdateState(x,hyd_auxvar,global_auxvar, &
   !Update primary variables
 
   if (istatechng) then
-  
+
     select case (old_state)
       case(L_STATE)
         state_change_string = 'Liquid --> '
@@ -2382,7 +2416,7 @@ subroutine HydrateAuxVarPerturb(hyd_auxvar,global_auxvar, &
   use Option_module
   use Characteristic_Curves_module
   use Global_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
 
   implicit none
 
@@ -2390,7 +2424,7 @@ subroutine HydrateAuxVarPerturb(hyd_auxvar,global_auxvar, &
   PetscInt :: natural_id
   type(hydrate_auxvar_type) :: hyd_auxvar(0:)
   type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   class(characteristic_curves_type) :: characteristic_curves
 
   PetscReal :: x(option%nflowdof), x_pert_plus(option%nflowdof), &
@@ -2402,12 +2436,12 @@ subroutine HydrateAuxVarPerturb(hyd_auxvar,global_auxvar, &
 !  PetscReal, parameter :: perturbation_tolerance = 1.d-11
   PetscReal, parameter :: min_mole_fraction_pert = 1.d-12
   PetscReal, parameter :: min_perturbation = 1.d-10
-  
+
   PetscReal, parameter :: min_pres_pert = 1.d-3
   PetscReal, parameter :: min_temp_pert = 8.66d-9
   PetscReal, parameter :: min_xmol_pert = 1.d-14
   PetscReal, parameter :: min_sat_pert = 3.16d-11
-  
+
   PetscInt :: idof
 
   lid = 1
@@ -2707,13 +2741,13 @@ subroutine HydrateAuxVarPerturb(hyd_auxvar,global_auxvar, &
       endif
 
   end select
-  ! HYDRATE_UPDATE_FOR_DERIVATIVE indicates call from perturbation  
+  ! HYDRATE_UPDATE_FOR_DERIVATIVE indicates call from perturbation
 
   option%iflag = HYDRATE_UPDATE_FOR_DERIVATIVE
- 
+
   do idof = 1, option%nflowdof
-   
-    if (hydrate_central_diff_jacobian) then 
+
+    if (hydrate_central_diff_jacobian) then
       pert(idof) = max(1.d-7 * x(idof),1.d-7)
 
       x_pert_minus = x
@@ -2791,22 +2825,22 @@ end subroutine HydrateAuxVarPerturb
 
 subroutine HydratePrintAuxVars(hydrate_auxvar,global_auxvar,material_auxvar, &
                                natural_id,string,option)
-  ! 
+  !
   ! Prints out the contents of an auxvar
-  ! 
+  !
   ! Author: Michael Nole
   ! Date: 07/23/19
-  ! 
+  !
 
   use Global_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Option_module
 
   implicit none
 
   type(hydrate_auxvar_type) :: hydrate_auxvar
   type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   PetscInt :: natural_id
   character(len=*) :: string
   type(option_type) :: option
@@ -2859,15 +2893,15 @@ subroutine HydratePrintAuxVars(hydrate_auxvar,global_auxvar,material_auxvar, &
       liquid_saturation = hydrate_auxvar%sat(lid)
       gas_saturation = hydrate_auxvar%sat(gid)
   end select
-  liquid_mass = (liquid_density*hydrate_auxvar%xmol(lid,lid)* & 
+  liquid_mass = (liquid_density*hydrate_auxvar%xmol(lid,lid)* &
                  liquid_saturation+ &
-                 gas_density*hydrate_auxvar%xmol(lid,gid)* & 
-                 gas_saturation)* & 
+                 gas_density*hydrate_auxvar%xmol(lid,gid)* &
+                 gas_saturation)* &
                  hydrate_auxvar%effective_porosity*material_auxvar%volume
-  gas_mass = (liquid_density*hydrate_auxvar%xmol(gid,lid)* & 
+  gas_mass = (liquid_density*hydrate_auxvar%xmol(gid,lid)* &
               liquid_saturation+ &
-              gas_density*hydrate_auxvar%xmol(gid,gid)* & 
-              gas_saturation)* & 
+              gas_density*hydrate_auxvar%xmol(gid,gid)* &
+              gas_saturation)* &
               hydrate_auxvar%effective_porosity*material_auxvar%volume
   print *, 'tot liq comp mass [kmol]: ', liquid_mass
   print *, 'tot gas comp mass [kmol]: ', gas_mass
@@ -2905,22 +2939,22 @@ end subroutine HydratePrintAuxVars
 
 subroutine HydrateOutputAuxVars1(hydrate_auxvar,global_auxvar,material_auxvar, &
                                  natural_id,string,append,option)
-  ! 
+  !
   ! Prints out the contents of an auxvar to a file
-  ! 
+  !
   ! Author: Michael Nole
   ! Date: 07/23/19
-  ! 
+  !
 
   use Global_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
   use Option_module
 
   implicit none
 
   type(hydrate_auxvar_type) :: hydrate_auxvar
   type(global_auxvar_type) :: global_auxvar
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   PetscInt :: natural_id
   character(len=*) :: string
   PetscBool :: append
@@ -2944,7 +2978,7 @@ subroutine HydrateOutputAuxVars1(hydrate_auxvar,global_auxvar,material_auxvar, &
   acid = option%air_id ! air component id
   wid = option%water_id
   eid = option%energy_id
-  
+
   liquid_density = 0.d0
   gas_density = 0.d0
   liquid_energy = 0.d0
@@ -2983,15 +3017,15 @@ subroutine HydrateOutputAuxVars1(hydrate_auxvar,global_auxvar,material_auxvar, &
       liquid_saturation = hydrate_auxvar%sat(lid)
       gas_saturation = hydrate_auxvar%sat(gid)
   end select
-  liquid_mass = (liquid_density*hydrate_auxvar%xmol(lid,lid)* & 
+  liquid_mass = (liquid_density*hydrate_auxvar%xmol(lid,lid)* &
                  liquid_saturation+ &
-                 gas_density*hydrate_auxvar%xmol(lid,gid)* & 
-                 gas_saturation)* & 
+                 gas_density*hydrate_auxvar%xmol(lid,gid)* &
+                 gas_saturation)* &
                  hydrate_auxvar%effective_porosity*material_auxvar%volume
-  gas_mass = (liquid_density*hydrate_auxvar%xmol(gid,lid)* & 
+  gas_mass = (liquid_density*hydrate_auxvar%xmol(gid,lid)* &
               liquid_saturation+ &
-              gas_density*hydrate_auxvar%xmol(gid,gid)* & 
-              gas_saturation)* & 
+              gas_density*hydrate_auxvar%xmol(gid,gid)* &
+              gas_saturation)* &
               hydrate_auxvar%effective_porosity*material_auxvar%volume
   write(86,*) 'tot liq comp mass [kmol]: ', liquid_mass
   write(86,*) 'tot gas comp mass [kmol]: ', gas_mass
@@ -3052,7 +3086,7 @@ subroutine HydrateOutputAuxVars1(hydrate_auxvar,global_auxvar,material_auxvar, &
   write(86,*) hydrate_auxvar%mobility(gid)
   write(86,*) hydrate_auxvar%effective_porosity
   write(86,*) '--------------------------------------------------------'
-  
+
   close(86)
 
 end subroutine HydrateOutputAuxVars1
@@ -3060,12 +3094,12 @@ end subroutine HydrateOutputAuxVars1
 ! ************************************************************************** !
 
 subroutine HydrateOutputAuxVars2(hydrate_auxvars,global_auxvars,option)
-  ! 
+  !
   ! Prints out the contents of an auxvar to a file
-  ! 
+  !
   ! Author: Michael Nole
   ! Date: 07/23/19
-  ! 
+  !
 
   use Global_Aux_module
   use Option_module
@@ -3090,14 +3124,14 @@ subroutine HydrateOutputAuxVars2(hydrate_auxvars,global_auxvars,option)
   acid = option%air_id ! air component id
   wid = option%water_id
   eid = option%energy_id
-  
+
   string = 'hydrate_auxvar.txt'
   open(unit=86,file=string)
-  
+
   n = size(global_auxvars)
 
 100 format(a,100('','',i9))
-  
+
   write(86,'(a,100('','',i9))') '             cell id: ', &
     ((i,i=1,n),idof=0,3)
   write(86,'(a,100('','',i2))') '                idof: ', &
@@ -3151,7 +3185,7 @@ subroutine HydrateOutputAuxVars2(hydrate_auxvars,global_auxvars,option)
     ((hydrate_auxvars(idof,i)%mobility(gid),i=1,n),idof=0,3)
   write(86,100) '   effective porosity: ', &
     ((hydrate_auxvars(idof,i)%effective_porosity,i=1,n),idof=0,3)
-  
+
   close(86)
 
 end subroutine HydrateOutputAuxVars2
@@ -3159,12 +3193,12 @@ end subroutine HydrateOutputAuxVars2
 ! ************************************************************************** !
 
 subroutine HydrateSetBogusDeriv(auxvar)
-  ! 
+  !
   ! Deallocates a mode auxiliary object
-  ! 
+  !
   ! Author: Michael Nole
   ! Date: 07/23/19
-  ! 
+  !
 
   implicit none
 
@@ -3213,7 +3247,7 @@ subroutine HydrateSetBogusDeriv(auxvar)
   auxvar%d%denv_pg = 1234.56789d0
   auxvar%d%dena_pg = 1234.56789d0
   auxvar%d%Hc = 1234.56789d0
-    
+
   auxvar%d%psat_p = 1234.56789d0
   auxvar%d%psat_T = 1234.56789d0
   auxvar%d%pv_p = 1234.56789d0
@@ -3239,12 +3273,12 @@ end subroutine HydrateSetBogusDeriv
 ! ************************************************************************** !
 
 subroutine HydrateZeroAnalyticalDeriv(auxvar)
-  ! 
+  !
   ! Deallocates a mode auxiliary object
-  ! 
+  !
   ! Author: Michael Nole
   ! Date: 07/23/19
-  ! 
+  !
 
   implicit none
 
@@ -3293,7 +3327,7 @@ subroutine HydrateZeroAnalyticalDeriv(auxvar)
   auxvar%d%denv_pg = 0.d0
   auxvar%d%dena_pg = 0.d0
   auxvar%d%Hc = 0.d0
-    
+
   auxvar%d%psat_p = 0.d0
   auxvar%d%psat_T = 0.d0
   auxvar%d%pv_p = 0.d0
@@ -3319,126 +3353,126 @@ end subroutine HydrateZeroAnalyticalDeriv
 ! ************************************************************************** !
 
 subroutine HydrateAuxVarSingleDestroy(auxvar)
-  ! 
+  !
   ! Deallocates a mode auxiliary object
-  ! 
+  !
   ! Author: Michael Nole
   ! Date: 07/23/19
-  ! 
+  !
 
   implicit none
 
   type(hydrate_auxvar_type), pointer :: auxvar
-  
+
   if (associated(auxvar)) then
     call HydrateAuxVarStrip(auxvar)
     deallocate(auxvar)
   endif
-  nullify(auxvar)  
+  nullify(auxvar)
 
 end subroutine HydrateAuxVarSingleDestroy
 
 ! ************************************************************************** !
 
 subroutine HydrateAuxVarArray1Destroy(auxvars)
-  ! 
+  !
   ! Deallocates a mode auxiliary object
-  ! 
+  !
   ! Author: Michael Nole
   ! Date: 07/23/19
-  ! 
+  !
 
   implicit none
 
   type(hydrate_auxvar_type), pointer :: auxvars(:)
-  
+
   PetscInt :: iaux
-  
+
   if (associated(auxvars)) then
     do iaux = 1, size(auxvars)
       call HydrateAuxVarStrip(auxvars(iaux))
-    enddo  
+    enddo
     deallocate(auxvars)
   endif
-  nullify(auxvars)  
+  nullify(auxvars)
 
 end subroutine HydrateAuxVarArray1Destroy
 
 ! ************************************************************************** !
 
 subroutine HydrateAuxVarArray2Destroy(auxvars)
-  ! 
+  !
   ! Deallocates a mode auxiliary object
-  ! 
+  !
   ! Author: Michael Nole
   ! Date: 07/23/19
-  ! 
+  !
 
   implicit none
 
   type(hydrate_auxvar_type), pointer :: auxvars(:,:)
-  
+
   PetscInt :: iaux, idof
-  
+
   if (associated(auxvars)) then
     do iaux = 1, size(auxvars,2)
       do idof = 1, size(auxvars,1)
         call HydrateAuxVarStrip(auxvars(idof-1,iaux))
       enddo
-    enddo  
+    enddo
     deallocate(auxvars)
   endif
-  nullify(auxvars)  
+  nullify(auxvars)
 
 end subroutine HydrateAuxVarArray2Destroy
 
 ! ************************************************************************** !
 
 subroutine HydrateAuxVarStrip(auxvar)
-  ! 
+  !
   ! HydrateAuxVarDestroy: Deallocates a hydrate auxiliary object
-  ! 
+  !
   ! Author: Michael Nole
   ! Date: 07/23/19
-  ! 
+  !
   use Utility_module, only : DeallocateArray
 
   implicit none
 
   type(hydrate_auxvar_type) :: auxvar
-  
-  call DeallocateArray(auxvar%pres)  
-  call DeallocateArray(auxvar%sat)  
-  call DeallocateArray(auxvar%den)  
-  call DeallocateArray(auxvar%den_kg)  
-  call DeallocateArray(auxvar%xmol)  
-  call DeallocateArray(auxvar%H)  
-  call DeallocateArray(auxvar%U)  
-  call DeallocateArray(auxvar%mobility)  
+
+  call DeallocateArray(auxvar%pres)
+  call DeallocateArray(auxvar%sat)
+  call DeallocateArray(auxvar%den)
+  call DeallocateArray(auxvar%den_kg)
+  call DeallocateArray(auxvar%xmol)
+  call DeallocateArray(auxvar%H)
+  call DeallocateArray(auxvar%U)
+  call DeallocateArray(auxvar%mobility)
   if (associated(auxvar%d)) then
     deallocate(auxvar%d)
     nullify(auxvar%d)
   endif
-  
+
 end subroutine HydrateAuxVarStrip
 
 ! ************************************************************************** !
 
 subroutine HydrateAuxDestroy(aux)
-  ! 
+  !
   ! Deallocates a hydrate auxiliary object
-  ! 
+  !
   ! Author: Michael Nole
   ! Date: 07/23/19
-  ! 
+  !
   use Utility_module, only : DeallocateArray
 
   implicit none
 
   type(hydrate_type), pointer :: aux
-  
+
   if (.not.associated(aux)) return
-  
+
   call HydrateAuxVarDestroy(aux%auxvars)
   call HydrateAuxVarDestroy(aux%auxvars_bc)
   call HydrateAuxVarDestroy(aux%auxvars_ss)
@@ -3450,10 +3484,10 @@ subroutine HydrateAuxDestroy(aux)
     deallocate(aux%hydrate_parameter)
   endif
   nullify(aux%hydrate_parameter)
-  
+
   deallocate(aux)
   nullify(aux)
-  
+
 end subroutine HydrateAuxDestroy
 
 ! ************************************************************************** !
@@ -3509,7 +3543,7 @@ subroutine HydratePE(T, sat, PE, dP, characteristic_curves, material_auxvar, &
 
   use Characteristic_Curves_module
   use Option_module
-  use Material_Aux_class
+  use Material_Aux_module
 
   implicit none
 
@@ -3519,7 +3553,7 @@ subroutine HydratePE(T, sat, PE, dP, characteristic_curves, material_auxvar, &
   PetscReal, intent(out) :: dP
 
   class(characteristic_curves_type) :: characteristic_curves
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   type(option_type) :: option
 
   PetscReal :: T_temp, dTf, dTfs, xmol
@@ -3745,7 +3779,7 @@ subroutine GibbsThomsonFreezing(sat,Hf,rho,Tb,dTf,characteristic_curves,&
 
   use Characteristic_Curves_module
   use Option_module
-  use Material_Aux_class
+  use Material_Aux_module
 
   implicit none
 
@@ -3755,7 +3789,7 @@ subroutine GibbsThomsonFreezing(sat,Hf,rho,Tb,dTf,characteristic_curves,&
   PetscReal, intent(in) :: Tb
   type(option_type) :: option
   class(characteristic_curves_type) :: characteristic_curves
-  class(material_auxvar_type) :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   PetscReal, intent(out) :: dTf
 
   PetscReal :: Pc,dpc_dsatl,sigma,theta
@@ -3834,7 +3868,7 @@ subroutine EOSHydrateEnthalpy(T,H)
   ! Units: MJ/kmol
   !H = H / 1.d3
 
-  !H = H / (Nhyd+1.d0) 
+  !H = H / (Nhyd+1.d0)
 
   !Constant Cp
   Cph = 1620.d0*(MW_H2O*Nhyd + MW_CH4)/1.d3
@@ -3857,9 +3891,6 @@ subroutine HydrateSalinityOffset(xmol,dTd)
   ! Date: 5/1/2020
   !
 
-  use Characteristic_Curves_module
-  use Material_Aux_class
-
   implicit none
 
   PetscReal, intent(in) :: xmol
@@ -3871,5 +3902,26 @@ subroutine HydrateSalinityOffset(xmol,dTd)
   dTd = dTr * log(1-xmol)/log(1-xmol_ref)
 
 end subroutine HydrateSalinityOffset
+
+! ************************************************************************** !
+
+subroutine IceSalinityOffset(xmass,dTd)
+
+  !
+  ! Author: Michael Nole
+  ! Date: 03/21/22
+  !
+  ! From Fujino et al., 1974
+
+  implicit none
+
+  PetscReal, intent(in) :: xmass
+  PetscReal, intent(out) :: dTd
+
+  dTd = -0.0575d0*(xmass*1000) + 0.000112d0*(xmass*1000)**2
+
+end subroutine IceSalinityOffset
+
+! ************************************************************************** !
 
 end module Hydrate_Aux_module

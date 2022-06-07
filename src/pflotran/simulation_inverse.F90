@@ -83,9 +83,9 @@ subroutine SimulationInverseRead(this,option)
   use String_module
   use Utility_module
   use Inversion_ERT_class
-  use Inversion_Perturbation_class
   use Inversion_Subsurface_class
   use Inversion_Tao_class
+  use Inversion_ZFlow_class
 
   class(simulation_inverse_type) :: this
   type(option_type), pointer :: option
@@ -124,10 +124,10 @@ subroutine SimulationInverseRead(this,option)
             this%inversion => InversionERTCreate(this%driver)
           case('TAO')
             this%inversion => InversionTaoCreate(this%driver)
-          case('PERTURBATION')
-            this%inversion => InversionPerturbationCreate(this%driver)
-          case('TEST')
+          case('TEST_SENSITIVITY_JACOBIAN')
             this%inversion => InversionSubsurfaceCreate(this%driver)
+          case('ZFLOW')
+            this%inversion => InversionZFlowCreate(this%driver)
           case default
             call InputKeywordUnrecognized(input,word,error_string,option)
         end select
@@ -179,7 +179,7 @@ subroutine SimulationInverseExecuteRun(this)
 
   call this%inversion%InitializeIterationNumber()
   do
-    if (this%inversion%converg_flag) exit
+    if (this%inversion%converged) exit
     call this%inversion%Step()
     call this%inversion%IncrementIteration()
   enddo

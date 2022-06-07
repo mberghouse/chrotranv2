@@ -221,6 +221,7 @@ subroutine SimSubsurfInitializeRun(this)
   ! the user may request output of variable that do not exist for the
   ! the requested process models; this routine should catch such issues.
   call OutputEnsureVariablesExist(this%output_option,this%option)
+  call SimSubsurfForbiddenCombinations(this)
 
   if (associated(this%process_model_coupler_list)) then
     if (this%option%restart_flag) then
@@ -392,12 +393,12 @@ subroutine SimSubsurfJumpStart(this)
   PetscBool :: snapshot_plot_flag, observation_plot_flag, massbal_plot_flag
   PetscErrorCode :: ierr
   PetscBool :: bypass_final_time_check
-  
+
   bypass_final_time_check = PETSC_FALSE
 
-  call PetscOptionsHasName(PETSC_NULL_OPTIONS, &
-                           PETSC_NULL_CHARACTER, "-bypass_final_time_check", &
-                           bypass_final_time_check, ierr);CHKERRQ(ierr)
+  call PetscOptionsHasName(PETSC_NULL_OPTIONS,PETSC_NULL_CHARACTER, &
+                           "-bypass_final_time_check",bypass_final_time_check, &
+                           ierr);CHKERRQ(ierr)
 #ifdef DEBUG
   call PrintMsg(this%option,'SimSubsurfJumpStart()')
 #endif
@@ -640,6 +641,35 @@ end function SimSubsurfGetFinalWaypointTime
 
 ! ************************************************************************** !
 
+subroutine SimSubsurfForbiddenCombinations(this)
+  !
+  ! Throws error messages when forbidden combinations of processes/process
+  ! models are requested.
+  !
+  ! Author: Glenn Hammond
+  ! Date: 05/31/22
+
+  use Strata_module
+
+  implicit none
+
+  class(simulation_subsurface_type) :: this
+
+  ! cannot update porosity based on mineral volume fractions and evolve
+  ! strata at the same time.
+  if (associated(this%realization%reaction)) then
+    if (StrataEvolves(this%realization%patch%strata_list) .and. &
+        this%realization%reaction%update_porosity) then
+      call PrintErrMsg(this%option,'Time dependent STRATA and the update of &
+            &porosity based on mineral volume fractions cannot be used &
+            &simultaneously.')
+    endif
+  endif
+
+end subroutine SimSubsurfForbiddenCombinations
+
+! ************************************************************************** !
+
 subroutine SimSubsurfFinalizeRun(this)
   !
   ! Finalizes simulation
@@ -768,6 +798,7 @@ call this%process_model_coupler_list%Destroy()
   nullify(this%realization)
   call RegressionDestroy(this%regression)
   call WaypointListDestroy(this%waypoint_list_subsurface)
+  call WaypointListDestroy(this%waypoint_list_outer)
   call OptionDestroy(this%option)
 
 end subroutine SimSubsurfStrip

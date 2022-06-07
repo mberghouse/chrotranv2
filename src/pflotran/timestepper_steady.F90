@@ -130,6 +130,7 @@ end subroutine TimestepperSteadyUpdateDT
 ! ************************************************************************** !
 
 subroutine TimestepperSteadySetTargetTime(this,sync_time,option,stop_flag, &
+                                          sync_flag, &
                                           snapshot_plot_flag, &
                                           observation_plot_flag, &
                                           massbal_plot_flag,checkpoint_flag)
@@ -149,6 +150,7 @@ subroutine TimestepperSteadySetTargetTime(this,sync_time,option,stop_flag, &
   PetscReal :: sync_time
   type(option_type) :: option
   PetscInt :: stop_flag
+  PetscBool :: sync_flag
   PetscBool :: snapshot_plot_flag
   PetscBool :: observation_plot_flag
   PetscBool :: massbal_plot_flag
@@ -159,6 +161,8 @@ subroutine TimestepperSteadySetTargetTime(this,sync_time,option,stop_flag, &
     if (.not.associated(this%cur_waypoint)) exit
     if (sync_time >= this%cur_waypoint%time) then
       if (Equal(sync_time,this%cur_waypoint%time)) then
+        if (this%cur_waypoint%print_snap_output) &
+          sync_flag = PETSC_TRUE
         if (this%cur_waypoint%print_snap_output) &
           snapshot_plot_flag = PETSC_TRUE
         if (this%cur_waypoint%print_obs_output) &
@@ -236,8 +240,8 @@ subroutine TimestepperSteadyStepDT(this,process_model,stop_flag)
 
   call PetscTime(log_start_time,ierr);CHKERRQ(ierr)
 
-  call SNESSolve(solver%snes,PETSC_NULL_VEC, &
-                 process_model%solution_vec,ierr);CHKERRQ(ierr)
+  call SNESSolve(solver%snes,PETSC_NULL_VEC,process_model%solution_vec, &
+                 ierr);CHKERRQ(ierr)
 
   call PetscTime(log_end_time,ierr);CHKERRQ(ierr)
 
@@ -264,9 +268,8 @@ subroutine TimestepperSteadyStepDT(this,process_model,stop_flag)
       select case(snes_reason)
         case(SNES_DIVERGED_FNORM_NAN)
           ! attempt to find cells with NaNs.
-          call SNESGetFunction(solver%snes,residual_vec, &
-                               PETSC_NULL_FUNCTION,PETSC_NULL_INTEGER, &
-                             ierr);CHKERRQ(ierr)
+          call SNESGetFunction(solver%snes,residual_vec,PETSC_NULL_FUNCTION, &
+                               PETSC_NULL_INTEGER,ierr);CHKERRQ(ierr)
           call OutputFindNaNOrInfInVec(residual_vec, &
                                        process_model%realization_base% &
                                          discretization%grid,option)

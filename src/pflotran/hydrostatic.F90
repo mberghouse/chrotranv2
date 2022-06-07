@@ -1,5 +1,5 @@
 module Hydrostatic_module
- 
+
 #include "petsc/finclude/petscsys.h"
   use petscsys
   use PFLOTRAN_Constants_module
@@ -10,19 +10,19 @@ module Hydrostatic_module
 
   public :: HydrostaticUpdateCoupler, &
             HydrostaticTest
- 
+
 contains
 
 ! ************************************************************************** !
 
 subroutine HydrostaticUpdateCoupler(coupler,option,grid)
-  ! 
+  !
   ! Computes the hydrostatic initial/boundary
   ! condition
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 11/28/07
-  ! 
+  !
 
   use EOS_Water_module
 
@@ -38,17 +38,18 @@ subroutine HydrostaticUpdateCoupler(coupler,option,grid)
   use Dataset_Common_HDF5_class
   use Dataset_Ascii_class
   use String_module
-  
+
   use General_Aux_module
   use Hydrate_Aux_module
   use WIPP_Flow_Aux_module
-  
+  use ZFlow_Aux_module
+
   implicit none
 
   type(coupler_type) :: coupler
   type(option_type) :: option
   type(grid_type) :: grid
-  
+
   PetscInt :: local_id, ghosted_id, iconn
   PetscInt :: num_iteration, ipressure, idatum, num_pressures
   PetscReal :: dist_x, dist_y, dist_z, delta_z, dist_z_for_pressure
@@ -70,28 +71,29 @@ subroutine HydrostaticUpdateCoupler(coupler,option,grid)
   PetscReal :: aux(1), dummy
   PetscReal :: lower_segment, upper_segment
   character(len=MAXWORDLENGTH) :: word
+  PetscInt :: water_index, conductance_index, energy_index, solute_index
   PetscErrorCode :: ierr
-  
+
   class(dataset_gridded_hdf5_type), pointer :: datum_dataset
   PetscReal :: datum_dataset_rmax
   PetscReal :: datum_dataset_rmin
-  
+
   type(flow_condition_type), pointer :: condition
-  
+
   type(connection_set_type), pointer :: cur_connection_set
-  
+
   condition => coupler%flow_condition
 
   datum_dataset_rmax = -MAX_DOUBLE
   datum_dataset_rmin = MAX_DOUBLE
-  
+
   xm_nacl = option%m_nacl * FMWNACL
   xm_nacl = xm_nacl /(1.d3 + xm_nacl)
   aux(1) = xm_nacl
-  
+
   nullify(pressure_array)
   nullify(datum_dataset)
-  
+
   delta_z = min((grid%z_max_global-grid%z_min_global)/500.d0,1.d0)
   ! if zero, assign 1.d0 to avoid divide by zero below. essentially the grid
   ! is flat.
@@ -105,7 +107,7 @@ subroutine HydrostaticUpdateCoupler(coupler,option,grid)
   temperature_gradient = 0.d0
   piezometric_head_gradient = 0.d0
   concentration_gradient = 0.d0
-  
+
   select case(option%iflowmode)
     case(G_MODE)
       temperature_at_datum = &
@@ -125,7 +127,7 @@ subroutine HydrostaticUpdateCoupler(coupler,option,grid)
         concentration_gradient = 0.d0
       endif
       pressure_at_datum = &
-        condition%general%liquid_pressure%dataset%rarray(1)    
+        condition%general%liquid_pressure%dataset%rarray(1)
       gas_pressure = option%flow%reference_pressure
       if (associated(condition%general%gas_pressure)) then
         gas_pressure = condition%general%gas_pressure%dataset%rarray(1)
@@ -181,7 +183,7 @@ subroutine HydrostaticUpdateCoupler(coupler,option,grid)
       coupler%flow_aux_mapping(HYDRATE_GAS_SATURATION_INDEX) = 3
     case(WF_MODE)
       pressure_at_datum = &
-        condition%general%liquid_pressure%dataset%rarray(1)    
+        condition%general%liquid_pressure%dataset%rarray(1)
       ! gradient is in m/m; needs conversion to Pa/m
       if (associated(condition%general%liquid_pressure%gradient)) then
         piezometric_head_gradient(1:3) = &
@@ -189,7 +191,7 @@ subroutine HydrostaticUpdateCoupler(coupler,option,grid)
       endif
       coupler%flow_aux_mapping(WIPPFLO_LIQUID_PRESSURE_INDEX) = 1
     case default
-      ! for now, just set it; in future need to account for a different 
+      ! for now, just set it; in future need to account for a different
       ! temperature datum
       !geh: this is a trick to determine if the dataset is hdf5 type.
       if (associated(condition%temperature)) then
@@ -240,7 +242,7 @@ subroutine HydrostaticUpdateCoupler(coupler,option,grid)
         piezometric_head_gradient(1:3) = &
           condition%pressure%gradient%rarray(1:3)
       endif
-  end select      
+  end select
 
   if (associated(condition%datum)) then
     nullify(datum_dataset)
@@ -261,21 +263,21 @@ subroutine HydrostaticUpdateCoupler(coupler,option,grid)
         call PrintErrMsg(option)
     end select
   endif
-      
+
   call EOSWaterDensityExt(temperature_at_datum,pressure_at_datum, &
                           aux,rho_kg,dummy,ierr)
   if (ierr /= 0) then
     call PrintMsgByCell(option,-1, &
                         'Error in HydrostaticUpdateCoupler->EOSWaterDensity')
   endif
-  
+
   gravity_magnitude = sqrt(DotProduct(option%gravity,option%gravity))
-  
+
   if (dabs(gravity_magnitude-EARTH_GRAVITY) > 0.1d0) then
     option%io_buffer = 'Magnitude of gravity vector is not near 9.81.'
     call PrintErrMsg(option)
   endif
-  
+
   ! if a pressure gradient is prescribed in Z (at this point it will be a
   ! piezometric head gradient), the units of the pressure gradient are
   ! Pa/m and the pressure gradient does not need conversion
@@ -324,7 +326,7 @@ subroutine HydrostaticUpdateCoupler(coupler,option,grid)
       max_z = max(grid%z_max_global,datum(Z_DIRECTION))+1.d0 ! add 1m buffer
       min_z = min(grid%z_min_global,datum(Z_DIRECTION))-1.d0
     endif
-    
+
     num_pressures = int((max_z-min_z)/delta_z) + 1
     allocate(pressure_array(num_pressures))
     allocate(density_array(num_pressures))
@@ -382,7 +384,7 @@ subroutine HydrostaticUpdateCoupler(coupler,option,grid)
                       'Error in HydrostaticUpdateCoupler->EOSWaterDensity')
       endif
       num_iteration = 0
-      do 
+      do
         pressure = pressure0 + 0.5d0*(rho_kg+rho_zero) * &
                    option%gravity(Z_DIRECTION) * delta_z
         call EOSWaterDensityExt(temperature,pressure,aux,rho_one,dummy,ierr)
@@ -390,7 +392,7 @@ subroutine HydrostaticUpdateCoupler(coupler,option,grid)
           call PrintMsgByCell(option,-4, &
                         'Error in HydrostaticUpdateCoupler->EOSWaterDensity')
         endif
-!geh        call EOSWaterDensityNaCl(temperature,pressure,xm_nacl,rho_one) 
+!geh        call EOSWaterDensityNaCl(temperature,pressure,xm_nacl,rho_one)
         if (dabs(rho_kg-rho_one) < 1.d-10) exit
         rho_kg = rho_one
         num_iteration = num_iteration + 1
@@ -462,11 +464,23 @@ subroutine HydrostaticUpdateCoupler(coupler,option,grid)
 
   num_faces = coupler%connection_set%num_connections
 
+  water_index = UNINITIALIZED_INTEGER
+  conductance_index = UNINITIALIZED_INTEGER
+  energy_index = UNINITIALIZED_INTEGER
+  solute_index = UNINITIALIZED_INTEGER
+  select case(option%iflowmode)
+    case(ZFLOW_MODE)
+      water_index = coupler%flow_aux_mapping(ZFLOW_COND_WATER_INDEX)
+      conductance_index = coupler%flow_aux_mapping(ZFLOW_COND_WATER_AUX_INDEX)
+      energy_index = coupler%flow_aux_mapping(ZFLOW_COND_ENERGY_INDEX)
+      solute_index = coupler%flow_aux_mapping(ZFLOW_COND_SOLUTE_INDEX)
+  end select
+
   do iconn=1, num_faces !geh: this should really be num_faces!
     local_id = coupler%connection_set%id_dn(iconn)
     ghosted_id = grid%nL2G(local_id)
-  
-    ! geh: note that this is a boundary connection, thus the entire 
+
+    ! geh: note that this is a boundary connection, thus the entire
     !      distance is between the face and cell center
     if (associated(coupler%connection_set%dist)) then
       dx_conn = coupler%connection_set%dist(0,iconn)* &
@@ -478,7 +492,7 @@ subroutine HydrostaticUpdateCoupler(coupler,option,grid)
     endif
     if (associated(datum_dataset)) then
       ! correct datum based on dataset value
-      ! if we interpolate in x and y, then we can use grid%x/y - dx/y_conn 
+      ! if we interpolate in x and y, then we can use grid%x/y - dx/y_conn
       ! for x and y then we set dist_x and dist_y = 0.
       dist_x = 0.d0
       dist_y = 0.d0
@@ -490,7 +504,7 @@ subroutine HydrostaticUpdateCoupler(coupler,option,grid)
       dist_z = grid%z(ghosted_id)-dz_conn-temp_real
       z_offset = temp_real-datum(Z_DIRECTION)
     else
-      ! note the negative (-) d?_conn is required due to the offset of 
+      ! note the negative (-) d?_conn is required due to the offset of
       ! the boundary face
       dist_x = grid%x(ghosted_id)-dx_conn-datum(X_DIRECTION)
       dist_y = grid%y(ghosted_id)-dy_conn-datum(Y_DIRECTION)
@@ -516,10 +530,10 @@ subroutine HydrostaticUpdateCoupler(coupler,option,grid)
       pressure = pressure_at_datum + &
                  pressure_gradient(X_DIRECTION)*dist_x + & ! gradient in Pa/m
                  pressure_gradient(Y_DIRECTION)*dist_y + &
-                 pressure_gradient(Z_DIRECTION)*dist_z 
+                 pressure_gradient(Z_DIRECTION)*dist_z
     endif
-   
- 
+
+
     if (pressure < option%flow%minimum_hydrostatic_pressure) &
       pressure = option%flow%minimum_hydrostatic_pressure
 
@@ -527,7 +541,7 @@ subroutine HydrostaticUpdateCoupler(coupler,option,grid)
     select case(option%iflowmode)
       case(G_MODE,WF_MODE,H_MODE)
         coupler%flow_aux_real_var(1,iconn) = pressure
-      case (MPH_MODE)
+      case(MPH_MODE)
         coupler%flow_aux_real_var(1,iconn) = pressure
         if (pressure < 0.d0) then
           option%io_buffer = 'Negative liquid pressure calculated by &
@@ -536,6 +550,7 @@ subroutine HydrostaticUpdateCoupler(coupler,option,grid)
             &a different type of FLOW_CONDITION.'
           call PrintErrMsgByRank(option)
         endif
+      case(ZFLOW_MODE)
       case default
         if (condition%pressure%itype == HYDROSTATIC_SEEPAGE_BC) then
           coupler%flow_aux_real_var(1,iconn) = &
@@ -545,7 +560,7 @@ subroutine HydrostaticUpdateCoupler(coupler,option,grid)
           coupler%flow_aux_real_var(1,iconn) = &
             max(pressure,option%flow%reference_pressure)
           select case(option%iflowmode)
-            case(RICHARDS_MODE,RICHARDS_TS_MODE,ZFLOW_MODE)
+            case(RICHARDS_MODE,RICHARDS_TS_MODE)
               coupler%flow_aux_real_var(RICHARDS_CONDUCTANCE_DOF,iconn) = &
                 condition%pressure%aux_real(1)
             case(TH_MODE,TH_TS_MODE)
@@ -557,14 +572,36 @@ subroutine HydrostaticUpdateCoupler(coupler,option,grid)
         endif
     end select
 
+    if (water_index > 0) then
+      if (condition%pressure%itype == HYDROSTATIC_SEEPAGE_BC) then
+        coupler%flow_aux_real_var(water_index,iconn) = &
+          max(pressure,option%flow%reference_pressure)
+      else if (condition%pressure%itype == HYDROSTATIC_CONDUCTANCE_BC) then
+        coupler%flow_aux_real_var(water_index,iconn) = &
+          max(pressure,option%flow%reference_pressure)
+         ! add the conductance
+        coupler%flow_aux_real_var(conductance_index,iconn) = &
+          condition%pressure%aux_real(1)
+      else
+        coupler%flow_aux_real_var(water_index,iconn) = pressure
+      endif
+    endif
+
     ! assign other dofs
     select case(option%iflowmode)
+      case(ZFLOW_MODE)
+        if (energy_index > 0) then
+          coupler%flow_aux_real_var(energy_index,iconn) = temperature
+        endif
+        if (solute_index > 0) then
+          coupler%flow_aux_real_var(solute_index,iconn) = concentration_at_datum
+        endif
       case(MPH_MODE)
         temperature = temperature_at_datum + &
                     ! gradient in K/m
-                    temperature_gradient(X_DIRECTION)*dist_x + & 
+                    temperature_gradient(X_DIRECTION)*dist_x + &
                     temperature_gradient(Y_DIRECTION)*dist_y + &
-                    temperature_gradient(Z_DIRECTION)*dist_z 
+                    temperature_gradient(Z_DIRECTION)*dist_z
         coupler%flow_aux_real_var(2,iconn) = temperature
         coupler%flow_aux_real_var(3,iconn) = concentration_at_datum
 
@@ -572,7 +609,7 @@ subroutine HydrostaticUpdateCoupler(coupler,option,grid)
       case(TH_MODE,TH_TS_MODE)
         temperature = temperature_at_datum + &
                     ! gradient in K/m
-                    temperature_gradient(X_DIRECTION)*dist_x + & 
+                    temperature_gradient(X_DIRECTION)*dist_x + &
                     temperature_gradient(Y_DIRECTION)*dist_y + &
                     temperature_gradient(Z_DIRECTION)*dist_z
         coupler%flow_aux_real_var(TH_TEMPERATURE_DOF,iconn) = temperature
@@ -581,9 +618,9 @@ subroutine HydrostaticUpdateCoupler(coupler,option,grid)
       case(G_MODE)
         temperature = temperature_at_datum + &
                     ! gradient in K/m
-                    temperature_gradient(X_DIRECTION)*dist_x + & 
+                    temperature_gradient(X_DIRECTION)*dist_x + &
                     temperature_gradient(Y_DIRECTION)*dist_y + &
-                    temperature_gradient(Z_DIRECTION)*dist_z 
+                    temperature_gradient(Z_DIRECTION)*dist_z
         coupler%flow_aux_real_var(3,iconn) = &
           temperature
         ! switch to two-phase if liquid pressure drops below gas pressure
@@ -633,18 +670,18 @@ end subroutine HydrostaticUpdateCoupler
 ! ************************************************************************** !
 
 subroutine HydrostaticTest()
-  ! 
+  !
   ! Computes the hydrostatic initial/boundary
   ! condition (more accurately than before0
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 11/28/07
-  ! 
+  !
 
   use EOS_Water_module
-  
+
   implicit none
-  
+
   PetscInt :: iz, i, i_increment, num_increment
   PetscInt :: max_num_pressures, i_up, i_dn, num_iteration
   PetscReal :: rho_kg, rho_one, rho_zero, pressure0, pressure, temperature
@@ -655,25 +692,25 @@ subroutine HydrostaticTest()
   PetscErrorCode :: ierr
 
   PetscReal, pointer :: density_array(:,:), pressure_array(:,:)
-  
+
   increment(1) = 1.d-1
   increment(2) = 1.d-0
   increment(3) = 1.d+1
   increment(4) = 1.d+2
   num_increment = size(increment)
-  
+
   temperature = 25.d0
 
   xm_nacl = 0.d0
   aux(1) = xm_nacl
-  
+
   max_num_pressures = int(1000.d0/increment(1)+0.5d0)+1
-  
+
   allocate(density_array(max_num_pressures,num_increment))
-  allocate(pressure_array(max_num_pressures,num_increment)) 
+  allocate(pressure_array(max_num_pressures,num_increment))
   density_array = 0.d0
   pressure_array = 0.d0
-  
+
   do i_increment = 1, num_increment
     pressure = 101325.d0
     call EOSWaterDensityExt(temperature,pressure,aux,rho_kg,dummy,ierr)
@@ -700,7 +737,7 @@ subroutine HydrostaticTest()
       pressure_array(i,i_increment) = pressure
       density_array(i,i_increment) = rho_kg
       pressure0 = pressure
-      rho_zero = rho_kg  
+      rho_zero = rho_kg
     enddo
   enddo
 
@@ -711,7 +748,7 @@ subroutine HydrostaticTest()
     do iz = 1,int(1000.d0/increment(i_increment)+0.5d0)
       i_dn = i_up + int(increment(i_increment)/increment(1)+1.d-6)
       dist = increment(1)
-      do 
+      do
         i = i + 1
         if (dist >= 0.9999d0*increment(i_increment)) exit
         pressure_array(i,i_increment) = pressure_array(i_up,i_increment)* &
@@ -729,7 +766,7 @@ subroutine HydrostaticTest()
     enddo
   enddo
 
-  
+
   open(unit=86,file='pressures.dat')
   dist_z = 0.d0
   do iz = 1,max_num_pressures
@@ -739,10 +776,10 @@ subroutine HydrostaticTest()
     dist_z = dist_z + increment(1)
   enddo
   close(86)
-  
+
   deallocate(pressure_array)
   deallocate(density_array)
-    
+
 end subroutine HydrostaticTest
 
 #if 0
@@ -750,22 +787,22 @@ end subroutine HydrostaticTest
 ! ************************************************************************** !
 
 function ProjectAOntoUnitB(A,B)
-  ! 
+  !
   ! Projects vector a onto b, assuming b is a unit vector
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 02/20/09
-  ! 
+  !
 
   implicit none
-  
+
   PetscReal :: A(3)
   PetscReal :: B(3)
-  
+
   PetscReal :: ProjectAOntoUnitB(3)
-  
+
   ProjectAOntoUnitB = dot_product(A,B)*A
-  
+
 end function ProjectAOntoUnitB
 #endif
 
