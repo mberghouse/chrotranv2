@@ -2004,7 +2004,6 @@ subroutine RichardsResidualAccumulation(r,realization,ierr)
 
   ! Accumulation terms ------------------------------------
   if (.not.option%flow%steady_state) then
-    r_p(1:grid%nlmax) = r_p(1:grid%nlmax) - accum_p(1:grid%nlmax)
 
     do local_id = 1, grid%nlmax  ! For each local node do...
       ghosted_id = grid%nL2G(local_id)
@@ -2015,7 +2014,7 @@ subroutine RichardsResidualAccumulation(r,realization,ierr)
            material_auxvars(ghosted_id), &
            option,Res)
       istart = (local_id-1)*option%nflowdof + 1
-      r_p(istart) = r_p(istart) + Res(1)
+      r_p(istart) = r_p(istart) + (Res(1) - accum_p(istart))
       accum2_p(istart) = Res(1)
     enddo
 
