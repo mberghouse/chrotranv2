@@ -274,7 +274,7 @@ function GeneralAuxCreate(option)
   !
 
   use Option_module
-  use Material_Aux_class
+  use Material_Aux_module
 
   implicit none
 
@@ -1861,20 +1861,53 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
       ! GAS_STATE cell and TWO_PHASE/LIQUID_STATE cells as air should still
       ! diffuse through the liquid phase.
       if (associated(gen_auxvar%d)) then
+        ! call EOSWaterSaturationPressure(gen_auxvar%temp, &
+        !                                 gen_auxvar%pres(spid), &
+        !                                 gen_auxvar%d%psat_T,ierr)
+        ! gen_auxvar%d%psat_p = 0.d0
+        ! call EOSGasHenry(gen_auxvar%temp,gen_auxvar%pres(spid), &
+        !                   gen_auxvar%d%psat_p,gen_auxvar%d%psat_T, &
+        !                   K_H_tilde,gen_auxvar%d%Hc_p,gen_auxvar%d%Hc_T, &
+        !                   eos_henry_ierr)
+        ! gen_auxvar%d%Hc = K_H_tilde
+        !Not supported: interfacial tension, Kelvin equation
         call EOSWaterSaturationPressure(gen_auxvar%temp, &
-                                        gen_auxvar%pres(spid), &
-                                        gen_auxvar%d%psat_T,ierr)
+             gen_auxvar%pres(spid), &
+             gen_auxvar%d%psat_T,ierr)
         gen_auxvar%d%psat_p = 0.d0
         call EOSGasHenry(gen_auxvar%temp,gen_auxvar%pres(spid), &
-                          gen_auxvar%d%psat_p,gen_auxvar%d%psat_T, &
-                          K_H_tilde,gen_auxvar%d%Hc_p,gen_auxvar%d%Hc_T, &
-                          eos_henry_ierr)
+             gen_auxvar%d%psat_p,gen_auxvar%d%psat_T, &
+             K_H_tilde,gen_auxvar%d%Hc_p,gen_auxvar%d%Hc_T, &
+             eos_henry_ierr)
         gen_auxvar%d%Hc = K_H_tilde
       else
-        call EOSWaterSatPressExt(gen_auxvar%temp, gen_auxvar%xmol(:,lid),&
-                                 gen_auxvar%pres(spid),ierr)
+        ! call EOSWaterSatPressExt(gen_auxvar%temp, gen_auxvar%xmol(:,lid),&
+        !                          gen_auxvar%pres(spid),ierr)
+        ! call EOSGasHenry(gen_auxvar%temp,gen_auxvar%pres(spid),K_H_tilde, &
+         !                  eos_henry_ierr)
+        call EOSWaterSaturationPressure(gen_auxvar%temp, &
+                                        gen_auxvar%pres(spid),ierr)
+        if (general_compute_surface_tension .or. general_kelvin_equation) then
+          call characteristic_curves%saturation_function% &
+               CapillaryPressure(gen_auxvar%sat(lid), &
+                                 gen_auxvar%pres(cpid),dpc_dsatl,option)
+          if (general_compute_surface_tension) then
+             call EOSWaterSurfaceTension(gen_auxvar%temp,sigma)
+             gen_auxvar%pres(cpid) = gen_auxvar%pres(cpid)*sigma
+          endif
+
+          if (general_kelvin_equation) then
+            ! Adjust saturation pressure so it is properly used in Henry and
+            ! UpdateState. Right now this adds an extra call to density.
+            call EOSWaterDensity(gen_auxvar%temp,cell_pressure, &
+                                 gen_auxvar%den_kg(lid),gen_auxvar%den(lid),ierr)
+            call EOSWaterKelvin(gen_auxvar%pres(cpid),gen_auxvar%den(lid), &
+                 gen_auxvar%temp,gen_auxvar%pres(spid), &
+                 gen_auxvar%pres(spid))
+          endif
+        endif
         call EOSGasHenry(gen_auxvar%temp,gen_auxvar%pres(spid),K_H_tilde, &
-                         eos_henry_ierr)
+              eos_henry_ierr)
       endif
       gen_auxvar%xmol(acid,lid) = gen_auxvar%pres(apid) / K_H_tilde
       ! set water mole fraction to zero as there is no water in liquid phase
@@ -1930,8 +1963,8 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
       if (general_2ph_energy_dof == GENERAL_TEMPERATURE_INDEX) then
         gen_auxvar%temp = x(GENERAL_ENERGY_DOF)
         if (associated(gen_auxvar%d)) then
-          call EOSWaterSatPressExt(gen_auxvar%temp,gen_auxvar%xmol(:,lid), &
-                                   gen_auxvar%pres(spid),ierr)
+          !call EOSWaterSatPressExt(gen_auxvar%temp,gen_auxvar%xmol(:,lid), &
+          !                         gen_auxvar%pres(spid),ierr)
           gen_auxvar%d%psat_p = 0.d0
           call EOSGasHenry(gen_auxvar%temp,gen_auxvar%pres(spid), &
                            gen_auxvar%d%psat_p,gen_auxvar%d%psat_T, &
@@ -1939,8 +1972,8 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
                            eos_henry_ierr)
           gen_auxvar%d%Hc = K_H_tilde
         else
-          call EOSWaterSatPressExt(gen_auxvar%temp,gen_auxvar%xmol(:,lid), &
-                                   gen_auxvar%pres(spid),ierr)
+          ! call EOSWaterSatPressExt(gen_auxvar%temp,gen_auxvar%xmol(:,lid), &
+          !                          gen_auxvar%pres(spid),ierr)
           call EOSGasHenry(gen_auxvar%temp,gen_auxvar%pres(spid),K_H_tilde, &
                            eos_henry_ierr)
         endif
@@ -1972,10 +2005,11 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
 
       !man: IFT calculation
       sigma=1.d0
-      if (characteristic_curves%saturation_function%calc_int_tension) then
-       call characteristic_curves%saturation_function% &
-           CalcInterfacialTension(gen_auxvar%temp,sigma)
-      endif
+      ! TODO(DF): match genauxvarcompute4 with genauxvar
+      ! if (characteristic_curves%saturation_function%calc_int_tension) then
+      !  call characteristic_curves%saturation_function% &
+      !      CalcInterfacialTension(gen_auxvar%temp,sigma)
+      ! endif
       gen_auxvar%pres(cpid) = gen_auxvar%pres(cpid)*sigma
 
 
@@ -2167,8 +2201,8 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
       if (general_2ph_energy_dof == GENERAL_TEMPERATURE_INDEX) then
         gen_auxvar%temp = x(GENERAL_ENERGY_DOF)
         if (associated(gen_auxvar%d)) then
-          call EOSWaterSatPressExt(gen_auxvar%temp,gen_auxvar%xmol(:,lid), &
-                                   gen_auxvar%pres(spid),ierr)
+          ! call EOSWaterSatPressExt(gen_auxvar%temp,gen_auxvar%xmol(:,lid), &
+          !                          gen_auxvar%pres(spid),ierr)
           gen_auxvar%d%psat_p = 0.d0
           call EOSGasHenry(gen_auxvar%temp,gen_auxvar%pres(spid), &
                            gen_auxvar%d%psat_p,gen_auxvar%d%psat_T, &
@@ -2176,8 +2210,8 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
                            eos_henry_ierr)
           gen_auxvar%d%Hc = K_H_tilde
         else
-          call EOSWaterSatPressExt(gen_auxvar%temp,gen_auxvar%xmol(:,lid), &
-                                   gen_auxvar%pres(spid),ierr)
+          ! call EOSWaterSatPressExt(gen_auxvar%temp,gen_auxvar%xmol(:,lid), &
+          !                          gen_auxvar%pres(spid),ierr)
           call EOSGasHenry(gen_auxvar%temp,gen_auxvar%pres(spid),K_H_tilde, &
                            eos_henry_ierr)
         endif
@@ -2209,10 +2243,11 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
 
       !man: IFT calculation
       sigma=1.d0
-      if (characteristic_curves%saturation_function%calc_int_tension) then
-       call characteristic_curves%saturation_function% &
-           CalcInterfacialTension(gen_auxvar%temp,sigma)
-      endif
+      !TODO(DF): match compute4 to compute
+      ! if (characteristic_curves%saturation_function%calc_int_tension) then
+      !  call characteristic_curves%saturation_function% &
+      !      CalcInterfacialTension(gen_auxvar%temp,sigma)
+      ! endif
       gen_auxvar%pres(cpid) = gen_auxvar%pres(cpid)*sigma
 
 
@@ -2302,8 +2337,8 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
                            eos_henry_ierr)
           gen_auxvar%d%Hc = K_H_tilde
         else
-          call EOSWaterSatPressExt(gen_auxvar%temp,gen_auxvar%xmol(:,lid),&
-                                   gen_auxvar%pres(spid),ierr)
+          ! call EOSWaterSatPressExt(gen_auxvar%temp,gen_auxvar%xmol(:,lid),&
+          !                          gen_auxvar%pres(spid),ierr)
           call EOSGasHenry(gen_auxvar%temp,gen_auxvar%pres(spid),K_H_tilde, &
                            eos_henry_ierr)
         endif
@@ -2335,10 +2370,11 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
 
       !man: IFT calculation
       sigma=1.d0
-      if (characteristic_curves%saturation_function%calc_int_tension) then
-       call characteristic_curves%saturation_function% &
-           CalcInterfacialTension(gen_auxvar%temp,sigma)
-      endif
+      !TODO(DF): match compute4 to compute
+      ! if (characteristic_curves%saturation_function%calc_int_tension) then
+      !  call characteristic_curves%saturation_function% &
+      !      CalcInterfacialTension(gen_auxvar%temp,sigma)
+      ! endif
       gen_auxvar%pres(cpid) = gen_auxvar%pres(cpid)*sigma
 
 
@@ -2938,7 +2974,7 @@ subroutine GeneralAuxVarUpdateState(x,gen_auxvar,global_auxvar, &
   use Global_Aux_module
   use EOS_Water_module
   use Characteristic_Curves_module
-  use Material_Aux_class
+  use Material_Aux_module
 
   implicit none
 
@@ -3176,7 +3212,7 @@ subroutine GeneralAuxVarUpdateState4(x,gen_auxvar,global_auxvar, &
   use Global_Aux_module
   use EOS_Water_module
   use Characteristic_Curves_module
-  use Material_Aux_class
+  use Material_Aux_module
 
   implicit none
 
@@ -3734,7 +3770,7 @@ subroutine GeneralAuxVarPerturb(gen_auxvar,global_auxvar, &
   use Option_module
   use Characteristic_Curves_module
   use Global_Aux_module
-  use Material_Aux_class
+  use Material_Aux_module
 
   implicit none
 

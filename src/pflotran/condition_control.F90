@@ -45,7 +45,7 @@ subroutine CondControlAssignFlowInitCond(realization)
   use Grid_module
   use Patch_module
   use EOS_Water_module
-  use Material_Aux_class
+  use Material_Aux_module
 
   use Global_module
   use Variables_module, only : STATE

@@ -1435,7 +1435,7 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
              'Precipitate Sat. ',&
              'Gas Pressure     ','Gas Saturation   ','Temperature      ',&
              'Precipitate Sat. '],shape(dof_string))
-
+  endif
   if (this%option%flow%using_newtontrdc) then
     if (general_newtontrdc_prev_iter_num == it) then
       general_sub_newton_iter_num = general_sub_newton_iter_num + 1
