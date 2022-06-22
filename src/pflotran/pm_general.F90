@@ -1571,21 +1571,21 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
               endif
               string = trim(string) // ' : ' // &
                 StringFormatDouble(this%converged_real(idof,istate,itol))
-              call OptionPrint(string,option)
+              call PrintMsg(option,string)
             endif
           endif
         enddo
       enddo
     enddo
-    
+
     if (option%flow%using_newtontrdc .and. &
         general_state_changed .and. &
         .not.rho_flag) then
       if (general_newtontrdc_hold_inner) then
         ! if we hold inner iterations, we must not change state in
-        ! the inner iteration. If we reach convergence in an inner 
-        ! newtontrdc iteration, then we must force an outer iteration 
-        ! to allow state change in case the solutions are 
+        ! the inner iteration. If we reach convergence in an inner
+        ! newtontrdc iteration, then we must force an outer iteration
+        ! to allow state change in case the solutions are
         ! out-of-bounds of the states -hdp
         general_force_iteration = PETSC_TRUE
         general_state_changed = PETSC_FALSE
@@ -1611,23 +1611,23 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
         option%convergence = CONVERGENCE_BREAKOUT_INNER_ITER
         general_force_iteration = PETSC_FALSE
       endif
-    endif 
+    endif
 
     if (this%logging_verbosity > 0 .and. it > 0 .and. &
         option%convergence == CONVERGENCE_CONVERGED) then
       string = '   Converged'
-      call OptionPrint(string,option)
+      call PrintMsg(option,string)
       write(string,'(4x," R:",9es8.1)') this%converged_real(:,:,RESIDUAL_INDEX)
-      call OptionPrint(string,option)
+      call PrintMsg(option,string)
       write(string,'(4x,"SR:",9es8.1)') &
         this%converged_real(:,:,SCALED_RESIDUAL_INDEX)
-      call OptionPrint(string,option)
+      call PrintMsg(option,string)
       write(string,'(4x,"AU:",9es8.1)') &
         this%converged_real(:,:,ABS_UPDATE_INDEX)
-      call OptionPrint(string,option)
+      call PrintMsg(option,string)
       write(string,'(4x,"RU:",9es8.1)') &
         this%converged_real(:,:,REL_UPDATE_INDEX)
-      call OptionPrint(string,option)
+      call PrintMsg(option,string)
     endif
 
     if (it >= this%solver%newton_max_iterations) then
@@ -1635,13 +1635,13 @@ subroutine PMGeneralCheckConvergence(this,snes,it,xnorm,unorm,fnorm, &
 
       if (this%logging_verbosity > 0) then
         string = '    Exceeded General Mode Max Newton Iterations'
-        call OptionPrint(string,option)
+        call PrintMsg(option,string)
       endif
     endif
     if (general_high_temp_ts_cut) then
       general_high_temp_ts_cut = PETSC_FALSE
       string = '    Exceeded General Mode EOS max temperature'
-      call OptionPrint(string,option)
+      call PrintMsg(option,string)
       option%convergence = CONVERGENCE_CUT_TIMESTEP
     endif
     if (general_sub_newton_iter_num > 20) then
@@ -1813,31 +1813,22 @@ subroutine PMGeneralMaxChange(this)
                      MPI_DOUBLE_PRECISION,MPI_MAX,option%mycomm,&
                      ierr);CHKERRQ(ierr)
   ! print them out
-  if (option%print_screen_flag) then
-    if (option%nflowdof == 3) then
-      write(*,'("  --> max chng: dpl= ",1pe12.4, " dpg= ",1pe12.4,&
-        & " dpa= ",1pe12.4,/,15x," dxa= ",1pe12.4,"  dt= ",1pe12.4,&
-        & " dsg= ",1pe12.4)') &
-        max_change_global(1:max_change_index)
-    elseif (option%nflowdof == 4) then
-      write(*,'("  --> max chng: dpl= ",1pe12.4, " dpg= ",1pe12.4,&
-        & " dpa= ",1pe12.4,/,15x," dxa= ",1pe12.4,"  dt= ",1pe12.4,&
-        & " dsg= ",1pe12.4,/,15x," dpo= ",1pe12.4)') &
-        max_change_global(1:max_change_index)
-    endif
-  endif
-  if (option%print_file_flag) then
-    if (option%nflowdof == 3) then
-      write(option%fid_out,'("  --> max chng: dpl= ",1pe12.4, " dpg= ",1pe12.4,&
-        & " dpa= ",1pe12.4,/,15x," dxa= ",1pe12.4,"  dt= ",1pe12.4, &
-        & " dsg= ",1pe12.4)') &
-        max_change_global(1:max_change_index)
-    elseif (option%nflowdof == 4) then
-      write(option%fid_out,'("  --> max chng: dpl= ",1pe12.4, " dpg= ",1pe12.4,&
-        & " dpa= ",1pe12.4,/,15x," dxa= ",1pe12.4,"  dt= ",1pe12.4,&
-        & " dsg= ",1pe12.4,/,15x," dpo= ",1pe12.4)') &
-        max_change_global(1:max_change_index)
-    endif
+  if (option%nflowdof == 3) then
+    write(option%io_buffer,'("  --> max change: dpl= ",1pe12.4, " dpg= ",&
+                           &1pe12.4," dpa= ",1pe12.4)') max_change_global(1:3)
+    call PrintMsg(option)
+    write(option%io_buffer,'(17x," dxa= ",1pe12.4,"  dt= ",1pe12.4,&
+                           &" dsg= ",1pe12.4)') max_change_global(4:6)
+    call PrintMsg(option)
+  elseif (option%nflowdof == 4) then
+    write(option%io_buffer,'("  --> max change: dpl= ",1pe12.4, " dpg= ",&
+         &1pe12.4," dpa= ",1pe12.4)') max_change_global(1:3)
+    call PrintMsg(option)
+    write(option%io_buffer,'(17x," dxa= ",1pe12.4,"  dt= ",1pe12.4,&
+         &" dsg= ",1pe12.4)') max_change_global(4:6)
+    call PrintMsg(option)
+    write(option%io_buffer,'(17x," dpo= ",1pe12.4)') max_change_global(7)
+    call PrintMsg(option)
   endif
 
   ! max change variables: [LIQUID_PRESSURE, GAS_PRESSURE, AIR_PRESSURE, &

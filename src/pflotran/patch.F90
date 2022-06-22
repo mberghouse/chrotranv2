@@ -1042,7 +1042,7 @@ subroutine PatchInitCouplerAuxVars(coupler_list,patch,option)
                     case(MPH_MODE)
                       ! do nothing
                     case default
-                      string = GetSubConditionName(coupler%flow_condition%&
+                      string = GetSubConditionType(coupler%flow_condition%&
                                                    rate%itype)
                       option%io_buffer='Source/Sink of rate%itype = "' // &
                         trim(adjustl(string)) // &
@@ -1050,7 +1050,7 @@ subroutine PatchInitCouplerAuxVars(coupler_list,patch,option)
                       call PrintErrMsg(option)
                   end select
                 case default
-                  string = GetSubConditionName(coupler%flow_condition% &
+                  string = GetSubConditionType(coupler%flow_condition% &
                                                rate%itype)
                   option%io_buffer = &
                     FlowConditionUnknownItype(coupler%flow_condition,'rate', &
@@ -1301,7 +1301,7 @@ subroutine PatchUpdateCouplerAuxVarsWF(patch,coupler,option)
           dof1 = PETSC_TRUE
         case default
           string = &
-            GetSubConditionName(general%liquid_pressure%itype)
+            GetSubConditionType(general%liquid_pressure%itype)
           option%io_buffer = &
             FlowConditionUnknownItype(coupler%flow_condition, &
               'wipp flow liquid pressure',string)
@@ -1332,7 +1332,7 @@ subroutine PatchUpdateCouplerAuxVarsWF(patch,coupler,option)
           dof2 = PETSC_TRUE
         case default
           string = &
-            GetSubConditionName(general%gas_saturation%itype)
+            GetSubConditionType(general%gas_saturation%itype)
           option%io_buffer = &
             FlowConditionUnknownItype(coupler%flow_condition, &
               'wipp flow gas saturation',string)
@@ -1721,7 +1721,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
               dof1 = PETSC_TRUE
               coupler%flow_bc_type(GENERAL_LIQUID_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(general%gas_pressure%itype)
+              string = GetSubConditionType(general%gas_pressure%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'GENERAL_MODE two phase state gas pressure ',string)
@@ -1745,7 +1745,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
               dof2 = PETSC_TRUE
               coupler%flow_bc_type(GENERAL_ENERGY_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(general%temperature%itype)
+              string = GetSubConditionType(general%temperature%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'GENERAL_MODE two phase state temperature ',string)
@@ -1760,7 +1760,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
               dof3 = PETSC_TRUE
               coupler%flow_bc_type(GENERAL_GAS_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(general%gas_saturation%itype)
+              string = GetSubConditionType(general%gas_saturation%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'GENERAL_MODE two phase state gas saturation ',string)
@@ -1776,7 +1776,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                  dof4 = PETSC_TRUE
                  coupler%flow_bc_type(GENERAL_SOLUTE_EQUATION_INDEX) = DIRICHLET_BC
               case default
-                 string = GetSubConditionName(general%porosity%itype)
+                 string = GetSubConditionType(general%porosity%itype)
                  option%io_buffer = &
                       FlowConditionUnknownItype(coupler%flow_condition, &
                       'GENERAL_MODE two phase state porosity ',string)
@@ -1815,7 +1815,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                 coupler%flow_bc_type(GENERAL_LIQUID_EQUATION_INDEX) = &
                                                                     DIRICHLET_BC
               case default
-                string = GetSubConditionName(general%liquid_pressure%itype)
+                string = GetSubConditionType(general%liquid_pressure%itype)
                 option%io_buffer = &
                   FlowConditionUnknownItype(coupler%flow_condition, &
                   'GENERAL_MODE liquid state liquid pressure ',string)
@@ -1831,7 +1831,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                 coupler%flow_bc_type(GENERAL_ENERGY_EQUATION_INDEX) = &
                                                                     DIRICHLET_BC
               case default
-                string = GetSubConditionName(general%temperature%itype)
+                string = GetSubConditionType(general%temperature%itype)
                 option%io_buffer = &
                   FlowConditionUnknownItype(coupler%flow_condition, &
                   'GENERAL_MODE liquid state temperature ',string)
@@ -1849,7 +1849,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                 dof3 = PETSC_TRUE
                 coupler%flow_bc_type(GENERAL_GAS_EQUATION_INDEX) = DIRICHLET_BC
               case default
-                string = GetSubConditionName(general%mole_fraction%itype)
+                string = GetSubConditionType(general%mole_fraction%itype)
                 option%io_buffer = &
                   FlowConditionUnknownItype(coupler%flow_condition, &
                   'GENERAL_MODE liquid state mole fraction ',string)
@@ -1866,7 +1866,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                     coupler%flow_bc_type(GENERAL_SOLUTE_EQUATION_INDEX) = &
                        DIRICHLET_BC
                  case default
-                   string = GetSubConditionName(general%porosity%itype)
+                   string = GetSubConditionType(general%porosity%itype)
                    option%io_buffer = &
                        FlowConditionUnknownItype(coupler%flow_condition, &
                        'GENERAL_MODE liquid state porosity ',string)
@@ -1885,7 +1885,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                     dof4 = PETSC_TRUE
                     coupler%flow_bc_type(GENERAL_SOLUTE_EQUATION_INDEX) = DIRICHLET_BC
                  case default
-                   string = GetSubConditionName(general%solute_fraction%itype)
+                   string = GetSubConditionType(general%solute_fraction%itype)
                    option%io_buffer = &
                        FlowConditionUnknownItype(coupler%flow_condition, &
                        'GENERAL_MODE liquid state mole fraction ',string)
@@ -1906,7 +1906,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
               dof1 = PETSC_TRUE
               coupler%flow_bc_type(GENERAL_GAS_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(general%gas_pressure%itype)
+              string = GetSubConditionType(general%gas_pressure%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                 'GENERAL_MODE gas state gas pressure',string)
@@ -1922,7 +1922,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
               dof2 = PETSC_TRUE
               coupler%flow_bc_type(GENERAL_ENERGY_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(general%temperature%itype)
+              string = GetSubConditionType(general%temperature%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                 'GENERAL_MODE gas state temperature',string)
@@ -1966,7 +1966,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                                                                     DIRICHLET_BC
                 endif
               case default
-                string = GetSubConditionName(general%mole_fraction%itype)
+                string = GetSubConditionType(general%mole_fraction%itype)
                 option%io_buffer = &
                   FlowConditionUnknownItype(coupler%flow_condition, &
                   'GENERAL_MODE air mole fraction',string)
@@ -2004,7 +2004,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                 coupler%flow_bc_type(GENERAL_LIQUID_EQUATION_INDEX) = &
                                                                     DIRICHLET_BC
               case default
-                string = GetSubConditionName(general%relative_humidity%itype)
+                string = GetSubConditionType(general%relative_humidity%itype)
                 option%io_buffer = &
                   FlowConditionUnknownItype(coupler%flow_condition, &
                   'GENERAL_MODE relative humidity',string)
@@ -2025,7 +2025,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
               dof1 = PETSC_TRUE
               coupler%flow_bc_type(GENERAL_LIQUID_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(general%liquid_pressure%itype)
+              string = GetSubConditionType(general%liquid_pressure%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'GENERAL_MODE LP state liquid pressure ',string)
@@ -2049,7 +2049,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
               dof2 = PETSC_TRUE
               coupler%flow_bc_type(GENERAL_ENERGY_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(general%temperature%itype)
+              string = GetSubConditionType(general%temperature%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'GENERAL_MODE two phase state temperature ',string)
@@ -2093,7 +2093,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                                                                     DIRICHLET_BC
                 endif
               case default
-                string = GetSubConditionName(general%mole_fraction%itype)
+                string = GetSubConditionType(general%mole_fraction%itype)
                 option%io_buffer = &
                   FlowConditionUnknownItype(coupler%flow_condition, &
                   'GENERAL_MODE air mole fraction',string)
@@ -2110,7 +2110,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                dof4 = PETSC_TRUE
                coupler%flow_bc_type(GENERAL_SOLUTE_EQUATION_INDEX) = DIRICHLET_BC
             case default
-               string = GetSubConditionName(general%gas_saturation%itype)
+               string = GetSubConditionType(general%gas_saturation%itype)
                option%io_buffer = &
                     FlowConditionUnknownItype(coupler%flow_condition, &
                     'GENERAL_MODE LP state precipitate saturation ',string)
@@ -2125,7 +2125,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                dof4 = PETSC_TRUE
                coupler%flow_bc_type(GENERAL_SOLUTE_EQUATION_INDEX) = DIRICHLET_BC
             case default
-               string = GetSubConditionName(general%porosity%itype)
+               string = GetSubConditionType(general%porosity%itype)
                option%io_buffer = &
                     FlowConditionUnknownItype(coupler%flow_condition, &
                     'GENERAL_MODE LP state porosity ',string)
@@ -2144,7 +2144,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
            dof1 = PETSC_TRUE
            coupler%flow_bc_type(GENERAL_LIQUID_EQUATION_INDEX) = DIRICHLET_BC
         case default
-           string = GetSubConditionName(general%gas_pressure%itype)
+           string = GetSubConditionType(general%gas_pressure%itype)
            option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                 'GENERAL_MODE two phase state gas pressure ',string)
@@ -2168,7 +2168,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
             dof2 = PETSC_TRUE
             coupler%flow_bc_type(GENERAL_ENERGY_EQUATION_INDEX) = DIRICHLET_BC
           case default
-            string = GetSubConditionName(general%temperature%itype)
+            string = GetSubConditionType(general%temperature%itype)
             option%io_buffer = &
               FlowConditionUnknownItype(coupler%flow_condition, &
                 'GENERAL_MODE two phase state temperature ',string)
@@ -2183,7 +2183,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
            dof3 = PETSC_TRUE
            coupler%flow_bc_type(GENERAL_GAS_EQUATION_INDEX) = DIRICHLET_BC
         case default
-           string = GetSubConditionName(general%gas_saturation%itype)
+           string = GetSubConditionType(general%gas_saturation%itype)
            option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                 'GENERAL_MODE two phase state gas saturation ',string)
@@ -2199,7 +2199,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
              dof4 = PETSC_TRUE
              coupler%flow_bc_type(GENERAL_SOLUTE_EQUATION_INDEX) = DIRICHLET_BC
           case default
-             string = GetSubConditionName(general%gas_saturation%itype)
+             string = GetSubConditionType(general%gas_saturation%itype)
              option%io_buffer = &
                   FlowConditionUnknownItype(coupler%flow_condition, &
                   'GENERAL_MODE LP state precipitate saturation ',string)
@@ -2214,7 +2214,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
              dof4 = PETSC_TRUE
              coupler%flow_bc_type(GENERAL_SOLUTE_EQUATION_INDEX) = DIRICHLET_BC
           case default
-             string = GetSubConditionName(general%porosity%itype)
+             string = GetSubConditionType(general%porosity%itype)
              option%io_buffer = &
                   FlowConditionUnknownItype(coupler%flow_condition, &
                   'GENERAL_MODE LP state porosity ',string)
@@ -2235,7 +2235,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                 coupler%flow_bc_type(GENERAL_ENERGY_EQUATION_INDEX) = &
                                                                     DIRICHLET_BC
               case default
-                string = GetSubConditionName(general%temperature%itype)
+                string = GetSubConditionType(general%temperature%itype)
                 option%io_buffer = &
                   FlowConditionUnknownItype(coupler%flow_condition, &
                   'GENERAL_MODE gas state temperature ',string)
@@ -2715,7 +2715,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
                 coupler%flow_bc_type(HYDRATE_LIQUID_EQUATION_INDEX) = &
                                                                     DIRICHLET_BC
               case default
-                string = GetSubConditionName(hydrate%liquid_pressure%itype)
+                string = GetSubConditionType(hydrate%liquid_pressure%itype)
                 option%io_buffer = &
                   FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE liquid state liquid pressure ',string)
@@ -2731,7 +2731,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
                 coupler%flow_bc_type(HYDRATE_ENERGY_EQUATION_INDEX) = &
                                                                     DIRICHLET_BC
               case default
-                string = GetSubConditionName(hydrate%temperature%itype)
+                string = GetSubConditionType(hydrate%temperature%itype)
                 option%io_buffer = &
                   FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE liquid state temperature ',string)
@@ -2746,7 +2746,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
                 dof3 = PETSC_TRUE
                 coupler%flow_bc_type(HYDRATE_GAS_EQUATION_INDEX) = DIRICHLET_BC
               case default
-                string = GetSubConditionName(hydrate%mole_fraction%itype)
+                string = GetSubConditionType(hydrate%mole_fraction%itype)
                 option%io_buffer = &
                   FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE liquid state mole fraction ',string)
@@ -2767,7 +2767,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               coupler%flow_bc_type(HYDRATE_GAS_EQUATION_INDEX) = &
                       hydrate%gas_pressure%itype !DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%gas_pressure%itype)
+              string = GetSubConditionType(hydrate%gas_pressure%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                 'HYDRATE MODE gas state gas pressure',string)
@@ -2783,7 +2783,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof2 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_ENERGY_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%temperature%itype)
+              string = GetSubConditionType(hydrate%temperature%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                 'HYDRATE MODE gas state temperature',string)
@@ -2817,7 +2817,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
                 coupler%flow_bc_type(HYDRATE_LIQUID_EQUATION_INDEX) = &
                                                                     DIRICHLET_BC
               case default
-                string = GetSubConditionName(hydrate%mole_fraction%itype)
+                string = GetSubConditionType(hydrate%mole_fraction%itype)
                 option%io_buffer = &
                   FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE air mole fraction',string)
@@ -2852,7 +2852,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
                 coupler%flow_bc_type(HYDRATE_LIQUID_EQUATION_INDEX) = &
                                                                     DIRICHLET_BC
               case default
-                string = GetSubConditionName(hydrate%relative_humidity%itype)
+                string = GetSubConditionType(hydrate%relative_humidity%itype)
                 option%io_buffer = &
                   FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE relative humidity',string)
@@ -2870,7 +2870,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof1 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_LIQUID_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%gas_pressure%itype)
+              string = GetSubConditionType(hydrate%gas_pressure%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE H-state gas pressure ',string)
@@ -2886,7 +2886,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
                 coupler%flow_bc_type(HYDRATE_ENERGY_EQUATION_INDEX) = &
                                                                     DIRICHLET_BC
               case default
-                string = GetSubConditionName(hydrate%temperature%itype)
+                string = GetSubConditionType(hydrate%temperature%itype)
                 option%io_buffer = &
                   FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE H-state state temperature ',string)
@@ -2900,7 +2900,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
                 dof3 = PETSC_TRUE
                 coupler%flow_bc_type(HYDRATE_GAS_EQUATION_INDEX) = DIRICHLET_BC
               case default
-                string = GetSubConditionName(hydrate%mole_fraction%itype)
+                string = GetSubConditionType(hydrate%mole_fraction%itype)
                 option%io_buffer = &
                   FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE H-state mole fraction ',string)
@@ -2917,7 +2917,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof1 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_LIQUID_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%gas_pressure%itype)
+              string = GetSubConditionType(hydrate%gas_pressure%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE I-state gas pressure ',string)
@@ -2933,7 +2933,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
                 coupler%flow_bc_type(HYDRATE_ENERGY_EQUATION_INDEX) = &
                                                                     DIRICHLET_BC
               case default
-                string = GetSubConditionName(hydrate%temperature%itype)
+                string = GetSubConditionType(hydrate%temperature%itype)
                 option%io_buffer = &
                   FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE I-state state temperature ',string)
@@ -2947,7 +2947,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
                 dof3 = PETSC_TRUE
                 coupler%flow_bc_type(HYDRATE_GAS_EQUATION_INDEX) = DIRICHLET_BC
               case default
-                string = GetSubConditionName(hydrate%mole_fraction%itype)
+                string = GetSubConditionType(hydrate%mole_fraction%itype)
                 option%io_buffer = &
                   FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE I-state mole fraction ',string)
@@ -2964,7 +2964,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof1 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_LIQUID_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%gas_pressure%itype)
+              string = GetSubConditionType(hydrate%gas_pressure%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE GA-State gas pressure ',string)
@@ -2979,7 +2979,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof2 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_ENERGY_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%temperature%itype)
+              string = GetSubConditionType(hydrate%temperature%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE GA-State temperature ',string)
@@ -2994,7 +2994,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof3 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_GAS_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%gas_saturation%itype)
+              string = GetSubConditionType(hydrate%gas_saturation%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE GA-State gas saturation ',string)
@@ -3013,7 +3013,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
                 coupler%flow_bc_type(HYDRATE_LIQUID_EQUATION_INDEX) = &
                                                                   DIRICHLET_BC
               case default
-                string = GetSubConditionName(hydrate%gas_pressure%itype)
+                string = GetSubConditionType(hydrate%gas_pressure%itype)
                 option%io_buffer = &
                   FlowConditionUnknownItype(coupler%flow_condition, &
                     'HYDRATE MODE HA-state gas pressure ',string)
@@ -3029,7 +3029,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
                 coupler%flow_bc_type(HYDRATE_ENERGY_EQUATION_INDEX) = &
                                                                  DIRICHLET_BC
               case default
-                string = GetSubConditionName(hydrate%temperature%itype)
+                string = GetSubConditionType(hydrate%temperature%itype)
                 option%io_buffer = &
                   FlowConditionUnknownItype(coupler%flow_condition, &
                     'HYDRATE MODE HA-state temperature ',string)
@@ -3058,7 +3058,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
                   coupler%flow_bc_type(HYDRATE_LIQUID_EQUATION_INDEX) = &
                                                                   DIRICHLET_BC
                 case default
-                  string = GetSubConditionName(hydrate%liquid_pressure%itype)
+                  string = GetSubConditionType(hydrate%liquid_pressure%itype)
                   option%io_buffer = &
                     FlowConditionUnknownItype(coupler%flow_condition, &
                     'HYDRATE MODE HA-state liquid pressure ',string)
@@ -3074,7 +3074,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
                   coupler%flow_bc_type(HYDRATE_ENERGY_EQUATION_INDEX) = &
                                                                     DIRICHLET_BC
                 case default
-                  string = GetSubConditionName(hydrate%temperature%itype)
+                  string = GetSubConditionType(hydrate%temperature%itype)
                   option%io_buffer = &
                     FlowConditionUnknownItype(coupler%flow_condition, &
                     'HYDRATE MODE HA-state temperature ',string)
@@ -3092,7 +3092,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof2 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_GAS_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%hydrate_saturation%itype)
+              string = GetSubConditionType(hydrate%hydrate_saturation%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE HA-state hydrate saturation ',string)
@@ -3109,7 +3109,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof1 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_LIQUID_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%gas_pressure%itype)
+              string = GetSubConditionType(hydrate%gas_pressure%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE GI-State gas pressure ',string)
@@ -3124,7 +3124,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof2 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_ENERGY_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%temperature%itype)
+              string = GetSubConditionType(hydrate%temperature%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE GI-state temperature ',string)
@@ -3139,7 +3139,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof3 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_GAS_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%ice_saturation%itype)
+              string = GetSubConditionType(hydrate%ice_saturation%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE GI-state gas saturation ',string)
@@ -3156,7 +3156,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof1 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_LIQUID_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%gas_pressure%itype)
+              string = GetSubConditionType(hydrate%gas_pressure%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE AI-State gas pressure ',string)
@@ -3171,7 +3171,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof2 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_ENERGY_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%temperature%itype)
+              string = GetSubConditionType(hydrate%temperature%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE AI-state temperature ',string)
@@ -3187,7 +3187,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof3 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_GAS_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%liquid_saturation%itype)
+              string = GetSubConditionType(hydrate%liquid_saturation%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE AI-state liquid saturation ',string)
@@ -3204,7 +3204,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof1 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_LIQUID_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%gas_saturation%itype)
+              string = GetSubConditionType(hydrate%gas_saturation%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE HGA-State gas saturation ',string)
@@ -3219,7 +3219,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof2 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_ENERGY_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%temperature%itype)
+              string = GetSubConditionType(hydrate%temperature%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE HGA-state temperature ',string)
@@ -3235,7 +3235,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof3 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_GAS_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%hydrate_saturation%itype)
+              string = GetSubConditionType(hydrate%hydrate_saturation%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE HGA-state hydrate saturation ',string)
@@ -3252,7 +3252,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof1 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_LIQUID_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%gas_pressure%itype)
+              string = GetSubConditionType(hydrate%gas_pressure%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE HAI-State gas pressure ',string)
@@ -3267,7 +3267,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof2 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_ENERGY_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%ice_saturation%itype)
+              string = GetSubConditionType(hydrate%ice_saturation%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE HAI-state ice saturation ',string)
@@ -3283,7 +3283,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof3 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_GAS_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%hydrate_saturation%itype)
+              string = GetSubConditionType(hydrate%hydrate_saturation%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE HAI-state hydrate saturation ',string)
@@ -3300,7 +3300,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof1 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_LIQUID_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%ice_saturation%itype)
+              string = GetSubConditionType(hydrate%ice_saturation%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE HGI-State ice saturation ',string)
@@ -3315,7 +3315,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof2 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_ENERGY_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%temperature%itype)
+              string = GetSubConditionType(hydrate%temperature%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE HGI-state temperature ',string)
@@ -3331,7 +3331,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof3 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_GAS_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%hydrate_saturation%itype)
+              string = GetSubConditionType(hydrate%hydrate_saturation%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE HGI-state hydrate saturation ',string)
@@ -3348,7 +3348,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof1 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_LIQUID_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%liquid_saturation%itype)
+              string = GetSubConditionType(hydrate%liquid_saturation%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE QUAD-State liquid saturation ',string)
@@ -3363,7 +3363,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof2 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_ENERGY_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%ice_saturation%itype)
+              string = GetSubConditionType(hydrate%ice_saturation%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE QUAD-state ice saturation ',string)
@@ -3379,7 +3379,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
               dof3 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_GAS_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionName(hydrate%gas_saturation%itype)
+              string = GetSubConditionType(hydrate%gas_saturation%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE QUAD-state gas saturation ',string)
@@ -3398,7 +3398,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
                 coupler%flow_bc_type(HYDRATE_ENERGY_EQUATION_INDEX) = &
                                                                     DIRICHLET_BC
               case default
-                string = GetSubConditionName(hydrate%temperature%itype)
+                string = GetSubConditionType(hydrate%temperature%itype)
                 option%io_buffer = &
                   FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE gas state temperature ',string)
@@ -3687,7 +3687,7 @@ subroutine PatchUpdateCouplerAuxVarsTH(patch,coupler,option)
         endif
       case default
         string = &
-          GetSubConditionName(flow_condition%pressure%itype)
+          GetSubConditionType(flow_condition%pressure%itype)
         option%io_buffer = &
           FlowConditionUnknownItype(flow_condition,'TH pressure',string)
         call PrintErrMsg(option)
@@ -3721,7 +3721,7 @@ subroutine PatchUpdateCouplerAuxVarsTH(patch,coupler,option)
                   TH_TEMPERATURE_DOF,option)
         case default
           string = &
-            GetSubConditionName(flow_condition%temperature%itype)
+            GetSubConditionType(flow_condition%temperature%itype)
           option%io_buffer = &
             FlowConditionUnknownItype(flow_condition,'TH temperature',string)
           call PrintErrMsg(option)
@@ -3771,7 +3771,7 @@ subroutine PatchUpdateCouplerAuxVarsTH(patch,coupler,option)
                 TH_TEMPERATURE_DOF,option)
       case default
         string = &
-          GetSubConditionName(flow_condition%temperature%itype)
+          GetSubConditionType(flow_condition%temperature%itype)
         option%io_buffer = &
           FlowConditionUnknownItype(flow_condition,'TH temperature',string)
         call PrintErrMsg(option)
@@ -3797,7 +3797,7 @@ subroutine PatchUpdateCouplerAuxVarsTH(patch,coupler,option)
         end select
       case default
         string = &
-          GetSubConditionName(flow_condition%energy_flux%itype)
+          GetSubConditionType(flow_condition%energy_flux%itype)
         option%io_buffer = &
           FlowConditionUnknownItype(flow_condition,'TH energy flux',string)
         call PrintErrMsg(option)
@@ -3821,7 +3821,7 @@ subroutine PatchUpdateCouplerAuxVarsTH(patch,coupler,option)
       ! do nothing here
       case default
         string = &
-          GetSubConditionName(flow_condition%rate%itype)
+          GetSubConditionType(flow_condition%rate%itype)
         option%io_buffer = &
           FlowConditionUnknownItype(flow_condition,'TH rate',string)
         call PrintErrMsg(option)
@@ -3852,7 +3852,7 @@ subroutine PatchUpdateCouplerAuxVarsTH(patch,coupler,option)
                 TH_TEMPERATURE_DOF,option)
       case default
         string = &
-          GetSubConditionName(flow_condition%energy_rate%itype)
+          GetSubConditionType(flow_condition%energy_rate%itype)
         option%io_buffer = &
           FlowConditionUnknownItype(flow_condition,'TH energy rate',string)
         call PrintErrMsg(option)
@@ -7628,6 +7628,12 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
                                       reaction,option)
     case(SALINITY)
       value = patch%aux%Global%auxvars(ghosted_id)%m_nacl(ONE_INTEGER)
+    case(SMECTITE)
+      if (associated(patch%aux%MTransform)) then
+        if (associated(patch%aux%MTransform%auxvars(ghosted_id)%il_aux)) then
+          value = patch%aux%MTransform%auxvars(ghosted_id)%il_aux%fs
+        endif
+      endif
     case(RESIDUAL)
       local_id = grid%nG2L(ghosted_id)
       call VecGetArrayF90(field%flow_r,vec_ptr2,ierr);CHKERRQ(ierr)
