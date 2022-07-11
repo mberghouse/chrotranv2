@@ -35,6 +35,8 @@ module Reactive_Transport_Aux_module
 
     ! gases
     PetscReal, pointer :: gas_pp(:) ! gas partial pressure in bars
+    PetscReal, pointer :: total_sorb_eq_gas(:) ! mol/m^3 bulk
+    PetscReal, pointer :: dtotal_sorb_eq_gas(:,:)
 
     ! sorption reactions
     PetscReal, pointer :: srfcplxrxn_free_site_conc(:)
@@ -255,9 +257,16 @@ subroutine RTAuxVarInit(auxvar,reaction,option)
 
   if (reaction%gas%nactive_gas > 0) then
     allocate(auxvar%gas_pp(reaction%gas%nactive_gas))
+    allocate(auxvar%total_sorb_eq_gas(reaction%gas%nactive_gas))
+    allocate(auxvar%dtotal_sorb_eq_gas(reaction%gas%nactive_gas,reaction%gas% &
+             nactive_gas)) 
     auxvar%gas_pp = 0.d0
+    auxvar%total_sorb_eq_gas = 0.d0
+    auxvar%dtotal_sorb_eq_gas = 0.d0
   else
     nullify(auxvar%gas_pp)
+    nullify(auxvar%total_sorb_eq_gas)
+    nullify(auxvar%dtotal_sorb_eq_gas)
   endif
 
   if (reaction%neqsorb > 0) then

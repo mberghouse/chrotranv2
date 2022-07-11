@@ -6,6 +6,7 @@ module Reaction_Gas_Aux_module
   use Reaction_Database_Aux_module
 
   use PFLOTRAN_Constants_module
+  use Reaction_Isotherm_Aux_module
 
   implicit none
 
@@ -33,6 +34,9 @@ module Reaction_Gas_Aux_module
     PetscInt :: nactive_gas
     PetscInt :: npassive_gas
 
+    PetscInt :: nsorb
+    PetscInt :: neqsorb
+
     type(gas_species_type), pointer :: list
 
     ! gas species names
@@ -45,16 +49,18 @@ module Reaction_Gas_Aux_module
     PetscInt, pointer :: acteqspecid(:,:)   ! (0:ncomp in rxn)
     PetscReal, pointer :: acteqstoich(:,:)
     PetscInt, pointer :: acteqh2oid(:)       ! id of water, if present
-    PetscReal, pointer :: acteqh2ostoich(:)  ! stoichiometry of water, if present
+    PetscReal, pointer :: acteqh2ostoich(:) ! stoichiometry of water, if present
     PetscReal, pointer :: acteqlogK(:)
     PetscReal, pointer :: acteqlogKcoef(:,:)
 
     PetscInt, pointer :: paseqspecid(:,:)   ! (0:ncomp in rxn)
     PetscReal, pointer :: paseqstoich(:,:)
-    PetscInt, pointer :: paseqh2oid(:)       ! id of water, if present
-    PetscReal, pointer :: paseqh2ostoich(:)  ! stoichiometry of water, if present
+    PetscInt, pointer :: paseqh2oid(:)      ! id of water, if present
+    PetscReal, pointer :: paseqh2ostoich(:) ! stoichiometry of water, if present
     PetscReal, pointer :: paseqlogK(:)
     PetscReal, pointer :: paseqlogKcoef(:,:)
+
+    type(isotherm_type), pointer :: isotherm
 
   end type gas_type
 
@@ -90,6 +96,8 @@ function GasCreate()
   gas%ngas = 0
   gas%nactive_gas = 0
   gas%npassive_gas = 0
+  gas%nsorb = 0
+  gas%neqsorb = 0
   gas%print_all = PETSC_FALSE
   nullify(gas%list)
   nullify(gas%active_names)
@@ -110,6 +118,8 @@ function GasCreate()
   nullify(gas%paseqh2ostoich)
   nullify(gas%paseqlogK)
   nullify(gas%paseqlogKcoef)
+
+  gas%isotherm => IsothermCreate()
 
   GasCreate => gas
 

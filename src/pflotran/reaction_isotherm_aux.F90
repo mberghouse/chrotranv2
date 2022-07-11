@@ -11,6 +11,7 @@ module Reaction_Isotherm_Aux_module
   !kd units
   PetscInt, parameter, public :: KD_UNIT_KG_M3_BULK = 0
   PetscInt, parameter, public :: KD_UNIT_MLW_GSOIL = 1
+  PetscInt, parameter, public :: KD_UNIT_DIMENSIONLESS = 2
 
   type, public :: isotherm_link_type
     PetscInt :: id
@@ -20,6 +21,7 @@ module Reaction_Isotherm_Aux_module
     PetscReal :: Kd
     PetscReal :: Langmuir_B
     PetscReal :: Freundlich_n
+    PetscReal :: retention_factor
     type(isotherm_link_type), pointer :: next
   end type isotherm_link_type
 
@@ -27,6 +29,7 @@ module Reaction_Isotherm_Aux_module
     PetscReal, pointer :: eqisothermcoeff(:)
     PetscReal, pointer :: eqisothermlangmuirb(:)
     PetscReal, pointer :: eqisothermfreundlichn(:)
+    PetscReal, pointer :: eqisothermretentionfactor(:)
   end type isotherm_rxn_type
 
   type, public :: isotherm_type
@@ -123,6 +126,8 @@ subroutine IsothermRxnCreate(isotherm_rxn, isotherm)
   isotherm_rxn%eqisothermlangmuirb = 0.d0
   allocate(isotherm_rxn%eqisothermfreundlichn(isotherm%neqkdrxn))
   isotherm_rxn%eqisothermfreundlichn = 0.d0
+  allocate(isotherm_rxn%eqisothermretentionfactor(isotherm%neqkdrxn))
+  isotherm_rxn%eqisothermretentionfactor = 0.d0
 
 end subroutine IsothermRxnCreate
 
@@ -160,6 +165,7 @@ subroutine IsothermRxnDestroy(isotherm_rxn)
   call DeallocateArray(isotherm_rxn%eqisothermcoeff)
   call DeallocateArray(isotherm_rxn%eqisothermlangmuirb)
   call DeallocateArray(isotherm_rxn%eqisothermfreundlichn)
+  call DeallocateArray(isotherm_rxn%eqisothermretentionfactor)
 
   deallocate(isotherm_rxn)
   nullify(isotherm_rxn)

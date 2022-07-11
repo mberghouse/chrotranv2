@@ -744,11 +744,13 @@ reaction_database_hpt.o : input_aux.o option.o pflotran_constants.o reaction.o \
                           reaction_database_aux.o reaction_gas_aux.o \
                           reaction_isotherm_aux.o reaction_mineral_aux.o \
                           reaction_surf_complex_aux.o string.o utility.o
-reaction_gas.o : co2eos.o eos_water.o global_aux.o input_aux.o option.o \
-                 pflotran_constants.o reaction_aux.o reaction_gas_aux.o \
-                 reactive_transport_aux.o string.o utility.o
-reaction_gas_aux.o : pflotran_constants.o reaction_database_aux.o string.o \
-                     utility.o
+reaction_gas.o : co2eos.o eos_water.o global_aux.o input_aux.o material_aux.o \
+                 option.o pflotran_constants.o reaction_aux.o \
+                 reaction_gas_aux.o reaction_isotherm.o \
+                 reaction_isotherm_aux.o reactive_transport_aux.o string.o \
+                 utility.o
+reaction_gas_aux.o : pflotran_constants.o reaction_database_aux.o \
+                     reaction_isotherm_aux.o string.o utility.o
 reaction_immobile.o : global_aux.o input_aux.o material_aux.o option.o \
                       pflotran_constants.o reaction_aux.o \
                       reaction_immobile_aux.o reactive_transport_aux.o \
@@ -843,9 +845,9 @@ reactive_transport.o : co2_span_wagner.o co2eos.o condition.o connection.o \
                        global.o global_aux.o grid.o hdf5.o logging.o \
                        material.o material_aux.o option.o output_aux.o \
                        output_tecplot.o patch.o pflotran_constants.o \
-                       reaction.o reaction_aux.o reaction_surf_complex_aux.o \
-                       reactive_transport_aux.o realization_subsurface.o \
-                       region.o secondary_continuum.o \
+                       reaction.o reaction_aux.o reaction_gas.o \
+                       reaction_surf_complex_aux.o reactive_transport_aux.o \
+                       realization_subsurface.o region.o secondary_continuum.o \
                        secondary_continuum_aux.o string.o transport.o \
                        transport_constraint_rt.o
 reactive_transport_aux.o : matrix_block_aux.o matrix_zeroing.o option.o \
