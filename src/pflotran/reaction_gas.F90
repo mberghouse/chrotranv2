@@ -241,8 +241,7 @@ subroutine RTotalSorbGasKD(rt_auxvar,global_auxvar,material_auxvar,gas, &
   PetscReal :: one_over_n
   PetscReal :: molality_one_over_n
   PetscReal :: kd_kgw_m3b, kd_sorb_gas, rf
-  PetscReal :: partial_pres,pp_one_over_n
-  PetscReal :: gas_concentration
+  PetscReal :: gas_concentration,pp_one_over_n
   PetscReal :: RT
   PetscReal :: L_pore, L_gas
   PetscInt :: ncomp
@@ -260,9 +259,8 @@ subroutine RTotalSorbGasKD(rt_auxvar,global_auxvar,material_auxvar,gas, &
   L_gas = L_pore*global_auxvar%sat(option%gas_phase)
 
   do irxn = 1, isotherm%neqkdrxn
-    partial_pres =  rt_auxvar%gas_pp(irxn)
     ! Concentration units = mol/L gas
-    gas_concentration = partial_pres * 1.d5 / RT
+    gas_concentration = rt_auxvar%total(irxn,iphase)
     ncomp = gas%acteqspecid(0,irxn)
     if (isotherm%ikd_units == KD_UNIT_MLW_GSOIL) then
                    !KD units [mL water/g soil]
@@ -286,21 +284,21 @@ subroutine RTotalSorbGasKD(rt_auxvar,global_auxvar,material_auxvar,gas, &
     select case(isotherm%eqisothermtype(irxn))
       case(SORPTION_LINEAR)
         ! Csorb = Kd*Pg
-        res = kd_kgw_m3b*partial_pres
+        res = kd_kgw_m3b*gas_concentration
         dres_dc = kd_kgw_m3b
       case(SORPTION_LANGMUIR)
         ! Csorb = K*Caq*b/(1+K*Pg)
-        tempreal = kd_kgw_m3b*partial_pres
+        tempreal = kd_kgw_m3b*gas_concentration
         res = tempreal*isotherm_rxn%eqisothermlangmuirb(irxn) / &
               (1.d0 + tempreal)
-        dres_dc = res/partial_pres - &
-                  res / (1.d0 + tempreal) * tempreal / partial_pres
+        dres_dc = res/gas_concentration - &
+                  res / (1.d0 + tempreal) * tempreal / gas_concentration
       case(SORPTION_FREUNDLICH)
         ! Csorb = Kd*Pg**(1/n)
         one_over_n = 1.d0/isotherm_rxn%eqisothermfreundlichn(irxn)
-        pp_one_over_n = partial_pres**one_over_n
-        res = kd_kgw_m3b*partial_pres**one_over_n
-        dres_dc = res/partial_pres*one_over_n
+        pp_one_over_n = gas_concentration**one_over_n
+        res = kd_kgw_m3b*gas_concentration**one_over_n
+        dres_dc = res/gas_concentration*one_over_n
       case(SORPTION_RETENTION_FACTOR)
         ! Retention factor: moles sorbed/moles gas
         ! (1/(1+1/rf)) = moles sorbed / (moles sorbed + moles in gas phase)
@@ -310,7 +308,7 @@ subroutine RTotalSorbGasKD(rt_auxvar,global_auxvar,material_auxvar,gas, &
         if (rf < 1.d-20) then
            res = 0.d0
         else
-           res = gas_concentration * L_gas *(1.d0/(1.d0+1.d0/rf)) / material_auxvar%volume
+           res = gas_concentration * L_gas * rf / material_auxvar%volume
         endif
         dres_dc = res/gas_concentration
       case default
