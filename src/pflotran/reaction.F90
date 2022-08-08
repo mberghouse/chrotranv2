@@ -921,6 +921,8 @@ subroutine ReactionReadPass1(reaction,input,option)
                      reaction%neqdynamickdrxn + &
                      reaction%isotherm%neqkdrxn + &
                      reaction%surface_complexation%neqsrfcplxrxn
+  reaction%gas%neqsorb = reaction%gas%isotherm%neqkdrxn
+  reaction%gas%nsorb = reaction%gas%neqsorb
   reaction%nsorb = reaction%neqsorb + &
                    reaction%surface_complexation%nkinmrsrfcplxrxn + &
                    reaction%surface_complexation%nkinsrfcplxrxn
@@ -5333,6 +5335,7 @@ subroutine RTAuxVarCompute(rt_auxvar,global_auxvar,material_auxvar,reaction, &
   enddo
   rt_auxvar%aqueous%dtotal(:,:,:) = dtotal
   if (reaction%neqsorb > 0) rt_auxvar%dtotal_sorb_eq = dtotalsorb
+  if (reaction%gas%neqsorb > 0) rt_auxvar%dtotal_sorb_eq = dtotalsorbgas
   call RTAuxVarStrip(rt_auxvar_pert)
 #endif
 

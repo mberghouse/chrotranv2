@@ -102,6 +102,7 @@ function IsothermLinkCreate()
   rxn%Kd = 0.d0
   rxn%Langmuir_B = 0.d0
   rxn%Freundlich_n = 0.d0
+  rxn%retention_factor = 0.d0
   nullify(rxn%next)
 
   IsothermLinkCreate => rxn
