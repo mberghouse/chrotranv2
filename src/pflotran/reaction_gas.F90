@@ -301,16 +301,12 @@ subroutine RTotalSorbGasKD(rt_auxvar,global_auxvar,material_auxvar,gas, &
         dres_dc = res/gas_concentration*one_over_n
       case(SORPTION_RETENTION_FACTOR)
         ! Retention factor: moles sorbed/moles gas
-        ! (1/(1+1/rf)) = moles sorbed / (moles sorbed + moles in gas phase)
+        ! res = moles gas / L gas * L_gas * (moles sorbed / moles gas) / m^3 bulk
         ! units = mole solute/L gas * L gas * sorbed/total / m^3 bulk
         !       = mole solute sorbed / m^3 bulk
         rf = isotherm_rxn%eqisothermretentionfactor(irxn)
-        if (rf < 1.d-20) then
-           res = 0.d0
-        else
-           res = gas_concentration * L_gas * rf / material_auxvar%volume
-        endif
-        dres_dc = res/gas_concentration
+        res = gas_concentration * L_gas * rf / material_auxvar%volume
+        dres_dc = res/rt_auxvar%total(irxn,ONE_INTEGER)
       case default
         res = 0.d0
         dres_dc = 0.d0
