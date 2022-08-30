@@ -85,7 +85,7 @@ subroutine SecondaryContinuumType(sec_continuum,nmat,aream, &
                             &or LENGTH and EPSILON '
         call PrintErrMsg(option)
       else if (Initialized(epsilon) .and. Initialized(aperture)) then
-        sec_continuum%slab%length = 2.d0 * aperture / ((1.d0 - epsilon) ** (-1.d0/3.d0) - 1.d0)
+        sec_continuum%slab%length = (aperture - epsilon * aperture) / (epsilon)
       else if (Initialized(sec_continuum%slab%length) .and. Initialized(aperture)) then
         epsilon = aperture / (sec_continuum%slab%length + aperture)
       else if (Initialized(sec_continuum%slab%length) .and. Initialized(epsilon)) then
