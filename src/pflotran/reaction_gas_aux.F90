@@ -43,6 +43,8 @@ module Reaction_Gas_Aux_module
     character(len=MAXWORDLENGTH), pointer :: active_names(:)
     character(len=MAXWORDLENGTH), pointer :: passive_names(:)
     PetscBool :: print_all
+    PetscBool :: print_concentration
+    PetscBool :: print_partial_pressure
     PetscBool, pointer :: active_print_me(:)
     PetscBool, pointer :: passive_print_me(:)
 
@@ -99,6 +101,8 @@ function GasCreate()
   gas%nsorb = 0
   gas%neqsorb = 0
   gas%print_all = PETSC_FALSE
+  gas%print_concentration = PETSC_FALSE
+  gas%print_partial_pressure = PETSC_FALSE
   nullify(gas%list)
   nullify(gas%active_names)
   nullify(gas%passive_names)

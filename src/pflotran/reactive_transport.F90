@@ -77,7 +77,7 @@ subroutine RTTimeCut(realization)
   ! copy previous solution back to current solution
   call VecCopy(field%tran_yy,field%tran_xx,ierr);CHKERRQ(ierr)
 
-  if (option%use_mc) then
+  if (option%use_sc) then
     call SecondaryRTTimeCut(realization)
   endif
 
@@ -250,7 +250,7 @@ subroutine RTSetup(realization)
 !============== Create secondary continuum variables - SK 2/5/13 ===============
 
 
-  if (option%use_mc) then
+  if (option%use_sc) then
     patch%aux%SC_RT => SecondaryAuxRTCreate(option)
     initial_condition => patch%initial_condition_list%first
     ! Must allocate to ngmax since rt_sec_transport_vars()%epsilon is used in
@@ -394,7 +394,7 @@ subroutine RTSetup(realization)
   if (rt_parameter%species_dependent_diffusion) then
     if (reaction%gas%nactive_gas > 0) then
       if (maxval(reaction%gas%acteqspecid(0,:)) > 1) then
-        option%io_buffer = 'Active gas transprot is not supported when &
+        option%io_buffer = 'Active gas transport is not supported when &
           &gas species are not defined as a one to one match with the &
           &primary species [e.g. O2(aq) <-> O2(g)].'
         call PrintErrMsg(option)
@@ -810,7 +810,7 @@ subroutine RTUpdateEquilibriumState(realization)
 #endif
 
   ! update secondary continuum variables
-  if (option%use_mc) then
+  if (option%use_sc) then
     rt_sec_transport_vars => patch%aux%SC_RT%sec_transport_vars
     do local_id = 1, grid%nlmax
       ghosted_id = grid%nL2G(local_id)
@@ -893,7 +893,7 @@ subroutine RTUpdateKineticState(realization)
   enddo
 
   ! update secondary continuum variables
-  if (option%use_mc) then
+  if (option%use_sc) then
     rt_sec_transport_vars => patch%aux%SC_RT%sec_transport_vars
     do local_id = 1, grid%nlmax
       ghosted_id = grid%nL2G(local_id)
@@ -959,7 +959,7 @@ subroutine RTUpdateFixedAccumulation(realization)
 
   grid => patch%grid
   reaction => realization%reaction
-  if (option%use_mc) then
+  if (option%use_sc) then
     rt_sec_transport_vars => patch%aux%SC_RT%sec_transport_vars
   endif
 
@@ -1029,7 +1029,7 @@ subroutine RTUpdateFixedAccumulation(realization)
                                 reaction,option,accum_p(istart:iendall))
     endif
 
-    if (option%use_mc) then
+    if (option%use_sc) then
       accum_p(istart:iendall) = accum_p(istart:iendall)* &
         rt_sec_transport_vars(ghosted_id)%epsilon
     endif
@@ -1101,7 +1101,7 @@ subroutine RTUpdateTransportCoefs(realization)
   grid => patch%grid
   rt_parameter => patch%aux%RT%rt_parameter
   nphase = rt_parameter%nphase
-  if (option%use_mc) then
+  if (option%use_sc) then
     rt_sec_transport_vars => patch%aux%SC_RT%sec_transport_vars
   endif
 
@@ -1163,7 +1163,7 @@ subroutine RTUpdateTransportCoefs(realization)
           cell_centered_Darcy_velocities_ghosted(:,1:nphase,ghosted_id_dn)
       endif
 
-      if (option%use_mc) then
+      if (option%use_sc) then
         epsilon_up = rt_sec_transport_vars(ghosted_id_up)%epsilon
         epsilon_dn = rt_sec_transport_vars(ghosted_id_dn)%epsilon
       endif
@@ -1209,7 +1209,7 @@ subroutine RTUpdateTransportCoefs(realization)
           cell_centered_Darcy_velocities_ghosted(:,1:nphase,ghosted_id)
       endif
 
-      if (option%use_mc) then
+      if (option%use_sc) then
         epsilon_dn = rt_sec_transport_vars(ghosted_id)%epsilon
       endif
 
@@ -2774,7 +2774,7 @@ subroutine RTResidualNonFlux(snes,xx,r,realization,ierr)
   global_auxvars => patch%aux%Global%auxvars
   global_auxvars_ss => patch%aux%Global%auxvars_ss
   material_auxvars => patch%aux%Material%auxvars
-  if (option%use_mc) then
+  if (option%use_sc) then
     rt_sec_transport_vars => patch%aux%SC_RT%sec_transport_vars
   endif
   nphase = rt_parameter%nphase
@@ -2818,7 +2818,7 @@ subroutine RTResidualNonFlux(snes,xx,r,realization,ierr)
 
       Res = Res / option%tran_dt
 
-      if (option%use_mc) then
+      if (option%use_sc) then
         Res = Res*rt_sec_transport_vars(ghosted_id)%epsilon
       endif
 
@@ -2843,7 +2843,7 @@ subroutine RTResidualNonFlux(snes,xx,r,realization,ierr)
 #if 1
 
 ! ========== Secondary continuum transport source terms -- MULTICOMPONENT ======
-  if (option%use_mc) then
+  if (option%use_sc) then
   ! Secondary continuum contribution (SK 1/31/2013)
   ! only one secondary continuum for now for each primary continuum node
     do local_id = 1, grid%nlmax  ! For each local node do...
@@ -3007,7 +3007,7 @@ subroutine RTResidualNonFlux(snes,xx,r,realization,ierr)
                      global_auxvars(ghosted_id), &
                      material_auxvars(ghosted_id), &
                      reaction,option)
-      if (option%use_mc) then
+      if (option%use_sc) then
         Res = Res*rt_sec_transport_vars(ghosted_id)%epsilon
       endif
       r_p(istartall:iendall) = r_p(istartall:iendall) + Res(1:reaction%ncomp)
@@ -3590,7 +3590,7 @@ subroutine RTJacobianNonFlux(snes,xx,A,B,realization,ierr)
   global_auxvars => patch%aux%Global%auxvars
   global_auxvars_bc => patch%aux%Global%auxvars_bc
   material_auxvars => patch%aux%Material%auxvars
-  if (option%use_mc) then
+  if (option%use_sc) then
     rt_sec_transport_vars => patch%aux%SC_RT%sec_transport_vars
   endif
   nphase = rt_parameter%nphase
@@ -3622,8 +3622,7 @@ subroutine RTJacobianNonFlux(snes,xx,A,B,realization,ierr)
                                             reaction,option,Jup)
       endif
 
-      if (option%use_mc) then
-
+      if (option%use_sc) then
         Jup = Jup*rt_sec_transport_vars(ghosted_id)%epsilon
 
         if (realization%reaction%ncomp /= realization%reaction%naqcomp) then
@@ -3718,7 +3717,7 @@ subroutine RTJacobianNonFlux(snes,xx,A,B,realization,ierr)
                                global_auxvars(ghosted_id), &
                                material_auxvars(ghosted_id), &
                                reaction,option)
-      if (option%use_mc) then
+      if (option%use_sc) then
         Jup = Jup*rt_sec_transport_vars(ghosted_id)%epsilon
       endif
       call MatSetValuesBlockedLocal(A,1,ghosted_id-1,1,ghosted_id-1,Jup, &

@@ -3569,7 +3569,7 @@ subroutine BasisInit(reaction,option)
 
     cur_isotherm_rxn => reaction%isotherm%isotherm_list
 
-    if (option%use_mc) then
+    if (option%use_sc) then
       call IsothermRxnCreate(reaction%isotherm%multicontinuum_isotherm_rxn, &
                              reaction%isotherm)
       sec_cont_cur_isotherm_rxn => &
@@ -3617,7 +3617,7 @@ subroutine BasisInit(reaction,option)
 
       cur_isotherm_rxn => cur_isotherm_rxn%next
 
-      if (option%use_mc) then
+      if (option%use_sc) then
         reaction%isotherm%multicontinuum_isotherm_rxn%eqisothermcoeff(irxn) = &
           sec_cont_cur_isotherm_rxn%Kd
         reaction%isotherm%multicontinuum_isotherm_rxn% &
@@ -4364,7 +4364,7 @@ subroutine ReactionDatabaseSetupGases(reaction,num_logKs,option,h2o_id, &
       cur_isotherm_rxn => gas%isotherm%isotherm_list
 
       !MAN: no idea if this will work with mc
-      if (option%use_mc) then
+      if (option%use_sc) then
         call IsothermRxnCreate(gas%isotherm%multicontinuum_isotherm_rxn, &
                                gas%isotherm)
         sec_cont_cur_isotherm_rxn => &
@@ -4422,7 +4422,7 @@ subroutine ReactionDatabaseSetupGases(reaction,num_logKs,option,h2o_id, &
         cur_isotherm_rxn => cur_isotherm_rxn%next
 
         !MAN: same as above, haven't tested for mc
-        if (option%use_mc) then
+        if (option%use_sc) then
           gas%isotherm%multicontinuum_isotherm_rxn%eqisothermcoeff(irxn) = &
             sec_cont_cur_isotherm_rxn%Kd
           gas%isotherm%multicontinuum_isotherm_rxn%eqisothermlangmuirb(irxn) = &
