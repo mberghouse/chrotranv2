@@ -244,9 +244,9 @@ subroutine RichardsFluxDerivative(rich_auxvar_up,global_auxvar_up, &
     dden_ave_dp_up = upweight*rich_auxvar_up%dden_dp
     dden_ave_dp_dn = (1.D0-upweight)*rich_auxvar_dn%dden_dp
 
-    gravity = (upweight*global_auxvar_up%den(1) + &
-              (1.D0-upweight)*global_auxvar_dn%den(1)) &
-              * FMWH2O * dist_gravity
+    gravity = (upweight*global_auxvar_up%den_kg(1) + &
+              (1.D0-upweight)*global_auxvar_dn%den_kg(1)) &
+              * dist_gravity
     dgravity_dden_up = upweight*FMWH2O*dist_gravity
     dgravity_dden_dn = (1.d0-upweight)*FMWH2O*dist_gravity
 
@@ -399,9 +399,9 @@ subroutine RichardsFlux(rich_auxvar_up,global_auxvar_up, &
     density_ave = upweight*global_auxvar_up%den(1)+ &
                   (1.D0-upweight)*global_auxvar_dn%den(1)
 
-    gravity = (upweight*global_auxvar_up%den(1) + &
-              (1.D0-upweight)*global_auxvar_dn%den(1)) &
-              * FMWH2O * dist_gravity
+    gravity = (upweight*global_auxvar_up%den_kg(1) + &
+              (1.D0-upweight)*global_auxvar_dn%den_kg(1)) &
+               * dist_gravity
 
     dphi = global_auxvar_up%pres(1) - global_auxvar_dn%pres(1)  + gravity
 
