@@ -953,7 +953,7 @@ subroutine UGridExplicitDecompose(ugrid,option)
   PetscInt :: natural_id_offset
   PetscErrorCode :: ierr
   PetscInt :: icell_up,icell_dn
-
+  PetscInt :: vertices_offset,ivertex,ivertex_offset,vec_offset,ivertex_id
   character(len=MAXSTRINGLENGTH) :: string
 
   explicit_grid => ugrid%explicit_grid
@@ -1179,6 +1179,8 @@ subroutine UGridExplicitDecompose(ugrid,option)
   connection_offset = 6 + 1 ! +1 for -777
   dual_offset = connection_offset + ugrid%max_ndual_per_cell + 1 ! +1 for -888
   cell_stride = dual_offset + ugrid%max_ndual_per_cell + 1 ! +1 for -999999
+!  vertices_offset = 24 + 1 ! 8x3 + 1 (-8989)
+!  cell_stride = dual_offset + ugrid%max_ndual_per_cell + vertices_offset + 1
   natural_id_offset = 2
 
   ! Information for each cell is packed in a strided petsc vec
@@ -1286,6 +1288,19 @@ subroutine UGridExplicitDecompose(ugrid,option)
         vec_ptr(count) = 0
       endif
     enddo
+
+!    ! add the vertices -BH
+!    count = count + 1
+!    vec_ptr(count) = -8989
+!    do ivertex = 1, 8  ! 8 vertices with 3 coordinates each(x,y,z)
+!      ivertex_id = (icell-1)*8+ivertex
+!      count = count + 1
+!      vec_ptr(count) = explicit_grid%vertex_coordinates(ivertex_id)%x
+!      count = count + 1
+!      vec_ptr(count) = explicit_grid%vertex_coordinates(ivertex_id)%y
+!      count = count + 1
+!      vec_ptr(count) = explicit_grid%vertex_coordinates(ivertex_id)%z
+!    enddo
 
     ! final separator
     count = count + 1
@@ -1397,6 +1412,15 @@ subroutine UGridExplicitDecompose(ugrid,option)
     endif
     int_array4(int_array2(iconn)) = count
   enddo
+
+!  if (option%myrank == 0) then
+!      do iconn = 1, num_connections_total
+!        print *,iconn,' : ',int_array(iconn),int_array2(iconn),int_array3(iconn),int_array4(iconn)
+!      enddo
+!  endif
+!  stop
+
+
   deallocate(int_array)
   deallocate(int_array2)
 
@@ -1577,6 +1601,7 @@ subroutine UGridExplicitDecompose(ugrid,option)
   deallocate(explicit_grid%cell_ids)
   deallocate(explicit_grid%cell_volumes)
   deallocate(explicit_grid%cell_centroids)
+!  deallocate(explicit_grid%vertex_coordinates)
 
   allocate(explicit_grid%cell_ids(ugrid%ngmax))
   explicit_grid%cell_ids = UNINITIALIZED_INTEGER
@@ -1588,8 +1613,14 @@ subroutine UGridExplicitDecompose(ugrid,option)
     explicit_grid%cell_centroids(icell)%y = UNINITIALIZED_DOUBLE
     explicit_grid%cell_centroids(icell)%z = UNINITIALIZED_DOUBLE
   enddo
-
+!  allocate(explicit_grid%vertex_coordinates(ugrid%ngmax*8))
+!  do ivertex = 1, ugrid%ngmax*8
+!    explicit_grid%vertex_coordinates(ivertex)%x = UNINITIALIZED_DOUBLE
+!    explicit_grid%vertex_coordinates(ivertex)%y = UNINITIALIZED_DOUBLE
+!    explicit_grid%vertex_coordinates(ivertex)%z = UNINITIALIZED_DOUBLE
+!  enddo
   call VecGetArrayF90(cells_local,vec_ptr,ierr);CHKERRQ(ierr)
+  vec_offset = dual_offset + ugrid%max_ndual_per_cell
   do ghosted_id=1, ugrid%ngmax
     offset = cell_stride*(ghosted_id-1)
     explicit_grid%cell_ids(ghosted_id) = int(vec_ptr(offset + 2))
@@ -1597,6 +1628,17 @@ subroutine UGridExplicitDecompose(ugrid,option)
     explicit_grid%cell_centroids(ghosted_id)%y = vec_ptr(offset + 4)
     explicit_grid%cell_centroids(ghosted_id)%z = vec_ptr(offset + 5)
     explicit_grid%cell_volumes(ghosted_id) = vec_ptr(offset + 6)
+!    do ivertex = 1, 8
+!      ivertex_id = (ghosted_id-1)*8+ivertex
+!      ivertex_offset = (ivertex-1)*3
+!!      vec_offset = dual_offset + ugrid%max_ndual_per_cell
+!      explicit_grid%vertex_coordinates(ivertex_id)%x = vec_ptr(offset + &
+!                                                 vec_offset+ivertex_offset+2)
+!      explicit_grid%vertex_coordinates(ivertex_id)%y = vec_ptr(offset + &
+!                                                 vec_offset+ivertex_offset+3)
+!      explicit_grid%vertex_coordinates(ivertex_id)%z = vec_ptr(offset + &
+!                                                 vec_offset+ivertex_offset+4)
+!    enddo
   enddo
   call VecRestoreArrayF90(cells_local,vec_ptr,ierr);CHKERRQ(ierr)
 
@@ -1612,6 +1654,22 @@ subroutine UGridExplicitDecompose(ugrid,option)
                 explicit_grid%cell_volumes(ghosted_id)
   enddo
   close(86)
+
+!  write(string,*) option%myrank
+!  string = 'cells_vertices_local_raw' // trim(adjustl(string)) // '.out'
+!  open(unit=86,file=trim(string))
+!  do ghosted_id = 1, ugrid%ngmax
+!    write(86,'(a,i5)') 'natural cell id: ',explicit_grid%cell_ids(ghosted_id)
+!    do ivertex = 1,8
+!      ivertex_id = (ghosted_id-1)*8+ivertex
+!      write(86,'(10X,3f10.3)') &
+!                explicit_grid%vertex_coordinates(ivertex_id)%x, &
+!                explicit_grid%vertex_coordinates(ivertex_id)%y, &
+!                explicit_grid%vertex_coordinates(ivertex_id)%z
+!    enddo
+!  enddo
+!  close(86)
+
 #endif
 
   ! deallocate/allocate connection info locally

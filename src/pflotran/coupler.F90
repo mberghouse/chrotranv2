@@ -420,7 +420,7 @@ subroutine CouplerComputeConnections(grid,option,coupler)
   region => coupler%region
 
   select case(grid%itype)
-    case(EXPLICIT_UNSTRUCTURED_GRID)
+    case(EXPLICIT_UNSTRUCTURED_GRID,OCTREE_UNSTRUCTURED_GRID)
       if (associated(region%explicit_faceset)) then
         connection_set => &
           UGridExplicitSetBoundaryConnect(grid%unstructured_grid% &

@@ -74,7 +74,7 @@ subroutine OutputVTK(realization_base)
     open(unit=OUTPUT_UNIT,file=filename,action="write")
   
     ! write header
-    write(OUTPUT_UNIT,'(''# vtk DataFile Version 2.0'')')
+    write(OUTPUT_UNIT,'(''# vtk DataFile Version 5.1'')')
     ! write title
     write(OUTPUT_UNIT,'(''PFLOTRAN output'')')
     write(OUTPUT_UNIT,'(''ASCII'')')
@@ -210,7 +210,8 @@ subroutine OutputVelocitiesVTK(realization_base)
     open(unit=OUTPUT_UNIT,file=filename,action="write")
   
     ! write header
-    write(OUTPUT_UNIT,'(''# vtk DataFile Version 2.0'')')
+!    write(OUTPUT_UNIT,'(''# vtk DataFile Version 2.0'')')
+   write(OUTPUT_UNIT,'(''# vtk DataFile Version 5.1'')')
     ! write title
     write(OUTPUT_UNIT,'(''PFLOTRAN output'')')
     write(OUTPUT_UNIT,'(''ASCII'')')
@@ -305,7 +306,10 @@ subroutine WriteVTKGrid(fid,realization_base)
   use Grid_module
   use Option_module
   use Patch_module
-
+  use Grid_Unstructured_Explicit_module
+  use Grid_Unstructured_Aux_module
+  use Grid_Unstructured_Octree_module
+  use Geometry_module
   implicit none
 
   PetscInt :: fid
@@ -315,11 +319,18 @@ subroutine WriteVTKGrid(fid,realization_base)
   type(grid_type), pointer :: grid
   type(option_type), pointer :: option
   type(patch_type), pointer :: patch  
+!  type(grid_unstructured_type) :: unstructured_grid
+  type(unstructured_explicit_type), pointer :: explicit_grid
   PetscInt :: i, j, k, nx, ny, nz
   PetscReal :: x, y, z
   PetscInt :: nxp1Xnyp1, nxp1, nyp1, nzp1
   PetscInt :: vertex_id
   PetscErrorCode :: ierr
+  PetscInt :: ncells,nvertices
+  PetscInt :: extre_num_vertices,num_line,icell
+  PetscInt ::  my_nvertices_local,istart
+  PetscInt,allocatable :: nvertices_local(:)
+  PetscReal,allocatable ::vertices_local(:),vertices_global(:)
 
 1000 format(es13.6,1x,es13.6,1x,es13.6)
 1001 format(i1,8(1x,i8))
@@ -392,6 +403,72 @@ subroutine WriteVTKGrid(fid,realization_base)
 
       write(fid,'(a)') ""
 
+    endif
+
+  elseif (realization_base%discretization%itype == UNSTRUCTURED_GRID) then
+    if(realization_base%discretization%grid%itype == EXPLICIT_UNSTRUCTURED_GRID .or. &
+      realization_base%discretization%grid%itype == OCTREE_UNSTRUCTURED_GRID)  then    
+      ncells = grid%unstructured_grid%nmax
+      explicit_grid => grid%unstructured_grid%explicit_grid
+      nvertices = explicit_grid%num_vertices
+      my_nvertices_local = explicit_grid%num_vertices_local
+      allocate(vertices_local(my_nvertices_local*3))
+      do i = 1,my_nvertices_local
+         vertices_local(1+(i-1)*3) = explicit_grid%vertex_coordinates(i)%x
+         vertices_local(2+(i-1)*3) = explicit_grid%vertex_coordinates(i)%y
+         vertices_local(3+(i-1)*3) = explicit_grid%vertex_coordinates(i)%z
+      enddo
+      allocate(vertices_global(nvertices*3))
+      vertices_global = 0.0
+      call MPI_GATHER(vertices_local,my_nvertices_local*3,MPI_DOUBLE_PRECISION, &
+        vertices_global,my_nvertices_local*3,MPI_DOUBLE_PRECISION,0,option%comm,ierr)
+      if (OptionIsIORank(option)) then
+        do i = 1,nvertices
+         print *, vertices_global(1+(i-1)*3),vertices_global(2+(i-1)*3),vertices_global(3+(i-1)*3) 
+        enddo
+ 1040 format("POINTS",1x,i5,1x,"float")
+        write(fid,1040) nvertices
+        num_line = (nvertices*3)/9
+        extre_num_vertices = MOD(nvertices*3,9)
+ 1050 format(9(f12.6,1x))
+        do i = 1,num_line
+           write(fid,1050) (vertices_global(j+(i-1)*9),j=1,9)
+        enddo
+        if (extre_num_vertices>0) then
+ 1060 format(<extre_num_vertices>(f12.6,1x))
+          write(fid,1060) (j+num_line*9,j=1,extre_num_vertices)
+        endif        
+ 1070 format("CELLS",1x,i5,1X,i5)
+        write(fid,1070) ncells+1, nvertices
+ 1071 format("OFFSETS vtktypeint64")
+        write(fid,1071)
+        num_line = (ncells+1)/9
+        extre_num_vertices = MOD(ncells+1,9)        
+ 1080 format(9(i5,1x))
+        do i = 1,num_line
+           write(fid,1080) (0+(j-1)*8+(i-1)*8*9,j=1,9)
+        enddo
+ 1090 format(<extre_num_vertices>(i5,1x))
+        if (extre_num_vertices>0) then
+          write(fid,1090) (0+(j-1)*8+num_line*8*9,j=1,extre_num_vertices)
+        endif
+ 1091 format("CONNECTIVITY vtktypeint64")
+        write(fid,1091)
+        num_line = nvertices/9
+        extre_num_vertices = MOD(nvertices,9)
+        do i = 1,num_line
+           write(fid,1080) (0+(j-1)+(i-1)*9,j=1,9)
+        enddo
+        if (extre_num_vertices>0) then
+          write(fid,1090) (0+(j-1)+num_line*9,j=1,extre_num_vertices)
+        endif
+ 1100 format("CELL_TYPES",1x,i5)
+        write(fid,1100) ncells
+        do i = 1,ncells
+          write(fid,*) "11"
+        enddo        
+
+      endif
     endif
   endif
 

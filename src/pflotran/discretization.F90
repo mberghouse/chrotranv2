@@ -9,6 +9,7 @@ module Discretization_module
   use Grid_Unstructured_Aux_module
   use Grid_Unstructured_Explicit_module
   use Grid_Unstructured_Polyhedra_module
+  use Grid_Unstructured_Octree_module
   use DM_Kludge_module
 
   use PFLOTRAN_Constants_module
@@ -198,7 +199,9 @@ subroutine DiscretizationReadRequiredCards(discretization,input,option)
                 structured_grid_itype = CARTESIAN_GRID
                 structured_grid_ctype = 'CARTESIAN'
             end select
-          case('UNSTRUCTURED','UNSTRUCTURED_EXPLICIT','UNSTRUCTURED_POLYHEDRA')
+!BH octree
+          case('UNSTRUCTURED','UNSTRUCTURED_EXPLICIT','UNSTRUCTURED_POLYHEDRA','UNSTRUCTURED_OCTREE')
+!          case('UNSTRUCTURED','UNSTRUCTURED_EXPLICIT','UNSTRUCTURED_POLYHEDRA')
             discretization%itype = UNSTRUCTURED_GRID
             word = discretization%ctype
             discretization%ctype = 'UNSTRUCTURED'
@@ -212,6 +215,11 @@ subroutine DiscretizationReadRequiredCards(discretization,input,option)
               case('UNSTRUCTURED_POLYHEDRA')
                 unstructured_grid_itype = POLYHEDRA_UNSTRUCTURED_GRID
                 unstructured_grid_ctype = 'POLYHEDRA UNSTRUCTURED'
+              case('UNSTRUCTURED_OCTREE')
+                unstructured_grid_itype = OCTREE_UNSTRUCTURED_GRID
+!                unstructured_grid_itype = EXPLICIT_UNSTRUCTURED_GRID
+                unstructured_grid_ctype = 'OCTREE UNSTRUCTURED'
+!                print *, 'OCTREE_UNSTRUCTURED_GRID'
             end select
             call InputReadFilename(input,option,discretization%filename)
             call InputErrorMsg(input,option,'unstructured filename','GRID')
@@ -291,6 +299,19 @@ subroutine DiscretizationReadRequiredCards(discretization,input,option)
             call PrintErrMsg(option,'Add UGridPolyhedraReadHDF5')
           else
             call UGridPolyhedraRead(un_str_grid,discretization%filename,option)
+          endif
+          grid%unstructured_grid => un_str_grid
+!BH octree
+        case(OCTREE_UNSTRUCTURED_GRID)
+          un_str_grid%octree_grid => UGridOctreeCreate()
+          un_str_grid%explicit_grid => UGridExplicitCreate()
+          if (index(discretization%filename,'.vtk') > 0 ) then
+            print *, 'read vtk file'
+            call UGridOctreeReadVTK(un_str_grid,discretization%filename,option)
+            call UGridOctreeToExplicit(un_str_grid,option) ! now data in explicit format
+!            call UGridOctreeDestroy(un_str_grid%octree_grid) 
+          else
+            call PrintErrMsg(option,'Unsupported file format for unstructured Octree girds.')
           endif
           grid%unstructured_grid => un_str_grid
       end select
@@ -670,7 +691,8 @@ subroutine DiscretizationCreateDMs(discretization, o_nflowdof, o_ntrandof, &
 #endif
           call UGridDecompose(discretization%grid%unstructured_grid, &
                               option)
-        case(EXPLICIT_UNSTRUCTURED_GRID)
+!        case(EXPLICIT_UNSTRUCTURED_GRID)
+        case(EXPLICIT_UNSTRUCTURED_GRID,OCTREE_UNSTRUCTURED_GRID)
 #if !defined(PETSC_HAVE_PARMETIS) && !defined(PETSC_HAVE_PTSCOTCH)
             option%io_buffer = &
              'Must compile with either Parmetis or PTSCOTCH in order to use explicit unstructured grids.'
@@ -686,6 +708,16 @@ subroutine DiscretizationCreateDMs(discretization, o_nflowdof, o_ntrandof, &
 #endif
           ugrid => discretization%grid%unstructured_grid
           call UGridPolyhedraDecompose(ugrid,option)
+!BH octree 
+! Now use explicit subroutine for decomposition
+!        case(OCTREE_UNSTRUCTURED_GRID)
+!#if !defined(PETSC_HAVE_PARMETIS)
+!            option%io_buffer = &
+!             'Must compile with Parmetis in order to use octree unstructured grids.'
+!            call PrintErrMsg(option)
+!#endif
+!          ugrid => discretization%grid%unstructured_grid
+!          call UGridOctreeDecompose(ugrid,option)
       end select
   end select
 
@@ -1611,7 +1643,7 @@ subroutine DiscretizationInputRecord(discretization)
       write(word2,Format) grid%structured_grid%bounds(Z_DIRECTION,UPPER)
       write(id,'(a)') adjustl(trim(word1)) // ' ,' // adjustl(trim(word2)) // ' m'
     case(EXPLICIT_UNSTRUCTURED_GRID,IMPLICIT_UNSTRUCTURED_GRID, &
-         POLYHEDRA_UNSTRUCTURED_GRID)
+         POLYHEDRA_UNSTRUCTURED_GRID,OCTREE_UNSTRUCTURED_GRID)
       write(id,'(a)') trim(grid%ctype)
   end select
 

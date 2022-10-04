@@ -7,6 +7,7 @@ module Grid_module
   use Grid_Unstructured_Explicit_module
   use Grid_Unstructured_Aux_module
   use Grid_Unstructured_Polyhedra_module
+  use Grid_Unstructured_Octree_module
   use Connection_module
 
   use PFLOTRAN_Constants_module
@@ -197,7 +198,7 @@ subroutine GridComputeInternalConnect(grid,option,ugdm)
   use Option_module
   use Grid_Unstructured_Explicit_module
   use Grid_Unstructured_Polyhedra_module
-
+  use Grid_Unstructured_Octree_module !BH
   implicit none
 
   PetscInt ierr
@@ -219,12 +220,19 @@ subroutine GridComputeInternalConnect(grid,option,ugdm)
       connection_set => &
         UGridComputeInternConnect(grid%unstructured_grid,grid%x,grid%y, &
                                   grid%z,option)
-    case(EXPLICIT_UNSTRUCTURED_GRID)
+    case(EXPLICIT_UNSTRUCTURED_GRID,OCTREE_UNSTRUCTURED_GRID)
       connection_set => &
         UGridExplicitSetInternConnect(grid%unstructured_grid%explicit_grid, &
                                       grid%unstructured_grid% &
                                         upwind_fraction_method, &
                                       option)
+!BH octree
+!    case(OCTREE_UNSTRUCTURED_GRID)
+!      connection_set => &
+!        UGridOctreeSetInternConnect(grid%unstructured_grid%octree_grid, &
+!                                      grid%unstructured_grid% &
+!                                        upwind_fraction_method, &
+!                                      option)
     case(POLYHEDRA_UNSTRUCTURED_GRID)
       connection_set => &
         UGridPolyhedraComputeInternConnect(grid%unstructured_grid, &
@@ -424,7 +432,7 @@ subroutine GridMapIndices(grid, dm_ptr, sgrid_stencil_type,option)
                                 grid%nG2L,grid%nL2G,grid%nG2A, &
                                 option)
     case(IMPLICIT_UNSTRUCTURED_GRID,EXPLICIT_UNSTRUCTURED_GRID, &
-         POLYHEDRA_UNSTRUCTURED_GRID)
+         POLYHEDRA_UNSTRUCTURED_GRID,OCTREE_UNSTRUCTURED_GRID)
       call UGridMapIndices(grid%unstructured_grid, &
                            dm_ptr%ugdm, &
                            grid%nG2L,grid%nL2G,grid%nG2A,option)
@@ -503,7 +511,7 @@ subroutine GridComputeCoordinates(grid,origin_global,option,ugdm)
                              grid%x_min_local,grid%x_max_local, &
                              grid%y_min_local,grid%y_max_local, &
                              grid%z_min_local,grid%z_max_local)
-    case(EXPLICIT_UNSTRUCTURED_GRID)
+    case(EXPLICIT_UNSTRUCTURED_GRID,OCTREE_UNSTRUCTURED_GRID)
       call UGridExplicitSetCellCentroids(grid%unstructured_grid% &
                                          explicit_grid, &
                                          grid%x,grid%y,grid%z, &
@@ -562,7 +570,7 @@ subroutine GridComputeVolumes(grid,volume,option)
     case(IMPLICIT_UNSTRUCTURED_GRID)
       call UGridComputeVolumes(grid%unstructured_grid,option,volume)
       call UGridComputeQuality(grid%unstructured_grid,option)
-    case(EXPLICIT_UNSTRUCTURED_GRID)
+    case(EXPLICIT_UNSTRUCTURED_GRID,OCTREE_UNSTRUCTURED_GRID)
       call UGridExplicitComputeVolumes(grid%unstructured_grid, &
                                        option,volume)
     case(POLYHEDRA_UNSTRUCTURED_GRID)
@@ -654,7 +662,7 @@ subroutine GridLocalizeRegions(grid,region_list,option)
             call GridLocalizeRegionsFromCellIDs(grid,region,option)
           case(IMPLICIT_UNSTRUCTURED_GRID)
             call GridLocalizeRegionsFromCellIDs(grid,region,option)
-          case(EXPLICIT_UNSTRUCTURED_GRID)
+          case(EXPLICIT_UNSTRUCTURED_GRID,OCTREE_UNSTRUCTURED_GRID)
             call GridLocalizeRegionsFromCellIDs(grid,region,option)
         end select
       case (DEFINED_BY_CELL_AND_FACE_IDS)
@@ -1467,7 +1475,8 @@ subroutine GridGetGhostedNeighbors(grid,ghosted_id,stencil_type, &
                                          stencil_width_j,stencil_width_k, &
                                          x_count,y_count,z_count, &
                                          ghosted_neighbors,option)
-    case(IMPLICIT_UNSTRUCTURED_GRID,EXPLICIT_UNSTRUCTURED_GRID)
+    case(IMPLICIT_UNSTRUCTURED_GRID,EXPLICIT_UNSTRUCTURED_GRID, &
+         OCTREE_UNSTRUCTURED_GRID)
       option%io_buffer = 'GridGetNeighbors not currently supported for ' // &
         'unstructured grids.'
       call PrintErrMsg(option)
@@ -1510,7 +1519,8 @@ subroutine GridGetGhostedNeighborsWithCorners(grid,ghosted_id,stencil_type, &
                                          stencil_width_k, &
                                          icount, &
                                          ghosted_neighbors,option)
-    case(IMPLICIT_UNSTRUCTURED_GRID,EXPLICIT_UNSTRUCTURED_GRID)
+    case(IMPLICIT_UNSTRUCTURED_GRID,EXPLICIT_UNSTRUCTURED_GRID, &
+           OCTREE_UNSTRUCTURED_GRID)
       option%io_buffer = 'GridGetNeighbors not currently supported for ' // &
         'unstructured grids.'
       call PrintErrMsg(option)
@@ -1542,7 +1552,7 @@ subroutine GridSetupCellNeighbors(grid,option)
       grid%cell_neighbors_local_ghosted => &
         grid%structured_grid%cell_neighbors_local_ghosted
     case(IMPLICIT_UNSTRUCTURED_GRID,EXPLICIT_UNSTRUCTURED_GRID, &
-        POLYHEDRA_UNSTRUCTURED_GRID)
+        POLYHEDRA_UNSTRUCTURED_GRID,OCTREE_UNSTRUCTURED_GRID)
       grid%cell_neighbors_local_ghosted => &
         grid%unstructured_grid%cell_neighbors_local_ghosted
   end select
@@ -2094,7 +2104,7 @@ subroutine GridLocalizeRegionFromCoordinates(grid,region,option)
             iflag = 1
           endif
         case(IMPLICIT_UNSTRUCTURED_GRID,EXPLICIT_UNSTRUCTURED_GRID, &
-             POLYHEDRA_UNSTRUCTURED_GRID)
+             POLYHEDRA_UNSTRUCTURED_GRID,OCTREE_UNSTRUCTURED_GRID)
           del_x = x_max-x_min
           del_y = y_max-y_min
           del_z = z_max-z_min
@@ -2139,7 +2149,8 @@ subroutine GridLocalizeRegionFromCoordinates(grid,region,option)
                    del_z > 1.d-10) .or. &
                   (del_x > 1.d-10 .and. del_y > 1.d-10 .and. &
                    del_z < 1.d-10)) then
-            if (grid%itype == EXPLICIT_UNSTRUCTURED_GRID) then
+            if ((grid%itype == EXPLICIT_UNSTRUCTURED_GRID) .or. &
+                (grid%itype == OCTREE_UNSTRUCTURED_GRID))then
               option%io_buffer = 'Regions defined with 2D planes are not ' // &
                 'supported with explicit unstructured grids.'
               call PrintErrMsg(option)
@@ -2285,13 +2296,14 @@ subroutine GridGetLocalIDFromCoordinate(grid,coordinate,option,local_id)
                                    coordinate%y, &
                                    coordinate%z, &
                                    grid%unstructured_grid,option,local_id)
-      case(EXPLICIT_UNSTRUCTURED_GRID)
+      case(EXPLICIT_UNSTRUCTURED_GRID,OCTREE_UNSTRUCTURED_GRID)
         dx = MAX_DOUBLE
         dy = MAX_DOUBLE
         dz = MAX_DOUBLE
         champion = UNINITIALIZED_INTEGER
         champion_distance = UNINITIALIZED_DOUBLE
-        if (grid%itype == EXPLICIT_UNSTRUCTURED_GRID) then
+        if ((grid%itype == EXPLICIT_UNSTRUCTURED_GRID) .or. &
+            (grid%itype == OCTREE_UNSTRUCTURED_GRID)) then
           call UGridExplicitGetClosestCellFromPoint( &
                                    coordinate%x, &
                                    coordinate%y, &

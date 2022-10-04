@@ -1026,7 +1026,7 @@ subroutine Output(realization_base,snapshot_plot_flag,observation_plot_flag, &
       call PetscLogEventBegin(logging%event_output_hdf5,ierr);CHKERRQ(ierr)
       if (realization_base%discretization%itype == UNSTRUCTURED_GRID) then
         select case (realization_base%discretization%grid%itype)
-          case (EXPLICIT_UNSTRUCTURED_GRID)
+          case (EXPLICIT_UNSTRUCTURED_GRID,OCTREE_UNSTRUCTURED_GRID)
              call OutputHDF5UGridXDMFExplicit(realization_base, &
                   INSTANTANEOUS_VARS)
           case (IMPLICIT_UNSTRUCTURED_GRID)

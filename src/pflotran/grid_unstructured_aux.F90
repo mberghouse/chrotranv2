@@ -35,12 +35,13 @@ module Grid_Unstructured_Aux_module
     AO :: ao_natural_to_petsc ! mapping of natural to petsc ordering
     type(unstructured_explicit_type), pointer :: explicit_grid
     type(unstructured_polyhedra_type), pointer :: polyhedra_grid
+    type(unstructured_octree_type), pointer :: octree_grid
     ! variables for implicit unstructured grids
     PetscInt :: grid_type         ! 3D subsurface (default) or 2D surface grid
     PetscInt :: num_vertices_global ! number of vertices in entire problem domain
     PetscInt :: num_vertices_local  ! number of vertices in local grid cells
     PetscInt :: num_vertices_natural ! number of vertices read initially
-    PetscInt :: max_ndual_per_cell
+    PetscInt :: max_ndual_per_cell ! max number of connections (neighboring cells)
     PetscInt :: max_nvert_per_cell
     PetscInt :: max_cells_sharing_a_vertex
     PetscInt, pointer :: cell_type(:)
@@ -89,6 +90,25 @@ module Grid_Unstructured_Aux_module
     type(point3d_type), pointer :: vertex_coordinates(:)
     character(len=MAXSTRINGLENGTH) :: domain_filename
   end type unstructured_explicit_type
+!BH octree
+  type, public :: unstructured_octree_type
+    PetscInt, pointer :: cell_ids(:)
+    PetscReal, pointer :: cell_volumes(:)
+    type(point3d_type), pointer :: cell_centroids(:)
+    PetscInt, pointer :: connections(:,:)
+    PetscReal, pointer :: face_areas(:)
+    type(point3d_type), pointer :: face_centroids(:)
+    PetscInt :: num_cells_global  ! Number of cells in the entire domain
+    PetscInt :: num_connections_global  ! Number of connections in the entire domain
+    PetscInt :: num_elems
+    PetscInt :: num_elems_local   ! Number of elements locally
+    PetscInt :: num_vertices
+    PetscInt :: num_vertices_local ! Number of vertices locally
+    PetscInt :: output_mesh_type  ! Current options: VERTEX_CENTRED (default),CELL_CENTRED
+    PetscInt, pointer :: cell_vertices(:,:)
+    type(point3d_type), pointer :: vertex_coordinates(:)
+    character(len=MAXSTRINGLENGTH) :: domain_filename
+  end type unstructured_octree_type
 
   type, public :: unstructured_polyhedra_type
     PetscInt, pointer :: cell_ids(:)
@@ -170,6 +190,7 @@ module Grid_Unstructured_Aux_module
   public :: UGridCreate, &
             UGridExplicitCreate, &
             UGridPolyhedraCreate, &
+            UGridOctreeCreate, &
             UGridMapIndices, &
             UGridDMCreateMatrix, &
             UGridDMCreateVector, &
@@ -181,7 +202,8 @@ module Grid_Unstructured_Aux_module
             UGridNaturalToPetsc, &
             UGridCreateOldVec, &
             UGridCalculateDist, &
-            UGridExplicitDestroy
+            UGridExplicitDestroy, &
+            UGridOctreeDestroy
 
 contains
 
@@ -256,7 +278,7 @@ function UGridCreate()
   unstructured_grid%ao_natural_to_petsc = 0
   nullify(unstructured_grid%explicit_grid)
   nullify(unstructured_grid%polyhedra_grid)
-
+  nullify(unstructured_grid%octree_grid)
   ! variables for implicit unstructured grids
   unstructured_grid%grid_type = THREE_DIM_GRID
   unstructured_grid%num_vertices_global = 0
@@ -323,6 +345,47 @@ function UGridExplicitCreate()
   UGridExplicitCreate => explicit_grid
   
 end function UGridExplicitCreate
+
+
+! ************************************************************************** !
+
+function UGridOctreeCreate()
+  !
+  ! Creates an octree unstructured grid object
+  !
+  ! Author: Bryan He
+  ! Date: 07/11/22
+  !
+
+  implicit none
+
+  type(unstructured_octree_type), pointer :: UGridOctreeCreate
+
+  type(unstructured_octree_type), pointer :: octree_grid
+
+  allocate(octree_grid)
+
+  nullify(octree_grid%cell_ids)
+  nullify(octree_grid%cell_volumes)
+  nullify(octree_grid%cell_centroids)
+  nullify(octree_grid%connections)
+  nullify(octree_grid%face_areas)
+  nullify(octree_grid%face_centroids)
+  nullify(octree_grid%cell_vertices)
+  nullify(octree_grid%vertex_coordinates)
+
+  octree_grid%num_cells_global = 0
+  octree_grid% num_connections_global= 0
+  octree_grid%num_elems = 0
+  octree_grid%num_elems_local = 0
+  octree_grid%num_vertices = 0
+  octree_grid%num_vertices_local = 0
+  octree_grid%output_mesh_type = VERTEX_CENTERED_OUTPUT_MESH
+  octree_grid%domain_filename = ''
+
+  UGridOctreeCreate => octree_grid
+
+end function UGridOctreeCreate
 
 ! ************************************************************************** !
 
@@ -2278,6 +2341,51 @@ subroutine UGridPolyhedraDestroy(polyhedra_grid)
   nullify(polyhedra_grid)
 
 end subroutine UGridPolyhedraDestroy
+
+! ************************************************************************** !
+
+subroutine UGridOctreeDestroy(octree_grid)
+  ! 
+  ! Deallocates an octree unstructured grid object
+  ! 
+  ! Author: Bryan He
+  ! Date: 07/14/22
+  ! 
+
+  use Utility_module, only : DeallocateArray
+
+  implicit none
+  
+  type(unstructured_octree_type), pointer :: octree_grid
+  
+  PetscErrorCode :: ierr
+    
+  if (.not.associated(octree_grid)) return
+
+  call DeallocateArray(octree_grid%cell_ids)
+  call DeallocateArray(octree_grid%cell_volumes)
+  if (associated(octree_grid%cell_centroids)) &
+    deallocate(octree_grid%cell_centroids)
+  nullify(octree_grid%cell_centroids)
+  call DeallocateArray(octree_grid%connections)
+  call DeallocateArray(octree_grid%face_areas)
+  if (associated(octree_grid%face_centroids)) &
+    deallocate(octree_grid%face_centroids)
+  nullify(octree_grid%face_centroids)
+
+  if (associated(octree_grid%cell_vertices)) then
+    deallocate(octree_grid%cell_vertices)
+    nullify   (octree_grid%cell_vertices)
+  endif
+  if (associated(octree_grid%vertex_coordinates)) then
+    deallocate(octree_grid%vertex_coordinates)
+    nullify   (octree_grid%vertex_coordinates)
+  endif
+  
+  deallocate(octree_grid)
+  nullify(octree_grid)
+
+end subroutine UGridOCtreeDestroy
 
 ! ************************************************************************** !
 
