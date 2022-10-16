@@ -3661,7 +3661,7 @@ subroutine SubsurfaceReadInput(simulation,input)
 
 !.....................
       case ('REGRESSION')
-        call RegressionRead(simulation%regression,input,option)
+        call RegressionRead(simulation%regression,input,option,output_option)
 
 !.....................
       case ('TIME')

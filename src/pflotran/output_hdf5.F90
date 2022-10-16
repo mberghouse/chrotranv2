@@ -153,6 +153,9 @@ subroutine OutputHDF5(realization_base,var_list_type)
   if (first) then
     call OutputHDF5Provenance(option, output_option, file_id)
     call OutputHDF5WriteStructCoordGroup(file_id,discretization,grid,option)
+    if (output_option%print_hdf5_connection_ids) then
+      call WriteHDF5ConnectionIds(realization_base,option,file_id)
+    endif
   endif
         
   ! create a group for the data set

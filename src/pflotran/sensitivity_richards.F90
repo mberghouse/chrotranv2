@@ -841,6 +841,7 @@ subroutine RichardsSensitivityAccumulation(A,realization,ivar,ierr)
            patch%characteristic_curves_array( &
            patch%cc_id(ghosted_id))%ptr, &
            Jup, ivar)
+    enddo
 
 #ifdef BUFFER_MATRIX
     if (option%use_matrix_buffer) then
@@ -855,7 +856,7 @@ subroutine RichardsSensitivityAccumulation(A,realization,ivar,ierr)
 #ifdef BUFFER_MATRIX
     endif
 #endif
-  enddo
+  endif
 
 #if 0
   if (option%inline_surface_flow) then

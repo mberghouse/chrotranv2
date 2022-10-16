@@ -494,10 +494,10 @@ subroutine OutputFileRead(input,realization,output_option, &
       case('VARIABLES')
         select case(trim(block_name))
           case('SNAPSHOT_FILE')
-            call OutputVariableRead(input,option, &
+            call OutputVariableRead(input,option,output_option, &
                  output_option%output_snap_variable_list)
           case('OBSERVATION_FILE')
-            call OutputVariableRead(input,option, &
+            call OutputVariableRead(input,option,output_option, &
                  output_option%output_obs_variable_list)
           case('MASS_BALANCE_FILE')
             option%io_buffer = 'A variable list cannot be specified within &
@@ -512,7 +512,17 @@ subroutine OutputFileRead(input,realization,output_option, &
 
 !.............................
       case('PRINT_CONNECTION_IDS')
-        print_connection_ids = PETSC_TRUE
+        select case(trim(block_name))
+          case('SNAPSHOT_FILE') 
+            print_connection_ids = PETSC_TRUE
+          case('OBSERVATION_FILE')
+            option%io_buffer = 'PRINT_CONNECTION_IDS cannot be specified for &
+                               &OUTPUT,OBSERVATION_FILE block.'
+            call PrintErrMsg(option)
+          case('MASS_BALANCE_FILE')
+            option%io_buffer = 'PRINT_CONNECTION_IDS cannot be specified for &
+                               &OUTPUT,MASS_BALANCE_FILE block.'
+        end select
 
 
 !.............................
@@ -625,7 +635,7 @@ end subroutine OutputFileRead
 
 ! ************************************************************************** !
 
-subroutine OutputVariableRead(input,option,output_variable_list)
+subroutine OutputVariableRead(input,option,output_option,output_variable_list)
   !
   ! This routine reads a variable from the input file.
   !
@@ -965,20 +975,6 @@ subroutine OutputVariableRead(input,option,output_variable_list)
             exit
           endif
         enddo
-      case('FACE_PERMEABILITY')
-        call OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
-                                option)
-        output_variable => OutputVariableCreate(name,category,units,id)
-        output_variable%iformat = 0 ! double
-        output_variable%plot_only = PETSC_TRUE ! toggle output off for observation
-        call OutputVariableAddToList(output_variable_list,output_variable)
-      case('FACE_AREA')
-        call OutputVariableToID(word,name,units,category,id,subvar,subsubvar, &
-                                option)
-        output_variable => OutputVariableCreate(name,category,units,id)
-        output_variable%iformat = 0 ! double
-        output_variable%plot_only = PETSC_TRUE ! toggle output off for observation
-        call OutputVariableAddToList(output_variable_list,output_variable)
 ! IMPORANT
 ! Developers: Before you add a new case statement, does the new
 ! have non-default values (see OutputVariableInit). If no, do

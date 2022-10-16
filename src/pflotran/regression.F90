@@ -62,7 +62,7 @@ end function RegressionCreate
 
 ! ************************************************************************** !
 
-subroutine RegressionRead(regression,input,option)
+subroutine RegressionRead(regression,input,option,output_option)
   !
   ! Reads in contents of a regression card
   !
@@ -81,6 +81,7 @@ subroutine RegressionRead(regression,input,option)
   type(regression_type), pointer :: regression
   type(input_type), pointer :: input
   type(option_type), pointer :: option
+  type(output_option_type), pointer :: output_option
 
   character(len=MAXWORDLENGTH) :: keyword, word
   type(output_variable_type), pointer :: cur_variable, new_variable
@@ -108,7 +109,8 @@ subroutine RegressionRead(regression,input,option)
         if (.not.associated(regression%variable_list)) then
           regression%variable_list => OutputVariableListCreate()
         endif
-        call OutputVariableRead(input,option,regression%variable_list)
+        call OutputVariableRead(input,option,output_option, &
+                                regression%variable_list)
       case('CELLS')
         call InputKeywordDeprecated('CELLS','CELL_IDS',option)
       case('CELL_IDS')
