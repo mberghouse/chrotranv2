@@ -276,7 +276,11 @@ subroutine RichardsFluxDerivative(rich_auxvar_up,global_auxvar_up, &
 
  ! note: Res is the flux contribution, for node up J = J + Jup
  !                                              dn J = J - Jdn
-
+  if (option%flow%density_depends_on_salinity .and. &
+      .not. option%flow%numerical_derivatives) then
+        option%io_buffer = 'Numerical derivatives required with Richards Mode + Auxiliary Salinity'
+        call PrintErrMsg(option)
+  endif
   if (option%flow%numerical_derivatives) then
     call GlobalAuxVarInit(global_auxvar_pert_up,option)
     call GlobalAuxVarInit(global_auxvar_pert_dn,option)
