@@ -1,0 +1,66 @@
+-- SATURATION: Gas Saturation --
+      Max:   1.0000000000000E+00
+      Min:   9.9999821233552E-01
+     Mean:   9.9999938465891E-01
+        1:   9.9999821233552E-01
+-- PRESSURE: Gas Pressure --
+      Max:   1.0839857298452E+05
+      Min:   1.0173565539718E+05
+     Mean:   1.0508516418890E+05
+        1:   1.0839857298452E+05
+-- PRESSURE: Liquid Pressure --
+      Max:   0.0000000000000E+00
+      Min:  -9.8948787358150E+06
+     Mean:  -6.5954933876102E+06
+        1:  -9.8916014270155E+06
+-- SATURATION: Liquid Saturation --
+      Max:   1.7876644777814E-06
+      Min:   0.0000000000000E+00
+     Mean:   6.1534108656650E-07
+        1:   1.7876644777814E-06
+-- GENERIC: Temperature --
+      Max:   2.5001814409999E+01
+      Min:   2.4999999488347E+01
+     Mean:   2.5000846839077E+01
+        1:   2.5001814409999E+01
+-- DISCRETE: Thermodynamic State --
+      Max:         3
+      Min:         2
+     Mean:   2.6666666666667E+00
+        1:         3
+-- DISCRETE: Material ID --
+      Max:         1
+      Min:         1
+     Mean:   1.0000000000000E+00
+        1:         1
+-- PRESSURE: Capillary Pressure --
+      Max:   1.0000000000000E+07
+      Min:   1.0000000000000E+07
+     Mean:   1.0000000000000E+07
+        1:   1.0000000000000E+07
+-- CONCENTRATION: Active Gas A(g) --
+      Max:   2.0415516237254E-09
+      Min:   7.0536491933304E-12
+     Mean:   7.8860766272980E-10
+        1:   2.0415516237254E-09
+-- DISCRETE: Material ID --
+      Max:         1
+      Min:         1
+     Mean:   1.0000000000000E+00
+        1:         1
+-- SOLUTION: Flow --
+   Time (seconds):   1.0580343000129E-02
+   Time Steps:           18
+   Newton Iterations:           29
+   Linear Solver Iterations:           29
+   Time Step Cuts:            0
+   Solution 2-Norm:   2.0706503991630E+05
+   Residual 2-Norm:   2.1767965058064E-12
+-- SOLUTION: Transport --
+   Time (seconds):   2.4048087999745E-02
+   Time Steps:           32
+   Newton Iterations:          104
+   Linear Solver Iterations:          144
+   Time Step Cuts:            0
+   Solution 2-Norm:   6.3406354785988E-15
+   Residual 2-Norm:   6.6216061397887E-17
