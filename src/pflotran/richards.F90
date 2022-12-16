@@ -1440,7 +1440,7 @@ subroutine RichardsResidualInternalConn(r,realization,skip_conn_type,ierr)
   PetscInt :: sum_connection
 
   PetscReal :: Res(realization%option%nflowdof)
-  PetscReal :: v_darcy
+  PetscReal :: v_darcy, face_permeability
   PetscReal, pointer :: r_p(:)
 
   patch => realization%patch
@@ -1481,6 +1481,10 @@ subroutine RichardsResidualInternalConn(r,realization,skip_conn_type,ierr)
       icc_up = patch%cc_id(ghosted_id_up)
       icc_dn = patch%cc_id(ghosted_id_dn)
 
+      if(option%flow%permeability_on_faces) then
+        face_permeability = patch%internal_permeabilities(iconn)
+      endif
+
       call RichardsFlux(rich_auxvars(ghosted_id_up), &
                       global_auxvars(ghosted_id_up), &
                       material_auxvars(ghosted_id_up), &
@@ -1489,7 +1493,7 @@ subroutine RichardsResidualInternalConn(r,realization,skip_conn_type,ierr)
                       material_auxvars(ghosted_id_dn), &
                       cur_connection_set%area(iconn), &
                       cur_connection_set%dist(:,iconn), &
-                      option,v_darcy,Res)
+                      option,v_darcy,face_permeability, Res)
 
       patch%internal_velocities(1,sum_connection) = v_darcy
       if (associated(patch%internal_flow_fluxes)) then
@@ -1605,7 +1609,7 @@ subroutine RichardsResidualBoundaryConn(r,realization,ierr)
   PetscInt :: iconn
   PetscInt :: sum_connection
 
-  PetscReal :: Res(realization%option%nflowdof), v_darcy
+  PetscReal :: Res(realization%option%nflowdof), v_darcy, face_permeability
   PetscReal, pointer :: r_p(:)
 
   PetscErrorCode :: ierr
@@ -1644,6 +1648,9 @@ subroutine RichardsResidualBoundaryConn(r,realization,ierr)
       endif
 
       icc_dn = patch%cc_id(ghosted_id)
+      if(option%flow%permeability_on_faces) then
+        face_permeability = patch%boundary_permeabilities(iconn)
+      endif
 
       call RichardsBCFlux(boundary_condition%flow_condition%itype, &
                        boundary_condition%flow_aux_real_var(:,iconn), &
@@ -1655,7 +1662,7 @@ subroutine RichardsResidualBoundaryConn(r,realization,ierr)
                        cur_connection_set%area(iconn), &
                        cur_connection_set%dist(:,iconn), &
                        option, &
-                       v_darcy,Res)
+                       v_darcy,face_permeability,Res)
       patch%boundary_velocities(1,sum_connection) = v_darcy
       if (associated(patch%boundary_flow_fluxes)) then
         patch%boundary_flow_fluxes(1,sum_connection) = Res(1)
@@ -2160,6 +2167,7 @@ subroutine RichardsJacobianInternalConn(A,realization,ierr)
   PetscInt :: ghosted_id_up, ghosted_id_dn
   PetscInt :: region_id_up, region_id_dn
   PetscInt :: istart_up, istart_dn
+  PetscReal :: face_permeability
 
   PetscReal :: Jup(realization%option%nflowdof,realization%option%nflowdof), &
                Jdn(realization%option%nflowdof,realization%option%nflowdof)
@@ -2234,6 +2242,10 @@ subroutine RichardsJacobianInternalConn(A,realization,ierr)
       icc_up = patch%cc_id(ghosted_id_up)
       icc_dn = patch%cc_id(ghosted_id_dn)
 
+      if(option%flow%permeability_on_faces) then
+        face_permeability = patch%internal_permeabilities(iconn)
+      endif
+
       call RichardsFluxDerivative(rich_auxvars(ghosted_id_up), &
                      global_auxvars(ghosted_id_up), &
                      material_auxvars(ghosted_id_up), &
@@ -2245,6 +2257,7 @@ subroutine RichardsJacobianInternalConn(A,realization,ierr)
                      option,&
                      patch%characteristic_curves_array(icc_up)%ptr, &
                      patch%characteristic_curves_array(icc_dn)%ptr, &
+                     face_permeability, &
                      Jup,Jdn)
 
       if (local_id_up > 0) then
@@ -2411,6 +2424,7 @@ subroutine RichardsJacobianBoundaryConn(A,realization,ierr)
   type(richards_auxvar_type), pointer :: rich_auxvars(:), rich_auxvars_bc(:)
   type(global_auxvar_type), pointer :: global_auxvars(:), global_auxvars_bc(:)
   type(material_auxvar_type), pointer :: material_auxvars(:)
+  PetscReal :: face_permeability
 
   character(len=MAXSTRINGLENGTH) :: string
 
@@ -2450,6 +2464,10 @@ subroutine RichardsJacobianBoundaryConn(A,realization,ierr)
 
       icc_dn = patch%cc_id(ghosted_id)
 
+      if(option%flow%permeability_on_faces) then
+        face_permeability = patch%boundary_permeabilities(iconn)
+      endif
+
       call RichardsBCFluxDerivative(boundary_condition%flow_condition%itype, &
                      boundary_condition%flow_aux_real_var(:,iconn), &
                      rich_auxvars_bc(sum_connection), &
@@ -2461,6 +2479,7 @@ subroutine RichardsJacobianBoundaryConn(A,realization,ierr)
                      cur_connection_set%dist(:,iconn), &
                      option, &
                      patch%characteristic_curves_array(icc_dn)%ptr, &
+                     face_permeability, &
                      Jdn)
       Jdn = -Jdn
 

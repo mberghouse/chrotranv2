@@ -49,6 +49,8 @@ private
     class(dataset_base_type), pointer :: uniform_velocity_dataset
     character(len=MAXSTRINGLENGTH) :: nonuniform_velocity_filename
 
+    character(len=MAXSTRINGLENGTH) :: permeability_faces_filename  
+
     class(reaction_rt_type), pointer :: reaction
     class(reaction_nw_type), pointer :: reaction_nw
 

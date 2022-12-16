@@ -34,6 +34,9 @@ module Option_Flow_module
     PetscBool :: full_perm_tensor
     PetscBool :: steady_state
 
+    ! If true, permeability is read from a dataset file and applied to faces
+    PetscBool :: permeability_on_faces
+
     ! If true, permeability changes due to pressure
     PetscBool :: update_flow_perm
     ! Type of averaging scheme for relative permeability

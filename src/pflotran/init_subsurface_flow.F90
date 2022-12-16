@@ -124,6 +124,9 @@ subroutine InitSubsurfFlowSetupRealization(simulation)
       case(TH_TS_MODE)
         call PMTHTSUpdateAuxVarsPatch(realization)
       case(RICHARDS_MODE)
+        if(option%flow%permeability_on_faces) then
+          call InitCommonReadFacePermeabilitiesField(realization)
+        endif
         call RichardsUpdateAuxVars(realization)
       case(RICHARDS_TS_MODE)
         call PMRichardsTSUpdateAuxVarsPatch(realization)

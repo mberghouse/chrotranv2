@@ -151,6 +151,7 @@ subroutine RichardsFluxDerivative(rich_auxvar_up,global_auxvar_up, &
                                   option, &
                                   characteristic_curves_up, &
                                   characteristic_curves_dn, &
+                                  face_permeability, &
                                   Jup,Jdn)
   !
   ! Computes the derivatives of the internal flux terms
@@ -170,7 +171,7 @@ subroutine RichardsFluxDerivative(rich_auxvar_up,global_auxvar_up, &
   type(global_auxvar_type) :: global_auxvar_up, global_auxvar_dn
   type(material_auxvar_type) :: material_auxvar_up, material_auxvar_dn
   type(option_type) :: option
-  PetscReal :: v_darcy, area, dist(-1:3)
+  PetscReal :: v_darcy, area, dist(-1:3), face_permeability
   class(characteristic_curves_type) :: characteristic_curves_up
   class(characteristic_curves_type) :: characteristic_curves_dn
   PetscReal :: Jup(option%nflowdof,option%nflowdof)
@@ -217,11 +218,14 @@ subroutine RichardsFluxDerivative(rich_auxvar_up,global_auxvar_up, &
   dq_dp_dn = 0.d0
 
   call ConnectionCalculateDistances(dist,option%gravity,dd_up,dd_dn, &
-                                    dist_gravity,upweight)
-  call PermeabilityTensorToScalar(material_auxvar_up,dist,perm_up)
-  call PermeabilityTensorToScalar(material_auxvar_dn,dist,perm_dn)
-
-  Dq = (perm_up * perm_dn)/(dd_up*perm_dn + dd_dn*perm_up)
+  dist_gravity,upweight)
+  if(option%flow%permeability_on_faces) then
+    Dq = face_permeability/(dd_up + dd_dn)
+  else
+    call PermeabilityTensorToScalar(material_auxvar_up,dist,perm_up)
+    call PermeabilityTensorToScalar(material_auxvar_dn,dist,perm_dn)
+    Dq = (perm_up * perm_dn)/(dd_up*perm_dn + dd_dn*perm_up)
+  endif
 
 ! Flow term
   if (rich_auxvar_up%kvr > eps .or. &
@@ -286,7 +290,7 @@ subroutine RichardsFluxDerivative(rich_auxvar_up,global_auxvar_up, &
     call RichardsFlux(rich_auxvar_up,global_auxvar_up,material_auxvar_up, &
                       rich_auxvar_dn,global_auxvar_dn,material_auxvar_dn, &
                       area, dist, &
-                      option,v_darcy,res)
+                      option,v_darcy,face_permeability, res)
     ideriv = 1
 !    pert_up = x_up(ideriv)*perturbation_tolerance
     pert_up = max(dabs(x_up(ideriv)*perturbation_tolerance),0.1d0)
@@ -315,13 +319,13 @@ subroutine RichardsFluxDerivative(rich_auxvar_up,global_auxvar_up, &
                       rich_auxvar_dn,global_auxvar_dn, &
                       material_auxvar_dn, &
                       area, dist, &
-                      option,v_darcy,res_pert_up)
+                      option,v_darcy,face_permeability,res_pert_up)
     call RichardsFlux(rich_auxvar_up,global_auxvar_up, &
                       material_auxvar_up, &
                       rich_auxvar_pert_dn,global_auxvar_pert_dn, &
                       material_auxvar_pert_dn, &
                       area, dist, &
-                      option,v_darcy,res_pert_dn)
+                      option,v_darcy,face_permeability,res_pert_dn)
     J_pert_up(1,ideriv) = (res_pert_up(1)-res(1))/pert_up
     J_pert_dn(1,ideriv) = (res_pert_dn(1)-res(1))/pert_dn
     Jup = J_pert_up
@@ -341,7 +345,7 @@ subroutine RichardsFlux(rich_auxvar_up,global_auxvar_up, &
                         rich_auxvar_dn,global_auxvar_dn, &
                         material_auxvar_dn, &
                         area, dist, &
-                        option,v_darcy,Res)
+                        option,v_darcy,face_permeability,Res)
   !
   ! Computes the internal flux terms for the residual
   !
@@ -358,7 +362,7 @@ subroutine RichardsFlux(rich_auxvar_up,global_auxvar_up, &
   type(global_auxvar_type) :: global_auxvar_up, global_auxvar_dn
   type(material_auxvar_type) :: material_auxvar_up, material_auxvar_dn
   type(option_type) :: option
-  PetscReal :: v_darcy, area, dist(-1:3)
+  PetscReal :: v_darcy, area, dist(-1:3), face_permeability
   PetscReal :: Res(1:option%nflowdof)
 
   PetscReal :: dist_gravity  ! distance along gravity vector
@@ -372,11 +376,14 @@ subroutine RichardsFlux(rich_auxvar_up,global_auxvar_up, &
   ukvr = 0.d0
 
   call ConnectionCalculateDistances(dist,option%gravity,dd_up,dd_dn, &
-                                    dist_gravity,upweight)
-  call PermeabilityTensorToScalar(material_auxvar_up,dist,perm_up)
-  call PermeabilityTensorToScalar(material_auxvar_dn,dist,perm_dn)
-
-  Dq = (perm_up * perm_dn)/(dd_up*perm_dn + dd_dn*perm_up)
+  dist_gravity,upweight)
+  if(option%flow%permeability_on_faces) then
+    Dq = face_permeability/(dd_up + dd_dn)
+  else
+    call PermeabilityTensorToScalar(material_auxvar_up,dist,perm_up)
+    call PermeabilityTensorToScalar(material_auxvar_dn,dist,perm_dn)
+    Dq = (perm_up * perm_dn)/(dd_up*perm_dn + dd_dn*perm_up)
+  endif
 
 ! Flow term
   if (rich_auxvar_up%kvr > eps .or. &
@@ -426,6 +433,7 @@ subroutine RichardsBCFluxDerivative(ibndtype,auxvars, &
                                     material_auxvar_dn, &
                                     area,dist,option, &
                                     characteristic_curves_dn, &
+                                    face_permeability, &
                                     Jdn)
   !
   ! Computes the derivatives of the boundary flux
@@ -460,7 +468,7 @@ subroutine RichardsBCFluxDerivative(ibndtype,auxvars, &
   PetscReal :: dist_gravity  ! distance along gravity vector
   PetscReal :: perm_dn
 
-  PetscReal :: v_darcy
+  PetscReal :: v_darcy, face_permeability
   PetscReal :: q,density_ave
   PetscReal :: ukvr,Dq
   PetscReal :: upweight,gravity,dphi
@@ -493,7 +501,11 @@ subroutine RichardsBCFluxDerivative(ibndtype,auxvars, &
   dukvr_dp_dn = 0.d0
   dq_dp_dn = 0.d0
 
-  call PermeabilityTensorToScalar(material_auxvar_dn,dist,perm_dn)
+  if(option%flow%permeability_on_faces) then
+    perm_dn = face_permeability
+  else
+    call PermeabilityTensorToScalar(material_auxvar_dn,dist,perm_dn)
+  endif
 
   ! Flow
   pressure_bc_type = ibndtype(RICHARDS_PRESSURE_DOF)
@@ -632,7 +644,7 @@ subroutine RichardsBCFluxDerivative(ibndtype,auxvars, &
                         rich_auxvar_up,global_auxvar_up, &
                         rich_auxvar_dn,global_auxvar_dn, &
                         material_auxvar_dn, &
-                        area,dist,option,v_darcy,res)
+                        area,dist,option,v_darcy,face_permeability,res)
     if (pressure_bc_type == ZERO_GRADIENT_BC) then
       x_pert_up = x_up
     endif
@@ -662,7 +674,7 @@ subroutine RichardsBCFluxDerivative(ibndtype,auxvars, &
                         rich_auxvar_pert_up,global_auxvar_pert_up, &
                         rich_auxvar_pert_dn,global_auxvar_pert_dn, &
                         material_auxvar_pert_dn, &
-                        area,dist,option,v_darcy,res_pert_dn)
+                        area,dist,option,v_darcy,face_permeability,res_pert_dn)
     J_pert_dn(1,ideriv) = (res_pert_dn(1)-res(1))/pert_dn
     Jdn = J_pert_dn
     call GlobalAuxVarStrip(global_auxvar_pert_up)
@@ -680,7 +692,7 @@ subroutine RichardsBCFlux(ibndtype,auxvars, &
                           rich_auxvar_up, global_auxvar_up, &
                           rich_auxvar_dn, global_auxvar_dn, &
                           material_auxvar_dn, &
-                          area, dist, option,v_darcy,Res)
+                          area, dist, option,v_darcy,face_permeability,Res)
   !
   ! Computes the  boundary flux terms for the residual
   !
@@ -700,7 +712,7 @@ subroutine RichardsBCFlux(ibndtype,auxvars, &
   type(material_auxvar_type) :: material_auxvar_dn
   type(option_type) :: option
   PetscReal :: auxvars(:) ! from aux_real_var array
-  PetscReal :: v_darcy, area
+  PetscReal :: v_darcy, area, face_permeability
   ! dist(-1) = fraction_upwind - not applicable here
   ! dist(0) = magnitude
   ! dist(1:3) = unit vector
@@ -722,7 +734,11 @@ subroutine RichardsBCFlux(ibndtype,auxvars, &
   q = 0.d0
   ukvr = 0.d0
 
-  call PermeabilityTensorToScalar(material_auxvar_dn,dist,perm_dn)
+  if(option%flow%permeability_on_faces) then
+    perm_dn = face_permeability
+  else
+    call PermeabilityTensorToScalar(material_auxvar_dn,dist,perm_dn)
+  endif
 
   ! Flow
   pressure_bc_type = ibndtype(RICHARDS_PRESSURE_DOF)

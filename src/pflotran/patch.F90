@@ -43,6 +43,9 @@ module Patch_module
     PetscInt, pointer :: cct_id(:)   ! thermal characteristic curves id
     PetscInt, pointer :: mtf_id(:)   ! material transform id
 
+    PetscReal, pointer :: internal_permeabilities(:)
+    PetscReal, pointer :: boundary_permeabilities(:)
+
     PetscReal, pointer :: internal_velocities(:,:)
     PetscReal, pointer :: boundary_velocities(:,:)
     PetscReal, pointer :: internal_tran_coefs(:,:,:)
@@ -720,6 +723,11 @@ subroutine PatchProcessCouplers(patch,flow_conditions,transport_conditions, &
   allocate(patch%internal_velocities(nphase,temp_int))
   patch%internal_velocities = 0.d0
 
+  if (option%flow%permeability_on_faces) then
+    allocate(patch%internal_permeabilities(temp_int))
+    patch%internal_permeabilities = 0.d0
+  endif
+
   ! flow
   if (option%nflowdof > 0) then
     if (option%flow%store_fluxes) then
@@ -746,6 +754,10 @@ subroutine PatchProcessCouplers(patch,flow_conditions,transport_conditions, &
     patch%boundary_velocities = 0.d0
     ! flow
     if (option%nflowdof > 0) then
+      if (option%flow%permeability_on_faces) then
+        allocate(patch%boundary_permeabilities(temp_int))
+        patch%boundary_permeabilities = 0.d0
+      endif      
       if (option%flow%store_fluxes) then
         allocate(patch%boundary_flow_fluxes(option%nflowdof,temp_int))
         patch%boundary_flow_fluxes = 0.d0
@@ -9594,6 +9606,8 @@ subroutine PatchDestroy(patch)
   call DeallocateArray(patch%cc_id)
   call DeallocateArray(patch%cct_id)
   call DeallocateArray(patch%mtf_id)
+  call DeallocateArray(patch%internal_permeabilities)
+  call DeallocateArray(patch%boundary_permeabilities)
   call DeallocateArray(patch%internal_velocities)
   call DeallocateArray(patch%boundary_velocities)
   call DeallocateArray(patch%internal_tran_coefs)

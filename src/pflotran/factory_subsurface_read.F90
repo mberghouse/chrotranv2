@@ -1001,6 +1001,29 @@ subroutine FactorySubsurfReadInput(simulation,input)
         call NWTReadPass2(realization%reaction_nw,input,option)
 
 !....................
+      case ('PERMEABILITY_ON_FACES')
+        option%flow%permeability_on_faces = PETSC_TRUE
+        call InputPushBlock(input,option)
+        do
+          call InputReadPflotranString(input,option)
+          call InputReadStringErrorMsg(input,option,card)
+          if (InputCheckExit(input,option)) exit
+          call InputReadCard(input,option,word)
+          call InputErrorMsg(input,option,'keyword','PERMEABILITY_ON_FACES')
+          call StringToUpper(word)
+          select case(trim(word))
+            case('DATASET')
+              ! Add interface for non-uniform dataset
+              call InputReadFilename(input,option, &
+                                      realization%permeability_faces_filename)
+              call InputErrorMsg(input,option,'filename', &
+                                  'PERMEABILITY_ON_FACES,DATASET')
+            
+          end select
+        enddo
+        call InputPopBlock(input,option)        
+
+!....................
       case ('SPECIFIED_VELOCITY')
         if (option%nflowdof > 0) then
           option%io_buffer = 'SPECIFIED_VELOCITY fields may not be used &
