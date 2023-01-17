@@ -113,7 +113,7 @@ function PMHydrateCreate()
              !H_STATE
              pres_abs_inf_tol,999.d0,temp_abs_inf_tol,  &
              !I_STATE
-             pres_abs_inf_tol,999.d0,temp_abs_inf_tol, &
+             pres_abs_inf_tol,xmol_abs_inf_tol,temp_abs_inf_tol, &
              !GA_STATE
              pres_abs_inf_tol,sat_abs_inf_tol,temp_abs_inf_tol, &
              !HG_STATE
@@ -146,7 +146,7 @@ function PMHydrateCreate()
              !H_STATE
              pres_rel_inf_tol,999.d0,temp_rel_inf_tol, &
              !I_STATE
-             pres_rel_inf_tol,999.d0,temp_rel_inf_tol, &
+             pres_rel_inf_tol,xmol_rel_inf_tol,temp_rel_inf_tol, &
              !GA_STATE
              pres_rel_inf_tol,sat_rel_inf_tol,temp_rel_inf_tol, &
              !HG_STATE
