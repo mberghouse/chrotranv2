@@ -1843,9 +1843,7 @@ subroutine HydrateAuxVarUpdateState(x,hyd_auxvar,global_auxvar, &
       endif
 
     case(I_STATE)
-      call CalcFreezingTempDepression(hyd_auxvar%sat(lid), &
-                                      characteristic_curves, dTf,option)
-      if (hyd_auxvar%temp > dTf) then
+      if (hyd_auxvar%temp > TQD) then
         istatechng = PETSC_TRUE
         global_auxvar%istate = AI_STATE
       ! elseif (hyd_auxvar%temp > Tf_ice) then
