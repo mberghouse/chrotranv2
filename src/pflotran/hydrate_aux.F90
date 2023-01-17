@@ -1843,9 +1843,9 @@ subroutine HydrateAuxVarUpdateState(x,hyd_auxvar,global_auxvar, &
       if (hyd_auxvar%sat(lid) > hyd_auxvar%srl) then
         istatechng = PETSC_TRUE
         global_auxvar%istate = AI_STATE
-      elseif (hyd_auxvar%temp > Tf_ice) then
-        istatechng = PETSC_TRUE
-        global_auxvar%istate = HGAI_STATE
+      ! elseif (hyd_auxvar%temp > Tf_ice) then
+      !   istatechng = PETSC_TRUE
+      !   global_auxvar%istate = HGAI_STATE
       else
         istatechng = PETSC_FALSE
       endif

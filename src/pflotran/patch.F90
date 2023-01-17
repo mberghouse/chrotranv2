@@ -2550,7 +2550,8 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
           ! mole fraction; 2nd dof ----------------------- !
             select case(hydrate%mole_fraction%itype)
               case(DIRICHLET_BC)
-                xmol = 0.d0
+                call PatchGetCouplerValueFromDataset(coupler,option, &
+                            patch%grid,hydrate%mole_fraction%dataset,iconn,xmol)
                 coupler%flow_aux_real_var(TWO_INTEGER,iconn) = xmol
                 dof2 = PETSC_TRUE
                 coupler%flow_bc_type(HYDRATE_GAS_EQUATION_INDEX) = DIRICHLET_BC
@@ -2558,7 +2559,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
                 string = GetSubConditionType(hydrate%mole_fraction%itype)
                 option%io_buffer = &
                   FlowConditionUnknownItype(coupler%flow_condition, &
-                  'HYDRATE MODE I-state mole fraction ',string)
+                  'HYDRATE MODE liquid state mole fraction ',string)
                 call PrintErrMsg(option)
             end select
     ! ---------------------------------------------------------------------- !
