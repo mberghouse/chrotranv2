@@ -852,10 +852,10 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
       hyd_auxvar%xmol(acid,lid) = x(HYDRATE_L_STATE_X_MOLE_DOF)
       hyd_auxvar%temp = x(HYDRATE_ENERGY_DOF)
 
-      hyd_auxvar%sat(lid) = 0.d0
       hyd_auxvar%sat(gid) = 0.d0
       hyd_auxvar%sat(hid) = 0.d0
       hyd_auxvar%sat(iid) = 1.d0 - characteristic_curves%gas_rel_perm_function%sr
+      hyd_auxvar%sat(lid) = 1.d0 - hyd_auxvar%sat(iid)
 
       hyd_auxvar%pres(cpid) = 0.d0
       hyd_auxvar%pres(apid) = 0.d0
@@ -1840,7 +1840,9 @@ subroutine HydrateAuxVarUpdateState(x,hyd_auxvar,global_auxvar, &
       endif
 
     case(I_STATE)
-      if (hyd_auxvar%sat(lid) > hyd_auxvar%srl) then
+      call CalcFreezingTempDepression(hyd_auxvar%sat(lid), &
+                                      characteristic_curves, dTf,option)
+      if (hyd_auxvar%temp > dTf) then
         istatechng = PETSC_TRUE
         global_auxvar%istate = AI_STATE
       ! elseif (hyd_auxvar%temp > Tf_ice) then
