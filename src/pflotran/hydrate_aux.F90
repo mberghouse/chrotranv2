@@ -2319,7 +2319,7 @@ subroutine HydrateAuxVarUpdateState(x,hyd_auxvar,global_auxvar, &
 !     ********* Ice State (I) ********************************
 !     Primary variables: Pg, Xmi, T
 !
-        x(HYDRATE_LIQUID_PRESSURE_DOF) = hyd_auxvar%pres(gid)
+        x(HYDRATE_LIQUID_PRESSURE_DOF) = hyd_auxvar%pres(lid)
         x(HYDRATE_L_STATE_X_MOLE_DOF) = max(0.d0,hyd_auxvar%xmol(acid,lid))
         x(HYDRATE_ENERGY_DOF) = hyd_auxvar%temp
 
