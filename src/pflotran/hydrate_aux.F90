@@ -1983,6 +1983,9 @@ subroutine HydrateAuxVarUpdateState(x,hyd_auxvar,global_auxvar, &
       !if (hyd_auxvar%pres(apid) >= hyd_auxvar% &
       !       pres(lid)*(1.d0-window_epsilon)) then
       !  if (hyd_auxvar%pres(apid) < PE_hyd) then
+      ! call CalcFreezingTempDepression(characteristic_curves%saturation_function%Sr,&
+      !                                characteristic_curves,dTf, &
+      !                                option)
       if (hyd_auxvar%pres(lid) >= PE_hyd .and. &
           K_H_tilde_hyd*hyd_auxvar%xmol(acid,lid) >= hyd_auxvar% &
           pres(lid)*(1.d0-window_epsilon)) then
@@ -1994,8 +1997,13 @@ subroutine HydrateAuxVarUpdateState(x,hyd_auxvar,global_auxvar, &
         istatechng = PETSC_TRUE
         global_auxvar%istate = GAI_STATE
       else
-        if (hyd_auxvar%sat(lid) > 0.d0 .and. hyd_auxvar%sat(iid) > 0.d0) then
+        if (hyd_auxvar%sat(lid) > characteristic_curves%saturation_function%Sr&
+            .and. hyd_auxvar%sat(iid) > 0.d0) then
           istatechng = PETSC_FALSE
+        elseif (hyd_auxvar%sat(lid) <= &
+                characteristic_curves%saturation_function%Sr) then
+          istatechng = PETSC_TRUE
+          global_auxvar%istate = I_STATE
         elseif (hyd_auxvar%sat(lid) > 0.d0) then
           istatechng = PETSC_TRUE
           global_auxvar%istate = L_STATE
