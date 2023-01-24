@@ -91,9 +91,31 @@ module Material_Transform_module
     ! Placeholder for buffer erosion model auxvars
   end type buffer_erosion_auxvar_type
   !---------------------------------------------------------------------------
+  type, public :: perm_transform_type
+    character(len=MAXWORDLENGTH) :: name
+    PetscBool :: print_me
+    PetscBool :: test
+    !  class(perm_transfer_base_type), pointer :: perm_transfer_model
+    PetscReal :: B(3)
+  contains
+    procedure, public :: ModifyPerm => PTModifyPerm
+  end type perm_transform_type
+  !---------------------------------------------------------------------------
+  type, public :: perm_transform_auxvar_type
+    PetscReal :: temp_prev ! previous temperature
+    PetscReal, allocatable :: perm0(:) ! initial permeability 
+  end type perm_transform_auxvar_type
+  !---------------------------------------------------------------------------
+!  type, public :: perm_transform_base_type
+!    PetscReal :: B(3)
+!  contains
+!    procedure, public :: ModifyPerm
+!  end type perm_transform_base_type
+  !---------------------------------------------------------------------------
   type, public :: material_transform_auxvar_type
     class(illitization_auxvar_type), pointer :: il_aux ! auxvars for illitization class
     class(buffer_erosion_auxvar_type), pointer :: be_aux ! auxvars for buffer erosion class
+    class(perm_transform_auxvar_type), pointer :: perm_aux ! auxvars for permeability transform class
   end type material_transform_auxvar_type
   !---------------------------------------------------------------------------
   type, public :: material_transform_type
@@ -107,6 +129,7 @@ module Material_Transform_module
     ! Classes for material transformations
     class(illitization_type), pointer :: illitization
     class(buffer_erosion_type), pointer :: buffer_erosion
+    class(perm_transform_type), pointer :: perm_transform
 
     ! Linked list
     type(material_transform_type), pointer :: next
@@ -128,7 +151,8 @@ module Material_Transform_module
             MTransformGetAuxVarVecLoc, &
             MTransformSetAuxVarVecLoc, &
             IllitizationAuxVarInit, &
-            BufferErosionAuxVarInit
+            BufferErosionAuxVarInit, &
+            PermTransformAuxVarInit
 
 contains
 
@@ -298,6 +322,28 @@ end function BufferErosionCreate
 
 ! ************************************************************************** !
 
+function PermTransformCreate()
+  !
+  ! Creates an object for a permability transform model
+  !
+
+  implicit none
+
+  class(perm_transform_type), pointer :: PermTransformCreate
+  class(perm_transform_type), pointer :: PermTransform
+
+  allocate(PermTransform)
+  PermTransform%name = ''
+  PermTransform%print_me = PETSC_FALSE
+  PermTransform%test = PETSC_FALSE
+  PermTransform%B(3) = UNINITIALIZED_DOUBLE
+
+  PermTransformCreate => PermTransform
+
+end function PermTransformCreate
+
+! ************************************************************************** !
+
 function MaterialTransformCreate()
   !
   ! Creates a material transform object
@@ -317,6 +363,7 @@ function MaterialTransformCreate()
   nullify(material_transform%auxvars)
   nullify(material_transform%illitization)
   nullify(material_transform%buffer_erosion)
+  nullify(material_transform%perm_transform)
   nullify(material_transform%next)
 
   MaterialTransformCreate => material_transform
@@ -375,11 +422,44 @@ function BufferErosionAuxVarInit()
   class(buffer_erosion_auxvar_type), pointer :: auxvar
 
   allocate(auxvar)
-
+  
   BufferErosionAuxVarInit => auxvar
 
 end function BufferErosionAuxVarInit
 
+! ************************************************************************** !
+
+function PermTransformAuxVarInit(option)
+  !
+  ! Initializes a permability transform auxiliary object
+  !
+
+  use Option_module
+
+  implicit none
+
+  class(perm_transform_auxvar_type), pointer :: PermTransformAuxVarInit
+  class(perm_transform_auxvar_type), pointer :: auxvar
+  type(option_type) :: option
+
+  allocate(auxvar)
+
+  auxvar%temp_prev = UNINITIALIZED_DOUBLE
+  
+  if (option%iflowmode /= NULL_MODE) then
+    if (option%flow%full_perm_tensor) then
+      allocate(auxvar%perm0(6))
+    else
+      allocate(auxvar%perm0(3))
+    endif
+    auxvar%perm0 = UNINITIALIZED_DOUBLE
+  endif
+  !else error message?
+
+  PermTransformAuxVarInit => auxvar
+
+end function PermTransformAuxVarInit
+  
 ! ************************************************************************** !
 
 subroutine MaterialTransformAuxVarInit(auxvar)
@@ -395,6 +475,7 @@ subroutine MaterialTransformAuxVarInit(auxvar)
 
   nullify(auxvar%il_aux)
   nullify(auxvar%be_aux)
+  nullify(auxvar%perm_aux)
 
 end subroutine MaterialTransformAuxVarInit
 
@@ -1040,6 +1121,77 @@ end subroutine BufferErosionRead
 
 ! ************************************************************************** !
 
+subroutine PermTransformRead(this, input, option)
+  !
+  ! Reads in contents of a PERMEABILITY_TRANSFORM block from MATERIAL_TRANSFORM
+  !
+
+  use Option_module
+  use Input_Aux_module
+  use String_module
+
+  implicit none
+
+  class(perm_transform_type) :: this
+  type(input_type), pointer :: input
+  type(option_type) :: option
+
+  character(len=MAXWORDLENGTH) :: keyword
+  character(len=MAXSTRINGLENGTH) :: error_string, verify_string
+  ! class(buffer_erosion_base_type), pointer :: buffer_erosion_model_ptr
+
+  ! nullify(buffer_erosion_model_ptr)
+
+  input%ierr = 0
+  error_string = 'PERMEABILITY_TRANSFORM'
+
+  ! if (associated(this%buffer_erosion_model)) then
+  !   option%io_buffer = 'There may only be one instance of '// &
+  !                      'BUFFER_EROSION_MODEL in BUFFER_EROSION "'// &
+  !                      trim(this%name)//'".'
+  !   call PrintErrMsg(option)
+  ! endif
+
+  call InputPushBlock(input,option)
+  do
+
+    call InputReadPflotranString(input,option)
+
+    if (InputCheckExit(input,option)) exit
+
+    call InputReadCard(input,option,keyword)
+    call InputErrorMsg(input,option,'keyword',error_string)
+    call StringToUpper(keyword)
+
+    select case(trim(keyword))
+      !------------------------------------------
+      case('B')
+        ! Placeholder for erosion models
+      !------------------------------------------
+      case('TEST')
+        this%test = PETSC_TRUE
+      !------------------------------------------
+      case default
+        call InputKeywordUnrecognized(input,keyword,'PERMEABILITY_TRANSFORM',option)
+    end select
+  enddo
+  call InputPopBlock(input,option)
+
+  !verify_string = 'BUFFER_EROSION(' // trim(this%name) // '),'
+
+  ! if (associated(this%buffer_erosion_model)) then
+  !   call this%buffer_erosion_model%Verify(verify_string,option)
+  ! else
+  !   option%io_buffer = 'A buffer erosion model has &
+  !        &not been set under BUFFER_EROSION "' // &
+  !        trim(this%name) // '". A BUFFER_EROSION_MODEL &
+  !        &block must be specified.'
+  ! endif
+
+end subroutine PermTransformRead
+
+! ************************************************************************** !
+
 subroutine MaterialTransformRead(this, input, option)
   !
   ! Reads in components of a MATERIAL_TRANSFORM block
@@ -1084,6 +1236,12 @@ subroutine MaterialTransformRead(this, input, option)
         this%buffer_erosion%name = this%name
         call BufferErosionRead(this%buffer_erosion,input,option)
       !------------------------------------------
+      case('PERMABILITY_TRANSFORM')
+        this%perm_transform=> PermTransformCreate()
+        this%perm_transform%name = this%name
+        call PermTransformRead(this%perm_transform,input,option)
+      !------------------------------------------
+  
       case default
         call InputKeywordUnrecognized(input,keyword, &
                'MATERIAL_TRANSFORM "'//trim(this%name)//'"',option)
@@ -1801,6 +1959,39 @@ end subroutine ILTShiftPerm
 
 ! ************************************************************************** !
 
+subroutine PTModifyPerm(this,material_auxvar, auxvar, global_auxvar, option)
+
+  !initial perm
+  !B1 B2 B3
+  !Current Temp
+  !Previous Temp
+
+  use Option_module
+  use Material_Aux_module
+  use Global_Aux_module
+  
+  implicit none
+
+  class(perm_transform_type), intent(inout) :: this
+  class(material_auxvar_type), intent(inout) :: material_auxvar
+  class(global_auxvar_type), intent(inout) :: global_auxvar
+  class(perm_transform_auxvar_type), intent(inout) :: auxvar
+  class(option_type), intent(inout) :: option
+
+  PetscInt  :: ps, i
+  PetscReal :: scale
+  
+  scale = (this%B(1) * (global_auxvar%temp - auxvar%temp_prev) + this%B(3) &
+       * exp(this%B(2) * (global_auxvar%temp - auxvar%temp_prev)))
+
+  do i = 1, ps
+    material_auxvar%permeability(i) = auxvar%perm0(i) * scale
+  enddo   
+
+end subroutine PTModifyPerm
+
+! ************************************************************************** !
+
 subroutine MaterialTransformAddToList(new_material_transform, list)
   !
   ! Populates the next pointer with a new material transform
@@ -2305,6 +2496,31 @@ end subroutine BufferErosionAuxVarStrip
 
 ! ************************************************************************** !
 
+subroutine PermTransformAuxVarStrip(auxvar)
+  !
+  ! Deallocates an permeability transform auxiliary object
+  !
+
+
+  use Utility_module, only : DeallocateArray
+
+  implicit none
+
+  class(perm_transform_auxvar_type), pointer :: auxvar
+
+  if (.not. associated(auxvar)) return
+
+  if (allocated(auxvar%perm0)) then
+    deallocate(auxvar%perm0)
+  endif
+
+  deallocate(auxvar)
+  nullify(auxvar)
+
+end subroutine PermTransformAuxVarStrip
+
+! ************************************************************************** !
+
 subroutine MaterialTransformAuxVarStrip(auxvar)
   !
   ! Deallocates a material transform auxiliary object
@@ -2322,7 +2538,10 @@ subroutine MaterialTransformAuxVarStrip(auxvar)
   if (associated(auxvar%be_aux)) then
     call BufferErosionAuxVarStrip(auxvar%be_aux)
   endif
-
+  if (associated(auxvar%perm_aux)) then
+    call PermTransformAuxVarStrip(auxvar%perm_aux)
+  endif
+ 
 end subroutine MaterialTransformAuxVarStrip
 
 ! ************************************************************************** !
@@ -2371,6 +2590,24 @@ end subroutine BufferErosionDestroy
 
 ! ************************************************************************** !
 
+recursive subroutine PermTransformDestroy(perm_transform)
+  !
+  ! Deallocates a permeability transform object
+  !
+
+  implicit none
+
+  class(perm_transform_type), pointer :: perm_transform
+
+  if (.not. associated(perm_transform)) return
+
+  deallocate(perm_transform)
+  nullify(perm_transform)
+
+end subroutine PermTransformDestroy
+
+! ************************************************************************** !
+
 recursive subroutine MaterialTransformDestroy(material_transform)
   !
   ! Deallocates a material transform object
@@ -2402,6 +2639,10 @@ recursive subroutine MaterialTransformDestroy(material_transform)
 
   if (associated(material_transform%buffer_erosion)) then
     call BufferErosionDestroy(material_transform%buffer_erosion)
+  endif
+
+  if (associated(material_transform%perm_transform)) then
+    call PermTransformDestroy(material_transform%perm_transform)
   endif
 
   deallocate(material_transform)

@@ -280,6 +280,12 @@ subroutine PMMaterialTransformSetup(this)
             BufferErosionAuxVarInit()
         endif
 
+        if (associated(material_transform%perm_transform)) then
+          ! initialize the buffer erosion auxiliary variable object
+          m_transform_auxvars(ghosted_id)%perm_aux => &
+            PermTransformAuxVarInit(option)
+        endif
+
         ! pass information from functions to auxiliary variables as needed
         if (.not. option%restart_flag) then
           if (associated(m_transform_auxvars(ghosted_id)%il_aux)) then
@@ -302,6 +308,14 @@ subroutine PMMaterialTransformSetup(this)
           endif
         endif
 
+        ! Save initial permability tensor and temperature
+        if (associated(m_transform_auxvars(ghosted_id)%perm_aux)) then
+          ps = size(material_auxvars(ghosted_id)%permeability)
+          do i = 1, ps
+            m_transform_auxvars(ghosted_id)%perm_aux%perm0(i) = &
+              material_auxvars(ghosted_id)%permeability(i)
+          enddo
+        endif
       endif
     endif
   enddo
@@ -661,6 +675,10 @@ subroutine PMMaterialTransformSolve(this, time, ierr)
         endif
         ! if (associated(material_transform%buffer_erosion)) then
         ! endif
+        if (associated(material_transform%perm_transform)) then
+          call material_transform%perm_transform%ModifyPerm(material_aux, &
+            m_transform_aux%perm_aux,global_aux,option)    
+        endif
       endif
     endif
 
