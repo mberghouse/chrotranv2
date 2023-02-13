@@ -248,14 +248,14 @@ subroutine RTSetup(realization)
       ! Ignore inactive cells with inactive materials
       if (patch%imat(ghosted_id) <= 0) cycle
       ! Assuming the same secondary continuum type for all regions
-      call SecondaryRTAuxVarInit(patch%material_property_array(patch%imat(ghosted_id))%ptr% &
+      call SecondaryRTAuxVarInit(realization, patch%material_property_array(patch%imat(ghosted_id))%ptr% &
                                  multicontinuum,material_auxvars(ghosted_id)% &
                                    soil_properties(epsilon_index), &
                                  material_auxvars(ghosted_id)% &
                                    soil_properties(half_matrix_width_index), &
                                  rt_sec_transport_vars(ghosted_id), &
                                  reaction,initial_condition, &
-                                 sec_tran_constraint,option)
+                                 sec_tran_constraint,option, ghosted_id)
     enddo
     patch%aux%SC_RT%sec_transport_vars => rt_sec_transport_vars
     do i = 1, size(patch%material_property_array)
