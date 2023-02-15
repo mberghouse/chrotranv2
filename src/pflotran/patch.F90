@@ -2888,16 +2888,32 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
                 call PrintErrMsg(option)
           end select
           ! liquid saturation; 3rd dof ---------------------- !
-          select case(hydrate%liquid_saturation%itype)
+          ! select case(hydrate%liquid_saturation%itype)
+          !   case(DIRICHLET_BC)
+          !     call PatchGetCouplerValueFromDataset(coupler,option, &
+          !               patch%grid,hydrate%liquid_saturation%dataset,iconn, &
+          !               liq_sat)
+          !     coupler%flow_aux_real_var(THREE_INTEGER,iconn) = liq_sat
+          !     dof3 = PETSC_TRUE
+          !     coupler%flow_bc_type(HYDRATE_ENERGY_EQUATION_INDEX) = DIRICHLET_BC
+          !   case default
+          !     string = GetSubConditionType(hydrate%liquid_saturation%itype)
+          !     option%io_buffer = &
+          !       FlowConditionUnknownItype(coupler%flow_condition, &
+          !         'HYDRATE MODE AI-state liquid saturation ',string)
+          !     call PrintErrMsg(option)
+
+          ! temperature; 3rd dof ---------------------- !
+          select case(hydrate%temperature%itype)
             case(DIRICHLET_BC)
               call PatchGetCouplerValueFromDataset(coupler,option, &
-                        patch%grid,hydrate%liquid_saturation%dataset,iconn, &
+                        patch%grid,hydrate%temperature%dataset,iconn, &
                         liq_sat)
-              coupler%flow_aux_real_var(THREE_INTEGER,iconn) = liq_sat
+              coupler%flow_aux_real_var(THREE_INTEGER,iconn) = temperature
               dof3 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_ENERGY_EQUATION_INDEX) = DIRICHLET_BC
             case default
-              string = GetSubConditionType(hydrate%liquid_saturation%itype)
+              string = GetSubConditionType(hydrate%temperature%itype)
               option%io_buffer = &
                 FlowConditionUnknownItype(coupler%flow_condition, &
                   'HYDRATE MODE AI-state liquid saturation ',string)

@@ -309,6 +309,7 @@ module Hydrate_Aux_module
             HydrateMethanogenesis, &
             HydrateGHSZSolubilityCorrection, &
             CalcFreezingTempDepression, &
+            CalcFreezingTempDepressionSat, &
             EOSIceEnergy, &
             EOSHydrateEnthalpy
 
@@ -367,7 +368,7 @@ function HydrateAuxCreate(option)
              HYDRATE_TEMPERATURE_INDEX, &
              !AI_STATE 3INDEX = Sl
              HYDRATE_GAS_PRESSURE_INDEX, HYDRATE_LIQ_MOLE_FRACTION_INDEX, &
-             HYDRATE_THREE_INDEX, &
+             HYDRATE_TEMPERATURE_INDEX, &!HYDRATE_THREE_INDEX, &
              !HGA_STATE
              HYDRATE_LIQ_SATURATION_INDEX, HYDRATE_HYD_SATURATION_INDEX, &
              HYDRATE_TEMPERATURE_INDEX, &
@@ -625,6 +626,7 @@ subroutine HydrateAuxSetEnergyDOF(energy_keyword,option)
 end subroutine HydrateAuxSetEnergyDOF
 
 ! ************************************************************************** !
+
 subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
                                 characteristic_curves,natural_id,option)
   !
@@ -1083,20 +1085,20 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
 !
       hyd_auxvar%pres(lid) = x(HYDRATE_LIQUID_PRESSURE_DOF)
       hyd_auxvar%xmol(acid,lid) = x(HYDRATE_GAS_SATURATION_DOF)
-      hyd_auxvar%sat(lid) = x(HYDRATE_ENERGY_DOF)
+      hyd_auxvar%temp = x(HYDRATE_ENERGY_DOF)
 
       hyd_auxvar%xmol(acid,lid) = max(0.d0,hyd_auxvar%xmol(acid,lid))
 
-      hyd_auxvar%sat(lid) = max(0.d0,min(1.d0,hyd_auxvar%sat(lid)))
-
+      ! call inverted freezing temperature curve 
+      ! also adjust for salinity
       hyd_auxvar%sat(gid) = 0.d0
+
+      call CalcFreezingTempDepressionSat(hyd_auxvar%sat(lid), &
+                                      characteristic_curves, hyd_auxvar%temp, option)
+
+      hyd_auxvar%sat(lid) = max(0.d0,min(1.d0,1.d0-hyd_auxvar%sat(gid)))
+
       hyd_auxvar%sat(hid) = 0.d0
-      hyd_auxvar%sat(iid) = 1.d0 - hyd_auxvar%sat(lid)
-
-      call CalcFreezingTempDepression(hyd_auxvar%sat(lid), &
-                                      characteristic_curves, dTf,option)
-
-      hyd_auxvar%temp = TQD-dTf
 
       call EOSWaterSaturationPressure(hyd_auxvar%temp, &
                                           hyd_auxvar%pres(spid),ierr)
@@ -2612,7 +2614,7 @@ subroutine HydrateAuxVarPerturb(hyd_auxvar,global_auxvar, &
       x(HYDRATE_L_STATE_X_MOLE_DOF) = &
          hyd_auxvar(ZERO_INTEGER)%xmol(option%air_id,option%liquid_phase)
       x(HYDRATE_ENERGY_DOF) = &
-         hyd_auxvar(ZERO_INTEGER)%sat(lid)
+         hyd_auxvar(ZERO_INTEGER)%temp
       pert(HYDRATE_LIQUID_PRESSURE_DOF) = &
          perturbation_tolerance*x(HYDRATE_LIQUID_PRESSURE_DOF) + &
          min_perturbation
@@ -2623,11 +2625,11 @@ subroutine HydrateAuxVarPerturb(hyd_auxvar,global_auxvar, &
       else
         pert(HYDRATE_L_STATE_X_MOLE_DOF) = perturbation_tolerance
       endif
-      if (x(HYDRATE_ENERGY_DOF) > 0.5d0) then
-        pert(HYDRATE_ENERGY_DOF) = -1.d0 * perturbation_tolerance
-      else
-        pert(HYDRATE_ENERGY_DOF) = perturbation_tolerance
-      endif
+      ! if (x(HYDRATE_ENERGY_DOF) > 0.5d0) then
+      !   pert(HYDRATE_ENERGY_DOF) = -1.d0 * perturbation_tolerance
+      ! else
+      !   pert(HYDRATE_ENERGY_DOF) = perturbation_tolerance
+      ! endif
 
     case(HGA_STATE)
       x(HYDRATE_GAS_PRESSURE_DOF) = &
@@ -3821,7 +3823,7 @@ subroutine CalcFreezingTempDepression(sat,characteristic_curves,dTf,option)
 
   PetscReal, intent(out) :: dTf
 
-  PetscReal :: Pc,dw,Tb,dpc_dsatl
+  PetscReal :: Pc,dw,Tb,dpc_dsatl,dsat_dpres
   PetscReal :: sigma, theta
 
   sigma = 0.073d0 !interfacial tension
@@ -3835,6 +3837,46 @@ subroutine CalcFreezingTempDepression(sat,characteristic_curves,dTf,option)
   dTf = Pc/(L_ICE * dw * 1.d6) * (Tb + 273.15d0)
 
 end subroutine CalcFreezingTempDepression
+
+! ************************************************************************** !
+
+subroutine CalcFreezingTempDepressionSat(sat,characteristic_curves,dTf,option)
+
+  !This subroutine finds the ice saturation based on a temperature depression
+  !subcooling required to form ice in pores.
+  !
+  !Author: David FUkuyama
+  !Date: 02/15/23
+  !
+
+  use Characteristic_Curves_module
+  use Option_module
+
+  implicit none
+
+  PetscReal, intent(out) :: sat !liquid saturation
+  type(option_type) :: option
+  class(characteristic_curves_type) :: characteristic_curves
+
+  PetscReal, intent(in) :: dTf
+
+  PetscReal :: Pc,dw,Tb,dpc_dsatl,dsat_dpres
+  PetscReal :: sigma, theta
+
+  sigma = 0.073d0 !interfacial tension
+  theta = 0.d0 !wetting angle
+  Tb = TQD !bulk freezing point
+  dw = ICE_DENSITY !density of water
+
+  !Clausius-Clapeyron derivation
+  ! call characteristic_curves%saturation_function% &
+  !        CapillaryPressure(sat,Pc,dpc_dsatl,option)
+  ! dTf = Pc/(L_ICE * dw * 1.d6) * (Tb + 273.15d0)
+  Pc = dTf * (L_ICE * dw * 1.d6) / (Tb + 273.15d0)
+  call characteristic_curves%saturation_function%&
+         Saturation(Pc,sat,dsat_dpres,option)
+
+end subroutine CalcFreezingTempDepressionSat
 
 ! ************************************************************************** !
 
