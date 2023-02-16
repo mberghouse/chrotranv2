@@ -764,6 +764,7 @@ subroutine SecondaryRTAuxVarInit(realization,multicontinuum,epsilon,half_matrix_
 
   call MaterialAuxVarStrip(material_auxvar)
   deallocate(material_auxvar)
+  deallocate(temp_vector)
 
   rt_sec_transport_vars%sec_jac_update = PETSC_FALSE
   rt_sec_transport_vars%sec_jac = 0.d0
