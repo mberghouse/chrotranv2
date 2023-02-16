@@ -2649,8 +2649,9 @@ subroutine FlowConditionHydrateRead(condition,input,option)
         condition%iphase = GI_STATE
       elseif ((associated(hydrate%gas_pressure) .or. &
                associated(hydrate%liquid_pressure)).and. &
+               hydrate%state == 'AI' .and. &
                associated(hydrate%mole_fraction) .and. &
-               associated(hydrate%liquid_saturation)) then
+               associated(hydrate%temperature)) then
         ! aqueous-ice condition
         condition%iphase = AI_STATE
       elseif (associated(hydrate%liquid_saturation) .and. &
