@@ -167,6 +167,13 @@ subroutine EOSRead(input,option)
                   end select
                 enddo
                 call InputPopBlock(input,option)
+              case('LINEAR_SALT_MOLAR')
+                call InputReadDouble(input,option,temparray(1))
+                call InputErrorMsg(input,option,'REFERENCE_DENSITY', &
+                                   'EOS,WATER,DENSITY,LINEAR_SALT_MOLAR')
+                call InputReadDouble(input,option,temparray(2))
+                call InputErrorMsg(input,option, 'LINEAR_SALT_COEFFICIENT', &
+                                   'EOS,WATER,DENSITY,LINEAR_SALT_MOLAR')
               case('IFC67','DEFAULT','BATZLE_AND_WANG','TGDPB01','PLANAR', &
                               'TRANGENSTEIN','IF97','SPARROW','DRIESNER')
               case default

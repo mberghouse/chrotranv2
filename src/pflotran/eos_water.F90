@@ -47,6 +47,10 @@ module EOS_Water_module
   PetscReal :: linear_reference_pressure
   PetscReal :: linear_water_compressibility
 
+  ! linear salt 
+  PetscReal :: linear_salt_reference_density
+  PetscReal :: linear_salt_coefficient
+
   ! halite saturated brine
   PetscBool :: halite_saturated_brine
 
@@ -298,6 +302,8 @@ subroutine EOSWaterInit()
   quadratic_reference_density = UNINITIALIZED_DOUBLE
   quadratic_reference_pressure = UNINITIALIZED_DOUBLE
   quadratic_wat_compressibility = UNINITIALIZED_DOUBLE
+  linear_salt_reference_density = UNINITIALIZED_DOUBLE
+  linear_salt_coefficient = UNINITIALIZED_DOUBLE
   halite_saturated_brine = PETSC_FALSE
 
   ! standard versions
@@ -374,6 +380,15 @@ subroutine EOSWaterVerify(ierr,error_string)
        Uninitialized(linear_water_compressibility))) then
     error_string = trim(error_string) // &
       ' Linear parameters incorrect.'
+     ierr = 1
+  endif
+
+  if ((associated(EOSWaterDensityPtr,EOSWaterDenLinearSaltMolarExt) .or. &
+       associated(EOSWaterDensityPtr,EOSWaterDenLinearSaltMolalExt)) .and. &
+      (Uninitialized(linear_salt_reference_density) .or. &
+       Uninitialized(linear_salt_coefficient))) then
+    error_string = trim(error_string) // &
+      ' linear_salt density parameters (rho_ref, Beta) not set.'
      ierr = 1
   endif
 
@@ -484,6 +499,12 @@ subroutine EOSWaterSetDensity(keyword,aux)
       EOSWaterDensityExtPtr => EOSWaterDensitySparrowExt
     case('DRIESNER')
       EOSWaterDensityExtPtr => EOSWaterDensityDriesnerExt
+    case('LINEAR_SALT_MOLAR')
+      constant_density = aux(1)
+      linear_salt_reference_density = aux(1)
+      linear_salt_coefficient = aux(2)
+      EOSWaterDensityPtr => EOSWaterDensityConstant
+      EOSWaterDensityExtPtr => EOSWaterDenLinearSaltMolarExt
     case default
       print *, 'Unknown pointer type "' // trim(keyword) // &
         '" in EOSWaterSetDensity().'
@@ -4204,6 +4225,178 @@ end subroutine EOSWaterComputeSalinity
   print *, 'dvw(t)t:  ', dvw_dt
 
 end subroutine TestEOSWaterBatzleAndWang
+
+! ************************************************************************** !
+
+subroutine EOSWaterDenLinearSaltMolar(tin, pin, aux, &
+                                           calculate_derivatives, &
+                                           dw, dwmol, dwp, dwt, ierr)
+
+  ! Water density dependent on salt (molar, M, mol/L) concentration 
+  ! model taken from the Elder problem setup 
+  !
+  !
+  ! Author: Paolo Orsini
+  ! Date: 02/02/17
+  ! 
+  implicit none
+
+  PetscReal, intent(in) :: tin   ! Temperature in centigrade
+  PetscReal, intent(in) :: pin   ! Pressure in Pascal
+  PetscReal, intent(in) :: aux(*)
+  PetscBool, intent(in) :: calculate_derivatives
+  PetscReal, intent(out) :: dw ! kg/m^3
+  PetscReal, intent(out) :: dwmol ! kmol/m^3
+  PetscReal, intent(out) :: dwp ! kmol/m^3-Pa
+  PetscReal, intent(out) :: dwt ! kmol/m^3-C
+  PetscErrorCode, intent(out) :: ierr
+
+  PetscReal :: s  !salt molar concetration (M, mol/L)
+
+
+
+  s = aux(1)
+
+  ! Linear Reference Density in kg/m3
+  ! Linear Salt Coefficient is kg/m3 (Density kg/m3 / Mass Fraction)
+  ! Salinity in mass fraction (Dimensionless)
+  ! The result "dw" will be in kg/m3 
+  ! Then, to have dwmol we compute dw / molecular weight of water. 
+
+  !kg/m3     !kg/m3                                    
+  dw = linear_salt_reference_density + &
+        linear_salt_coefficient * s
+
+  print *, "dw Linear Salt"
+  print *, dw
+
+  dwmol = dw/FMWH2O ! kmol/m^3
+  print *, "dwmol Linear Salt"
+  print *, dwmol
+
+  print *, calculate_derivatives
+
+  !if (calculate_derivatives) then
+  dwp = 0.0d0
+  dwt = 0.0d0
+  !else
+  !  dwp = UNINITIALIZED_DOUBLE
+  !  dwt = UNINITIALIZED_DOUBLE
+  !endif 
+
+end subroutine EOSWaterDenLinearSaltMolar
+
+! ************************************************************************** !
+
+subroutine EOSWaterDenLinearSaltMolarExt(tin, pin, aux, &
+                                           calculate_derivatives, &
+                                           dw, dwmol, dwp, dwt, ierr)
+
+  ! Water density dependent on salt (molar, M, mol/L) concentration 
+  ! model taken from the Elder problem setup 
+  !
+  !
+  ! Author: Paolo Orsini
+  ! Date: 02/02/17
+  ! 
+  implicit none
+
+  PetscReal, intent(in) :: tin   ! Temperature in centigrade
+  PetscReal, intent(in) :: pin   ! Pressure in Pascal
+  PetscReal, intent(in) :: aux(*)
+  PetscBool, intent(in) :: calculate_derivatives
+  PetscReal, intent(out) :: dw ! kg/m^3
+  PetscReal, intent(out) :: dwmol ! kmol/m^3
+  PetscReal, intent(out) :: dwp ! kmol/m^3-Pa
+  PetscReal, intent(out) :: dwt ! kmol/m^3-C
+  PetscErrorCode, intent(out) :: ierr
+
+  PetscReal :: s  !salt molar concetration (M, mol/L)
+
+
+
+  s = aux(1)
+
+  ! Linear Reference Density in kg/m3
+  ! Linear Salt Coefficient is kg/m3 (Density kg/m3 / Mass Fraction)
+  ! Salinity in mass fraction (Dimensionless)
+  ! The result "dw" will be in kg/m3 
+  ! Then, to have dwmol we compute dw / molecular weight of water. 
+
+  !kg/m3     !kg/m3                                    
+  dw = linear_salt_reference_density + &
+        linear_salt_coefficient * s
+
+  print *, "dw Linear Salt"
+  print *, dw
+
+  dwmol = dw/FMWH2O ! kmol/m^3
+  print *, "dwmol Linear Salt"
+  print *, dwmol
+
+  print *, calculate_derivatives
+
+  !if (calculate_derivatives) then
+  dwp = 0.0d0
+  dwt = 0.0d0
+  !else
+  !  dwp = UNINITIALIZED_DOUBLE
+  !  dwt = UNINITIALIZED_DOUBLE
+  !endif 
+
+end subroutine EOSWaterDenLinearSaltMolarExt
+
+! ************************************************************************** !
+
+subroutine EOSWaterDenLinearSaltMolalExt(tin, pin, aux, &
+                                           calculate_derivatives, &
+                                           dw, dwmol, dwp, dwt, ierr)
+
+  ! Water density dependent on salt (molal, m, mol/kg_w) concentration 
+  ! model taken from the Elder problem setup
+  !
+  !
+  ! Author: Paolo Orsini
+  ! Date: 03/04/17
+  ! 
+  implicit none
+
+  PetscReal, intent(in) :: tin   ! Temperature in centigrade
+  PetscReal, intent(in) :: pin   ! Pressure in Pascal
+  PetscReal, intent(in) :: aux(*)
+  PetscBool, intent(in) :: calculate_derivatives
+  PetscReal, intent(out) :: dw ! kg/m^3
+  PetscReal, intent(out) :: dwmol ! kmol/m^3
+  PetscReal, intent(out) :: dwp ! kmol/m^3-Pa
+  PetscReal, intent(out) :: dwt ! kmol/m^3-C
+  PetscErrorCode, intent(out) :: ierr
+
+  PetscReal, parameter :: fmw_nacl_kg_over_mol = 58.44277d-3 ! (kg/mol NaCl)
+  PetscReal :: xnacl !salt mass fraction 
+  PetscReal :: mnacl
+
+  xnacl = aux(1)
+  !converting salt mass fraction to molal concentration (mol_NaCl/kg_w)
+  mnacl = xnacl/(1.d0-xnacl)/fmw_nacl_kg_over_mol
+
+  !s = aux(1) 
+
+  !kg/m3     !kg/m3                                    
+  dw = linear_salt_reference_density + &
+                !kg/m3 kg_w/mol * mol/kg_w = kg/m3
+        linear_salt_coefficient * mnacl
+
+  dwmol = dw/FMWH2O ! kmol/m^3
+
+  !if (calculate_derivatives) then
+  dwp = 0.0d0
+  dwt = 0.0d0
+  !else
+  !  dwp = UNINITIALIZED_DOUBLE
+  !  dwt = UNINITIALIZED_DOUBLE
+  !endif 
+
+end subroutine EOSWaterDenLinearSaltMolalExt
 
 ! ************************************************************************** !
 
