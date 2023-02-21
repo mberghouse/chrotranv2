@@ -575,7 +575,7 @@ subroutine CondControlAssignFlowInitCond(realization)
                   hydrate%liquid_saturation%itype == HYDROSTATIC_BC)) then
                   option%io_buffer = 'Liquid saturation ' // trim(string)
                   call PrintErrMsg(option)
-                endif
+                endif 
 
               case(HGA_STATE)
                 if (.not. &
@@ -785,7 +785,7 @@ subroutine CondControlAssignFlowInitCond(realization)
                   xx_p(ibegin+HYDRATE_GAS_SATURATION_DOF) = &
                     hydrate%mole_fraction%dataset%rarray(1)
                   xx_p(ibegin+HYDRATE_ENERGY_DOF) = &
-                    hydrate%liquid_saturation%dataset%rarray(1)
+                    hydrate%temperature%dataset%rarray(1)
                 case(HGA_STATE)
                   xx_p(ibegin+HYDRATE_GAS_PRESSURE_DOF) = &
                       hydrate%liquid_saturation%dataset%rarray(1)

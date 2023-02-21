@@ -1092,13 +1092,12 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
       ! call inverted freezing temperature curve 
       ! also adjust for salinity
       hyd_auxvar%sat(gid) = 0.d0
+      hyd_auxvar%sat(hid) = 0.d0
 
       call CalcFreezingTempDepressionSat(hyd_auxvar%sat(lid), &
                                       characteristic_curves, hyd_auxvar%temp, option)
+      hyd_auxvar%sat(iid) = 1.d0 - hyd_auxvar%sat(lid)
 
-      hyd_auxvar%sat(lid) = max(0.d0,min(1.d0,1.d0-hyd_auxvar%sat(gid)))
-
-      hyd_auxvar%sat(hid) = 0.d0
 
       call EOSWaterSaturationPressure(hyd_auxvar%temp, &
                                           hyd_auxvar%pres(spid),ierr)
@@ -3845,7 +3844,7 @@ subroutine CalcFreezingTempDepressionSat(sat,characteristic_curves,dTf,option)
   !This subroutine finds the ice saturation based on a temperature depression
   !subcooling required to form ice in pores.
   !
-  !Author: David FUkuyama
+  !Author: David Fukuyama
   !Date: 02/15/23
   !
 
@@ -3872,7 +3871,7 @@ subroutine CalcFreezingTempDepressionSat(sat,characteristic_curves,dTf,option)
   ! call characteristic_curves%saturation_function% &
   !        CapillaryPressure(sat,Pc,dpc_dsatl,option)
   ! dTf = Pc/(L_ICE * dw * 1.d6) * (Tb + 273.15d0)
-  Pc = dTf * (L_ICE * dw * 1.d6) / (Tb + 273.15d0)
+  Pc = -dTf * (L_ICE * dw * 1.d6) / (Tb + 273.15d0)
   call characteristic_curves%saturation_function%&
          Saturation(Pc,sat,dsat_dpres,option)
 

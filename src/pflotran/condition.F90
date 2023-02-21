@@ -2591,6 +2591,7 @@ subroutine FlowConditionHydrateRead(condition,input,option)
         condition%iphase = HYD_MULTI_STATE
       elseif (hydrate%state /= 'I' .and. &
               hydrate%state /= 'H' .and. &
+              hydrate%state /= 'AI' .and. &
               associated(hydrate%liquid_pressure) .and. &
               associated(hydrate%mole_fraction) .and. &
               associated(hydrate%temperature)) then
@@ -2598,6 +2599,7 @@ subroutine FlowConditionHydrateRead(condition,input,option)
         condition%iphase = L_STATE
       elseif (hydrate%state /= 'I' .and. &
               hydrate%state /= 'H' .and. &
+              hydrate%state /= 'AI' .and. &
                 associated(hydrate%gas_pressure) .and. &
                (associated(hydrate%mole_fraction) .or. &
                 associated(hydrate%relative_humidity)) .and. &

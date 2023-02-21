@@ -2908,7 +2908,7 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
             case(DIRICHLET_BC)
               call PatchGetCouplerValueFromDataset(coupler,option, &
                         patch%grid,hydrate%temperature%dataset,iconn, &
-                        liq_sat)
+                        temperature)
               coupler%flow_aux_real_var(THREE_INTEGER,iconn) = temperature
               dof3 = PETSC_TRUE
               coupler%flow_bc_type(HYDRATE_ENERGY_EQUATION_INDEX) = DIRICHLET_BC
