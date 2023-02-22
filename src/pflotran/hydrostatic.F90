@@ -645,6 +645,22 @@ subroutine HydrostaticUpdateCoupler(coupler,option,grid)
               temperature
             coupler%flow_aux_real_var(1,iconn) = pressure
             coupler%flow_aux_int_var(HYDRATE_STATE_INDEX,iconn) = GA_STATE
+          case(AI_STATE)
+            temperature = temperature_at_datum + &
+                        ! gradient in K/m
+                        temperature_gradient(X_DIRECTION)*dist_x + &
+                        temperature_gradient(Y_DIRECTION)*dist_y + &
+                        temperature_gradient(Z_DIRECTION)*dist_z
+            coupler%flow_aux_real_var(3,iconn) = temperature
+            ! switch to liquid state if temperature is above freezing.
+            if (temperature > 0.d0) then
+              coupler%flow_aux_int_var(HYDRATE_STATE_INDEX,iconn) = L_STATE
+            else
+              coupler%flow_aux_int_var(HYDRATE_STATE_INDEX,iconn) = AI_STATE              
+            endif
+            coupler%flow_aux_real_var(1,iconn) = pressure
+            coupler%flow_aux_real_var(2,iconn) = concentration_at_datum
+
           case default
             temperature = temperature_at_datum + &
                         ! gradient in K/m
