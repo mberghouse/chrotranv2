@@ -559,9 +559,9 @@ subroutine CondControlAssignFlowInitCond(realization)
 
               case(AI_STATE)
                 if (.not. &
-                    (hydrate%gas_pressure%itype == DIRICHLET_BC .or. &
-                      hydrate%gas_pressure%itype == HYDROSTATIC_BC)) then
-                  option%io_buffer = 'Gas pressure ' // trim(string)
+                    (hydrate%liquid_pressure%itype == DIRICHLET_BC .or. &
+                      hydrate%liquid_pressure%itype == HYDROSTATIC_BC)) then
+                  option%io_buffer = 'Liquid pressure ' // trim(string)
                   call PrintErrMsg(option)
                 endif
                 if (.not. &

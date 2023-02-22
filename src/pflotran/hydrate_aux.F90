@@ -2344,7 +2344,7 @@ subroutine HydrateAuxVarUpdateState(x,hyd_auxvar,global_auxvar, &
 !
         x(HYDRATE_LIQUID_PRESSURE_DOF) = hyd_auxvar%pres(lid)
         x(HYDRATE_GAS_SATURATION_DOF) = hyd_auxvar%xmol(acid,lid)
-        x(HYDRATE_ENERGY_DOF) = hyd_auxvar%sat(lid)
+        x(HYDRATE_ENERGY_DOF) = hyd_auxvar%temp
 
       case(HGA_STATE)
 !     ********* Hydrate, Gas, & Aqueous State (HGA) **************************
