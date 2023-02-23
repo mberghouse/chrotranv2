@@ -84,11 +84,37 @@ module Material_Transform_module
     character(len=MAXWORDLENGTH) :: name
     PetscBool :: print_me
     PetscBool :: test
-    ! class(buffer_erosion_base_type), pointer :: buffer_erosion_model
+    class(BE_base_type), pointer :: buffer_erosion_model
   end type buffer_erosion_type
   !---------------------------------------------------------------------------
+  type, public :: BE_base_type
+    PetscReal :: smec_den        ! smectite particle density
+    PetscReal :: bh_rad          ! borehole radius
+!  contains
+!    procedure, public :: Verify => BEBaseVerify
+!    procedure, public :: Test => BEBaseTest
+  end type BE_base_type
+  !---------------------------------------------------------------------------
+  type, public, extends(BE_base_type) :: BE_default_type
+    ! Model based on Posiva 2013, Section 6.11 and 6.19
+    ! and Neretnieks et al. 2017 buffer erosion, Chapter 4
+    ! implemented by Heeho Park
+    ! Date : 02/22/2023
+    PetscReal :: diff_coef_bh       ! diffusion coeffficient in borehole
+    PetscReal :: smec_vf_bh_init ! smectite vol. frac. borehole initially
+    PetscReal :: smec_vf_int_rim ! smectite vol. frac. at intruding rim
+    PetscReal :: y0              ! coefficients for total buffer extruded over
+    PetscReal :: y1              ! time. Users must understand conditions/
+    PetscReal :: y2              ! uncertainty/assumptions due to these coefs
+!  contains
+!    procedure, public :: Verify => BEDefaultVerify
+  end type BE_default_type
+  !---------------------------------------------------------------------------
   type, public :: buffer_erosion_auxvar_type
-    ! Placeholder for buffer erosion model auxvars
+    !data from PFLOTRAN
+    PetscReal :: water_den       ! water desity
+    PetscReal, allocatable :: water_vel(:) ! water velosity
+    PetscReal :: frac_aperture   ! fracture aperture
   end type buffer_erosion_auxvar_type
   !---------------------------------------------------------------------------
   type, public :: material_transform_auxvar_type
@@ -290,7 +316,7 @@ function BufferErosionCreate()
   BufferErosion%name = ''
   BufferErosion%print_me = PETSC_FALSE
   BufferErosion%test = PETSC_FALSE
-  ! nullify(BufferErosion%buffer_erosion_model)
+  nullify(BufferErosion%buffer_erosion_model)
 
   BufferErosionCreate => BufferErosion
 
@@ -322,6 +348,76 @@ function MaterialTransformCreate()
   MaterialTransformCreate => material_transform
 
 end function MaterialTransformCreate
+
+! ************************************************************************** !
+
+function BEBaseCreate()
+  !
+  ! Creates base buffer erosion model
+  !
+  ! Author: Heeho Park
+  ! Date: 02/21/2023
+
+  implicit none
+
+  class(BE_base_type), pointer :: BEBaseCreate
+
+  allocate(BEBaseCreate)
+
+  BEBaseCreate%smec_den = UNINITIALIZED_DOUBLE
+  BEBaseCreate%bh_rad   = UNINITIALIZED_DOUBLE
+
+end function BEBaseCreate
+
+! ************************************************************************** !
+
+function BEDefaultCreate()
+  !
+  ! Creates default buffer erosion model
+  !
+  ! Author: Heeho Park
+  ! Date: 02/21/2023
+
+  implicit none
+
+  class(BE_default_type), pointer :: BEDefaultCreate
+
+  allocate(BEDefaultCreate)
+
+ BEDefaultCreate%diff_coef_bh       = UNINITIALIZED_DOUBLE
+ BEDefaultCreate%smec_vf_bh_init = UNINITIALIZED_DOUBLE
+ BEDefaultCreate%smec_vf_int_rim = UNINITIALIZED_DOUBLE
+ BEDefaultCreate%y0              = UNINITIALIZED_DOUBLE
+ BEDefaultCreate%y1              = UNINITIALIZED_DOUBLE
+ BEDefaultCreate%y2              = UNINITIALIZED_DOUBLE
+
+end function BEDefaultCreate
+
+! ************************************************************************** !
+
+function BufferErosionAuxVarInit(option)
+  !
+  ! Initializes an buffer erosion auxiliary object
+  !
+  ! Author: Heeho Park
+  ! Date: 02/21/2023
+
+  use Option_module
+
+  implicit none
+
+  class(buffer_erosion_auxvar_type), pointer :: BufferErosionAuxVarInit
+  class(buffer_erosion_auxvar_type), pointer :: BEauxvar
+  type(option_type) :: option
+
+  allocate(BEauxvar)
+  BEauxvar%water_den = UNINITIALIZED_DOUBLE
+  BEauxvar%frac_aperture = UNINITIALIZED_DOUBLE
+  allocate(BEauxvar%water_vel(3))
+
+  BufferErosionAuxVarInit => BEauxvar
+
+end function BufferErosionAuxVarInit
 
 ! ************************************************************************** !
 
@@ -359,26 +455,6 @@ function IllitizationAuxVarInit(option)
   IllitizationAuxVarInit => auxvar
 
 end function IllitizationAuxVarInit
-
-! ************************************************************************** !
-
-function BufferErosionAuxVarInit()
-  !
-  ! Initializes a buffer erosion auxiliary object
-  !
-  ! Author: Alex Salazar III
-  ! Date: 02/10/2022
-
-  implicit none
-
-  class(buffer_erosion_auxvar_type), pointer :: BufferErosionAuxVarInit
-  class(buffer_erosion_auxvar_type), pointer :: auxvar
-
-  allocate(auxvar)
-
-  BufferErosionAuxVarInit => auxvar
-
-end function BufferErosionAuxVarInit
 
 ! ************************************************************************** !
 
@@ -967,12 +1043,108 @@ end subroutine IllitizationRead
 
 ! ************************************************************************** !
 
+subroutine BEDefaultRead(buffer_erosion_model, input, option)
+  !
+  ! Reads in contents of a BUFFER_EROSION_MODEL block
+  !
+  ! Author: Heeho Park
+  ! Date: 02/21/2023
+
+  use Option_module
+  use Input_Aux_module
+  use String_module
+
+  implicit none
+
+  class(BE_base_type) :: buffer_erosion_model
+  type(input_type), pointer :: input
+  type(option_type) :: option
+
+  character(len=MAXWORDLENGTH) :: keyword
+  character(len=MAXSTRINGLENGTH) :: error_string
+
+  input%ierr = 0
+  error_string = 'BUFFER_EROSION_MODEL,'
+  select type(be_model => buffer_erosion_model)
+    class is(BE_default_type)
+      error_string = trim(error_string) // 'DEFAULT'
+  end select
+
+  call InputPushBlock(input,option)
+  do
+    call InputReadPflotranString(input,option)
+    if (InputCheckExit(input,option)) exit
+
+    call InputReadCard(input,option,keyword)
+    call InputErrorMsg(input,option,'keyword',error_string)
+    call StringToUpper(keyword)
+
+    select type(be_model => buffer_erosion_model)
+      !------------------------------------------
+      class is(BE_default_type)
+        select case(trim(keyword))
+          case('SMECTITE_PARTICLE_DENSITY')
+            call InputReadDouble(input,option,be_model%smec_den)
+            call InputErrorMsg(input,option,'smectite density',&
+                               'BUFFER_EROSION, GENERAL')
+          case('BOREHOLE_RADIUS')
+            call InputReadDouble(input,option,be_model%bh_rad)
+            call InputErrorMsg(input,option,'borehole radius',&
+                               'BUFFER_EROSION, GENERAL')
+          case('DIFFUSION_COEFFICIENT_IN_BOREHOLE',&
+               'DIFFUSION_IN_BOREHOLE',&
+               'DIFF_COEF_IN_BH')
+            call InputReadDouble(input,option,be_model%diff_coef_bh)
+            call InputErrorMsg(input,option,&
+                               'diffusion coefficient in borehole',&
+                               'BUFFER_EROSION, GENERAL')
+          case('SMECTITE_VOLUME_FRACTION_BOREHOLE_INIT',&
+               'SMECTITE_VOL_FRAC_BH_INIT')
+            call InputReadDouble(input,option,be_model%smec_vf_bh_init)
+            call InputErrorMsg(input,option,&
+                          'smectite volume fraction borehole initially',&
+                               'BUFFER_EROSION, GENERAL')
+          case('SMECTITE_VOLUME_FRACTION_AT_RIM',&
+               'SMECTITE_VOL_FRAC_AT_RIM')
+            call InputReadDouble(input,option,be_model%smec_vf_int_rim)
+            call InputErrorMsg(input,option,&
+                   'smectite volume fraction borehole at intruding rim',&
+                               'BUFFER_EROSION, GENERAL')
+          case('Y0')
+            call InputReadDouble(input,option,be_model%y0)
+            call InputErrorMsg(input,option,&
+                      'coefficient for total buffer extruded over time',&
+                               'BUFFER_EROSION, GENERAL')
+          case('Y1')
+            call InputReadDouble(input,option,be_model%y1)
+            call InputErrorMsg(input,option,&
+                      'coefficient for total buffer extruded over time',&
+                               'BUFFER_EROSION, GENERAL')
+          case('Y2')
+            call InputReadDouble(input,option,be_model%y2)
+            call InputErrorMsg(input,option,&
+                      'coefficient for total buffer extruded over time',&
+                               'BUFFER_EROSION, GENERAL')
+        end select
+      !------------------------------------------
+      class default
+        option%io_buffer = 'Read routine not implemented for ' &
+             // trim(error_string) // '.'
+        call PrintErrMsg(option)
+    end select
+  enddo
+  call InputPopBlock(input,option)
+
+end subroutine BEDefaultRead
+
+! ************************************************************************** !
+
 subroutine BufferErosionRead(this, input, option)
   !
   ! Reads in contents of a BUFFER_EROSION block from MATERIAL_TRANSFORM
   !
-  ! Author: Alex Salazar III
-  ! Date: 01/20/2022
+  ! Author: Heeho Park
+  ! Date: 02/22/2023
 
   use Option_module
   use Input_Aux_module
@@ -984,21 +1156,21 @@ subroutine BufferErosionRead(this, input, option)
   type(input_type), pointer :: input
   type(option_type) :: option
 
-  character(len=MAXWORDLENGTH) :: keyword
+  character(len=MAXWORDLENGTH) :: keyword, word
   character(len=MAXSTRINGLENGTH) :: error_string, verify_string
-  ! class(buffer_erosion_base_type), pointer :: buffer_erosion_model_ptr
+  class(BE_base_type), pointer :: BE_model_ptr
 
-  ! nullify(buffer_erosion_model_ptr)
+  nullify(BE_model_ptr)
 
   input%ierr = 0
   error_string = 'BUFFER_EROSION'
 
-  ! if (associated(this%buffer_erosion_model)) then
-  !   option%io_buffer = 'There may only be one instance of '// &
-  !                      'BUFFER_EROSION_MODEL in BUFFER_EROSION "'// &
-  !                      trim(this%name)//'".'
-  !   call PrintErrMsg(option)
-  ! endif
+  if (associated(this%buffer_erosion_model)) then
+    option%io_buffer = 'There may only be one instance of '// &
+                       'BUFFER_EROSION_MODEL in BUFFER_EROSION "'// &
+                       trim(this%name)//'".'
+    call PrintErrMsg(option)
+  endif
 
   call InputPushBlock(input,option)
   do
@@ -1014,7 +1186,22 @@ subroutine BufferErosionRead(this, input, option)
     select case(trim(keyword))
       !------------------------------------------
       case('BUFFER_EROSION_MODEL')
-        ! Placeholder for erosion models
+      !------------------------------------------
+        call InputReadCard(input,option,word)
+        call InputErrorMsg(input,option, &
+             'BUFFER_EROSION_MODEL',error_string)
+        call StringToUpper(word)
+        select case(word)
+          !-------------------------------------
+          case('DEFAULT','POSIVA')
+            this%buffer_erosion_model => BEDefaultCreate()
+            call BEDefaultRead(this%buffer_erosion_model,input,option)
+          !-------------------------------------
+          case default
+            call InputKeywordUnrecognized(input,word, &
+                 'BUFFER_EROSION_MODEL',option)
+        end select
+        !call BERead(this%buffer_erosion_model,input,option)
       !------------------------------------------
       case('TEST')
         this%test = PETSC_TRUE
