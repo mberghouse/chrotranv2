@@ -683,11 +683,14 @@ general.o : \
   pflotran_constants.o \
   realization_subsurface.o \
   saturation_function.o \
+  secondary_continuum.o \
+  secondary_continuum_aux.o \
   srcsink_sandbox.o \
   srcsink_sandbox_base.o \
   srcsink_sandbox_wipp_gas.o \
   srcsink_sandbox_wipp_well.o \
   upwind_direction.o \
+  utility.o \
   variables.o
 general_aux.o : \
   characteristic_curves.o \

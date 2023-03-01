@@ -199,6 +199,8 @@ module General_Aux_module
     PetscReal, pointer :: diffusion_coefficient(:) ! (iphase)
     PetscReal :: newton_inf_scaled_res_tol
     PetscBool :: check_post_converged
+    PetscReal, pointer :: dencpr(:)
+    PetscReal, pointer :: ckwet(:)
   end type general_parameter_type
 
   type, public :: general_type
