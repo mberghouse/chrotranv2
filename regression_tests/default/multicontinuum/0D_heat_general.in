@@ -1,0 +1,192 @@
+# 0D batch reactor
+# sphere of radius 1m inside a cube of side 1m
+# Multiple continuum test
+# David Fukuyama
+# 03/06/23
+#--------------------------------------------------------------------
+
+SIMULATION
+  SIMULATION_TYPE SUBSURFACE
+  PROCESS_MODELS
+    SUBSURFACE_FLOW flow
+      MODE GENERAL
+      OPTIONS
+        MULTIPLE_CONTINUUM
+      /
+    /
+  /
+END
+
+SUBSURFACE
+
+#=========================== numerical methods ================================
+NUMERICAL_METHODS FLOW
+
+  TIMESTEPPER
+    TS_ACCELERATION 5
+    PRESSURE_CHANGE_GOVERNOR 1.e5
+    TEMPERATURE_CHANGE_GOVERNOR 5.
+  /
+
+  NEWTON_SOLVER
+    ATOL 1D-8
+    RTOL 1D-8
+    STOL 1D-30
+    DTOL 1D15
+    ITOL 1D-8
+    MAXIMUM_NUMBER_OF_ITERATIONS 25
+    MAXF 100
+  /
+
+END
+
+#=========================== regression ===================================
+REGRESSION
+  CELL_IDS
+    1
+  /
+  CELLS_PER_PROCESS 5
+END
+
+#=========================== discretization ===================================
+GRID
+TYPE STRUCTURED
+ORIGIN 0.d0 0.d0 0.d0
+NXYZ 1 1 1
+BOUNDS
+  0.d0 0.d0 0.d0
+  1.d0 1.d0 1.d0
+/
+END
+
+#=========================== solver options ===================================
+
+
+#=========================== times ============================================
+TIME
+FINAL_TIME 100.d0 y
+INITIAL_TIMESTEP_SIZE 1.d-8 y
+MAXIMUM_TIMESTEP_SIZE 0.1d0 y
+/
+
+#=========================== output options ===================================
+OUTPUT
+  TIMES y 0.005 0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 \
+  0.25 0.5 0.75 1.0 2.5 5. 7.5 10. \
+  15. 20. 25. 30. 35. 40. 45. 50. 55. 60. 65. 70. 75. 80. 85. 90. 95. 100.
+  ! 125. 150. 175. 200.
+  PERIODIC_OBSERVATION TIMESTEP 1
+  SCREEN PERIODIC 10
+  PRINT_COLUMN_IDS
+  #FORMAT TECPLOT POINT
+  FORMAT HDF5
+/
+
+#=========================== fluid properties =================================
+FLUID_PROPERTY
+DIFFUSION_COEFFICIENT 1.d-9
+/
+
+#=========================== material properties ==============================
+MATERIAL_PROPERTY rock1
+ID 1
+POROSITY 1.d-4
+ROCK_DENSITY 2.65E3
+SPECIFIC_HEAT 1E3
+THERMAL_CONDUCTIVITY_DRY 2.51
+THERMAL_CONDUCTIVITY_WET 2.51
+CHARACTERISTIC_CURVES cc1
+PERMEABILITY
+PERM_X 1.d-13
+PERM_Y 1.d-13
+PERM_Z 1.d-13
+/
+SECONDARY_CONTINUUM
+  TYPE NESTED_SPHERES
+  RADIUS                1.d0
+  NUM_CELLS             10
+  EPSILON               0.5
+  TEMPERATURE           50.d0
+  POROSITY              1.d0
+/
+END
+
+#=========================== saturation functions =============================
+
+CHARACTERISTIC_CURVES cc1
+  SATURATION_FUNCTION VAN_GENUCHTEN
+    LIQUID_RESIDUAL_SATURATION 0.2d0
+    ALPHA 1.d-4
+    M 0.5d0
+    MAX_CAPILLARY_PRESSURE 1.d6
+  /
+  PERMEABILITY_FUNCTION MUALEM
+    PHASE LIQUID
+    LIQUID_RESIDUAL_SATURATION 0.2d0
+    M 0.5d0
+  /
+  PERMEABILITY_FUNCTION MUALEM_VG_GAS
+    PHASE GAS
+    LIQUID_RESIDUAL_SATURATION 0.2d0
+    GAS_RESIDUAL_SATURATION 0.1d0
+    M 0.5d0
+  /
+/
+
+#=========================== regions ==========================================
+
+REGION all
+COORDINATES
+  0.d0 0.d0 0.d0
+  1.d0 1.d0 1.d0
+/
+END
+
+
+
+REGION obs
+COORDINATES
+  0.5d0 0.5d0 0.5d0
+  0.5d0 0.5d0 0.5d0
+/
+END
+
+
+OBSERVATION
+  REGION obs
+  AT_CELL_CENTER
+  SECONDARY_TEMPERATURE
+END
+
+
+
+#=========================== flow conditions ==================================
+FLOW_CONDITION initial
+  TYPE
+    LIQUID_PRESSURE DIRICHLET
+    MOLE_FRACTION DIRICHLET
+    TEMPERATURE DIRICHLET
+  /
+  LIQUID_PRESSURE 1.01325d5
+  MOLE_FRACTION 1.D-12
+  TEMPERATURE 100.d0
+/
+
+
+#=========================== condition couplers ===============================
+# initial condition
+INITIAL_CONDITION
+  FLOW_CONDITION initial
+  REGION all
+END
+
+
+#=========================== stratigraphy couplers ============================
+STRATA
+  REGION all
+  MATERIAL rock1
+END
+
+
+
+END_SUBSURFACE
