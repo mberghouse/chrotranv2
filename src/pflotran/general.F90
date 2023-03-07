@@ -1486,8 +1486,7 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
                                 general_parameter%ckwet(patch%cct_id(ghosted_id)), &
                                 sec_dencpr, &
                                 option,res_sec_heat)
-      r_p(iend) = r_p(iend) - res_sec_heat*option%flow_dt* &
-                              material_auxvars(ghosted_id)%volume
+      r_p(iend) = r_p(iend) + res_sec_heat*material_auxvars(ghosted_id)%volume
 
     enddo
   endif
@@ -1895,7 +1894,6 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
                           general_parameter%ckwet(ghosted_id), &
                           general_parameter%dencpr(ghosted_id), &
                           option,jac_sec_heat)
-!DF: check this
         Jup(option%nflowdof,GENERAL_ENERGY_EQUATION_INDEX) = &
                                  Jup(option%nflowdof,GENERAL_ENERGY_EQUATION_INDEX) - &
                                  jac_sec_heat*material_auxvars(ghosted_id)%volume
