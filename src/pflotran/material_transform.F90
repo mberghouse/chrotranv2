@@ -1103,28 +1103,73 @@ subroutine BEDefaultRead(buffer_erosion_model, input, option)
             call InputReadDouble(input,option,be_model%smec_vf_bh_init)
             call InputErrorMsg(input,option,&
                           'smectite volume fraction borehole initially',&
-                               'BUFFER_EROSION, GENERAL')
+                          'BUFFER_EROSION, GENERAL')
           case('SMECTITE_VOLUME_FRACTION_AT_RIM',&
                'SMECTITE_VOL_FRAC_AT_RIM')
             call InputReadDouble(input,option,be_model%smec_vf_int_rim)
             call InputErrorMsg(input,option,&
                    'smectite volume fraction borehole at intruding rim',&
-                               'BUFFER_EROSION, GENERAL')
+                   'BUFFER_EROSION, GENERAL')
           case('Y0')
             call InputReadDouble(input,option,be_model%y0)
             call InputErrorMsg(input,option,&
-                      'coefficient for total buffer extruded over time',&
-                               'BUFFER_EROSION, GENERAL')
+                      'Y0 coefficient for total buffer extruded over time',&
+                      'BUFFER_EROSION, GENERAL')
           case('Y1')
             call InputReadDouble(input,option,be_model%y1)
             call InputErrorMsg(input,option,&
-                      'coefficient for total buffer extruded over time',&
-                               'BUFFER_EROSION, GENERAL')
+                      'Y1 coefficient for total buffer extruded over time',&
+                      'BUFFER_EROSION, GENERAL')
           case('Y2')
             call InputReadDouble(input,option,be_model%y2)
             call InputErrorMsg(input,option,&
-                      'coefficient for total buffer extruded over time',&
-                               'BUFFER_EROSION, GENERAL')
+                      'Y2 coefficient for total buffer extruded over time',&
+                      'BUFFER_EROSION, GENERAL')
+          case('CI_UPPER_BOUND','ION_CONCENTRATION_UPPER_BOUND')
+            call InputReadDouble(input,option,be_model%ci_ub)
+            call InputErrorMsg(input,option,&
+                      'upper bound ion concentration',&
+                      'BUFFER_EROSION, GENERAL')
+          case('CI_LOWER_BOUND','ION_CONCENTRATION_LOWER_BOUND')
+            call InputReadDouble(input,option,be_model%ci_lb)
+            call InputErrorMsg(input,option,&
+                      'lower bound ion concentration',&
+                      'BUFFER_EROSION, GENERAL')
+          case('SEDIMENT_RELEASE_CONSTANT')
+            call InputReadDouble(input,option,be_model%ci_lb)
+            call InputErrorMsg(input,option,&
+                      'lower bound ion concentration',&
+                      'BUFFER_EROSION, GENERAL')
+          case('AGGLOMERATE_FLUID_VISCOSITY', 'AF_VISCOSITY')
+            call InputReadDouble(input,option,be_model%af_vis)
+            call InputErrorMsg(input,option,&
+                      'agglomerate fluid viscosity',&
+                      'BUFFER_EROSION, GENERAL')
+          case('AGGLOMERATE_FLUID_DENSITY', 'AF_DENSITY')
+            call InputReadDouble(input,option,be_model%af_den)
+            call InputErrorMsg(input,option,&
+                      'agglomerate fluid density',&
+                      'BUFFER_EROSION, GENERAL')
+          case('AGGLOMERATE_FLUID_VOLUME_DENSITY', 'AF_VOL_DEN')
+            call InputReadDouble(input,option,be_model%af_vol_den)
+            call InputErrorMsg(input,option,&
+                      'agglomerate fluid volume density',&
+                      'BUFFER_EROSION, GENERAL')
+          case('VOLUME_MULTIPLIER','F1')
+            call InputReadDouble(input,option,be_model%f1)
+            call InputErrorMsg(input,option,&
+                      'volume multiplier',&
+                      'BUFFER_EROSION, GENERAL')
+          case('BUFFER_POROSITY')
+            call InputReadDouble(input,option,be_model%buffer_por)
+            call InputErrorMsg(input,option,&
+                      'buffer porosity',&
+                      'BUFFER_EROSION, GENERAL')
+          case('CANISTER_RADIUS')
+            call InputReadDouble(input,option,be_model%can_rad)
+            call InputErrorMsg(input,option,&
+                      'canister radius',&
+                      'BUFFER_EROSION, GENERAL')            
         end select
       !------------------------------------------
       class default
@@ -1193,7 +1238,7 @@ subroutine BufferErosionRead(this, input, option)
         call StringToUpper(word)
         select case(word)
           !-------------------------------------
-          case('DEFAULT','POSIVA')
+          case('DEFAULT','NERETNIEKS')
             this%buffer_erosion_model => BEDefaultCreate()
             call BEDefaultRead(this%buffer_erosion_model,input,option)
           !-------------------------------------
