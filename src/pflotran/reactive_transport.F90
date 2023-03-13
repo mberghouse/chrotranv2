@@ -114,6 +114,10 @@ subroutine RTSetup(realization)
   use Output_Aux_module
   use Generic_module
   use String_module
+  use Dataset_Base_class
+  use Dataset_Common_HDF5_class
+  use Field_module
+  use HDF5_module
 
   implicit none
 
@@ -134,10 +138,19 @@ subroutine RTSetup(realization)
   type(generic_parameter_type), pointer :: cur_generic_parameter
 
   character(len=MAXWORDLENGTH) :: word
+  character(len=MAXSTRINGLENGTH) :: string, string2
   PetscInt :: ghosted_id, iconn, sum_connection
-  PetscInt :: iphase, local_id, i
+  PetscInt :: iphase, local_id, i, idof
   PetscInt :: flag(10)
+  PetscReal, allocatable :: array_2D(:,:)
 
+  PetscBool :: use_aq_dataset
+  class(dataset_base_type), pointer :: dataset
+  type(field_type), pointer :: field
+  PetscErrorCode :: ierr
+  PetscReal, pointer :: vec_p(:)
+
+  field => realization%field
   option => realization%option
   patch => realization%patch
   grid => patch%grid
@@ -237,13 +250,40 @@ subroutine RTSetup(realization)
 
 !============== Create secondary continuum variables - SK 2/5/13 ===============
 
-
   if (option%use_sc) then
     patch%aux%SC_RT => SecondaryAuxRTCreate(option)
     initial_condition => patch%initial_condition_list%first
     ! Must allocate to ngmax since rt_sec_transport_vars()%epsilon is used in
     ! the calculation of effective diffusion coef in fluxes.
+
     allocate(rt_sec_transport_vars(grid%ngmax))
+    use_aq_dataset = PETSC_FALSE
+
+    if (sec_tran_constraint%aqueous_species%external_dataset(1)) then
+      use_aq_dataset = PETSC_TRUE
+      string = 'constraint ' // trim(sec_tran_constraint%name)
+      allocate(array_2D(realization%reaction%naqcomp, patch%grid%ngmax))
+    endif
+
+    do idof = 1, reaction%naqcomp ! primary aqueous concentrations
+      if (use_aq_dataset) then
+        dataset => DatasetBaseGetPointer(realization%datasets, &
+          sec_tran_constraint%aqueous_species%constraint_aux_string(idof), &
+          string,option)
+        select type(dataset)
+          class is (dataset_common_hdf5_type)
+            string = '' ! group name
+            string2 = dataset%hdf5_dataset_name
+            call HDF5ReadCellIndexedRealArray(realization,field%work, &
+              dataset%filename, &
+              string,string2, &
+              dataset%realization_dependent) 
+        end select
+        call VecGetArrayF90(field%work,vec_p,ierr);CHKERRQ(ierr) 
+        array_2D(idof,:) = vec_p 
+      endif
+    enddo
+
     do ghosted_id = 1, grid%ngmax
       ! Ignore inactive cells with inactive materials
       if (patch%imat(ghosted_id) <= 0) cycle
@@ -255,8 +295,13 @@ subroutine RTSetup(realization)
                                    soil_properties(half_matrix_width_index), &
                                  rt_sec_transport_vars(ghosted_id), &
                                  reaction,initial_condition, &
-                                 sec_tran_constraint,option, ghosted_id)
+                                 sec_tran_constraint,option, ghosted_id, array_2D, use_aq_dataset)
     enddo
+
+    if (use_aq_dataset) then
+      deallocate(array_2D)
+    endif
+
     patch%aux%SC_RT%sec_transport_vars => rt_sec_transport_vars
     do i = 1, size(patch%material_property_array)
       if (.not. patch%material_property_array(1)%ptr%multicontinuum%ncells &

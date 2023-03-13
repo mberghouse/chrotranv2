@@ -550,7 +550,7 @@ end subroutine SecondaryRTTimeCut
 
 subroutine SecondaryRTAuxVarInit(realization,multicontinuum,epsilon,half_matrix_width, &
                                  rt_sec_transport_vars, reaction, &
-                                 initial_condition,constraint,option, local_id)
+                                 initial_condition,constraint,option, local_id, array_2D, use_aq_dataset)
   !
   ! Initializes all the secondary continuum reactive
   ! transport variables
@@ -606,8 +606,9 @@ subroutine SecondaryRTAuxVarInit(realization,multicontinuum,epsilon,half_matrix_
   type(field_type), pointer :: field
   class(dataset_base_type), pointer :: dataset
   PetscReal, pointer :: vec_p(:)
-  PetscReal, dimension(:),allocatable :: temp_vector
+  !PetscReal, dimension(:),allocatable :: temp_vector
   type(aq_species_constraint_type), pointer :: aq_species_constraint
+  PetscReal, dimension(:,:) :: array_2D
   
 
   num_iterations = 0
@@ -673,30 +674,6 @@ subroutine SecondaryRTAuxVarInit(realization,multicontinuum,epsilon,half_matrix_
            r(reaction%naqcomp*rt_sec_transport_vars%ncells))
   allocate(rt_sec_transport_vars% &
            updated_conc(reaction%naqcomp,rt_sec_transport_vars%ncells))
-  allocate(temp_vector(reaction%naqcomp))
-
- 
-  use_aq_dataset = PETSC_FALSE
-  do idof = 1, reaction%naqcomp ! primary aqueous concentrations
-    if (constraint%aqueous_species%external_dataset(idof)) then
-      use_aq_dataset = PETSC_TRUE
-      string = 'constraint ' // trim(constraint%name)
-      dataset => DatasetBaseGetPointer(realization%datasets, &
-        constraint%aqueous_species%constraint_aux_string(idof), &
-        string,option)
-      select type(dataset)
-        class is (dataset_common_hdf5_type)
-          string = '' ! group name
-          string2 = dataset%hdf5_dataset_name
-          call HDF5ReadCellIndexedRealArray(realization,field%work, &
-            dataset%filename, &
-            string,string2, &
-            dataset%realization_dependent)
-      end select
-      call VecGetArrayF90(field%work,vec_p,ierr);CHKERRQ(ierr)
-      temp_vector(idof) = vec_p(local_id)
-    endif
-  enddo
 
   initial_flow_condition => initial_condition%flow_condition
   do cell = 1, rt_sec_transport_vars%ncells
@@ -750,8 +727,10 @@ subroutine SecondaryRTAuxVarInit(realization,multicontinuum,epsilon,half_matrix_
     reaction%mc_flag = 1
 
     aq_species_constraint => constraint%aqueous_species
-    aq_species_constraint%constraint_conc = temp_vector(:) 
- 
+    if (use_aq_dataset) then
+      aq_species_constraint%constraint_conc = array_2D(:, local_id) 
+    endif
+
     call ReactionEquilibrateConstraint(rt_auxvar,global_auxvar, &
                           material_auxvar, &
                           reaction,constraint, &
@@ -764,7 +743,6 @@ subroutine SecondaryRTAuxVarInit(realization,multicontinuum,epsilon,half_matrix_
 
   call MaterialAuxVarStrip(material_auxvar)
   deallocate(material_auxvar)
-  deallocate(temp_vector)
 
   rt_sec_transport_vars%sec_jac_update = PETSC_FALSE
   rt_sec_transport_vars%sec_jac = 0.d0
