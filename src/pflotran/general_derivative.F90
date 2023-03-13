@@ -512,7 +512,7 @@ subroutine GeneralDerivativeAccum(pert,general_auxvar,global_auxvar, &
                            material_auxvar(ZERO_INTEGER), &
                            material_parameter%soil_heat_capacity(1), &
                            option, &
-                           res,jac_anal,PETSC_TRUE,PETSC_FALSE)
+                           res,jac_anal,PETSC_TRUE,PETSC_FALSE,1.d0)
 
   do i = 1, 3
     call GeneralAccumulation(general_auxvar(i), &
@@ -520,7 +520,7 @@ subroutine GeneralDerivativeAccum(pert,general_auxvar,global_auxvar, &
                              material_auxvar(i), &
                              material_parameter%soil_heat_capacity(1), &
                              option, &
-                             res_pert(:,i),jac_dum,PETSC_FALSE,PETSC_FALSE)
+                             res_pert(:,i),jac_dum,PETSC_FALSE,PETSC_FALSE,1.d0)
 
     do irow = 1, option%nflowdof
       jac_num(irow,i) = (res_pert(irow,i)-res(irow))/pert(i)

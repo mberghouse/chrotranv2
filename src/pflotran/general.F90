@@ -1259,7 +1259,7 @@ subroutine GeneralUpdateFixedAccum(realization)
                              material_parameter%soil_heat_capacity(imat), &
                              option,accum_p(local_start:local_end), &
                              Jac_dummy,PETSC_FALSE, &
-                             local_id == general_debug_cell_id)
+                             local_id == general_debug_cell_id,vol_frac_prim)
   enddo
 
 
@@ -1459,7 +1459,7 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
                              material_parameter%soil_heat_capacity(imat), &
                              option,Res,Jac_dummy, &
                              general_analytical_derivatives, &
-                             local_id == general_debug_cell_id)
+                             local_id == general_debug_cell_id,vol_frac_prim)
     r_p(local_start:local_end) =  r_p(local_start:local_end) + Res(:)
     accum_p2(local_start:local_end) = Res(:)
   enddo
@@ -1886,17 +1886,17 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
                               material_auxvars(ghosted_id), &
                               material_parameter%soil_heat_capacity(imat), &
                               option, &
-                              Jup)
+                              Jup,vol_frac_prim)
     if (option%use_sc) then
       if (.not.Equal((material_auxvars(ghosted_id)% &
           soil_properties(epsilon_index)),1.d0)) then
         call GeneralSecondaryHeatJacobian(sec_heat_vars(local_id), &
-                          general_parameter%ckwet(ghosted_id), &
-                          general_parameter%dencpr(ghosted_id), &
+                          general_parameter%ckwet(patch%cct_id(ghosted_id)), &
+                          general_parameter%dencpr(patch%cct_id(ghosted_id)), &
                           option,jac_sec_heat)
         Jup(option%nflowdof,GENERAL_ENERGY_EQUATION_INDEX) = &
                                  Jup(option%nflowdof,GENERAL_ENERGY_EQUATION_INDEX) - &
-                                 jac_sec_heat*material_auxvars(ghosted_id)%volume
+                                 jac_sec_heat*material_auxvars(ghosted_id)%volume / option%flow_dt
       endif
     endif
     call MatSetValuesBlockedLocal(A,1,ghosted_id-1,1,ghosted_id-1,Jup, &
@@ -2724,6 +2724,7 @@ subroutine GeneralSecondaryHeatJacobian(sec_heat_vars, &
   PetscReal :: m
   PetscReal :: Dtemp_N_Dtemp_prim
   PetscReal :: jac_heat
+  PetscReal :: dt
 
   ngcells = sec_heat_vars%ncells
   area = sec_heat_vars%area
