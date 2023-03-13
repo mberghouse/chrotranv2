@@ -50,7 +50,7 @@ subroutine EOSRead(input,option)
   character(len=MAXWORDLENGTH) :: keyword, word, subkeyword
   character(len=MAXWORDLENGTH) :: test_filename
   character(len=MAXSTRINGLENGTH) :: string
-  PetscReal :: tempreal
+  PetscReal :: tempreal, tempreal2
   PetscReal :: rks_tc = UNINITIALIZED_DOUBLE
   PetscReal :: rks_pc = UNINITIALIZED_DOUBLE
   PetscReal :: rks_acen = UNINITIALIZED_DOUBLE
@@ -165,7 +165,16 @@ subroutine EOSRead(input,option)
                                 'EOS,WATER,DENSITY,QUADRATIC',option)
                   end select
                 enddo
-                call InputPopBlock(input,option)
+              call InputPopBlock(input,option)
+              case('LINEAR_SALT_MOLAR')
+
+                call InputReadDouble(input,option,temparray(1))
+                call InputErrorMsg(input,option,'REFERENCE_DENSITY', &
+                                   'EOS,WATER,DENSITY,LINEAR_SALT_MOLAR')
+                call InputReadDouble(input,option,temparray(2))
+                call InputErrorMsg(input,option, 'LINEAR_SALT_COEFFICIENT', &
+                                   'EOS,WATER,DENSITY,LINEAR_SALT_MOLAR')
+              
               case('IFC67','DEFAULT','BATZLE_AND_WANG','TGDPB01','PLANAR', &
                               'TRANGENSTEIN','IF97','SPARROW','DRIESNER')
               case default
@@ -251,7 +260,7 @@ subroutine EOSRead(input,option)
             select case(trim(word))
               case('HAAS','SPARROW')
                 option%flow%sat_pres_depends_on_salinity = PETSC_TRUE
-              case('IFC67','IF97','WAGNER_AND_PRUSS','HUANG-ICE','ICE')
+              case('IFC67','IF97','WAGNER_AND_PRUSS')
               case default
                 call InputKeywordUnrecognized(input,word, &
                        'EOS,WATER,SATURATION_PRESSURE', &
@@ -478,8 +487,6 @@ subroutine EOSRead(input,option)
                 call EOSGasSetHenryConstant(tempreal)
               case('DEFAULT')
                 call EOSGasSetHenry()
-              case('METHANE')
-                call EOSGasSetHenryMethane()
               case default
                 call InputKeywordUnrecognized(input,word, &
                                               'EOS,GAS,HENRYS_CONSTANT', &

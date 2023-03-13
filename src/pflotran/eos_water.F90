@@ -46,6 +46,10 @@ module EOS_Water_module
   PetscReal :: linear_reference_density
   PetscReal :: linear_reference_pressure
   PetscReal :: linear_water_compressibility
+  
+  ! linear salt concentration
+  PetscReal :: linear_salt_reference_density
+  PetscReal :: linear_salt_coefficient
 
   ! halite saturated brine
   PetscBool :: halite_saturated_brine
@@ -298,7 +302,10 @@ subroutine EOSWaterInit()
   quadratic_reference_density = UNINITIALIZED_DOUBLE
   quadratic_reference_pressure = UNINITIALIZED_DOUBLE
   quadratic_wat_compressibility = UNINITIALIZED_DOUBLE
+  linear_salt_reference_density = UNINITIALIZED_DOUBLE
+  linear_salt_coefficient = UNINITIALIZED_DOUBLE
   halite_saturated_brine = PETSC_FALSE
+  
 
   ! standard versions
   EOSWaterDensityPtr => EOSWaterDensityIFC67
@@ -311,7 +318,8 @@ subroutine EOSWaterInit()
   ! extended versions
   EOSWaterSaturationPressureExtPtr => EOSWaterSaturationPressureHaasExt
   EOSWaterViscosityExtPtr => EOSWaterViscosityKestinExt
-  EOSWaterDensityExtPtr => EOSWaterDensityBatzleAndWangExt
+  !EOSWaterDensityExtPtr => EOSWaterDensityBatzleAndWangExt
+  EOSWaterDensityExtPtr => EOSWaterDenLinearSaltMolarExt
   EOSWaterEnthalpyExtPtr => EOSWaterEnthalpyDriesnerExt
 
 end subroutine EOSWaterInit
@@ -357,6 +365,19 @@ subroutine EOSWaterVerify(ierr,error_string)
       ' Exponential parameters incorrect.'
     ierr = 1
   endif
+  
+
+  if ((associated(EOSWaterDensityExtPtr,EOSWaterDenLinearSaltMolarExt) .or. &
+       associated(EOSWaterDensityExtPtr,EOSWaterDenLinearSaltMolalExt) &
+      ) .and. &
+      (Uninitialized(linear_salt_reference_density) .or. & 
+       Uninitialized(linear_salt_coefficient)) &
+      ) then
+    error_string = trim(error_string) // &
+      ' linear_salt density parameters (rho_ref, Beta) not set.'
+    ierr = 1
+  end if
+ 
 
   if (associated(EOSWaterDensityPtr,EOSWaterDensityExpPressureTemp) .and. &
       (Uninitialized(exp_pt_reference_density) .or. &
@@ -484,6 +505,12 @@ subroutine EOSWaterSetDensity(keyword,aux)
       EOSWaterDensityExtPtr => EOSWaterDensitySparrowExt
     case('DRIESNER')
       EOSWaterDensityExtPtr => EOSWaterDensityDriesnerExt
+    case('LINEAR_SALT_MOLAR')
+      linear_salt_reference_density = aux(1)
+      linear_salt_coefficient = aux(2)
+      !constant_density = aux(1)
+      !EOSWaterDensityPtr => EOSWaterDensityBatzleAndWang
+      EOSWaterDensityExtPtr => EOSWaterDenLinearSaltMolarExt
     case default
       print *, 'Unknown pointer type "' // trim(keyword) // &
         '" in EOSWaterSetDensity().'
@@ -608,8 +635,6 @@ subroutine EOSWaterSetSaturationPressure(keyword,aux)
       EOSWaterSaturationPressureExtPtr => EOSWaterSaturationPressureHaasExt
     case('SPARROW')
       EOSWaterSaturationPressureExtPtr => EOSWaterSatPressSparrowExt
-    case('HUANG-ICE','ICE')
-      EOSWaterSaturationPressurePtr => EOSWaterSaturationPressureIce
     case default
       print *, 'Unknown pointer type "' // trim(keyword) // &
         '" in EOSWaterSetSaturationPressure().'
@@ -638,6 +663,7 @@ subroutine EOSWaterSetSteamDensity(keyword,aux)
       EOSWaterSteamDensityEnthalpyPtr => EOSWaterSteamDensityEnthalpyIFC67
     case('IF97')
       EOSWaterSteamDensityEnthalpyPtr => EOSWaterSteamDensityEnthalpyIF97
+      EOSWaterSaturationPressurePtr => EOSWaterSaturationPressureIF97
     case default
       print *, 'Unknown pointer type "' // trim(keyword) // &
         '" in EOSWaterSetSteamDensity().'
@@ -806,6 +832,7 @@ subroutine EOSWaterViscosityTable(T,P,PS,dPS_dT,&
   PetscReal, intent(out) :: dVW_dP !derivative viscosity wrt table Pressure [Pa-s/Pa]
   PetscErrorCode, intent(out) :: ierr
   PetscInt, pointer, optional, intent(inout) :: table_idxs(:)
+
 
   call pvt_table%EOSPropGrad(T,P,EOS_VISCOSITY,VW,dVW_dT,dVW_dP, &
                              ierr,table_idxs)
@@ -1082,7 +1109,8 @@ subroutine EOSWaterDensityExtDerive(t,p,aux,dw,dwmol,dwp,dwt,ierr)
   PetscReal, intent(out) :: dw,dwmol,dwp,dwt
   PetscErrorCode, intent(out) :: ierr
 
-  ierr = 0
+  ierr = 0 
+
   call EOSWaterDensityExtPtr(t,p,aux,PETSC_TRUE,dw,dwmol,dwp,dwt,ierr)
 
 end subroutine EOSWaterDensityExtDerive
@@ -1464,44 +1492,6 @@ subroutine EOSWaterSatPresWagnerPruss(T, calculate_derivatives, &
   endif
 
 end subroutine EOSWaterSatPresWagnerPruss
-
-subroutine EOSWaterSaturationPressureIce(T, calculate_derivatives, &
-                                      PS, dPS_dT, ierr)
-  !
-  ! Calculates the saturation pressure of water as a function of temperature
-  ! above and below the freezing point of water based on Huang, J. (2018). 
-  ! A simple accurate formula for calculating saturation vapor pressure of 
-  ! water and ice. Journal of Applied Meteorology and Climatology, 57(6), 
-  ! 1265-1272.
-  !
-  ! Author: Michael Nole
-  ! Date: 12/07/2022
-  !
-  implicit none
-
-  PetscReal, intent(in) :: T ! temperature
-  PetscBool, intent(in) :: calculate_derivatives
-  PetscReal, intent(out) :: PS, dPS_dT ! Saturation pres. and derivative
-  PetscErrorCode, intent(out) :: ierr
-
-  if (T > 0.d0) then
-    PS = exp(34.494d0 - 4924.99d0/(T+237.1d0))/(T+105.d0)**1.57d0
-    if (calculate_derivatives) then
-      dPS_dT = -1.57d0*(T+105.d0)**(-2.57d0)*exp(34.494d0-4924.99d0/(T+237.1d0))
-      dPS_dT = dPS_dT +(T+105.d0)**(-1.57d0)*exp(34.494d0-4924.99d0/ &
-               (T+237.1d0)) * 4924.99d0*(T+237.1d0)**(-2.d0)
-    endif
-  else
-    PS = exp(43.494d0 - 6545.8d0/(T+278.d0))/(T+868.d0)**2
-    if (calculate_derivatives) then
-      dPS_dT = -2.d0*(T+868.d0)**(-3.d0)*exp(43.494d0 - 6545.8d0/(T+278.d0))
-      dPS_dT = dPS_dT + (T+868.d0)**(-2.d0)*exp(43.494d0 - 6545.8d0/ &
-               (T+278.d0))*6545.8d0*(T+278.d0)**(-2.d0)
-    endif
-  endif
-!print *, T
-!print *, PS
-end subroutine EOSWaterSaturationPressureIce
 
 ! ************************************************************************** !
 
@@ -3809,6 +3799,8 @@ subroutine EOSWaterDensityBatzleAndWang(tin, pin, calculate_derivatives, &
     dwt = UNINITIALIZED_DOUBLE
   endif
 
+
+
 end subroutine EOSWaterDensityBatzleAndWang
 
 ! ************************************************************************** !
@@ -3861,9 +3853,11 @@ subroutine EOSWaterDensityBatzleAndWangExt(tin, pin, aux, &
                       47.d0*p_Mpa*s))) * &
        g_cm3_to_kg_m3
 
+
   ! molar density H2O = solution density (kg/m3) * (1-mass frac salt) / (kg/kmol water)
   !dwmol = dw * (1-s) / (FMWH2O)
   dwmol = dw / FMWH2O
+
 
   if (calculate_derivatives) then
         ! v - this dwp is in the correct units of kmol/m^3-Pa
@@ -3879,6 +3873,7 @@ subroutine EOSWaterDensityBatzleAndWangExt(tin, pin, aux, &
     dwp = UNINITIALIZED_DOUBLE
     dwt = UNINITIALIZED_DOUBLE
   endif
+
 
 end subroutine EOSWaterDensityBatzleAndWangExt
 
@@ -3970,7 +3965,7 @@ subroutine EOSWaterViscosityBatzleAndWangExt(T, P, PS, dPS_dT, aux, &
   temperature_term = (1.65d0 + 91.9d0*s**3.d0)*exp(exponential_term)
   VW = 0.1d0 + 0.333d0*s + temperature_term
   VW = VW * centipoise_to_Pa_s
-
+ 
   if (calculate_derivatives) then
     dVW_dP = 0.d0
     dVW_dT = 0.8d0*temperature_term*exponential_term/t_C*centipoise_to_Pa_s
@@ -4205,6 +4200,110 @@ end subroutine EOSWaterComputeSalinity
 
 end subroutine TestEOSWaterBatzleAndWang
 
+subroutine EOSWaterDenLinearSaltMolarExt(tin, pin, aux, &
+                                           calculate_derivatives, &
+                                           dw, dwmol, dwp, dwt, ierr)
+
+  ! Water density dependent on salt (molar, M, mol/L) concentration 
+  ! model taken from the Elder problem setup 
+  !
+  !
+  ! Author: Paolo Orsini
+  ! Date: 02/02/17
+  ! 
+  implicit none
+
+  PetscReal, intent(in) :: tin   ! Temperature in centigrade
+  PetscReal, intent(in) :: pin   ! Pressure in Pascal
+  PetscReal, intent(in) :: aux(*)
+  PetscBool, intent(in) :: calculate_derivatives
+  PetscReal, intent(out) :: dw ! kg/m^3
+  PetscReal, intent(out) :: dwmol ! kmol/m^3
+  PetscReal, intent(out) :: dwp ! kmol/m^3-Pa
+  PetscReal, intent(out) :: dwt ! kmol/m^3-C
+  PetscErrorCode, intent(out) :: ierr
+  
+  PetscReal :: s  !salt molar concetration (M, mol/L)
+  
+  
+
+  s = aux(1) 
+  
+  ! Linear Reference Density in kg/m3
+  ! Linear Salt Coefficient is kg/m3 (Density kg/m3 / Mass Fraction)
+  ! Salinity in mass fraction (Dimensionless)
+  ! The result "dw" will be in kg/m3 
+  ! Then, to have dwmol we compute dw / molecular weight of water. 
+
+  !kg/m3     !kg/m3                                    
+  dw = linear_salt_reference_density + &
+        linear_salt_coefficient * s 
+
+
+  dwmol = dw/FMWH2O ! kmol/m^3
+
+  if (calculate_derivatives) then
+    dwp = 0.0d0
+    dwt = 0.0d0
+  else
+    dwp = UNINITIALIZED_DOUBLE
+    dwt = UNINITIALIZED_DOUBLE
+  endif 
+
+end subroutine EOSWaterDenLinearSaltMolarExt
+
+! ************************************************************************** !
+
+subroutine EOSWaterDenLinearSaltMolalExt(tin, pin, aux, &
+                                           calculate_derivatives, &
+                                           dw, dwmol, dwp, dwt, ierr)
+
+  ! Water density dependent on salt (molal, m, mol/kg_w) concentration 
+  ! model taken from the Elder problem setup
+  !
+  !
+  ! Author: Paolo Orsini
+  ! Date: 03/04/17
+  ! 
+  implicit none
+
+  PetscReal, intent(in) :: tin   ! Temperature in centigrade
+  PetscReal, intent(in) :: pin   ! Pressure in Pascal
+  PetscReal, intent(in) :: aux(*)
+  PetscBool, intent(in) :: calculate_derivatives
+  PetscReal, intent(out) :: dw ! kg/m^3
+  PetscReal, intent(out) :: dwmol ! kmol/m^3
+  PetscReal, intent(out) :: dwp ! kmol/m^3-Pa
+  PetscReal, intent(out) :: dwt ! kmol/m^3-C
+  PetscErrorCode, intent(out) :: ierr
+  
+  PetscReal, parameter :: fmw_nacl_kg_over_mol = 58.44277d-3 ! (kg/mol NaCl)
+  PetscReal :: xnacl !salt mass fraction 
+  PetscReal :: mnacl
+
+  xnacl = aux(1)
+  !converting salt mass fraction to molal concentration (mol_NaCl/kg_w)
+  mnacl = xnacl/(1.d0-xnacl)/fmw_nacl_kg_over_mol
+
+  !s = aux(1) 
+
+  !kg/m3     !kg/m3                                    
+  dw = linear_salt_reference_density + &
+                !kg/m3 kg_w/mol * mol/kg_w = kg/m3
+        linear_salt_coefficient * mnacl
+ 
+  dwmol = dw/FMWH2O ! kmol/m^3
+  
+  if (calculate_derivatives) then
+    dwp = 0.0d0
+    dwt = 0.0d0
+  else
+    dwp = UNINITIALIZED_DOUBLE
+    dwt = UNINITIALIZED_DOUBLE
+  endif 
+
+end subroutine EOSWaterDenLinearSaltMolalExt
+
 ! ************************************************************************** !
 
 subroutine EOSWaterDensityExtNumericalDerive(t,p,aux,dw,dwmol,dwp,dwt,ierr)
@@ -4227,6 +4326,8 @@ subroutine EOSWaterDensityExtNumericalDerive(t,p,aux,dw,dwmol,dwp,dwt,ierr)
   PetscReal :: tpert, ppert, t_plus_tpert, p_plus_ppert
   PetscReal :: salinity(1)
   PetscReal :: pert_tol = 1.d-6
+
+  print *, "Entering numerical derive"
 
   tpert = t*pert_tol
   ppert = p*pert_tol
@@ -4588,9 +4689,6 @@ subroutine EOSWaterTest(temp_low,temp_high,pres_low,pres_high, &
   elseif (associated(EOSWaterSaturationPressurePtr, &
                      EOSWaterSatPresWagnerPruss)) then
     eos_saturation_pressure_name = 'WagnerAndPruss'
-  elseif (associated(EOSWaterSaturationPressurePtr, &
-                     EOSWaterSaturationPressureIce)) then
-    eos_saturation_pressure_name = 'Huang-Ice'
   else
     eos_saturation_pressure_name = 'Unknown'
   endif
