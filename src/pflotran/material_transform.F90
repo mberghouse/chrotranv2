@@ -100,12 +100,20 @@ module Material_Transform_module
     ! and Neretnieks et al. 2017 buffer erosion, Chapter 4
     ! implemented by Heeho Park
     ! Date : 02/22/2023
-    PetscReal :: diff_coef_bh       ! diffusion coeffficient in borehole
+    PetscReal :: diff_coef_bh    ! diffusion coeffficient in borehole
     PetscReal :: smec_vf_bh_init ! smectite vol. frac. borehole initially
     PetscReal :: smec_vf_int_rim ! smectite vol. frac. at intruding rim
     PetscReal :: y0              ! coefficients for total buffer extruded over
     PetscReal :: y1              ! time. Users must understand conditions/
     PetscReal :: y2              ! uncertainty/assumptions due to these coefs
+    PetscReal :: ci_ub           ! upper bound Conc. ion for buffer erosion
+    PetscReal :: ci_lb           ! lower bound Conc. ion for buffer erosion
+    PetscReal :: af_vis          ! Agglomerate Fluid (AF) viscosity
+    PetscReal :: af_den          ! AF density
+    PetscReal :: af_vol_den      ! AF volume density
+    PetscReal :: f1              ! volume multiplier
+    PetscReal :: buffer_por      ! buffer porosity
+    PetscReal :: can_rad         ! canister radius
 !  contains
 !    procedure, public :: Verify => BEDefaultVerify
   end type BE_default_type
