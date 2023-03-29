@@ -392,18 +392,26 @@ function BEDefaultCreate()
 
   allocate(BEDefaultCreate)
 
- BEDefaultCreate%diff_coef_bh       = UNINITIALIZED_DOUBLE
+ BEDefaultCreate%diff_coef_bh    = UNINITIALIZED_DOUBLE
  BEDefaultCreate%smec_vf_bh_init = UNINITIALIZED_DOUBLE
  BEDefaultCreate%smec_vf_int_rim = UNINITIALIZED_DOUBLE
  BEDefaultCreate%y0              = UNINITIALIZED_DOUBLE
  BEDefaultCreate%y1              = UNINITIALIZED_DOUBLE
  BEDefaultCreate%y2              = UNINITIALIZED_DOUBLE
+ BEDefaultCreate%ci_ub           = UNINITIALIZED_DOUBLE
+ BEDefaultCreate%ci_lb           = UNINITIALIZED_DOUBLE
+ BEDefaultCreate%af_vis          = UNINITIALIZED_DOUBLE
+ BEDefaultCreate%af_den          = UNINITIALIZED_DOUBLE
+ BEDefaultCreate%af_vol_den      = UNINITIALIZED_DOUBLE
+ BEDefaultCreate%f1              = UNINITIALIZED_DOUBLE
+ BEDefaultCreate%buffer_por      = UNINITIALIZED_DOUBLE
+ BEDefaultCreate%can_rad         = UNINITIALIZED_DOUBLE
 
 end function BEDefaultCreate
 
 ! ************************************************************************** !
 
-function BufferErosionAuxVarInit(option)
+function BufferErosionAuxVarInit()
   !
   ! Initializes an buffer erosion auxiliary object
   !
@@ -416,7 +424,6 @@ function BufferErosionAuxVarInit(option)
 
   class(buffer_erosion_auxvar_type), pointer :: BufferErosionAuxVarInit
   class(buffer_erosion_auxvar_type), pointer :: BEauxvar
-  type(option_type) :: option
 
   allocate(BEauxvar)
   BEauxvar%water_den = UNINITIALIZED_DOUBLE
