@@ -159,6 +159,7 @@ module Hydrate_Aux_module
   PetscInt, public :: hydrate_tcond = 2
   PetscBool, public :: hydrate_perm_scaling = PETSC_TRUE
   PetscBool, public :: hydrate_eff_sat_scaling = PETSC_TRUE
+  PetscBool, public :: hydrate_no_ice_density_change = PETSC_FALSE
   PetscBool, public :: hydrate_with_gibbs_thomson = PETSC_FALSE
   PetscBool, public :: hydrate_gt_3phase = PETSC_FALSE
   PetscBool, public :: hydrate_adjust_ghsz_solubility = PETSC_FALSE
@@ -1555,8 +1556,13 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
   !call EOSWaterDensityIcePainter(hyd_auxvar%temp,hyd_auxvar%pres(lid), &
   !                  PETSC_FALSE, hyd_auxvar%den(iid), &
   !                  dden_ice_dT, dden_ice_dP, ierr)
-  hyd_auxvar%den(iid) = ICE_DENSITY
-  hyd_auxvar%den_kg(iid) = ICE_DENSITY_KG
+  if (hydrate_no_ice_density_change) then
+    hyd_auxvar%den(iid) = hyd_auxvar%den(lid)
+    hyd_auxvar%den_kg(iid) = hyd_auxvar%den_kg(lid)
+  else
+    hyd_auxvar%den(iid) = ICE_DENSITY
+    hyd_auxvar%den_kg(iid) = ICE_DENSITY_KG
+  endif
   hyd_auxvar%U(iid) = U_ice
   hyd_auxvar%H(iid) = U_ice
   hyd_auxvar%mobility(iid) = 0.d0
