@@ -1562,6 +1562,27 @@ subroutine FlowConditionRead(condition,input,option)
       if (associated(energy_rate)) &
         condition%itype(TWO_INTEGER) = energy_rate%itype
 
+    case (SWE_MODE)
+      if (.not.associated(pressure) ) then
+        option%io_buffer = 'pressure condition is null in &
+                           &condition: ' // trim(condition%name)
+        call PrintErrMsg(option)
+      endif
+      if (associated(pressure)) then
+        condition%pressure => pressure
+      endif
+
+      condition%num_sub_conditions = 1
+      allocate(condition%sub_condition_ptr(condition%num_sub_conditions))
+      if (associated(pressure)) then
+        condition%sub_condition_ptr(ONE_INTEGER)%ptr => pressure
+      endif
+
+      allocate(condition%itype(ONE_INTEGER))
+      if (associated(pressure)) then
+        condition%itype(ONE_INTEGER) = pressure%itype
+      endif
+
     case(RICHARDS_MODE,RICHARDS_TS_MODE)
       if (.not.associated(pressure) .and. .not.associated(rate) .and. &
           .not.associated(saturation) .and. .not.associated(well)) then
