@@ -1205,7 +1205,7 @@ subroutine FactorySubsurfReadInput(simulation,input)
         call InputReadWord(input,option,coupler%name,PETSC_TRUE)
         call InputDefaultMsg(input,option,'Boundary Condition name')
         call CouplerRead(coupler,input,option)
-        call RealizationAddCoupler(realization,coupler)
+        call RealizationAddCoupler(realization%patch,coupler)
         nullify(coupler)
 
 !....................
@@ -1214,7 +1214,7 @@ subroutine FactorySubsurfReadInput(simulation,input)
         call InputReadWord(input,option,coupler%name,PETSC_TRUE)
         call InputDefaultMsg(input,option,'Initial Condition name')
         call CouplerRead(coupler,input,option)
-        call RealizationAddCoupler(realization,coupler)
+        call RealizationAddCoupler(realization%patch,coupler)
         nullify(coupler)
 
 !....................
@@ -1223,7 +1223,7 @@ subroutine FactorySubsurfReadInput(simulation,input)
         call InputReadWord(input,option,coupler%name,PETSC_TRUE)
         call InputDefaultMsg(input,option,'Source Sink name')
         call CouplerRead(coupler,input,option)
-        call RealizationAddCoupler(realization,coupler)
+        call RealizationAddCoupler(realization%patch,coupler)
         nullify(coupler)
 
 !....................
@@ -1253,7 +1253,7 @@ subroutine FactorySubsurfReadInput(simulation,input)
       case ('STRATIGRAPHY','STRATA')
         strata => StrataCreate()
         call StrataRead(strata,input,option)
-        call RealizationAddStrata(realization,strata)
+        call RealizationAddStrata(realization%patch,strata)
         nullify(strata)
 
 !.....................
