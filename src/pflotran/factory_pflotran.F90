@@ -106,11 +106,13 @@ function FactoryPFLOTRANCreateSimulation(driver)
   use Input_Aux_module
   use Option_module
   use Factory_Forward_module
+  use Factory_Forward_Surface_module
   use Simulation_Base_class
   use Simulation_Geomechanics_class
   use Simulation_Inverse_class
   use Simulation_MultiRealization_class
   use Simulation_Subsurface_class
+  use Simulation_Surface_class
 
   class(driver_type), pointer :: driver
 
@@ -123,6 +125,7 @@ function FactoryPFLOTRANCreateSimulation(driver)
   character(len=MAXWORDLENGTH) :: simulation_type
   PetscBool :: stochastic_option_found, bool_flag
 
+  write(*,*)'In FactoryPFLOTRANCreateSimulation'
   option => OptionCreate()
   call OptionSetDriver(option,driver)
   call OptionSetComm(option,driver%comm)
@@ -151,12 +154,15 @@ function FactoryPFLOTRANCreateSimulation(driver)
       simulation => SimulationMRCreate(driver)
     case('INVERSE')
       simulation => SimulationInverseCreate(driver)
-    case('SUBSURFACE','GEOMECHANICS_SUBSURFACE')
+    case('SUBSURFACE','GEOMECHANICS_SUBSURFACE','SURFACE')
       select case(simulation_type)
         case('SUBSURFACE')
           simulation => SimSubsurfCreate(driver,option)
         case('GEOMECHANICS_SUBSURFACE')
           simulation => GeomechanicsSimulationCreate(driver,option)
+        case ('SURFACE')
+          write(*,*)'call SimSurfaceCreate()'
+          simulation => SimSurfaceCreate(driver,option)
       end select
     case default
       call driver%PrintErrMsg('Unrecognized SIMULATION_TYPE ' // &
@@ -166,6 +172,11 @@ function FactoryPFLOTRANCreateSimulation(driver)
   select type(simulation)
     class is(simulation_subsurface_type)
       call FactoryForwardInitialize(simulation,driver%input_filename,option)
+    class is(simulation_surface_type)
+      write(*,*)'calling FactoryForwardSurfaceInitialize()'
+      call FactoryForwardSurfaceInitialize(simulation,driver%input_filename,option)
+      write(*,*)'calling FactoryForwardSurfaceInitialize() done'
+      call exit(0)
     class is(simulation_inverse_type)
       call SimulationInverseRead(simulation,option)
     class is(simulation_multirealization_type)

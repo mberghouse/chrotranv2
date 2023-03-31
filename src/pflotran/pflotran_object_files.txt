@@ -64,6 +64,8 @@ mode_process_model_obj = \
 	${common_src}pm_nwt.o \
 	${common_src}pm_richards.o \
 	${common_src}pm_richards_ts.o \
+	${common_src}pm_surface_flow.o \
+	${common_src}pm_swe.o \
 	${common_src}pm_osrt.o \
 	${common_src}pm_pnf.o \
 	${common_src}pm_rt.o \
@@ -232,11 +234,16 @@ misc_obj = \
 	${common_src}data_mediator_base.o \
 	${common_src}debug.o \
 	${common_src}factory_forward.o \
+	${common_src}factory_forward_surface.o \
 	${common_src}factory_pflotran.o \
 	${common_src}factory_subsurface.o \
 	${common_src}factory_subsurface_linkage.o \
 	${common_src}factory_subsurface_read.o \
+	${common_src}factory_surface.o \
+	${common_src}factory_surface_linkage.o \
+	${common_src}factory_surface_read.o \
 	${common_src}field.o \
+	${common_src}field_surface.o \
 	${common_src}hydrostatic.o \
 	${common_src}init_common.o \
 	${common_src}init_subsurface.o \
@@ -260,9 +267,11 @@ misc_obj = \
 	${common_src}pmc_linear.o \
 	${common_src}pmc_subsurface.o \
 	${common_src}pmc_subsurface_osrt.o \
+	${common_src}pmc_surface.o \
 	${common_src}pmc_third_party.o \
 	${common_src}realization_base.o \
 	${common_src}realization_subsurface.o \
+	${common_src}realization_surface.o \
 	${common_src}region.o \
 	${common_src}regression.o \
 	${common_src}secondary_continuum_aux.o\
@@ -273,6 +282,7 @@ misc_obj = \
 	${common_src}simulation_inverse.o \
 	${common_src}simulation_multirealization.o \
 	${common_src}simulation_subsurface.o \
+	${common_src}simulation_surface.o \
 	${common_src}spline.o \
 	${common_src}strata.o \
 	${common_src}timestepper_base.o \
