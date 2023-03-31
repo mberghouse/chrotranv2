@@ -166,6 +166,7 @@ subroutine FactorySurfaceSetupRealization(simulation)
   !
   use EOS_module
   use Option_module
+  use Init_Common_module
   use Realization_Surface_class
   use Waypoint_module
 
@@ -187,6 +188,8 @@ subroutine FactorySurfaceSetupRealization(simulation)
 
   call RealizationSurfaceCreateDiscretization(realization_surface)
 
+  call InitCommonReadRegionFiles(realization_surface%patch,realization_surface%surf_region_list, &
+                                 option)
   write(*,*)'Stopping in FactorySurfaceSetupRealization'
   call exit(0)
 

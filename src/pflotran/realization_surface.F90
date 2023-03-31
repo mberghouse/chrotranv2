@@ -10,6 +10,7 @@ module Realization_Surface_class
   use PFLOTRAN_Constants_module
   use Realization_Base_class
   use Region_module
+  use Material_Surface_module
 
   implicit none
 
@@ -17,10 +18,11 @@ module Realization_Surface_class
 
   type, public, extends(realization_base_type) :: realization_surface_type
 
-    type(region_list_type), pointer :: surf_regions
+    type(region_list_type), pointer :: surf_region_list
     type(condition_list_type),pointer :: surf_flow_conditions
 
     type(field_surface_type), pointer :: field_surface
+    type(material_surface_property_type), pointer :: surf_material_properties
 
     character(len=MAXSTRINGLENGTH) :: surf_filename
     character(len=MAXSTRINGLENGTH) :: subsurf_filename
@@ -53,14 +55,15 @@ function RealizationSurfaceCreate(option)
   call RealizationBaseInit(surf_realization,option)
   surf_realization%option => option
 
-  allocate(surf_realization%surf_regions)
-  call RegionInitList(surf_realization%surf_regions)
+  allocate(surf_realization%surf_region_list)
+  call RegionInitList(surf_realization%surf_region_list)
   
   allocate(surf_realization%surf_flow_conditions)
   call FlowConditionInitList(surf_realization%surf_flow_conditions)
 
   surf_realization%field_surface => FieldSurfaceCreate()
 
+  nullify(surf_realization%surf_material_properties)
   nullify(surf_realization%datasets)
 
   RealizationSurfaceCreate => surf_realization
