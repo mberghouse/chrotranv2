@@ -190,7 +190,8 @@ relations_obj = \
 
 properties_obj = \
 	${common_src}fluid.o \
-	${common_src}material.o
+	${common_src}material.o \
+	${common_src}material_surface.o
 
 dataset_obj = \
 	${common_src}dataset_ascii.o \

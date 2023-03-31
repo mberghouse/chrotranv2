@@ -9,6 +9,7 @@ use Option_module
 use Output_Aux_module
 use PM_Base_class
 use PMC_Base_class
+use PMC_Surface_class
 use Waypoint_module
 use Regression_module
 use Realization_Surface_class
@@ -24,7 +25,8 @@ use Realization_Surface_class
     class(pmc_base_type), pointer :: process_model_coupler_list
     class(pm_base_type), pointer :: process_model_list
     type(simulation_aux_type), pointer :: sim_aux
-    !class(pmc_subsurface_type), pointer :: flow_process_model_coupler
+    class(pmc_base_type), pointer :: surface_flow_process_model_coupler_list
+    class(pmc_surface_type), pointer :: surface_flow_process_model_coupler
     class(realization_surface_type), pointer :: surface_realization
     ! regression object
     type(regression_type), pointer :: regression
@@ -96,7 +98,8 @@ subroutine SimSurfaceInit(this,driver,option)
   nullify(this%process_model_list)
   this%sim_aux => SimAuxCreate()
   this%stop_flag = TS_CONTINUE
-  !nullify(this%realization)
+  nullify(this%surface_flow_process_model_coupler)
+  nullify(this%surface_realization)
   nullify(this%regression)
   this%waypoint_list_surface => WaypointListCreate()
   this%waypoint_list_outer => WaypointListCreate()

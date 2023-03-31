@@ -693,6 +693,7 @@ factory_surface.o : \
   string.o \
   timestepper_TS.o
 factory_surface_linkage.o : \
+  factory_surface_read.o \
   option.o \
   pflotran_constants.o \
   pmc_surface.o \
@@ -704,6 +705,7 @@ factory_surface_linkage.o : \
   timestepper_TS.o
 factory_surface_read.o : \
   input_aux.o \
+  material_surface.o \
   option.o \
   pm_base.o \
   simulation_surface.o \
@@ -1437,6 +1439,8 @@ material_aux.o : \
   pflotran_constants.o \
   utility.o \
   variables.o
+material_surface.o : \
+  pflotran_constants.o
 material_transform.o : \
   global_aux.o \
   input_aux.o \
@@ -3191,6 +3195,7 @@ realization_surface.o : \
   condition.o \
   dataset_base.o \
   field_surface.o \
+  material_surface.o \
   option.o \
   pflotran_constants.o \
   realization_base.o \
@@ -3412,11 +3417,12 @@ simulation_subsurface.o : \
   timestepper_base.o \
   waypoint.o \
   wipp.o
-simulation_surface.o: \
+simulation_surface.o : \
   driver.o \
   option.o \
   pm_base.o \
   pmc_base.o \
+  pmc_surface.o \
   simulation_aux.o \
   simulation_base.o \
   regression.o \
