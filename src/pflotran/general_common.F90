@@ -34,6 +34,7 @@ module General_Common_module
             GeneralFlux, &
             GeneralBCFlux, &
             GeneralAuxVarComputeAndSrcSink, &
+            GeneralThermalImbibitionDerivative, &
             GeneralAccumDerivative, &
             GeneralFluxDerivative, &
             GeneralBCFluxDerivative, &
@@ -4357,6 +4358,58 @@ subroutine GeneralAccumDerivative(gen_auxvar,global_auxvar,material_auxvar, &
   endif
 
 end subroutine GeneralAccumDerivative
+
+! ************************************************************************** !
+
+subroutine GeneralThermalImbibitionDerivative(gen_auxvar,global_auxvar,material_auxvar, &
+                                              soil_heat_capacity,option,J)
+  !
+  ! Computes derivatives of the thermal imbibition
+  ! term for the Jacobian
+  !
+  ! Author: David Fukuyama
+  ! Date: 04/03/23
+  !
+
+  use Option_module
+  use Material_Aux_module
+
+  implicit none
+
+  type(general_auxvar_type) :: gen_auxvar(0:)
+  type(global_auxvar_type) :: global_auxvar
+  type(material_auxvar_type) :: material_auxvar
+  type(option_type) :: option
+  PetscReal :: soil_heat_capacity
+  PetscReal :: J(option%nflowdof,option%nflowdof)
+
+  PetscReal :: res(option%nflowdof), res_pert(option%nflowdof)
+  PetscReal :: jac(option%nflowdof,option%nflowdof)
+  PetscReal :: jac_pert(option%nflowdof,option%nflowdof)
+  PetscInt :: idof, irow
+
+  ! else
+  !   do idof = 1, option%nflowdof
+  !     do irow = 1, option%nflowdof
+  !       !J(irow,idof) = (res_pert(irow)-res(irow))/gen_auxvar(idof)%pert
+  !       J(irow,idof) = gen_auxvar(idof)%thermal_imbibition_term - &
+  !                      gen_auxvar(ZERO_INTEGER)%thermal_imbibition_term / &
+  !                      gen_auxvar(idof)%pert
+  !     enddo !irow
+  !   enddo ! idof
+  ! endif
+
+  ! if (general_isothermal) then
+  !   J(GENERAL_ENERGY_EQUATION_INDEX,:) = 0.d0
+  !   J(:,GENERAL_ENERGY_EQUATION_INDEX) = 0.d0
+  ! endif
+
+  ! if (general_no_air) then
+  !   J(GENERAL_GAS_EQUATION_INDEX,:) = 0.d0
+  !   J(:,GENERAL_GAS_EQUATION_INDEX) = 0.d0
+  ! endif
+
+end subroutine GeneralThermalImbibitionDerivative
 
 ! ************************************************************************** !
 

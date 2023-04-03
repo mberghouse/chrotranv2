@@ -1321,13 +1321,14 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
       imat = patch%imat(ghosted_id)
       if (imat <= 0) cycle
       Sw = gen_auxvars(ZERO_INTEGER,ghosted_id)%sat(lid)
-      dsdt_p(local_id) =  (dsdt_p(local_id) + Sw)/option%flow_dt
+      dsdt_p(local_id) =  (dsdt_p(local_id) + Sw)
       sat_p2(local_id) = Sw
+      r_p(local_id * THREE_INTEGER) = r_p(local_id * THREE_INTEGER) - 1.d-3*(dsdt_p(local_id) / option%flow_dt * &
+                                      gen_auxvars(ZERO_INTEGER,ghosted_id)%thermal_imbibition_term * &
+                                      material_auxvars(ghosted_id)%volume)
+                                       
     enddo
     call VecRestoreArrayF90(field%flow_sat2,sat_p2,ierr);CHKERRQ(ierr)
-    thermal_imbibition_term = dsdt_p(local_id) * 1.d0 
-    r_p(local_id * THREE_INTEGER) = r_p(local_id * THREE_INTEGER) + thermal_imbibition_term
-    !thermal_term = dsdt_p * other_terms
     call VecRestoreArrayF90(field%flow_dsdt,dsdt_p,ierr);CHKERRQ(ierr)
   endif
 
@@ -1626,6 +1627,8 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
   PetscInt :: local_id, ghosted_id, natural_id
   PetscInt :: local_id_up, local_id_dn
   PetscInt :: ghosted_id_up, ghosted_id_dn
+  PetscInt :: idof, irow
+  PetscReal, pointer :: dsdt_p(:)
   Vec, parameter :: null_vec = tVec(0)
 
   PetscReal :: Jup(realization%option%nflowdof,realization%option%nflowdof), &
@@ -1729,6 +1732,44 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
     call DebugViewerDestroy(realization%debug,viewer)
   endif
 
+  ! Thermal imbibition terms ------------------------------------
+  if (general_thermal_imbibition) then
+    do local_id = 1, grid%nlmax  ! For each local node do...
+      ghosted_id = grid%nL2G(local_id)
+      !geh - Ignore inactive cells with inactive materials
+      imat = patch%imat(ghosted_id)
+      if (imat <= 0) cycle
+      call GeneralThermalImbibitionDerivative(gen_auxvars(:,ghosted_id), &
+                                              global_auxvars(ghosted_id), &
+                                              material_auxvars(ghosted_id), &
+                                              material_parameter%soil_heat_capacity(imat), &
+                                              option, &
+                                              Jup)
+      call VecGetArrayReadF90(field%flow_dsdt,dsdt_p,ierr);CHKERRQ(ierr)
+      do idof = 1, option%nflowdof
+        do irow = 1, option%nflowdof
+          Jup(irow,idof) = 1.d-3*dsdt_p(local_id) * (gen_auxvars(idof,ghosted_id)%thermal_imbibition_term - &
+                         gen_auxvars(ZERO_INTEGER,ghosted_id)%thermal_imbibition_term) * &
+                         material_auxvars(ghosted_id)%volume / &
+                         gen_auxvars(idof,ghosted_id)%pert
+        enddo
+      enddo
+      call VecRestoreArrayReadF90(field%flow_dsdt,dsdt_p,ierr);CHKERRQ(ierr)
+      call MatSetValuesBlockedLocal(A,1,ghosted_id-1,1,ghosted_id-1,Jup, &
+                                    ADD_VALUES,ierr);CHKERRQ(ierr)
+    enddo
+
+    if (realization%debug%matview_Matrix_detailed) then
+      call MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
+      call MatAssemblyEnd(A,MAT_FINAL_ASSEMBLY,ierr);CHKERRQ(ierr)
+      call DebugWriteFilename(realization%debug,string,'Gjacobian_accum','', &
+                              general_ts_count,general_ts_cut_count, &
+                              general_ni_count)
+      call DebugCreateViewer(realization%debug,string,option,viewer)
+      call MatView(A,viewer,ierr);CHKERRQ(ierr)
+      call DebugViewerDestroy(realization%debug,viewer)
+    endif
+  endif
 
   ! Interior Flux Terms -----------------------------------
   connection_set_list => grid%internal_connection_set_list

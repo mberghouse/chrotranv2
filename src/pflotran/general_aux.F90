@@ -126,6 +126,7 @@ module General_Aux_module
     PetscReal, pointer :: mobility(:) ! relative perm / kinematic viscosity
     PetscReal :: effective_porosity ! factors in compressibility
     PetscReal :: pert
+    PetscReal :: thermal_imbibition_term
 !    PetscReal, pointer :: dmobility_dp(:)
     type(general_derivative_auxvar_type), pointer :: d
   end type general_auxvar_type
@@ -543,6 +544,7 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
   PetscReal :: krg, visg
   PetscReal :: K_H_tilde
   PetscReal :: guess, dummy
+  PetscReal :: C1, C2, D
   PetscInt :: apid, cpid, vpid, spid
 #if 0
   character(len=8) :: state_char
@@ -594,6 +596,8 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
 
   eos_henry_ierr = 0
 
+  C1 = 1500.d0 !kJ/kg
+  C2 = 25.d0
 
 #ifdef DEBUG_GENERAL
   ! create a NaN
@@ -1518,6 +1522,12 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
       gen_auxvar%d%mug_T = dvis_dT
       gen_auxvar%d%mug_pg = dvis_dp
     endif
+  endif
+  if (general_thermal_imbibition) then
+    D = (gen_auxvar%den_kg(lid) * gen_auxvar%effective_porosity) / ((1.d0 - gen_auxvar%effective_porosity) * &
+         material_auxvar%soil_particle_density)
+    gen_auxvar%thermal_imbibition_term = (gen_auxvar%den_kg(lid) * gen_auxvar%effective_porosity * C1 * &
+                                         exp(-1.d0 * C2 * D * gen_auxvar%sat(lid))) * 1.d-3
   endif
 
 #if 0

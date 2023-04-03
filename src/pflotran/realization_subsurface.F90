@@ -294,11 +294,11 @@ subroutine RealizationCreateDiscretization(realization)
                                        field%flow_accum)
     call DiscretizationDuplicateVector(discretization,field%flow_xx, &
                                        field%flow_accum2)
-    call DiscretizationDuplicateVector(discretization,field%flow_xx, &
+    call DiscretizationDuplicateVector(discretization,field%work, &
                                        field%flow_sat)
-    call DiscretizationDuplicateVector(discretization,field%flow_xx, &
+    call DiscretizationDuplicateVector(discretization,field%work, &
                                        field%flow_sat2)
-    call DiscretizationDuplicateVector(discretization,field%flow_xx, &
+    call DiscretizationDuplicateVector(discretization,field%work, &
                                        field%flow_dsdt)
 
     ! ndof degrees of freedom, local
