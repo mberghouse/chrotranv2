@@ -908,8 +908,8 @@ subroutine HDF5ReadRegionDefinedByVertex(option,region,filename)
   sideset%face_vertices = UNINITIALIZED_INTEGER
 
   do ii = 1,sideset%nfaces
-     do jj = 1,int(dims_h5(1))
-        sideset%face_vertices(jj,ii) = int_buffer_2d(jj,ii)
+     do jj = 2,int_buffer_2d(1,ii)+1
+        sideset%face_vertices(jj-1,ii) = int_buffer_2d(jj,ii)
      enddo
   enddo
   ! cannot use DeallocateArray since int_array_i4 may not be PetscInt
