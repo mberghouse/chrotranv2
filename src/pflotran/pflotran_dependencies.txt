@@ -708,6 +708,7 @@ factory_surface_read.o : \
   material_surface.o \
   option.o \
   pm_base.o \
+  simulation_subsurface.o \
   simulation_surface.o \
   string.o
 field.o : \
@@ -1440,6 +1441,8 @@ material_aux.o : \
   utility.o \
   variables.o
 material_surface.o : \
+  input_aux.o \
+  option.o \
   pflotran_constants.o
 material_transform.o : \
   global_aux.o \
