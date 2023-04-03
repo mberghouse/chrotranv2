@@ -1059,8 +1059,10 @@ subroutine GeneralUpdateFixedAccum(realization)
 
   PetscInt :: ghosted_id, local_id, local_start, local_end, natural_id
   PetscInt :: imat
+  PetscInt :: lid = 1
   PetscReal, pointer :: xx_p(:)
   PetscReal, pointer :: accum_p(:)
+  PetscReal, pointer :: sat_p(:)
   PetscReal :: Jac_dummy(realization%option%nflowdof, &
                          realization%option%nflowdof)
 
@@ -1105,6 +1107,11 @@ subroutine GeneralUpdateFixedAccum(realization)
                              option,accum_p(local_start:local_end), &
                              Jac_dummy,PETSC_FALSE, &
                              local_id == general_debug_cell_id)
+    if (general_thermal_imbibition) then
+      call VecGetArrayF90(field%flow_sat,sat_p,ierr);CHKERRQ(ierr)
+      sat_p(local_id) = gen_auxvars(ZERO_INTEGER,ghosted_id)%sat(lid)
+      call VecRestoreArrayF90(field%flow_sat,sat_p,ierr);CHKERRQ(ierr)
+    endif
   enddo
 
 
@@ -1178,10 +1185,13 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
   PetscInt :: local_id_up, local_id_dn, ghosted_id_up, ghosted_id_dn
   PetscInt :: i, imat, imat_up, imat_dn
   PetscInt :: flow_src_sink_type
+  PetscInt :: lid = 1
+  PetscReal :: Sw,thermal_imbibition_term
 
   PetscReal, pointer :: r_p(:)
   PetscReal, pointer :: accum_p(:), accum_p2(:)
-
+  PetscReal, pointer :: sat_p(:), sat_p2(:), dsdt_p(:)
+  
   PetscReal :: qsrc(3)
 
   character(len=MAXSTRINGLENGTH) :: string
@@ -1191,7 +1201,6 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
   PetscReal :: Jac_dummy(realization%option%nflowdof, &
                          realization%option%nflowdof)
   PetscReal :: v_darcy(realization%option%nphase)
-
 
   discretization => realization%discretization
   option => realization%option
@@ -1207,6 +1216,8 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
   global_auxvars_bc => patch%aux%Global%auxvars_bc
   global_auxvars_ss => patch%aux%Global%auxvars_ss
   material_auxvars => patch%aux%Material%auxvars
+
+
 
   ! bragflo uses the following logic, update when
   !   it == 1, before entering iteration loop
@@ -1292,6 +1303,33 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
     accum_p2(local_start:local_end) = Res(:)
   enddo
   call VecRestoreArrayF90(field%flow_accum2,accum_p2,ierr);CHKERRQ(ierr)
+
+  ! Thermal imbibition terms ------------------------------
+  ! q = rho_w * phi * dSw/dt * C1 exp(-C2*D*Sw)
+  ! saturation at t(k) (doesn't change during Newton iteration)
+  if (general_thermal_imbibition) then
+    call VecGetArrayF90(field%flow_dsdt,dsdt_p,ierr);CHKERRQ(ierr)
+    call VecGetArrayReadF90(field%flow_sat,sat_p,ierr);CHKERRQ(ierr)
+    dsdt_p = -sat_p
+    call VecRestoreArrayReadF90(field%flow_sat,sat_p,ierr);CHKERRQ(ierr)
+
+    ! saturation at t(k+1)
+    call VecGetArrayF90(field%flow_sat2,sat_p2,ierr);CHKERRQ(ierr)
+    do local_id = 1, grid%nlmax  ! For each local node do...
+      ghosted_id = grid%nL2G(local_id)
+      !geh - Ignore inactive cells with inactive materials
+      imat = patch%imat(ghosted_id)
+      if (imat <= 0) cycle
+      Sw = gen_auxvars(ZERO_INTEGER,ghosted_id)%sat(lid)
+      dsdt_p(local_id) =  (dsdt_p(local_id) + Sw)/option%flow_dt
+      sat_p2(local_id) = Sw
+    enddo
+    call VecRestoreArrayF90(field%flow_sat2,sat_p2,ierr);CHKERRQ(ierr)
+    thermal_imbibition_term = dsdt_p(local_id) * 1.d0 
+    r_p(local_id * THREE_INTEGER) = r_p(local_id * THREE_INTEGER) + thermal_imbibition_term
+    !thermal_term = dsdt_p * other_terms
+    call VecRestoreArrayF90(field%flow_dsdt,dsdt_p,ierr);CHKERRQ(ierr)
+  endif
 
   ! Interior Flux Terms -----------------------------------
   connection_set_list => grid%internal_connection_set_list

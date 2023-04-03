@@ -273,6 +273,8 @@ subroutine PMGeneralReadSimOptionsBlock(this,input)
         general_compute_surface_tension = PETSC_TRUE
       case('VAPOR_PRESSURE_KELVIN')
         general_kelvin_equation = PETSC_TRUE
+      case('THERMAL_IMBIBITION')
+        general_thermal_imbibition = PETSC_TRUE
       case default
         call InputKeywordUnrecognized(input,keyword,'GENERAL Mode',option)
     end select

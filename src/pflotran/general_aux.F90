@@ -45,6 +45,7 @@ module General_Aux_module
   PetscBool, public :: gen_chk_max_dpl_liq_state_only = PETSC_FALSE
   PetscBool, public :: general_kelvin_equation = PETSC_FALSE
   PetscBool, public :: general_compute_surface_tension = PETSC_FALSE
+  PetscBool, public :: general_thermal_imbibition = PETSC_FALSE
 
   ! debugging
   PetscInt, public :: general_ni_count
