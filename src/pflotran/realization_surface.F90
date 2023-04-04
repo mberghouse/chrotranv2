@@ -34,7 +34,8 @@ module Realization_Surface_class
   public :: RealizationSurfaceCreate, &
             RealizationSurfaceCreateDiscretization, &
             RealizationSurfacePassPtrsToPatches, &
-            RealizationSurfaceProcessMatProp
+            RealizationSurfaceProcessMatProp, &
+            RealizationSurfaceProcessConditions
 
 contains
 
@@ -96,7 +97,6 @@ subroutine RealizationSurfaceCreateDiscretization(surf_realization)
   type(grid_type), pointer :: grid
   type(field_surface_type), pointer :: field_surface
   type(option_type), pointer :: option
-  type(dm_ptr_type), pointer :: dm_ptr
   PetscErrorCode :: ierr
 
   option => surf_realization%option
@@ -206,5 +206,87 @@ subroutine RealizationSurfaceProcessMatProp(surf_realization)
                                             patch%imat_internal_to_external)
 
 end subroutine RealizationSurfaceProcessMatProp
+
+! ************************************************************************** !
+
+subroutine RealizationSurfaceProcessConditions(surf_realization)
+  !
+  ! Sets linkages of conditions. Presently, only flow condition is supported.
+  !
+  ! Author: Gautam Bisht
+  ! Date: 04/04/23
+  !
+
+  use Option_module
+  use Patch_module
+
+  implicit none
+
+  class(realization_surface_type) :: surf_realization
+
+  if (surf_realization%option%nflowdof > 0) then
+    call RealizationSurfaceProcessFlowConditions(surf_realization)
+  endif
+
+end subroutine RealizationSurfaceProcessConditions
+
+! ************************************************************************** !
+
+subroutine RealizationSurfaceProcessFlowConditions(surf_realization)
+  !
+  ! Sets linkage of flow conditions to dataset
+  !
+  ! Author: Gautam Bisht
+  ! Date: 04/04/23
+  !
+
+  use Option_module
+  use Patch_module
+  use Dataset_Base_class
+  use Dataset_module
+
+  implicit none
+
+  class(realization_surface_type) :: surf_realization
+
+  type(flow_condition_type), pointer :: cur_surf_flow_condition
+  type(option_type), pointer :: option
+  character(len=MAXSTRINGLENGTH) :: string
+  PetscInt :: i
+  
+  option => surf_realization%option
+  
+  ! loop over flow conditions looking for linkage to datasets
+  cur_surf_flow_condition => surf_realization%surf_flow_conditions%first
+  do
+    if (.not.associated(cur_surf_flow_condition)) exit
+    string = 'flow_condition ' // trim(cur_surf_flow_condition%name)
+    ! find datum dataset
+    call DatasetFindInList(surf_realization%datasets, &
+                           cur_surf_flow_condition%datum, &
+                           cur_surf_flow_condition%default_time_storage, &
+                           string,option)
+    select case(option%iflowmode)
+      case(SWE_MODE)
+        do i = 1, size(cur_surf_flow_condition%sub_condition_ptr)
+           ! find dataset
+          call DatasetFindInList(surf_realization%datasets, &
+                 cur_surf_flow_condition%sub_condition_ptr(i)%ptr%dataset, &
+                 cur_surf_flow_condition%default_time_storage, &
+                 string,option)
+          ! find gradient dataset
+          call DatasetFindInList(surf_realization%datasets, &
+                 cur_surf_flow_condition%sub_condition_ptr(i)%ptr%gradient, &
+                 cur_surf_flow_condition%default_time_storage, &
+                 string,option)
+        enddo
+      case default
+        option%io_buffer='RealizSurfProcessFlowConditions not implemented in this mode'
+        call PrintErrMsg(option)
+    end select
+    cur_surf_flow_condition => cur_surf_flow_condition%next
+  enddo
+
+end subroutine RealizationSurfaceProcessFlowConditions
 
 end module Realization_Surface_class
