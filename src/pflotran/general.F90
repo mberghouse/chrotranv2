@@ -1186,7 +1186,7 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
   PetscInt :: i, imat, imat_up, imat_dn
   PetscInt :: flow_src_sink_type
   PetscInt :: lid = 1
-  PetscReal :: Sw,thermal_imbibition_term
+  PetscReal :: Sw
 
   PetscReal, pointer :: r_p(:)
   PetscReal, pointer :: accum_p(:), accum_p2(:)
