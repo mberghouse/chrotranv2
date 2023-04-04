@@ -32,7 +32,8 @@ module Realization_Surface_class
   end type realization_surface_type
 
   public :: RealizationSurfaceCreate, &
-            RealizationSurfaceCreateDiscretization
+            RealizationSurfaceCreateDiscretization, &
+            RealizationSurfacePassPtrsToPatches
 
 contains
 
@@ -152,5 +153,21 @@ subroutine RealizationSurfaceCreateDiscretization(surf_realization)
   end select
 
 end subroutine RealizationSurfaceCreateDiscretization
+
+! ************************************************************************** !
+
+subroutine RealizationSurfacePassPtrsToPatches(surf_realization)
+  !
+  ! Set patch%field => realization%field
+  !
+  ! Author: Gautam Bisht
+  ! Date: 04/04/23
+  !
+
+  class(realization_surface_type) :: surf_realization
+
+  surf_realization%patch%field_surface => surf_realization%field_surface
+
+end subroutine RealizationSurfacePassPtrsToPatches
 
 end module Realization_Surface_class
