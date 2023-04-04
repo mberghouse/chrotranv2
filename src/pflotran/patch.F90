@@ -16,6 +16,7 @@ module Patch_module
   use NW_Transport_Aux_module
   use Dataset_Base_class
   use Material_module
+  use Material_Surface_module
   use Field_module
   use Field_Surface_module
   use Saturation_Function_module
@@ -72,6 +73,8 @@ module Patch_module
 
     type(material_property_type), pointer :: material_properties
     type(material_property_ptr_type), pointer :: material_property_array(:)
+    type(material_surface_property_type), pointer :: surface_material_properties
+    type(material_surface_property_ptr_type), pointer :: surface_material_property_array(:)
     type(saturation_function_type), pointer :: saturation_functions
     type(saturation_function_ptr_type), pointer :: saturation_function_array(:)
     class(characteristic_curves_type), pointer :: characteristic_curves
@@ -205,6 +208,9 @@ function PatchCreate()
   nullify(patch%char_curves_thermal_array)
   nullify(patch%material_transform)
   nullify(patch%material_transform_array)
+
+  nullify(patch%surface_material_properties)
+  nullify(patch%surface_material_property_array)
 
   allocate(patch%observation_list)
   call ObservationInitList(patch%observation_list)
@@ -9668,6 +9674,9 @@ subroutine PatchDestroy(patch)
     deallocate(patch%material_transform_array)
   nullify(patch%material_transform_array)
   nullify(patch%material_transform)
+
+  nullify(patch%surface_material_properties)
+  nullify(patch%surface_material_property_array)
 
   ! solely nullify grid since destroyed in discretization
   nullify(patch%grid)

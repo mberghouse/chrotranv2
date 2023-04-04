@@ -19,9 +19,9 @@ module Material_Surface_module
     type(material_surface_property_type), pointer :: next
   end type material_surface_property_type
   
-  type, public :: surface_material_property_ptr_type
+  type, public :: material_surface_property_ptr_type
     type(material_surface_property_type), pointer :: ptr
-  end type surface_material_property_ptr_type
+  end type material_surface_property_ptr_type
 
   public :: MaterialSurfacePropertyCreate, &
             MaterialSurfacePropertyDestroy, &
@@ -183,7 +183,7 @@ subroutine MaterialSurfacePropConvertListToArray(list,array,option)
   implicit none
 
   type(material_surface_property_type), pointer :: list
-  type(surface_material_property_ptr_type), pointer :: array(:)
+  type(material_surface_property_ptr_type), pointer :: array(:)
   type(option_type) :: option
 
   type(material_surface_property_type), pointer :: cur_material_property
@@ -299,7 +299,7 @@ function MaterialSurfacePropGetPtrFromArray(material_surface_property_name, &
   implicit none
 
   type(material_surface_property_type), pointer :: MaterialSurfacePropGetPtrFromArray
-  type(surface_material_property_ptr_type), pointer :: material_surface_property_array(:)
+  type(material_surface_property_ptr_type), pointer :: material_surface_property_array(:)
   character(len=MAXWORDLENGTH) :: material_surface_property_name
   PetscInt :: length
   PetscInt :: imaterial_surface_property
@@ -333,7 +333,7 @@ function MaterialSurfaceGetMaxExternalID(material_surface_property_array)
   !
   implicit none
 
-  type(surface_material_property_ptr_type) :: material_surface_property_array(:)
+  type(material_surface_property_ptr_type) :: material_surface_property_array(:)
 
   PetscInt :: MaterialSurfaceGetMaxExternalID
 
@@ -359,7 +359,7 @@ subroutine MaterialSurfaceCreateIntToExtMapping(material_surface_property_array,
   !
   implicit none
 
-  type(surface_material_property_ptr_type) :: material_surface_property_array(:)
+  type(material_surface_property_ptr_type) :: material_surface_property_array(:)
   PetscInt, pointer :: mapping(:)
 
   PetscInt :: i
@@ -387,7 +387,7 @@ subroutine MaterialSurfaceCreateExtToIntMapping(material_surface_property_array,
   !
   implicit none
 
-  type(surface_material_property_ptr_type) :: material_surface_property_array(:)
+  type(material_surface_property_ptr_type) :: material_surface_property_array(:)
   PetscInt, pointer :: mapping(:)
 
   PetscInt :: i

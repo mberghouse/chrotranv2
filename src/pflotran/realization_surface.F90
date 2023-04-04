@@ -33,7 +33,8 @@ module Realization_Surface_class
 
   public :: RealizationSurfaceCreate, &
             RealizationSurfaceCreateDiscretization, &
-            RealizationSurfacePassPtrsToPatches
+            RealizationSurfacePassPtrsToPatches, &
+            RealizationSurfaceProcessMatProp
 
 contains
 
@@ -164,10 +165,46 @@ subroutine RealizationSurfacePassPtrsToPatches(surf_realization)
   ! Date: 04/04/23
   !
 
+  implicit none
+
   class(realization_surface_type) :: surf_realization
 
   surf_realization%patch%field_surface => surf_realization%field_surface
 
 end subroutine RealizationSurfacePassPtrsToPatches
+
+! ************************************************************************** !
+
+subroutine RealizationSurfaceProcessMatProp(surf_realization)
+  !
+  ! This routine sets up linkeage between surface material properties
+  !
+  ! Author: Gautam Bisht
+  ! Date: 04/04/23
+  !
+
+  use Option_module
+  use Patch_module
+
+  implicit none
+
+  class(realization_surface_type) :: surf_realization
+
+  type(option_type), pointer :: option
+  type(patch_type), pointer :: patch
+
+  option => surf_realization%option
+  patch => surf_realization%patch
+
+  patch%surface_material_properties => surf_realization%surf_material_properties
+  call MaterialSurfacePropConvertListToArray( &
+                                patch%surface_material_properties, &
+                                patch%surface_material_property_array, &
+                                option)
+
+  call MaterialSurfaceCreateIntToExtMapping(patch%surface_material_property_array, &
+                                            patch%imat_internal_to_external)
+
+end subroutine RealizationSurfaceProcessMatProp
 
 end module Realization_Surface_class
