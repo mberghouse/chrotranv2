@@ -1812,6 +1812,7 @@ patch.o : \
   hydrostatic.o \
   integral_flux.o \
   material.o \
+  material_surface.o \
   material_aux.o \
   material_transform.o \
   mphase_aux.o \
