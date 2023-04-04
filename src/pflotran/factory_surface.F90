@@ -147,12 +147,27 @@ subroutine FactorySurfaceInitSimulation(simulation)
   ! Date: 03/22/23
   !
 
+  use Init_Common_module
+  use Init_Surface_Flow_module
+  use Option_module
+  use Realization_Surface_class
+
   implicit none
 
   class(simulation_surface_type) :: simulation
 
+  class(realization_surface_type), pointer :: realization_surface
+  type(option_type), pointer :: option
+
   write(*,*)'Add code in FactorySurfaceInitSimulation'
   call FactorySurfaceSetupRealization(simulation)
+
+  realization_surface => simulation%surface_realization
+  option => realization_surface%option
+  call InitCommonAddOutputWaypoints(option,simulation%output_option, &
+                                    simulation%waypoint_list_surface)
+
+  call InitSurfaceFlowSetupRealization(simulation)
   call exit(0)
 
 end subroutine FactorySurfaceInitSimulation
@@ -169,6 +184,7 @@ subroutine FactorySurfaceSetupRealization(simulation)
   use Init_Common_module
   use Realization_Surface_class
   use Waypoint_module
+  use Init_Surface_Flow_module
 
   implicit none
 
@@ -178,9 +194,8 @@ subroutine FactorySurfaceSetupRealization(simulation)
   type(waypoint_list_type) :: waypoint_list
   
   type(option_type), pointer :: option
-  PetscErrorCode :: ierr
 
-  realization_surface => simulation%surface_realization  
+  realization_surface => simulation%surface_realization
   option => realization_surface%option
 
   ! set reference densities if not specified in input file.
@@ -190,6 +205,7 @@ subroutine FactorySurfaceSetupRealization(simulation)
 
   call InitCommonReadRegionFiles(realization_surface%patch,realization_surface%surf_region_list, &
                                  option)
+
   write(*,*)'Stopping in FactorySurfaceSetupRealization'
   call exit(0)
 
