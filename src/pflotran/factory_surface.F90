@@ -183,6 +183,7 @@ subroutine FactorySurfaceSetupRealization(simulation)
   use Option_module
   use Init_Common_module
   use Realization_Surface_class
+  use Realization_Subsurface_class
   use Waypoint_module
   use Init_Surface_Flow_module
 
@@ -202,9 +203,15 @@ subroutine FactorySurfaceSetupRealization(simulation)
   call EOSReferenceDensity(option)
 
   call RealizationSurfaceCreateDiscretization(realization_surface)
+  realization_surface%discretization%grid%unstructured_grid%grid_type = TWO_DIM_GRID
 
   call InitCommonReadRegionFiles(realization_surface%patch,realization_surface%surf_region_list, &
                                  option)
+
+  call RealizationLocalizeRegions(realization_surface%patch,realization_surface%surf_region_list, &
+                                  option)
+
+  call RealizationSurfacePassPtrsToPatches(realization_surface)
 
   write(*,*)'Stopping in FactorySurfaceSetupRealization'
   call exit(0)

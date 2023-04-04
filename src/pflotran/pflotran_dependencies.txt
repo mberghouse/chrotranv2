@@ -689,6 +689,7 @@ factory_surface.o : \
   pm_base.o \
   pm_surface_flow.o \
   pm_swe.o \
+  realization_subsurface.o \
   realization_surface.o \
   simulation_surface.o \
   string.o \
@@ -1801,6 +1802,7 @@ patch.o : \
   eos_water.o \
   ert_aux.o \
   field.o \
+  field_surface.o \
   general_aux.o \
   geometry.o \
   global_aux.o \

@@ -17,6 +17,7 @@ module Patch_module
   use Dataset_Base_class
   use Material_module
   use Field_module
+  use Field_Surface_module
   use Saturation_Function_module
   use Characteristic_Curves_Thermal_module
   use Characteristic_Curves_module
@@ -90,6 +91,7 @@ module Patch_module
     class(reaction_rt_type), pointer :: reaction
     class(reaction_nw_type), pointer :: reaction_nw
     class(reaction_base_type), pointer :: reaction_base
+    type(field_surface_type), pointer :: field_surface
 
     type(auxiliary_type) :: aux
 
@@ -214,6 +216,7 @@ function PatchCreate()
   call AuxInit(patch%aux)
 
   nullify(patch%field)
+  nullify(patch%field_surface)
   nullify(patch%datasets)
   nullify(patch%reaction_base)
   nullify(patch%reaction)
@@ -10496,6 +10499,7 @@ subroutine PatchDestroy(patch)
   nullify(patch%reaction_nw)
   nullify(patch%datasets)
   nullify(patch%field)
+  nullify(patch%field_surface)
 
   deallocate(patch)
   nullify(patch)
