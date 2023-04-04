@@ -1306,6 +1306,8 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
 
   ! Thermal imbibition terms ------------------------------
   ! q = rho_w * phi * dSw/dt * C1 exp(-C2*D*Sw)
+  ! thermal_imbibition_term includes all variables except for dSw/dt [kJ/m^3]
+  ! 
   ! saturation at t(k) (doesn't change during Newton iteration)
   if (general_thermal_imbibition) then
     call VecGetArrayF90(field%flow_dsdt,dsdt_p,ierr);CHKERRQ(ierr)
@@ -1321,12 +1323,11 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
       imat = patch%imat(ghosted_id)
       if (imat <= 0) cycle
       Sw = gen_auxvars(ZERO_INTEGER,ghosted_id)%sat(lid)
-      dsdt_p(local_id) =  (dsdt_p(local_id) + Sw)
+      dsdt_p(local_id) =  (dsdt_p(local_id) + Sw) / option%flow_dt
       sat_p2(local_id) = Sw
-      r_p(local_id * THREE_INTEGER) = r_p(local_id * THREE_INTEGER) - 1.d-3*(dsdt_p(local_id) / option%flow_dt * &
+      r_p(local_id * THREE_INTEGER) = r_p(local_id * THREE_INTEGER) - 1.d-3*dsdt_p(local_id) * &
                                       gen_auxvars(ZERO_INTEGER,ghosted_id)%thermal_imbibition_term * &
-                                      material_auxvars(ghosted_id)%volume)
-                                       
+                                      material_auxvars(ghosted_id)%volume
     enddo
     call VecRestoreArrayF90(field%flow_sat2,sat_p2,ierr);CHKERRQ(ierr)
     call VecRestoreArrayF90(field%flow_dsdt,dsdt_p,ierr);CHKERRQ(ierr)
@@ -1739,12 +1740,6 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
       !geh - Ignore inactive cells with inactive materials
       imat = patch%imat(ghosted_id)
       if (imat <= 0) cycle
-      call GeneralThermalImbibitionDerivative(gen_auxvars(:,ghosted_id), &
-                                              global_auxvars(ghosted_id), &
-                                              material_auxvars(ghosted_id), &
-                                              material_parameter%soil_heat_capacity(imat), &
-                                              option, &
-                                              Jup)
       call VecGetArrayReadF90(field%flow_dsdt,dsdt_p,ierr);CHKERRQ(ierr)
       do idof = 1, option%nflowdof
         do irow = 1, option%nflowdof

@@ -1526,7 +1526,7 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
     D = (gen_auxvar%den_kg(lid) * gen_auxvar%effective_porosity) / ((1.d0 - gen_auxvar%effective_porosity) * &
          material_auxvar%soil_particle_density)
     gen_auxvar%thermal_imbibition_term = (gen_auxvar%den_kg(lid) * gen_auxvar%effective_porosity * thermal_imb_C1 * &
-                                         exp(-1.d0 * thermal_imb_C2 * D * gen_auxvar%sat(lid))) * 1.d-3
+                                         exp(-1.d0 * thermal_imb_C2 * D * gen_auxvar%sat(lid)))
   endif
 
 #if 0

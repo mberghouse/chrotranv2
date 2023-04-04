@@ -280,9 +280,8 @@ subroutine PMGeneralReadSimOptionsBlock(this,input)
             call InputReadPflotranString(input,option)
             if (input%ierr /= 0) exit
             if (InputCheckExit(input,option)) exit
-
             call InputReadCard(input,option,word)
-            call InputErrorMsg(input,option,'keyword','HYDRATE')
+            call InputErrorMsg(input,option,keyword,error_string)
             call StringToUpper(word)
             select case(trim(word))
               case('C1')
