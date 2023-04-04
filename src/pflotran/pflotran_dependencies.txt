@@ -675,6 +675,7 @@ factory_subsurface_read.o : \
 factory_surface.o : \
   factory_surface_linkage.o \
   input_aux.o \
+  init_surface_flow.o \
   option.o \
   pm_base.o \
   pm_surface_flow.o \
@@ -1234,6 +1235,11 @@ init_subsurface_transport.o : \
   reactive_transport.o \
   realization_subsurface.o \
   variables.o
+init_surface_flow.o : \
+  option.o \
+  patch.o \
+  realization_surface.o \
+  simulation_surface.o
 inlinesurface.o : \
   global_aux.o \
   inlinesurface_aux.o \
