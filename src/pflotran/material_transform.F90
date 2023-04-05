@@ -1,3 +1,4 @@
+
 module Material_Transform_module
   !
   ! Models to transform material properties
@@ -108,6 +109,7 @@ module Material_Transform_module
     PetscReal :: y2              ! uncertainty/assumptions due to these coefs
     PetscReal :: ci_ub           ! upper bound Conc. ion for buffer erosion
     PetscReal :: ci_lb           ! lower bound Conc. ion for buffer erosion
+    PetscReal :: c_sed           ! Sediment release constant
     PetscReal :: af_vis          ! Agglomerate Fluid (AF) viscosity
     PetscReal :: af_den          ! AF density
     PetscReal :: af_vol_den      ! AF volume density
@@ -123,6 +125,8 @@ module Material_Transform_module
     PetscReal :: water_den       ! water desity
     PetscReal, allocatable :: water_vel(:) ! water velosity
     PetscReal :: frac_aperture   ! fracture aperture
+    PetscReal :: frac_angle      ! fracture angle
+    PetscReal :: ion_conc        ! concentration of ion (mM)
   end type buffer_erosion_auxvar_type
   !---------------------------------------------------------------------------
   type, public :: material_transform_auxvar_type
@@ -1151,7 +1155,7 @@ subroutine BEDefaultRead(buffer_erosion_model, input, option)
                       'lower bound ion concentration',&
                       'BUFFER_EROSION, GENERAL')
           case('SEDIMENT_RELEASE_CONSTANT')
-            call InputReadDouble(input,option,be_model%ci_lb)
+            call InputReadDouble(input,option,be_model%c_sed)
             call InputErrorMsg(input,option,&
                       'lower bound ion concentration',&
                       'BUFFER_EROSION, GENERAL')
@@ -1495,6 +1499,197 @@ subroutine ILTBaseIllitization(this, fs, temperature, dt, fi, scale, option)
   scale = 0.0d+0
 
 end subroutine ILTBaseIllitization
+
+! ************************************************************************** !
+
+subroutine BEDefaultIntrusionRate(this, t, intr_rate, auxvar, option)
+
+  !
+  !
+  !
+  !
+  !
+  
+  use Option_module
+  
+  implicit none
+
+  class(BE_default_type) :: this     ! buffer erosion object
+  PetscReal, intent(in) :: t         ! simulation time (s)
+  PetscReal, intent(out) :: intr_rate ! intrusion rate (kg/yr)
+  class(buffer_erosion_auxvar_type), intent(in) :: auxvar
+  type(option_type), intent(inout) :: option
+
+  PetscReal :: t_yr                  ! simulation time in years
+
+  t_yr = t*60.d0*60.d0*24.d0*365.d0  ! sec,min,hr,day
+
+  intr_rate = auxvar%frac_aperture * &
+             (this%y0 + 2.0d0*this%y1*t_yr + 3.0d0*this%y2*t_yr**2.0d0)
+
+end subroutine BEDefaultIntrusionRate
+
+! ************************************************************************** !
+
+subroutine BELambertWSolve(x0_in, const, tol, max_iter, sol, status)
+
+  !
+  !
+  !
+  !
+  !
+  
+  PetscReal, intent(in) :: x0_in, const, tol
+  PetscInt, intent(in) :: max_iter
+  PetscReal, intent(out) :: sol
+  PetscInt, intent(out) :: status
+
+  PetscReal :: x0, f, fp
+  PetscInt :: iter
+
+  x0 = x0_in
+  iter = 0
+  sol = x0
+  do
+    f = sol * exp(sol) - const
+    fp = (1.0d0 + sol) * exp(sol)
+    sol = sol - f / fp
+
+    ! Check for convergence
+    if (abs(sol - x0) < tol) then
+      status = 0
+      exit
+    endif
+
+    x0 = sol
+    iter = iter + 1
+
+    ! Check for maximum number of iterations
+    if (iter >= max_iter) then
+      status = 1
+      exit
+    endif
+  end do
+
+end subroutine BELambertWSolve
+
+! ************************************************************************** !
+
+subroutine BEDefaultSeepingErosion(this, eros_rate, auxvar, option)
+
+  !
+  !
+  !
+  !
+  !
+  
+  use Option_module
+  use PFLOTRAN_Constants_module
+   
+  implicit none
+
+  class(BE_default_type) :: this     ! buffer erosion object
+  PetscReal, intent(out) :: eros_rate ! intrusion rate (kg/yr)
+  class(buffer_erosion_auxvar_type), intent(in) :: auxvar
+  type(option_type) :: option
+
+  PetscReal :: Dr, u, y, expo
+  PetscReal :: G
+  PetscReal :: Gdiv2
+  PetscReal :: rRSS
+  PetscInt :: status
+
+  ! magnitude of water velocity using 2-norm fucntion from BLAS
+  u = sqrt(auxvar%water_vel(1)**2.d0 * &
+           auxvar%water_vel(2)**2.d0 * &
+           auxvar%water_vel(3)**2.d0)
+  
+  ! calculate diffusion coefficient at the rim
+  if (auxvar%ion_conc > this%ci_ub) then
+    Dr = 0.0d0  ! m^2/s
+    y = 0.0d0
+  else
+    if (auxvar%ion_conc > this%ci_lb) then
+      y = log(auxvar%ion_conc)
+    else
+      y = -1.0d0
+    end if
+    expo = -9.42911d0 - 1.309d0*y - 1.88737d0*y**2.d0 - 0.783596*y**3.d0
+    Dr = 10.d0 ** expo
+  end if
+
+  ! Equation 4-6
+  G = this%diff_coef_bh * PI*(this%smec_vf_bh_init-this%smec_vf_int_rim) / &
+      2.d0*this%smec_vf_int_rim*sqrt(Dr*this%bh_rad*u)
+
+  ! ProductLog(G/2) in Eq. 4-7 (i.e., Lambert W)
+  ! solving with Newton's Method
+  !               init_guess, const, tol, max_iter, sol, status
+  call BELambertWSolve(1.d0, G/2.d0, 1.d-8, 100, Gdiv2, status)
+  if (status == 1) then
+    option%io_buffer = "Newton's method did not converge" // &
+                       " within the maximum number of iterations" // &
+                       " to solve Lambert W in" // &
+                       " Buffer Erosion by Seeping water erosion"
+    call PrintErrMsg(option)
+  end if
+
+  ! radius of rim at steady state
+  rRSS = this%bh_rad*((G/2.d0)/Gdiv2)**2.d0  ! (m)
+
+  ! Buffer erosion rate by Seeping water
+  eros_rate = this%smec_den*auxvar%frac_aperture*this%smec_vf_int_rim * &
+              4.0d0*sqrt(Dr*PI*rRSS*u)
+  
+end subroutine BEDefaultSeepingErosion
+
+! ************************************************************************** !
+
+subroutine BEDefaultSedimentationErosion(this, sed_rate, auxvar, option)
+
+  !
+  !
+  !
+  !
+  !
+
+  use Option_module
+  use PFLOTRAN_Constants_module
+   
+  implicit none
+
+  class(BE_default_type) :: this     ! buffer erosion object
+  PetscReal, intent(out) :: sed_rate ! intrusion rate (kg/yr)
+  class(buffer_erosion_auxvar_type), intent(in) :: auxvar
+  type(option_type) :: option
+
+  PetscReal :: 
+  PetscReal :: 
+  PetscReal :: 
+  PetscReal :: 
+  PetscInt :: 
+
+  Fexp = this%diff_coef_bh * this%smec_den * &
+         (this%smec_vf_bh_init - this%af_vol_den) / &
+         (c_sed*sin(auxvar%frac_angle))
+
+  ratio = Fexp/this%bh_rad
+
+  ! ProductLog(G/2) in Eq. 4-7 (i.e., Lambert W)
+  ! solving with Newton's Method
+  !               init_guess, const, tol, max_iter, sol, status
+  call BELambertWSolve(1.d0, ratio, 1.d-8, 100, x1, status)
+  if (status == 1) then
+    option%io_buffer = "Newton's method did not converge" // &
+                       " within the maximum number of iterations" // &
+                       " to solve Lambert W in" // &
+                       " Buffer Erosion by Sedimentation"
+    call PrintErrMsg(option)
+  end if
+  
+  rRSS = Fexp/x1
+  
+end subroutine BEDefaultSedimentationErosion
 
 ! ************************************************************************** !
 
