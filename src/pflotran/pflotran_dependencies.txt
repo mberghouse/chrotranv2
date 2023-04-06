@@ -170,6 +170,7 @@ condition_control.o : \
   reactive_transport_aux.o \
   realization_subsurface.o \
   region.o \
+  secondary_continuum_aux.o \
   transport_constraint_base.o \
   transport_constraint_nwt.o \
   transport_constraint_rt.o \
@@ -2730,6 +2731,7 @@ reaction_sandbox.o : \
   reaction_sandbox_gas.o \
   reaction_sandbox_pnnl_cyber.o \
   reaction_sandbox_pnnl_lambda.o \
+  reaction_sandbox_radon.o \
   reaction_sandbox_simple.o \
   reaction_sandbox_ufd_wp.o \
   reactive_transport_aux.o \
@@ -2878,6 +2880,17 @@ reaction_sandbox_pnnl_lambda.o : \
   string.o \
   units.o \
   utility.o
+reaction_sandbox_radon.o : \
+  global_aux.o \
+  input_aux.o \
+  material_aux.o \
+  option.o \
+  pflotran_constants.o \
+  reaction_aux.o \
+  reaction_sandbox_base.o \
+  reactive_transport_aux.o \
+  string.o \
+  units.o
 reaction_sandbox_simple.o : \
   global_aux.o \
   material_aux.o \
@@ -3126,9 +3139,6 @@ saturation_function.o : \
 secondary_continuum.o : \
   block_solve.o \
   block_tridiag.o \
-  condition.o \
-  coupler.o \
-  eos_water.o \
   global_aux.o \
   grid.o \
   material.o \
@@ -3144,8 +3154,6 @@ secondary_continuum.o : \
   realization_subsurface.o \
   secondary_continuum_aux.o \
   string.o \
-  transport_constraint.o \
-  transport_constraint_rt.o \
   utility.o \
   variables.o
 secondary_continuum_aux.o : \

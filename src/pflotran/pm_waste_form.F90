@@ -539,11 +539,12 @@ module PM_Waste_Form_class
 
   type, public :: spacer_mechanism_base_type
     character(len=MAXWORDLENGTH) :: mech_name
-    PetscReal :: threshold_sat ! threshold saturation for asm. exposure to water
+    PetscReal :: threshold_sat ! threshold saturation for exposure to water
     PetscReal :: alteration_rate  ! saturation-based factor for altering rate
-    PetscReal :: spacer_mass  ! total mass of grid spacers
-    PetscReal :: spacer_surface_area ! total surface area of grid spacers
+    PetscReal :: spacer_loss_ratio  ! metal loss ratio from oxide formation
+    PetscReal :: spacer_thickness ! initial thickness of metal
     PetscReal :: spacer_coeff  ! empirical coefficient of Arrhenius term
+    PetscReal :: spacer_rad_factor  ! irradiation factor for degradation rate
     PetscReal :: spacer_activation_energy  ! activation energy
     class(spacer_mechanism_base_type), pointer :: next
   contains
@@ -896,9 +897,10 @@ function PMWFSpacerMechCreate()
 
   spc%mech_name = ''
   spc%threshold_sat = 0.0d0
+  spc%spacer_rad_factor = 1.0d0
   spc%alteration_rate = UNINITIALIZED_DOUBLE
-  spc%spacer_mass = UNINITIALIZED_DOUBLE
-  spc%spacer_surface_area = UNINITIALIZED_DOUBLE
+  spc%spacer_loss_ratio = UNINITIALIZED_DOUBLE
+  spc%spacer_thickness = UNINITIALIZED_DOUBLE
   spc%spacer_coeff = UNINITIALIZED_DOUBLE
   spc%spacer_activation_energy = UNINITIALIZED_DOUBLE
 
@@ -2373,22 +2375,22 @@ subroutine PMWFReadSpacerMech(this,input,option,keyword,error_string,found)
             call InputErrorMsg(input,option,'grid spacer exposure &
                                &saturation limit',error_string)
         !-----------------------------
-          case('MASS')
+          case('METAL_LOSS_RATIO')
             call InputReadDouble(input,option, &
-                                 new_sp_mech%spacer_mass)
-            call InputErrorMsg(input,option,'grid spacer total mass', &
+                                 new_sp_mech%spacer_loss_ratio)
+            call InputErrorMsg(input,option,'grid spacer metal loss ratio', &
                                error_string)
-            call InputReadAndConvertUnits(input, new_sp_mech%spacer_mass, &
-                                          'kg','MASS',option)
+            call InputReadAndConvertUnits(input, new_sp_mech%spacer_loss_ratio,&
+                                          'm^3/kg','METAL_LOSS_RATIO',option)
         !-----------------------------
-          case('SURFACE_AREA')
+          case('THICKNESS')
             call InputReadDouble(input,option, &
-                                 new_sp_mech%spacer_surface_area)
-            call InputErrorMsg(input,option,'grid spacer total surface &
-                               &area',error_string)
+                                 new_sp_mech%spacer_thickness)
+            call InputErrorMsg(input,option,'grid spacer initial thickness', &
+                               error_string)
             call InputReadAndConvertUnits(input, &
-                                          new_sp_mech%spacer_surface_area, &
-                                          'm^2','SURFACE_AREA',option)
+                                          new_sp_mech%spacer_thickness, &
+                                          'm','THICKNESS',option)
         !-----------------------------
           case('C')
             call InputReadDouble(input,option, &
@@ -2398,6 +2400,11 @@ subroutine PMWFReadSpacerMech(this,input,option,keyword,error_string,found)
             call InputReadAndConvertUnits(input, &
                                           new_sp_mech%spacer_coeff, &
                                           'kg/m^2-s','C',option)
+        !-----------------------------
+          case('RAD_FACTOR')
+            call InputReadDouble(input,option,new_sp_mech%spacer_rad_factor)
+            call InputErrorMsg(input,option,'irradiation factor for grid &
+                               &spacer degradation rate',error_string)
         !-----------------------------
           case('Q')
             call InputReadDouble(input,option, &
@@ -2424,9 +2431,16 @@ subroutine PMWFReadSpacerMech(this,input,option,keyword,error_string,found)
                          //'with a waste form.'
         call PrintWrnMsg(option)
       endif
-      if (Uninitialized(new_sp_mech%spacer_mass)) then
-        option%io_buffer = 'ERROR: Total spacer grid mass must be specified &
-                           &for spacer grid degradation mechanism.'
+      if (Uninitialized(new_sp_mech%spacer_loss_ratio)) then
+        option%io_buffer = 'ERROR: Metal loss ratio for spacer grid must be &
+                           &specified for spacer grid degradation mechanism.'
+        call PrintMsg(option)
+        num_errors = num_errors + 1
+      endif
+      if (new_sp_mech%spacer_rad_factor <= 0.d0) then
+        option%io_buffer = 'ERROR: Irradiation factor for spacer grid &
+                           &degradation rate must be greater than zero in the &
+                           &spacer grid degradation mechanism.'
         call PrintMsg(option)
         num_errors = num_errors + 1
       endif
@@ -2442,8 +2456,8 @@ subroutine PMWFReadSpacerMech(this,input,option,keyword,error_string,found)
         call PrintMsg(option)
         num_errors = num_errors + 1
       endif
-      if (Uninitialized(new_sp_mech%spacer_surface_area)) then
-        option%io_buffer = 'ERROR: Total spacer grid surface area must be &
+      if (Uninitialized(new_sp_mech%spacer_thickness)) then
+        option%io_buffer = 'ERROR: Spacer grid initial thickness must be &
                            &specified for spacer grid degradation mechanism.'
         call PrintMsg(option)
         num_errors = num_errors + 1
@@ -3494,7 +3508,7 @@ subroutine PMWFInitializeTimestep(this)
              1.d3) / &                               ! [kg-matrix] -> [g-matrix]
              ! [kg-water]
             (material_auxvars(ghosted_id)%porosity * &         ! [-]
-             global_auxvars(ghosted_id)%sat(LIQUID_PHASE) * &  ! [-]
+             (global_auxvars(ghosted_id)%sat(LIQUID_PHASE)+1.d-20) * &  ! [-]
              material_auxvars(ghosted_id)%volume * &           ! [m^3]
              global_auxvars(ghosted_id)%den_kg(LIQUID_PHASE))  ! [kg/m^3-water]
           idof = cwfm%rad_species_list(k)%ispecies + &
@@ -6176,16 +6190,16 @@ subroutine SpacerMechInputRecord(this)
       write(id,'(a)') trim(adjustl(cur_sp_mech%mech_name))
     endif
 
-    if (Initialized(cur_sp_mech%spacer_mass)) then
-      write(id,'(a29)',advance='no') 'grid spc. tot. mass: '
-      write(word,'(es12.5)') cur_sp_mech%spacer_mass
-      write(id,'(a)') trim(adjustl(word)) // ' kg'
+    if (Initialized(cur_sp_mech%spacer_loss_ratio)) then
+      write(id,'(a29)',advance='no') 'grid spc. metal loss ratio: '
+      write(word,'(es12.5)') cur_sp_mech%spacer_loss_ratio
+      write(id,'(a)') trim(adjustl(word)) // ' m^3/kg'
     endif
 
-    if (Initialized(cur_sp_mech%spacer_surface_area)) then
-      write(id,'(a29)',advance='no') 'grid spc. tot. surface area: '
-      write(word,'(es12.5)') cur_sp_mech%spacer_surface_area
-      write(id,'(a)') trim(adjustl(word)) // ' m^2'
+    if (Initialized(cur_sp_mech%spacer_thickness)) then
+      write(id,'(a29)',advance='no') 'grid spc. init. thickness: '
+      write(word,'(es12.5)') cur_sp_mech%spacer_thickness
+      write(id,'(a)') trim(adjustl(word)) // ' m'
     endif
 
     if (Initialized(cur_sp_mech%spacer_coeff)) then
@@ -6198,6 +6212,12 @@ subroutine SpacerMechInputRecord(this)
       write(id,'(a29)',advance='no') 'grid spc. mech act. energy: '
       write(word,'(es12.5)') cur_sp_mech%spacer_activation_energy
       write(id,'(a)') trim(adjustl(word)) // ' J/mol'
+    endif
+
+    if (Initialized(cur_sp_mech%spacer_rad_factor)) then
+      write(id,'(a29)',advance='no') 'grid spc. rad factor: '
+      write(word,'(es12.5)') cur_sp_mech%spacer_rad_factor
+      write(id,'(a)') trim(adjustl(word))
     endif
 
     if (Initialized(cur_sp_mech%threshold_sat)) then
@@ -6551,13 +6571,14 @@ subroutine SpacerMechBaseDegradation(this,waste_form,pm,sat,temp,dt,ierr)
                                     this%spacer_activation_energy / &
                                     (IDEAL_GAS_CONSTANT * temp))
 
-  ! Modify rate with total surface area and saturation factor [kg/s]
+  ! Modify rate with metal loss ratio and saturation factor [kg/s]
   waste_form%spacer_vitality_rate = waste_form%spacer_vitality_rate* &
-                                    this%spacer_surface_area* &
+                                    this%spacer_loss_ratio* &
+                                    this%spacer_rad_factor* &
                                     this%alteration_rate
 
   ! Change in spacer vitality [kg/kg]
-  dspv = (1.0d0 / this%spacer_mass) * waste_form%spacer_vitality_rate * dt
+  dspv = (2.0d0 / this%spacer_thickness) * waste_form%spacer_vitality_rate * dt
 
   ! Spacer vitality [kg/kg]
   waste_form%spacer_vitality = waste_form%spacer_vitality - dspv
@@ -8612,7 +8633,6 @@ subroutine ANNReadH5File(this, option)
   character(len=MAXSTRINGLENGTH) :: group_name = '/'
   character(len=MAXSTRINGLENGTH) :: dataset_name
 
-  integer(HID_T) :: prop_id
   integer(HID_T) :: file_id
   integer(HID_T) :: group_id
   integer(HID_T) :: dataset_id
@@ -8621,17 +8641,15 @@ subroutine ANNReadH5File(this, option)
 
   PetscMPIInt :: hdf5_err
 
-  call h5open_f(hdf5_err)
-  call h5pcreate_f(H5P_FILE_ACCESS_F,prop_id,hdf5_err)
-  call HDF5FileOpenReadOnly(h5_name,file_id,prop_id,'',option)
-  call HDF5GroupOpen(file_id,group_name,group_id,option%driver)
+  call HDF5FileOpenReadOnly(h5_name,file_id,PETSC_FALSE,'',option)
+  call HDF5GroupOpen(file_id,group_name,group_id,option)
 
   dataset_name = 'input_hidden1_weights'
   call ANNGetH5DatasetInfo(group_id,option,h5_name,dataset_name,dataset_id, &
        dims_h5)
   call h5dread_f(dataset_id,H5T_NATIVE_DOUBLE, this%input_hidden1_weights, dims_h5, &
                  hdf5_err)
-  call h5dclose_f(dataset_id,hdf5_err)
+  call HDF5DatasetClose(dataset_id,option)
   deallocate(dims_h5)
 
   dataset_name = 'input_hidden1_bias'
@@ -8639,7 +8657,7 @@ subroutine ANNReadH5File(this, option)
        dims_h5)
   call h5dread_f(dataset_id,H5T_NATIVE_DOUBLE, this%input_hidden1_bias,dims_h5, &
                  hdf5_err)
-  call h5dclose_f(dataset_id,hdf5_err)
+  call HDF5DatasetClose(dataset_id,option)
   deallocate(dims_h5)
 
   dataset_name = 'hidden1_hidden2_weights'
@@ -8647,7 +8665,7 @@ subroutine ANNReadH5File(this, option)
        dims_h5)
   call h5dread_f(dataset_id,H5T_NATIVE_DOUBLE, this%hidden1_hidden2_weights, dims_h5, &
                  hdf5_err)
-  call h5dclose_f(dataset_id,hdf5_err)
+  call HDF5DatasetClose(dataset_id,option)
   deallocate(dims_h5)
 
   dataset_name = 'hidden1_hidden2_bias'
@@ -8655,7 +8673,7 @@ subroutine ANNReadH5File(this, option)
        dims_h5)
   call h5dread_f(dataset_id,H5T_NATIVE_DOUBLE, this%hidden1_hidden2_bias, dims_h5, &
                  hdf5_err)
-  call h5dclose_f(dataset_id,hdf5_err)
+  call HDF5DatasetClose(dataset_id,option)
   deallocate(dims_h5)
 
   dataset_name = 'hidden2_output_weights'
@@ -8663,7 +8681,7 @@ subroutine ANNReadH5File(this, option)
        dims_h5)
   call h5dread_f(dataset_id,H5T_NATIVE_DOUBLE,this%hidden2_output_weights,dims_h5, &
                    hdf5_err)
-  call h5dclose_f(dataset_id,hdf5_err)
+  call HDF5DatasetClose(dataset_id,option)
   deallocate(dims_h5)
 
   dataset_name = 'hidden2_output_bias'
@@ -8671,7 +8689,7 @@ subroutine ANNReadH5File(this, option)
        dims_h5)
   call h5dread_f(dataset_id,H5T_NATIVE_DOUBLE,this%hidden2_output_bias,dims_h5, &
                  hdf5_err)
-  call h5dclose_f(dataset_id,hdf5_err)
+  call HDF5DatasetClose(dataset_id,option)
   deallocate(dims_h5)
 
   dataset_name = 'scaler_offsets'
@@ -8679,7 +8697,7 @@ subroutine ANNReadH5File(this, option)
        dims_h5)
   call h5dread_f(dataset_id,H5T_NATIVE_DOUBLE,this%scaler_offsets,dims_h5, &
                  hdf5_err)
-  call h5dclose_f(dataset_id,hdf5_err)
+  call HDF5DatasetClose(dataset_id,option)
   deallocate(dims_h5)
 
   dataset_name = 'scaler_scales'
@@ -8687,12 +8705,11 @@ subroutine ANNReadH5File(this, option)
        dims_h5)
   call h5dread_f(dataset_id,H5T_NATIVE_DOUBLE,this%scaler_scales,dims_h5, &
                  hdf5_err)
-  call h5dclose_f(dataset_id,hdf5_err)
+  call HDF5DatasetClose(dataset_id,option)
   deallocate(dims_h5)
 
-  call h5gclose_f(group_id,hdf5_err)
-  call h5fclose_f(file_id,hdf5_err)
-  call h5pclose_f(prop_id,hdf5_err)
+  call HDF5GroupClose(group_id,option)
+  call HDF5FileClose(file_id,option)
 
 end subroutine ANNReadH5File
 
@@ -8832,7 +8849,6 @@ subroutine KnnrReadH5File(this, option)
   character(len=MAXSTRINGLENGTH) :: group_name = '/'
   character(len=MAXSTRINGLENGTH) :: dataset_name
 
-  integer(HID_T) :: prop_id
   integer(HID_T) :: file_id
   integer(HID_T) :: group_id
   integer(HID_T) :: dataset_id
@@ -8844,14 +8860,10 @@ subroutine KnnrReadH5File(this, option)
 
   PetscMPIInt :: hdf5_err
 
-  call h5pcreate_f(H5P_FILE_ACCESS_F,prop_id,hdf5_err)
-
-  call HDF5FileOpenReadOnly(h5_name,file_id,prop_id,'',option)
-
-  call h5pclose_f(prop_id,hdf5_err)
+  call HDF5FileOpenReadOnly(h5_name,file_id,PETSC_FALSE,'',option)
 
   !hdf5groupopen
-  call HDF5GroupOpen(file_id,group_name,group_id,option%driver)
+  call HDF5GroupOpen(file_id,group_name,group_id,option)
 
   !Get Nearest Neighbors
   call KnnrGetNearestNeighbors(this,group_id,h5_name,option)
@@ -8882,7 +8894,7 @@ subroutine KnnrReadH5File(this, option)
   call h5dread_f(dataset_id,H5T_NATIVE_DOUBLE, this%table_data(1,:), dims_h5, &
                    hdf5_err)
 
-  call h5dclose_f(dataset_id,hdf5_err)
+  call HDF5DatasetClose(dataset_id,option)
 
   dataset_name = 'Env_CO3_2n'
   call KnnrReadH5Dataset(this,group_id,dims_h5,option,h5_name,dataset_name,2)
@@ -8896,9 +8908,8 @@ subroutine KnnrReadH5File(this, option)
   deallocate(dims_h5)
   deallocate(max_dims_h5)
 
-
-  call h5gclose_f(group_id,hdf5_err)
-  call h5fclose_f(file_id,hdf5_err)
+  call HDF5GroupClose(group_id,option)
+  call HDF5FileClose(file_id,option)
 
   this%table_data(1,:) = log10(this%table_data(1,:))
   this%table_data(2,:) = log10(this%table_data(2,:))
@@ -8913,6 +8924,7 @@ end subroutine KnnrReadH5File
 subroutine KnnrGetNearestNeighbors(this,group_id,h5_name,option)
 
   use hdf5
+  use HDF5_Aux_module
 
   implicit none
 
@@ -8940,7 +8952,7 @@ subroutine KnnrGetNearestNeighbors(this,group_id,h5_name,option)
      call h5dread_f(dataset_id,H5T_NATIVE_INTEGER, this%num_nearest_neighbor, dims_h5, &
        hdf5_err)
 
-     call h5dclose_f(dataset_id,hdf5_err)
+     call HDF5DatasetClose(dataset_id,option)
   endif
 
 end subroutine KnnrGetNearestNeighbors
@@ -8950,6 +8962,7 @@ end subroutine KnnrGetNearestNeighbors
 subroutine KnnrReadH5Dataset(this,group_id,dims_h5,option,h5_name,dataset_name,i)
 
   use hdf5
+  use HDF5_Aux_module
 
   implicit none
 
@@ -8982,8 +8995,7 @@ subroutine KnnrReadH5Dataset(this,group_id,dims_h5,option,h5_name,dataset_name,i
   call h5dread_f(dataset_id,H5T_NATIVE_DOUBLE, this%table_data(i,:), dims_h5, &
        hdf5_err)
 
-  call h5dclose_f(dataset_id,hdf5_err)
-
+  call HDF5DatasetClose(dataset_id,option)
 
 end subroutine KnnrReadH5Dataset
 
