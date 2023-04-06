@@ -36,7 +36,8 @@ module Realization_Surface_class
             RealizationSurfacePassPtrsToPatches, &
             RealizationSurfaceProcessMatProp, &
             RealizationSurfaceProcessConditions, &
-            RealizationSurfaceProcessCouplers
+            RealizationSurfaceProcessCouplers, &
+            RealizationSurfaceLocalToLocalWithArray
 
 contains
 
@@ -503,5 +504,61 @@ subroutine RealizationSurfaceProcessCouplers(surf_realization)
   enddo
 
 end subroutine RealizationSurfaceProcessCouplers
+
+! ************************************************************************** !
+
+subroutine RealizationSurfaceLocalToLocalWithArray(surf_realization,array_id)
+  ! 
+  ! This routine takes an F90 array that is ghosted and updates the ghosted
+  ! values.
+  ! 
+  ! Author: Gautam Bisht
+  ! Date: 04/04/23
+  ! 
+
+  use Discretization_module
+  use Grid_module
+  use Field_Surface_module
+  use Patch_module
+
+  implicit none
+
+  class(realization_surface_type) :: surf_realization
+  PetscInt :: array_id
+  
+  type(patch_type), pointer :: cur_patch
+  type(grid_type), pointer :: grid
+  type(field_surface_type), pointer :: surf_field
+
+  surf_field => surf_realization%field_surface
+
+  cur_patch => surf_realization%patch_list%first
+  do
+    if (.not.associated(cur_patch)) exit
+    grid => cur_patch%grid
+    select case(array_id)
+      case(MATERIAL_ID_ARRAY)
+        call GridCopyIntegerArrayToVec(grid, cur_patch%imat,surf_field%work_loc, &
+                                        grid%ngmax)
+    end select
+    cur_patch => cur_patch%next
+  enddo
+  call DiscretizationLocalToLocal(surf_realization%discretization, &
+                                  surf_field%work_loc, &
+                                  surf_field%work_loc,ONEDOF)
+  cur_patch => surf_realization%patch_list%first
+  do
+    if (.not.associated(cur_patch)) exit
+    grid => cur_patch%grid
+
+    select case(array_id)
+      case(MATERIAL_ID_ARRAY)
+        call GridCopyVecToIntegerArray(grid, cur_patch%imat,surf_field%work_loc, &
+                                        grid%ngmax)
+    end select
+    cur_patch => cur_patch%next
+  enddo
+
+end subroutine RealizationSurfaceLocalToLocalWithArray
 
 end module Realization_Surface_class
