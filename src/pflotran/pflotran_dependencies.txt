@@ -684,6 +684,7 @@ factory_subsurface_read.o : \
 factory_surface.o : \
   factory_surface_linkage.o \
   input_aux.o \
+  init_surface.o \
   init_surface_flow.o \
   option.o \
   pm_base.o \

@@ -186,6 +186,7 @@ subroutine FactorySurfaceSetupRealization(simulation)
   use Realization_Subsurface_class
   use Waypoint_module
   use Init_Surface_Flow_module
+  use Init_Surface_module
 
   implicit none
 
@@ -215,6 +216,7 @@ subroutine FactorySurfaceSetupRealization(simulation)
   call RealizationSurfaceProcessMatProp(realization_surface)
   call RealizationSurfaceProcessConditions(realization_surface)
   call RealizationSurfaceProcessCouplers(realization_surface)
+  call SurfaceInitMaterialProperties(realization_surface)
 
   write(*,*)'Stopping in FactorySurfaceSetupRealization'
   call exit(0)

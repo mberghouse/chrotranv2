@@ -253,6 +253,7 @@ misc_obj = \
 	${common_src}init_subsurface_flow.o \
 	${common_src}init_subsurface_transport.o \
 	${common_src}init_surface_flow.o \
+	${common_src}init_surface.o \
 	${common_src}integral_flux.o \
 	${common_src}inversion_aux.o \
 	${common_src}inversion_base.o \
