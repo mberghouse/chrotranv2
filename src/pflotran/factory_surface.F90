@@ -71,6 +71,7 @@ subroutine FactorySurfaceInitPostPetsc(simulation)
   realization_surface => RealizationSurfaceCreate(option)
 
   simulation%surface_realization => realization_surface
+  realization_surface%output_option => simulation%output_option
 
   call FactorySurfaceLinkSetupPMCLinages(simulation,pm_surface_flow)
 
@@ -217,6 +218,8 @@ subroutine FactorySurfaceSetupRealization(simulation)
   call RealizationSurfaceProcessConditions(realization_surface)
   call RealizationSurfaceProcessCouplers(realization_surface)
   call SurfaceInitMaterialProperties(realization_surface)
+  call RealizationSurfaceInitAllCouplerAuxVars(realization_surface)
+  call RealizationSurfaceAddWaypointsToList(realization_surface,simulation%waypoint_list_surface)
 
   write(*,*)'Stopping in FactorySurfaceSetupRealization'
   call exit(0)
