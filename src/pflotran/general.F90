@@ -190,69 +190,15 @@ subroutine GeneralSetup(realization)
     allocate(general_sec_heat_vars(grid%nlmax))
 
     do local_id = 1, grid%nlmax
-
       ghosted_id = grid%nL2G(local_id)
-      call SecondaryContinuumSetProperties( &
-        general_sec_heat_vars(local_id)%sec_continuum, &
-        patch%material_property_array(patch%imat(ghosted_id))%ptr%multicontinuum%name, &
-        patch%aux%Material%auxvars(ghosted_id)%soil_properties(half_matrix_width_index), &
-        patch%material_property_array(patch%imat(ghosted_id))%ptr%multicontinuum%matrix_block_size, &
-        patch%material_property_array(patch%imat(ghosted_id))%ptr%multicontinuum%fracture_spacing, &
-        patch%material_property_array(patch%imat(ghosted_id))%ptr%multicontinuum%radius, &
-        patch%material_property_array(patch%imat(ghosted_id))%ptr%multicontinuum%porosity, &
-        option)
-
-      general_sec_heat_vars(ghosted_id)%ncells = &
-        patch%material_property_array(patch%imat(ghosted_id))%ptr%multicontinuum%ncells
-      general_sec_heat_vars(ghosted_id)%half_aperture = &
-        patch%material_property_array(patch%imat(ghosted_id))%ptr%multicontinuum%half_aperture
-      general_sec_heat_vars(ghosted_id)%epsilon = &
-        patch%aux%Material%auxvars(ghosted_id)%soil_properties(epsilon_index)
-      general_sec_heat_vars(ghosted_id)%log_spacing = &
-        patch%material_property_array(patch%imat(ghosted_id))%ptr%multicontinuum%log_spacing
-      general_sec_heat_vars(ghosted_id)%outer_spacing = &
-        patch%material_property_array(patch%imat(ghosted_id))%ptr%multicontinuum%outer_spacing
-
-
-      allocate(general_sec_heat_vars(ghosted_id)%area(general_sec_heat_vars(ghosted_id)%ncells))
-      allocate(general_sec_heat_vars(ghosted_id)%vol(general_sec_heat_vars(ghosted_id)%ncells))
-      allocate(general_sec_heat_vars(ghosted_id)%dm_minus(general_sec_heat_vars(ghosted_id)%ncells))
-      allocate(general_sec_heat_vars(ghosted_id)%dm_plus(general_sec_heat_vars(ghosted_id)%ncells))
-      allocate(general_sec_heat_vars(ghosted_id)%sec_continuum% &
-               distance(general_sec_heat_vars(ghosted_id)%ncells))
-
-      call SecondaryContinuumType(&
-                              general_sec_heat_vars(ghosted_id)%sec_continuum, &
-                              general_sec_heat_vars(ghosted_id)%ncells, &
-                              general_sec_heat_vars(ghosted_id)%area, &
-                              general_sec_heat_vars(ghosted_id)%vol, &
-                              general_sec_heat_vars(ghosted_id)%dm_minus, &
-                              general_sec_heat_vars(ghosted_id)%dm_plus, &
-                              general_sec_heat_vars(ghosted_id)%half_aperture, &
-                              general_sec_heat_vars(ghosted_id)%epsilon, &
-                              general_sec_heat_vars(ghosted_id)%log_spacing, &
-                              general_sec_heat_vars(ghosted_id)%outer_spacing, &
-                              area_per_vol,option)
-
-      general_sec_heat_vars(ghosted_id)%interfacial_area = area_per_vol* &
-          (1.d0 - general_sec_heat_vars(ghosted_id)%epsilon)* &
-          patch%material_property_array(patch%imat(ghosted_id))%ptr% &
-          multicontinuum%area_scaling
-
-
-    ! Setting the initial values of all secondary node temperatures same as primary node
-    ! temperatures (with initial dirichlet BC only) -- sk 06/26/12
-      allocate(general_sec_heat_vars(ghosted_id)%sec_temp(general_sec_heat_vars(ghosted_id)%ncells))
-
-      if (option%flow%set_secondary_init_temp) then
-        general_sec_heat_vars(ghosted_id)%sec_temp = &
-          patch%material_property_array(patch%imat(ghosted_id))%ptr%multicontinuum%init_temp
-      else
-        general_sec_heat_vars(ghosted_id)%sec_temp = &
-        initial_condition%flow_condition%temperature%dataset%rarray(1)
-      endif
-
-    enddo
+      if (patch%imat(ghosted_id) <= 0) cycle
+      call SecondaryHeatAuxVarInit( &
+           patch%material_property_array(patch%imat(ghosted_id))%ptr%multicontinuum, &
+           patch%aux%Material%auxvars(ghosted_id)%soil_properties(epsilon_index), &
+           patch%aux%Material%auxvars(ghosted_id)%soil_properties(half_matrix_width_index), &
+           general_sec_heat_vars(local_id), initial_condition, option)
+           
+    enddo      
 
     patch%aux%SC_heat%sec_heat_vars => general_sec_heat_vars
     do i = 1, size(patch%material_property_array)
@@ -441,11 +387,10 @@ subroutine GeneralUpdateSolution(realization)
 
       sec_dencpr = general_parameter%dencpr(patch%cct_id(ghosted_id)) ! secondary rho*c_p same as primary for now
 
-      call GeneralSecHeatAuxVarCompute(general_sec_heat_vars(local_id), &
-                                       global_auxvars(ghosted_id), &
-                                       general_parameter%ckwet(patch%cct_id(ghosted_id)), &
-                                       sec_dencpr, &
-                                       option)
+      call SecHeatAuxVarCompute(general_sec_heat_vars(local_id), &
+                                general_parameter%ckwet(patch%cct_id(ghosted_id)), &
+                                sec_dencpr,global_auxvars(ghosted_id)%temp, &
+                                option)
     enddo
 
   endif
@@ -1481,12 +1426,11 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
 
       sec_dencpr = general_parameter%dencpr(patch%cct_id(ghosted_id)) ! secondary rho*c_p same as primary for now
 
-      call GeneralSecondaryHeat(general_sec_heat_vars(local_id), &
-                                global_auxvars(ghosted_id), &
-                                general_parameter%ckwet(patch%cct_id(ghosted_id)), &
-                                sec_dencpr, &
-                                option,res_sec_heat)
-      r_p(iend) = r_p(iend) + res_sec_heat*material_auxvars(ghosted_id)%volume
+      call SecondaryHeatResidual(general_sec_heat_vars(local_id), &
+                                 general_parameter%ckwet(patch%cct_id(ghosted_id)), &
+                                 sec_dencpr,global_auxvars(ghosted_id)%temp, &
+                                 option,res_sec_heat)
+      r_p(iend) = r_p(iend) - res_sec_heat*material_auxvars(ghosted_id)%volume
 
     enddo
   endif
@@ -1767,6 +1711,7 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
   use Material_Aux_module
   use Upwind_Direction_module
   use Secondary_Continuum_Aux_module
+  use Secondary_Continuum_module
   use Utility_module, only: Equal
 
   implicit none
@@ -1890,10 +1835,10 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
     if (option%use_sc) then
       if (.not.Equal((material_auxvars(ghosted_id)% &
           soil_properties(epsilon_index)),1.d0)) then
-        call GeneralSecondaryHeatJacobian(sec_heat_vars(local_id), &
-                          general_parameter%ckwet(patch%cct_id(ghosted_id)), &
-                          general_parameter%dencpr(patch%cct_id(ghosted_id)), &
-                          option,jac_sec_heat)
+        call SecondaryHeatJacobian(sec_heat_vars(local_id), &
+                                   general_parameter%ckwet(patch%cct_id(ghosted_id)), &
+                                   general_parameter%dencpr(patch%cct_id(ghosted_id)), &
+                                   option,jac_sec_heat)
         Jup(option%nflowdof,GENERAL_ENERGY_EQUATION_INDEX) = &
                                  Jup(option%nflowdof,GENERAL_ENERGY_EQUATION_INDEX) - &
                                  jac_sec_heat*material_auxvars(ghosted_id)%volume / option%flow_dt
