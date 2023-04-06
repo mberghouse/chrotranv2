@@ -152,6 +152,7 @@ subroutine FactorySurfaceInitSimulation(simulation)
   use Init_Surface_Flow_module
   use Option_module
   use Realization_Surface_class
+  use Surface_Global_module
 
   implicit none
 
@@ -160,15 +161,20 @@ subroutine FactorySurfaceInitSimulation(simulation)
   class(realization_surface_type), pointer :: realization_surface
   type(option_type), pointer :: option
 
+  realization_surface => simulation%surface_realization
+  option => realization_surface%option
+
   write(*,*)'Add code in FactorySurfaceInitSimulation'
   call FactorySurfaceSetupRealization(simulation)
 
-  realization_surface => simulation%surface_realization
-  option => realization_surface%option
   call InitCommonAddOutputWaypoints(option,simulation%output_option, &
                                     simulation%waypoint_list_surface)
 
+  call SurfaceGlobalSetup(realization_surface)
+
   call InitSurfaceFlowSetupRealization(simulation)
+
+  write(*,*)'stopping in FactorySurfaceInitSimulation'
   call exit(0)
 
 end subroutine FactorySurfaceInitSimulation
@@ -220,9 +226,6 @@ subroutine FactorySurfaceSetupRealization(simulation)
   call SurfaceInitMaterialProperties(realization_surface)
   call RealizationSurfaceInitAllCouplerAuxVars(realization_surface)
   call RealizationSurfaceAddWaypointsToList(realization_surface,simulation%waypoint_list_surface)
-
-  write(*,*)'Stopping in FactorySurfaceSetupRealization'
-  call exit(0)
 
 end subroutine FactorySurfaceSetupRealization
 

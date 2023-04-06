@@ -1237,6 +1237,19 @@ init_subsurface_transport.o : \
   reactive_transport.o \
   realization_subsurface.o \
   variables.o
+init_surface.o : \
+  discretization.o \
+  realization_subsurface.o \
+  realization_surface.o \
+  strata.o \
+  region.o \
+  material.o \
+  option.o \
+  grid.o \
+  field_surface.o \
+  patch.o \
+  material.o \
+  hdf5.o
 init_surface_flow.o : \
   option.o \
   patch.o \
@@ -1820,6 +1833,7 @@ patch.o : \
   saturation_function.o \
   strata.o \
   string.o \
+  surface_auxiliary.o \
   th_aux.o \
   transport_constraint.o \
   transport_constraint_base.o \
@@ -3495,6 +3509,15 @@ strata.o : \
   units.o
 string.o : \
   pflotran_constants.o
+surface_auxiliary.o : \
+  surface_global_aux.o
+surface_global_aux.o : \
+  pflotran_constants.o \
+  option.o
+surface_global.o : \
+  pflotran_constants.o \
+  realization_surface.o \
+  surface_global_aux.o
 survey.o : \
   geometry.o \
   grid.o \

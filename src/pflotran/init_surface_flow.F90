@@ -37,6 +37,10 @@ subroutine InitSurfaceFlowSetupRealization(simulation)
   option => surface_realization%option
   patch => surface_realization%patch
 
+
+  write(*,*)'stopping in InitSurfaceFlowSetupRealization'
+  call exit(0)
+
 end subroutine InitSurfaceFlowSetupRealization
 
 end module Init_Surface_Flow_module
