@@ -35,7 +35,8 @@ module Realization_Surface_class
             RealizationSurfaceCreateDiscretization, &
             RealizationSurfacePassPtrsToPatches, &
             RealizationSurfaceProcessMatProp, &
-            RealizationSurfaceProcessConditions
+            RealizationSurfaceProcessConditions, &
+            RealizationSurfaceProcessCouplers
 
 contains
 
@@ -244,6 +245,7 @@ subroutine RealizationSurfaceProcessFlowConditions(surf_realization)
   use Patch_module
   use Dataset_Base_class
   use Dataset_module
+  use Condition_module
 
   implicit none
 
@@ -288,5 +290,218 @@ subroutine RealizationSurfaceProcessFlowConditions(surf_realization)
   enddo
 
 end subroutine RealizationSurfaceProcessFlowConditions
+
+! ************************************************************************** !
+
+subroutine RealizationSurfaceProcessCouplers(surf_realization)
+  !
+  ! Sets connectivity and pointers for couplers
+  !
+  ! Author: Gautam Bisht
+  ! Date: 04/04/23
+  !
+
+  use Patch_module
+  use Coupler_module
+  use Strata_module
+  use Option_module
+  use Material_Surface_module
+
+  implicit none
+
+  class(realization_surface_type) :: surf_realization
+
+  type(option_type), pointer :: option
+  type(patch_type), pointer :: patch
+  type(condition_list_type), pointer :: flow_conditions
+  type(coupler_type), pointer :: coupler
+  type(strata_type), pointer :: strata
+  PetscInt :: temp_int
+
+  patch => surf_realization%patch
+  option => surf_realization%option
+  flow_conditions => surf_realization%surf_flow_conditions
+
+  ! boundary conditions
+  coupler => patch%boundary_condition_list%first
+  do
+    if (.not.associated(coupler)) exit
+    write(*,*)'BC coupler ',trim(coupler%name)
+    ! pointer to region
+    coupler%region => RegionGetPtrFromList(coupler%region_name, &
+                                           patch%region_list)
+    if (.not.associated(coupler%region)) then
+      option%io_buffer = 'Region "' // trim(coupler%region_name) // &
+                 '" in boundary condition "' // &
+                 trim(coupler%name) // &
+                 '" not found in region list'
+      call PrintErrMsg(option)
+    endif
+    if (associated(patch%grid%structured_grid)) then
+      if (coupler%region%num_cells > 0 .and. &
+          (coupler%region%iface == 0 .and. &
+           .not.associated(coupler%region%faces))) then
+        option%io_buffer = 'Region "' // trim(coupler%region_name) // &
+                 '", which is tied to a boundary condition, has not &
+                 &been assigned a face in the structured grid. '
+        call PrintErrMsg(option)
+      endif
+    endif
+    ! pointer to flow condition
+    if (option%nflowdof > 0) then
+      if (len_trim(coupler%flow_condition_name) > 0) then
+        coupler%flow_condition => &
+          FlowConditionGetPtrFromList(coupler%flow_condition_name, &
+                                      flow_conditions)
+        if (.not.associated(coupler%flow_condition)) then
+          option%io_buffer = 'Flow condition "' // &
+                   trim(coupler%flow_condition_name) // &
+                   '" in boundary condition "' // &
+                   trim(coupler%name) // &
+                   '" not found in flow condition list'
+          call PrintErrMsg(option)
+        endif
+      else
+        option%io_buffer = 'A FLOW_CONDITION must be specified in &
+                           &BOUNDARY_CONDITION: ' // trim(coupler%name) // '.'
+        call PrintErrMsg(option)
+      endif
+    endif
+
+    coupler => coupler%next
+  enddo
+
+
+  ! initial conditions
+  coupler => patch%initial_condition_list%first
+  do
+    if (.not.associated(coupler)) exit
+    ! pointer to region
+    coupler%region => RegionGetPtrFromList(coupler%region_name, &
+                                           patch%region_list)
+    if (.not.associated(coupler%region)) then
+      option%io_buffer = 'Region "' // trim(coupler%region_name) // &
+                 '" in initial condition "' // &
+                 trim(coupler%name) // &
+                 '" not found in region list'
+      call PrintErrMsg(option)
+    endif
+    ! pointer to flow condition
+    if (option%nflowdof > 0) then
+      if (len_trim(coupler%flow_condition_name) > 0) then
+        coupler%flow_condition => &
+          FlowConditionGetPtrFromList(coupler%flow_condition_name, &
+                                      flow_conditions)
+        if (.not.associated(coupler%flow_condition)) then
+          option%io_buffer = 'Flow condition "' // &
+                   trim(coupler%flow_condition_name) // &
+                   '" in initial condition "' // &
+                   trim(coupler%name) // &
+                   '" not found in flow condition list'
+          call PrintErrMsg(option)
+        endif
+      else
+        option%io_buffer = 'A FLOW_CONDITION must be specified in ' // &
+                           'INITIAL_CONDITION: ' // trim(coupler%name) // '.'
+        call PrintErrMsg(option)
+      endif
+    endif
+
+    coupler => coupler%next
+  enddo
+
+  ! source/sinks
+  coupler => patch%source_sink_list%first
+  do
+    if (.not.associated(coupler)) exit
+    ! pointer to region
+    coupler%region => RegionGetPtrFromList(coupler%region_name, &
+                                           patch%region_list)
+    if (.not.associated(coupler%region)) then
+      option%io_buffer = 'Region "' // trim(coupler%region_name) // &
+                 '" in source/sink "' // &
+                 trim(coupler%name) // &
+                 '" not found in region list'
+      call PrintErrMsg(option)
+    endif
+
+    ! pointer to flow condition
+    if (option%nflowdof > 0) then
+      if (len_trim(coupler%flow_condition_name) > 0) then
+        coupler%flow_condition => &
+          FlowConditionGetPtrFromList(coupler%flow_condition_name, &
+                                      flow_conditions)
+        if (.not.associated(coupler%flow_condition)) then
+          option%io_buffer = 'Flow condition "' // &
+                   trim(coupler%flow_condition_name) // &
+                   '" in source/sink "' // &
+                   trim(coupler%name) // &
+                   '" not found in flow condition list'
+          call PrintErrMsg(option)
+        endif
+        ! check to ensure that a rate subcondition exists
+        if (.not.associated(coupler%flow_condition%rate) .and. &
+              .not.associated(coupler%flow_condition%well)) then
+          temp_int = 0
+          if (associated(coupler%flow_condition%general)) then
+            if (associated(coupler%flow_condition%general%rate)) then
+              temp_int = 1
+            endif
+          endif
+          if (associated(coupler%flow_condition%hydrate)) then
+            if (associated(coupler%flow_condition%hydrate%rate)) then
+              temp_int = 1
+            endif
+          endif
+          if (temp_int == 0) then
+            option%io_buffer = 'FLOW_CONDITIONs associated with &
+              &SOURCE_SINKs must have a RATE or WELL expression within them.'
+            call PrintErrMsg(option)
+          endif
+        endif
+      else
+        option%io_buffer = 'A FLOW_CONDITION must be specified in &
+                           &SOURCE_SINK: ' // trim(coupler%name) // '.'
+        call PrintErrMsg(option)
+      endif
+    endif
+
+    coupler => coupler%next
+  enddo
+
+  ! strata
+  ! connect pointers from strata to regions
+  strata => patch%strata_list%first
+  do
+    if (.not.associated(strata)) exit
+    ! pointer to region
+    if (len_trim(strata%region_name) > 0) then
+      strata%region => RegionGetPtrFromList(strata%region_name, &
+                                                  patch%region_list)
+      if (.not.associated(strata%region)) then
+        option%io_buffer = 'Region "' // trim(strata%region_name) // &
+                 '" in strata not found in region list'
+        call PrintErrMsg(option)
+      endif
+      if (strata%active) then
+        ! pointer to material
+        strata%material_surface_property => &
+          MaterialSurfacePropGetPtrFromArray(strata%material_property_name, &
+          patch%surface_material_property_array)
+        if (.not.associated(strata%material_surface_property)) then
+          option%io_buffer = 'Surface Material "' // &
+                            trim(strata%material_property_name) // &
+                            '" not found in material list'
+          call PrintErrMsg(option)
+        endif
+      endif
+    else
+      nullify(strata%region)
+      nullify(strata%material_surface_property)
+    endif
+    strata => strata%next
+  enddo
+
+end subroutine RealizationSurfaceProcessCouplers
 
 end module Realization_Surface_class
