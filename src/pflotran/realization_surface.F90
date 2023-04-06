@@ -37,7 +37,9 @@ module Realization_Surface_class
             RealizationSurfaceProcessMatProp, &
             RealizationSurfaceProcessConditions, &
             RealizationSurfaceProcessCouplers, &
-            RealizationSurfaceLocalToLocalWithArray
+            RealizationSurfaceLocalToLocalWithArray, &
+            RealizationSurfaceInitAllCouplerAuxVars, &
+            RealizationSurfaceAddWaypointsToList
 
 contains
 
@@ -560,5 +562,119 @@ subroutine RealizationSurfaceLocalToLocalWithArray(surf_realization,array_id)
   enddo
 
 end subroutine RealizationSurfaceLocalToLocalWithArray
+
+! ************************************************************************** !
+
+subroutine RealizationSurfaceInitAllCouplerAuxVars(surf_realization)
+  ! 
+  ! This routine initializez coupler auxillary variables within list
+  ! 
+  ! Author: Gautam Bisht
+  ! Date: 04/04/23
+  ! 
+
+  use Condition_module
+  use Patch_module
+  use Option_module
+
+  implicit none
+  
+  class(realization_surface_type) :: surf_realization
+  
+  type(patch_type), pointer :: cur_patch
+
+  call FlowConditionUpdate(surf_realization%surf_flow_conditions, &
+                           surf_realization%option)
+
+  call PatchInitAllCouplerAuxVars(surf_realization%patch, &
+                                  surf_realization%option)
+
+end subroutine RealizationSurfaceInitAllCouplerAuxVars
+
+! ************************************************************************** !
+
+subroutine RealizationSurfaceAddWaypointsToList(surf_realization,waypoint_list)
+  ! 
+  ! This routine creates waypoints assocated with source/sink, boundary
+  ! condition, etc. and adds to a list
+  ! 
+  ! Author: Gautam Bisht
+  ! Date: 04/04/23
+  ! 
+  use Option_module
+  use Waypoint_module
+  use Time_Storage_module
+
+  implicit none
+
+  class(realization_surface_type) :: surf_realization
+  type(waypoint_list_type) :: waypoint_list
+
+  type(flow_condition_type), pointer :: cur_flow_condition
+  type(flow_sub_condition_type), pointer :: sub_condition
+  type(waypoint_type), pointer :: waypoint, cur_waypoint
+  type(option_type), pointer :: option
+  PetscInt :: itime, isub_condition
+  PetscReal :: temp_real, final_time
+  PetscReal, pointer :: times(:)
+
+  option => surf_realization%option
+  nullify(times)
+
+  ! set flag for final output
+  cur_waypoint => waypoint_list%first
+  do
+    if (.not.associated(cur_waypoint)) exit
+    if (cur_waypoint%final) then
+      cur_waypoint%print_snap_output = &
+        surf_realization%output_option%print_final_snap
+      exit
+    endif
+    cur_waypoint => cur_waypoint%next
+  enddo
+
+  ! use final time in conditional below
+  if (associated(cur_waypoint)) then
+    final_time = cur_waypoint%time
+  else
+    option%io_buffer = 'Final time not found in RealizationSurfaceAddWaypointsToList'
+    call PrintErrMsg(option)
+  endif
+
+  ! add update of flow conditions
+  cur_flow_condition => surf_realization%surf_flow_conditions%first
+  do
+    if (.not.associated(cur_flow_condition)) exit
+    if (cur_flow_condition%sync_time_with_update) then
+      do isub_condition = 1, cur_flow_condition%num_sub_conditions
+        sub_condition => cur_flow_condition%sub_condition_ptr(isub_condition)%ptr
+        !TODO(geh): check if this updated more than simply the flow_dataset (i.e. datum and gradient)
+        !geh: followup - no, datum/gradient are not considered.  Should they be considered?
+        call TimeStorageGetTimes(sub_condition%dataset%time_storage, option, &
+                                final_time, times)
+        if (associated(times)) then
+          if (size(times) > 1000) then
+            option%io_buffer = 'For flow condition "' // &
+              trim(cur_flow_condition%name) // &
+              '" dataset "' // trim(sub_condition%name) // &
+              '", the number of times is excessive for synchronization ' // &
+              'with waypoints.'
+            call PrintErrMsg(option)
+          endif
+          do itime = 1, size(times)
+            waypoint => WaypointCreate()
+            waypoint%time = times(itime)
+            waypoint%update_conditions = PETSC_TRUE
+            call WaypointInsertInList(waypoint,waypoint_list)
+          enddo
+          deallocate(times)
+          nullify(times)
+        endif
+      enddo
+    endif
+    cur_flow_condition => cur_flow_condition%next
+  enddo
+
+end subroutine RealizationSurfaceAddWaypointsToList
 
 end module Realization_Surface_class
