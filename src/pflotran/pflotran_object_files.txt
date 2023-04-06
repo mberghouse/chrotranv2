@@ -48,6 +48,7 @@ mode_aux_obj = \
 	${common_src}kdtree.o \
 	${common_src}pnf_aux.o \
 	${common_src}richards_aux.o \
+	${common_src}surface_auxiliary.o \
 	${common_src}th_aux.o \
 	${common_src}zflow_aux.o \
 	${common_src}inlinesurface_aux.o
@@ -95,6 +96,7 @@ mode_obj = \
 	${common_src}reactive_transport.o \
 	${common_src}richards.o \
 	${common_src}richards_common.o \
+	${common_src}surface_global.o \
 	${common_src}th.o \
 	${common_src}zflow.o \
 	${common_src}zflow_common.o \
@@ -113,7 +115,8 @@ shared_mode_aux_obj = \
 	${common_src}lookup_table.o \
 	${common_src}material_aux.o \
 	${common_src}nw_transport_aux.o \
-	${common_src}reactive_transport_aux.o
+	${common_src}reactive_transport_aux.o \
+	${common_src}surface_global_aux.o
 
 # DO NOT place any object files that depend on the discretization within
 # util_obj

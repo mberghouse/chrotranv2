@@ -24,7 +24,7 @@ module Patch_module
   use Characteristic_Curves_module
   use Material_Transform_module
   use Auxiliary_module
-
+  use Surface_Auxiliary_module
   use General_Aux_module
   use Hydrate_Aux_module
   use TH_Aux_module
@@ -97,6 +97,7 @@ module Patch_module
     type(field_surface_type), pointer :: field_surface
 
     type(auxiliary_type) :: aux
+    type(surface_auxiliary_type) :: surf_aux
 
     type(patch_type), pointer :: next
 
@@ -220,6 +221,7 @@ function PatchCreate()
   call StrataInitList(patch%strata_list)
 
   call AuxInit(patch%aux)
+  call SurfaceAuxInit(patch%surf_aux)
 
   nullify(patch%field)
   nullify(patch%field_surface)
