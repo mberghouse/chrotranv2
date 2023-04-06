@@ -3486,6 +3486,7 @@ srcsink_sandbox_wipp_well.o : \
 strata.o : \
   input_aux.o \
   material.o \
+  material_surface.o \
   option.o \
   pflotran_constants.o \
   region.o \

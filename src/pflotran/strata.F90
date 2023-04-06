@@ -5,6 +5,7 @@ module Strata_module
 
   use Region_module
   use Material_module
+  use Material_Surface_module
 
   use PFLOTRAN_Constants_module
 
@@ -22,6 +23,7 @@ module Strata_module
     PetscInt :: imaterial_property                       ! id of material in material array/list
     PetscInt :: iregion                                  ! id of region in region array/list
     type(material_property_type), pointer :: material_property ! pointer to material in material array/list
+    type(material_surface_property_type), pointer :: material_surface_property ! pointer to material in material array/list
     type(region_type), pointer :: region                ! pointer to region in region array/list
     PetscReal :: start_time
     PetscReal :: final_time
@@ -87,6 +89,7 @@ function StrataCreate1()
   strata%well = PETSC_FALSE
   nullify(strata%region)
   nullify(strata%material_property)
+  nullify(strata%material_surface_property)
   nullify(strata%next)
 
   StrataCreate1 => strata

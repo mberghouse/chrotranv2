@@ -214,6 +214,7 @@ subroutine FactorySurfaceSetupRealization(simulation)
   call RealizationSurfacePassPtrsToPatches(realization_surface)
   call RealizationSurfaceProcessMatProp(realization_surface)
   call RealizationSurfaceProcessConditions(realization_surface)
+  call RealizationSurfaceProcessCouplers(realization_surface)
 
   write(*,*)'Stopping in FactorySurfaceSetupRealization'
   call exit(0)
