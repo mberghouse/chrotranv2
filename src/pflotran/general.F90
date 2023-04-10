@@ -1186,7 +1186,7 @@ subroutine GeneralUpdateFixedAccum(realization)
     option%iflag = GENERAL_UPDATE_FOR_FIXED_ACCUM
 
     if (option%use_sc) then
-      vol_frac_prim = general_sec_heat_vars(local_id)%epsilon
+      vol_frac_prim = material_auxvars(ghosted_id)%soil_properties(epsilon_index)
     else
       vol_frac_prim = 1.d0
     endif
@@ -1379,8 +1379,6 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
   ! now assign access pointer to local variables
   call VecGetArrayF90(r,r_p,ierr);CHKERRQ(ierr)
 
-  vol_frac_prim = 1.d0
-
   ! Accumulation terms ------------------------------------
   ! accumulation at t(k) (doesn't change during Newton iteration)
   call VecGetArrayReadF90(field%flow_accum,accum_p,ierr);CHKERRQ(ierr)
@@ -1397,7 +1395,9 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
     local_end = local_id * option%nflowdof
     local_start = local_end - option%nflowdof + 1
     if (option%use_sc) then
-      vol_frac_prim = general_sec_heat_vars(local_id)%epsilon
+      vol_frac_prim = material_auxvars(ghosted_id)%soil_properties(epsilon_index)
+    else
+      vol_frac_prim = 1.d0
     endif
     call GeneralAccumulation(gen_auxvars(ZERO_INTEGER,ghosted_id), &
                              global_auxvars(ghosted_id), &
@@ -1431,7 +1431,7 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
                                  general_parameter%ckwet(patch%cct_id(ghosted_id)), &
                                  sec_dencpr,global_auxvars(ghosted_id)%temp, &
                                  option,res_sec_heat)
-      r_p(iend) = r_p(iend) + res_sec_heat*material_auxvars(ghosted_id)%volume
+      r_p(iend) = r_p(iend) - res_sec_heat*material_auxvars(ghosted_id)%volume
 
     enddo
   endif
@@ -1842,7 +1842,7 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
                                    option,jac_sec_heat)
         Jup(option%nflowdof,GENERAL_ENERGY_EQUATION_INDEX) = &
                                  Jup(option%nflowdof,GENERAL_ENERGY_EQUATION_INDEX) - &
-                                 jac_sec_heat*material_auxvars(ghosted_id)%volume / option%flow_dt
+                                 jac_sec_heat*material_auxvars(ghosted_id)%volume
       endif
     endif
     call MatSetValuesBlockedLocal(A,1,ghosted_id-1,1,ghosted_id-1,Jup, &
