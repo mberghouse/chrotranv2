@@ -79,7 +79,7 @@ OUTPUT
   SCREEN PERIODIC 10
   PRINT_COLUMN_IDS
   #FORMAT TECPLOT POINT
-  FORMAT HDF5
+  #FORMAT HDF5
 /
 
 #=========================== fluid properties =================================

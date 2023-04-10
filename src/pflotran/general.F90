@@ -66,7 +66,6 @@ subroutine GeneralSetup(realization)
 
   PetscInt :: ghosted_id, iconn, sum_connection, local_id
   PetscInt :: i, idof, ndof, ipara
-  PetscReal :: area_per_vol
   PetscBool :: error_found
   PetscInt :: flag(10)
   PetscErrorCode :: ierr
@@ -1188,6 +1187,8 @@ subroutine GeneralUpdateFixedAccum(realization)
 
     if (option%use_sc) then
       vol_frac_prim = general_sec_heat_vars(local_id)%epsilon
+    else
+      vol_frac_prim = 1.d0
     endif
 
     call GeneralAuxVarCompute(xx_p(local_start:local_end), &
@@ -1430,7 +1431,7 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
                                  general_parameter%ckwet(patch%cct_id(ghosted_id)), &
                                  sec_dencpr,global_auxvars(ghosted_id)%temp, &
                                  option,res_sec_heat)
-      r_p(iend) = r_p(iend) - res_sec_heat*material_auxvars(ghosted_id)%volume
+      r_p(iend) = r_p(iend) + res_sec_heat*material_auxvars(ghosted_id)%volume
 
     enddo
   endif
@@ -2669,7 +2670,6 @@ subroutine GeneralSecondaryHeatJacobian(sec_heat_vars, &
   PetscReal :: m
   PetscReal :: Dtemp_N_Dtemp_prim
   PetscReal :: jac_heat
-  PetscReal :: dt
 
   ngcells = sec_heat_vars%ncells
   area = sec_heat_vars%area
