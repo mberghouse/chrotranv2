@@ -25,9 +25,7 @@ module General_module
             GeneralGetTecplotHeader, &
             GeneralSetPlotVariables, &
             GeneralMapBCAuxVarsToGlobal, &
-            GeneralDestroy, &
-            GeneralSecondaryHeat, &
-            GeneralSecondaryHeatJacobian
+            GeneralDestroy
 
 contains
 
@@ -388,7 +386,7 @@ subroutine GeneralUpdateSolution(realization)
 
       call SecHeatAuxVarCompute(general_sec_heat_vars(local_id), &
                                 general_parameter%ckwet(patch%cct_id(ghosted_id)), &
-                                sec_dencpr,global_auxvars(ghosted_id)%temp, &
+                                sec_dencpr,gen_auxvars(ZERO_INTEGER,ghosted_id)%temp, &
                                 option)
     enddo
 
@@ -1429,7 +1427,7 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
 
       call SecondaryHeatResidual(general_sec_heat_vars(local_id), &
                                  general_parameter%ckwet(patch%cct_id(ghosted_id)), &
-                                 sec_dencpr,global_auxvars(ghosted_id)%temp, &
+                                 sec_dencpr,gen_auxvars(ZERO_INTEGER,ghosted_id)%temp, &
                                  option,res_sec_heat)
       r_p(iend) = r_p(iend) - res_sec_heat*material_auxvars(ghosted_id)%volume
 
@@ -1816,7 +1814,7 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
   call GeneralOutputAuxVars(gen_auxvars,global_auxvars,option)
 #endif
 
-  vol_frac_prim = 1.d0
+
 
   ! Accumulation terms ------------------------------------
   do local_id = 1, grid%nlmax  ! For each local node do...
@@ -1826,6 +1824,8 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
     if (imat <= 0) cycle
     if (option%use_sc) then
       vol_frac_prim = sec_heat_vars(local_id)%epsilon
+    else
+      vol_frac_prim = 1.d0
     endif
     call GeneralAccumDerivative(gen_auxvars(:,ghosted_id), &
                               global_auxvars(ghosted_id), &
@@ -2536,192 +2536,6 @@ subroutine GeneralSSSandboxLoadAuxReal(srcsink,aux_real,gen_auxvar,option)
   end select
 
 end subroutine GeneralSSSandboxLoadAuxReal
-
-! ************************************************************************** !
-
-subroutine GeneralSecondaryHeat(sec_heat_vars,global_auxvar, &
-                                therm_conductivity,dencpr, &
-                                option,res_heat)
-  !
-  ! Calculates the source term contribution due to secondary
-  ! continuum in the primary continuum residual
-  !
-  ! Author: Satish Karra, LANL, David Fukuyama (General mode)
-  ! Date: 06/2/12, 3/1/23
-  !
-
-  use Option_module
-  use Global_Aux_module
-  use Secondary_Continuum_Aux_module
-
-  implicit none
-
-  type(sec_heat_type) :: sec_heat_vars
-  type(global_auxvar_type) :: global_auxvar
-  type(option_type) :: option
-  PetscReal :: coeff_left(sec_heat_vars%ncells)
-  PetscReal :: coeff_diag(sec_heat_vars%ncells)
-  PetscReal :: coeff_right(sec_heat_vars%ncells)
-  PetscReal :: rhs(sec_heat_vars%ncells)
-  PetscReal :: area(sec_heat_vars%ncells)
-  PetscReal :: vol(sec_heat_vars%ncells)
-  PetscReal :: dm_plus(sec_heat_vars%ncells)
-  PetscReal :: dm_minus(sec_heat_vars%ncells)
-  PetscInt :: i, ngcells
-  PetscReal :: area_fm
-  PetscReal :: alpha, therm_conductivity, dencpr
-  PetscReal :: temp_primary_node
-  PetscReal :: m
-  PetscReal :: temp_current_N
-  PetscReal :: res_heat
-
-  ngcells = sec_heat_vars%ncells
-  area = sec_heat_vars%area
-  vol = sec_heat_vars%vol
-  dm_plus = sec_heat_vars%dm_plus
-  dm_minus = sec_heat_vars%dm_minus
-  area_fm = sec_heat_vars%interfacial_area
-  temp_primary_node = global_auxvar%temp
-
-  coeff_left = 0.d0
-  coeff_diag = 0.d0
-  coeff_right = 0.d0
-  rhs = 0.d0
-
-  alpha = option%flow_dt*therm_conductivity/dencpr
-
-
-! Setting the coefficients
-  do i = 2, ngcells-1
-    coeff_left(i) = -alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i))
-    coeff_diag(i) = alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i)) + &
-                    alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i)) + 1.d0
-    coeff_right(i) = -alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i))
-  enddo
-
-  coeff_diag(1) = alpha*area(1)/((dm_minus(2) + dm_plus(1))*vol(1)) + 1.d0
-  coeff_right(1) = -alpha*area(1)/((dm_minus(2) + dm_plus(1))*vol(1))
-
-  coeff_left(ngcells) = -alpha*area(ngcells-1)/ &
-                       ((dm_minus(ngcells) + dm_plus(ngcells-1))*vol(ngcells))
-  coeff_diag(ngcells) = alpha*area(ngcells-1)/ &
-                       ((dm_minus(ngcells) + dm_plus(ngcells-1))*vol(ngcells)) &
-                       + alpha*area(ngcells)/(dm_plus(ngcells)*vol(ngcells)) &
-                       + 1.d0
-
-  ! secondary continuum values from previous time step
-  rhs = sec_heat_vars%sec_temp
-  rhs(ngcells) = rhs(ngcells) + &
-                 alpha*area(ngcells)/(dm_plus(ngcells)*vol(ngcells))* &
-                 temp_primary_node
-
-  ! Thomas algorithm for tridiagonal system
-  ! Forward elimination
-  do i = 2, ngcells
-    m = coeff_left(i)/coeff_diag(i-1)
-    coeff_diag(i) = coeff_diag(i) - m*coeff_right(i-1)
-    rhs(i) = rhs(i) - m*rhs(i-1)
-  enddo
-
-  ! Back substitution
-  ! We only need the temperature at the outer-most node (closest to
-  ! primary node)
-  temp_current_N = rhs(ngcells)/coeff_diag(ngcells)
-
-  ! Calculate the coupling term
-  res_heat = area_fm*therm_conductivity*(temp_current_N - temp_primary_node)/ &
-             dm_plus(ngcells)
-
-end subroutine GeneralSecondaryHeat
-
-! ************************************************************************** !
-
-subroutine GeneralSecondaryHeatJacobian(sec_heat_vars, &
-                                    therm_conductivity, &
-                                    dencpr, &
-                                    option,jac_heat)
-  !
-  ! Calculates the source term jacobian contribution
-  ! due to secondary continuum in the primary continuum residual
-  !
-  ! Author: Satish Karra, LANL, David Fukuyama (General mode)
-  ! Date: 06/6/12, 3/1/23
-  !
-
-  use Option_module
-  use Global_Aux_module
-  use Secondary_Continuum_Aux_module
-
-  implicit none
-
-  type(sec_heat_type) :: sec_heat_vars
-  type(option_type) :: option
-  PetscReal :: coeff_left(sec_heat_vars%ncells)
-  PetscReal :: coeff_diag(sec_heat_vars%ncells)
-  PetscReal :: coeff_right(sec_heat_vars%ncells)
-  PetscReal :: rhs(sec_heat_vars%ncells)
-  PetscReal :: area(sec_heat_vars%ncells)
-  PetscReal :: vol(sec_heat_vars%ncells)
-  PetscReal :: dm_plus(sec_heat_vars%ncells)
-  PetscReal :: dm_minus(sec_heat_vars%ncells)
-  PetscInt :: i, ngcells
-  PetscReal :: area_fm
-  PetscReal :: alpha, therm_conductivity, dencpr
-  PetscReal :: m
-  PetscReal :: Dtemp_N_Dtemp_prim
-  PetscReal :: jac_heat
-
-  ngcells = sec_heat_vars%ncells
-  area = sec_heat_vars%area
-  vol = sec_heat_vars%vol
-  dm_plus = sec_heat_vars%dm_plus
-  area_fm = sec_heat_vars%interfacial_area
-  dm_minus = sec_heat_vars%dm_minus
-
-  coeff_left = 0.d0
-  coeff_diag = 0.d0
-  coeff_right = 0.d0
-  rhs = 0.d0
-
-  alpha = option%flow_dt*therm_conductivity/dencpr
-
-! Setting the coefficients
-  do i = 2, ngcells-1
-    coeff_left(i) = -alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i))
-    coeff_diag(i) = alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i)) + &
-                    alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i)) + 1.d0
-    coeff_right(i) = -alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i))
-  enddo
-
-  coeff_diag(1) = alpha*area(1)/((dm_minus(2) + dm_plus(1))*vol(1)) + 1.d0
-  coeff_right(1) = -alpha*area(1)/((dm_minus(2) + dm_plus(1))*vol(1))
-
-  coeff_left(ngcells) = -alpha*area(ngcells-1)/ &
-                       ((dm_minus(ngcells) + dm_plus(ngcells-1))*vol(ngcells))
-  coeff_diag(ngcells) = alpha*area(ngcells-1)/ &
-                       ((dm_minus(ngcells) + dm_plus(ngcells-1))*vol(ngcells)) &
-                       + alpha*area(ngcells)/(dm_plus(ngcells)*vol(ngcells)) &
-                       + 1.d0
-
-  ! Thomas algorithm for tridiagonal system
-  ! Forward elimination
-  do i = 2, ngcells
-    m = coeff_left(i)/coeff_diag(i-1)
-    coeff_diag(i) = coeff_diag(i) - m*coeff_right(i-1)
-    ! We do not have to calculate rhs terms
-  enddo
-
-  ! We need the temperature derivative at the outer-most node (closest
-  ! to primary node)
-  Dtemp_N_Dtemp_prim = 1.d0/coeff_diag(ngcells)*alpha*area(ngcells)/ &
-                       (dm_plus(ngcells)*vol(ngcells))
-
-  ! Calculate the jacobian term
-  jac_heat = area_fm*therm_conductivity*(Dtemp_N_Dtemp_prim - 1.d0)/ &
-             dm_plus(ngcells)
-
-
-end subroutine GeneralSecondaryHeatJacobian
 
 ! ************************************************************************** !
 

@@ -1521,8 +1521,6 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
     endif
   endif
 
-  global_auxvar%temp = gen_auxvar%temp
-
 #if 0
   if (option%iflag == GENERAL_UPDATE_FOR_ACCUM) then
     write(*,'(a,i3,2f13.4,es13.6,f13.4,a3)') 'i/l/g/x[a/l]/t: ', &
