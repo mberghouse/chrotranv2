@@ -1595,7 +1595,7 @@ subroutine BEDefaultSeepingErosion(this, eros_rate, auxvar, option)
 
   PetscReal :: Dr, u, y, expo
   PetscReal :: G
-  PetscReal :: Gdiv2
+  PetscReal :: seepLamWx
   PetscReal :: rRSS
   PetscInt :: status
 
@@ -1625,7 +1625,7 @@ subroutine BEDefaultSeepingErosion(this, eros_rate, auxvar, option)
   ! ProductLog(G/2) in Eq. 4-7 (i.e., Lambert W)
   ! solving with Newton's Method
   !               init_guess, const, tol, max_iter, sol, status
-  call BELambertWSolve(1.d0, G/2.d0, 1.d-8, 100, Gdiv2, status)
+  call BELambertWSolve(1.d0, G/2.d0, 1.d-8, 100, seepLamWx, status)
   if (status == 1) then
     option%io_buffer = "Newton's method did not converge" // &
                        " within the maximum number of iterations" // &
@@ -1635,7 +1635,7 @@ subroutine BEDefaultSeepingErosion(this, eros_rate, auxvar, option)
   end if
 
   ! radius of rim at steady state
-  rRSS = this%bh_rad*((G/2.d0)/Gdiv2)**2.d0  ! (m)
+  rRSS = this%bh_rad*((G/2.d0)/seepLamWx)**2.d0  ! (m)
 
   ! Buffer erosion rate by Seeping water
   eros_rate = this%smec_den*auxvar%frac_aperture*this%smec_vf_int_rim * &
@@ -1671,14 +1671,14 @@ subroutine BEDefaultSedimentationErosion(this, sed_rate, auxvar, option)
 
   Fexp = this%diff_coef_bh * this%smec_den * &
          (this%smec_vf_bh_init - this%af_vol_den) / &
-         (c_sed*sin(auxvar%frac_angle))
+         (this%c_sed*sin(auxvar%frac_angle))
 
   ratio = Fexp/this%bh_rad
 
   ! ProductLog(G/2) in Eq. 4-7 (i.e., Lambert W)
   ! solving with Newton's Method
   !               init_guess, const, tol, max_iter, sol, status
-  call BELambertWSolve(1.d0, ratio, 1.d-8, 100, x1, status)
+  call BELambertWSolve(1.d0, ratio, 1.d-8, 100, sedLamWx, status)
   if (status == 1) then
     option%io_buffer = "Newton's method did not converge" // &
                        " within the maximum number of iterations" // &
@@ -1687,7 +1687,8 @@ subroutine BEDefaultSedimentationErosion(this, sed_rate, auxvar, option)
     call PrintErrMsg(option)
   end if
   
-  rRSS = Fexp/x1
+  rRSS = Fexp/sedLamWx
+  NexpSed = this%c_sed
   
 end subroutine BEDefaultSedimentationErosion
 
