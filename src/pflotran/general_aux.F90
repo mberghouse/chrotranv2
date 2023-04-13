@@ -46,8 +46,8 @@ module General_Aux_module
   PetscBool, public :: general_kelvin_equation = PETSC_FALSE
   PetscBool, public :: general_compute_surface_tension = PETSC_FALSE
   PetscBool, public :: general_thermal_imbibition = PETSC_FALSE
-  PetscReal, public :: thermal_imb_C1 = 1500.d0
-  PetscReal, public :: thermal_imb_C2 = 25.d0
+  PetscReal, public :: thermal_imb_C1
+  PetscReal, public :: thermal_imb_C2
 
   ! debugging
   PetscInt, public :: general_ni_count
@@ -1525,6 +1525,8 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
   if (general_thermal_imbibition) then
     D = (gen_auxvar%den_kg(lid) * gen_auxvar%effective_porosity) / ((1.d0 - gen_auxvar%effective_porosity) * &
          material_auxvar%soil_particle_density)
+    thermal_imb_C1 = material_auxvar%heat_of_wetting
+    thermal_imb_C2 = material_auxvar%heat_of_wetting_exp
     gen_auxvar%thermal_imbibition_term = (gen_auxvar%den_kg(lid) * gen_auxvar%effective_porosity * thermal_imb_C1 * &
                                          exp(-1.d0 * thermal_imb_C2 * D * gen_auxvar%sat(lid)))
   endif

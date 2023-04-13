@@ -57,6 +57,9 @@ module Material_module
     PetscReal :: electrical_conductivity
     class(dataset_base_type), pointer :: electrical_conductivity_dataset
 
+    PetscReal :: heat_of_wetting
+    PetscReal :: heat_of_wetting_exp
+
     class(fracture_type), pointer :: fracture
 
     PetscInt :: creep_closure_id
@@ -211,6 +214,9 @@ function MaterialPropertyCreate(option)
   material_property%tensorial_rel_perm_exponent = UNINITIALIZED_DOUBLE
   material_property%electrical_conductivity = UNINITIALIZED_DOUBLE
   nullify(material_property%electrical_conductivity_dataset)
+
+  material_property%heat_of_wetting = UNINITIALIZED_DOUBLE
+  material_property%heat_of_wetting_exp = UNINITIALIZED_DOUBLE
 
   nullify(material_property%fracture)
   nullify(material_property%geomechanics_subsurface_properties)
@@ -953,6 +959,14 @@ subroutine MaterialPropertyRead(material_property,input,option)
                       material_property%electrical_conductivity, &
                       material_property%electrical_conductivity_dataset, &
                       'electrical conductivity','MATERIAL_PROPERTY',option)
+      case('HEAT_OF_WETTING')
+        call InputReadDouble(input,option,material_property%heat_of_wetting)
+        call InputErrorMsg(input,option,'heat of wetting','MATERIAL_PROPERTY')
+        call InputReadAndConvertUnits(input,material_property%rock_density, &
+                          'kJ/kg','MATERIAL_PROPERTY,heat of wetting',option)
+      case('HEAT_OF_WETTING_EXP')
+        call InputReadDouble(input,option,material_property%heat_of_wetting_exp)
+        call InputErrorMsg(input,option,'heat of wetting exponential','MATERIAL_PROPERTY')
       case default
         call InputKeywordUnrecognized(input,keyword,'MATERIAL_PROPERTY',option)
     end select
@@ -1711,6 +1725,16 @@ subroutine MaterialAssignPropertyToAux(material_auxvar,material_property, &
       material_property%rock_density
   endif
 
+  if (Initialized(material_property%heat_of_wetting)) then
+    material_auxvar%heat_of_wetting = &
+      material_property%heat_of_wetting
+  endif
+
+  if (Initialized(material_property%heat_of_wetting_exp)) then
+    material_auxvar%heat_of_wetting_exp = &
+      material_property%heat_of_wetting_exp
+  endif
+
   if (associated(material_property%geomechanics_subsurface_properties)) then
     call GeomechanicsSubsurfacePropsPropertytoAux(material_auxvar, &
       material_property%geomechanics_subsurface_properties)
@@ -1829,6 +1853,14 @@ subroutine MaterialSetAuxVarScalar(Material,value,ivar,isubvar)
     case(ELECTRICAL_CONDUCTIVITY)
       do i=1, Material%num_aux
         material_auxvars(i)%electrical_conductivity(1) = value
+      enddo
+    case(HEAT_OF_WETTING)
+      do i=1, Material%num_aux
+        material_auxvars(i)%heat_of_wetting = value
+      enddo
+    case(HEAT_OF_WETTING_EXP)
+      do i=1, Material%num_aux
+        material_auxvars(i)%heat_of_wetting_exp = value
       enddo
   end select
 
@@ -2380,6 +2412,18 @@ subroutine MaterialPropInputRecord(material_property_list)
       write(id,'(a29)',advance='no') 'frozen th. conductivity: '
       write(word1,*) cur_matprop%thermal_conductivity_frozen
       write(id,'(a)') adjustl(trim(word1)) // ' W/m-C'
+    endif
+
+    if (Initialized(cur_matprop%heat_of_wetting)) then
+      write(id,'(a29)',advance='no') 'heat of wetting: '
+      write(word1,*) cur_matprop%heat_of_wetting
+      write(id,'(a)') adjustl(trim(word1)) // ' kJ/kg'
+    endif
+
+    if (Initialized(cur_matprop%heat_of_wetting)) then
+      write(id,'(a29)',advance='no') 'heat of wetting exponential: '
+      write(word1,*) cur_matprop%heat_of_wetting_exp
+      write(id,'(a)') adjustl(trim(word1)) // ' '
     endif
 
     if (len_trim(cur_matprop%soil_compressibility_function) > 0) then

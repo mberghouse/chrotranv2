@@ -275,24 +275,24 @@ subroutine PMGeneralReadSimOptionsBlock(this,input)
         general_kelvin_equation = PETSC_TRUE
       case('THERMAL_IMBIBITION')
         general_thermal_imbibition = PETSC_TRUE
-        call InputPushBlock(input,option)
-          do
-            call InputReadPflotranString(input,option)
-            if (input%ierr /= 0) exit
-            if (InputCheckExit(input,option)) exit
-            call InputReadCard(input,option,word)
-            call InputErrorMsg(input,option,keyword,error_string)
-            call StringToUpper(word)
-            select case(trim(word))
-              case('C1')
-                call InputReadDouble(input,option,thermal_imb_C1)
-                call InputErrorMsg(input,option,'C1',error_string)
-              case('C2')
-                call InputReadDouble(input,option,thermal_imb_C2)
-                call InputErrorMsg(input,option,'C2',error_string)
-            end select
-          enddo
-        call InputPopBlock(input,option)
+        ! call InputPushBlock(input,option)
+        !   do
+        !     call InputReadPflotranString(input,option)
+        !     if (input%ierr /= 0) exit
+        !     if (InputCheckExit(input,option)) exit
+        !     call InputReadCard(input,option,word)
+        !     call InputErrorMsg(input,option,keyword,error_string)
+        !     call StringToUpper(word)
+        !     select case(trim(word))
+        !       case('C1')
+        !         call InputReadDouble(input,option,thermal_imb_C1)
+        !         call InputErrorMsg(input,option,'C1',error_string)
+        !       case('C2')
+        !         call InputReadDouble(input,option,thermal_imb_C2)
+        !         call InputErrorMsg(input,option,'C2',error_string)
+        !     end select
+        !   enddo
+        ! call InputPopBlock(input,option)
       case default
         call InputKeywordUnrecognized(input,keyword,'GENERAL Mode',option)
     end select

@@ -58,6 +58,8 @@ module Material_Aux_module
     PetscReal :: dporosity_dp
     PetscReal :: tortuosity
     PetscReal :: soil_particle_density
+    PetscReal :: heat_of_wetting
+    PetscReal :: heat_of_wetting_exp
     PetscReal, pointer :: permeability(:)
     PetscReal, pointer :: sat_func_prop(:)
     PetscReal, pointer :: soil_properties(:) ! den, therm. cond., heat cap., epsilon, matrix length
@@ -194,6 +196,8 @@ subroutine MaterialAuxVarInit(auxvar,option)
   auxvar%dporosity_dp = 0.d0
   auxvar%tortuosity = UNINITIALIZED_DOUBLE
   auxvar%soil_particle_density = UNINITIALIZED_DOUBLE
+  auxvar%heat_of_wetting = UNINITIALIZED_DOUBLE
+  auxvar%heat_of_wetting_exp = UNINITIALIZED_DOUBLE
   if (option%iflowmode /= NULL_MODE) then
     if (option%flow%full_perm_tensor) then
       allocate(auxvar%permeability(6))
@@ -253,6 +257,8 @@ subroutine MaterialAuxVarCopy(auxvar,auxvar2,option)
   auxvar2%porosity = auxvar%porosity
   auxvar2%tortuosity = auxvar%tortuosity
   auxvar2%soil_particle_density = auxvar%soil_particle_density
+  auxvar2%heat_of_wetting = auxvar%heat_of_wetting
+  auxvar2%heat_of_wetting_exp = auxvar%heat_of_wetting
   if (associated(auxvar%permeability)) then
     auxvar2%permeability = auxvar%permeability
   endif
@@ -668,6 +674,10 @@ function MaterialAuxVarGetValue(material_auxvar,ivar)
                                  soil_properties(soil_reference_pressure_index)
     case(ELECTRICAL_CONDUCTIVITY)
       MaterialAuxVarGetValue = material_auxvar%electrical_conductivity(1)
+    case(HEAT_OF_WETTING)
+      MaterialAuxVarGetValue = material_auxvar%heat_of_wetting
+    case(HEAT_OF_WETTING_EXP)
+      MaterialAuxVarGetValue = material_auxvar%heat_of_wetting_exp
     case default
       print *, 'Unrecognized variable in MaterialAuxVarGetValue: ', ivar
       stop
@@ -726,6 +736,10 @@ subroutine MaterialAuxVarSetValue(material_auxvar,ivar,value)
       material_auxvar%soil_properties(soil_reference_pressure_index) = value
     case(ELECTRICAL_CONDUCTIVITY)
       material_auxvar%electrical_conductivity(1) = value
+    case(HEAT_OF_WETTING)
+      material_auxvar%heat_of_wetting = value
+    case(HEAT_OF_WETTING_EXP)
+      material_auxvar%heat_of_wetting_exp = value
     case default
       print *, 'Unrecognized variable in MaterialAuxVarSetValue: ', ivar
       stop
