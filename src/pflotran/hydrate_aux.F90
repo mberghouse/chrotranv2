@@ -166,6 +166,7 @@ module Hydrate_Aux_module
   PetscBool, public :: hydrate_no_pc = PETSC_FALSE
   PetscBool, public :: hydrate_with_methanogenesis = PETSC_FALSE
   PetscBool, public :: hydrate_compute_surface_tension = PETSC_FALSE
+  PetscBool, public :: grenier_function = PETSC_TRUE
 
   type, public :: hydrate_auxvar_type
     PetscInt :: istate_store(2) ! 1 = previous timestep; 2 = previous iteration
@@ -3864,6 +3865,10 @@ subroutine CalcFreezingTempDepression(sat,characteristic_curves,dTf,option)
   call characteristic_curves%saturation_function% &
          CapillaryPressure(sat,Pc,dpc_dsatl,option)
   dTf = Pc/(L_ICE * dw * 1.d6) * (Tb + 273.15d0)
+
+  if (grenier_function) then
+    dTf = sqrt(-1*log(sat))*0.5
+  endif
 
 end subroutine CalcFreezingTempDepression
 
