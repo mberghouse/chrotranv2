@@ -3855,11 +3855,13 @@ subroutine CalcFreezingTempDepression(sat,characteristic_curves,dTf,option)
 
   PetscReal :: Pc,dw,Tb,dpc_dsatl
   PetscReal :: sigma, theta
+  PetscReal :: sr
 
   sigma = 0.073d0 !interfacial tension
   theta = 0.d0 !wetting angle
   Tb = TQD !bulk freezing point
   dw = ICE_DENSITY !density of water
+  sr = characteristic_curves%saturation_function%sr
 
   !Clausius-Clapeyron derivation
   call characteristic_curves%saturation_function% &
@@ -3867,7 +3869,7 @@ subroutine CalcFreezingTempDepression(sat,characteristic_curves,dTf,option)
   dTf = Pc/(L_ICE * dw * 1.d6) * (Tb + 273.15d0)
 
   if (grenier_function) then
-    dTf = sqrt(-1*log(sat))*0.5
+    dTf = sqrt(-1*log((sat-sr)/(1-sr)))*0.5
   endif
 
 end subroutine CalcFreezingTempDepression
