@@ -33,7 +33,7 @@ eos_obj = \
 	${common_src}eos.o \
 	${common_src}eos_gas.o \
 	${common_src}eos_oil.o \
-        ${common_src}eos_slv.o \
+	${common_src}eos_slv.o \
 	${common_src}gas_eos_mod.o 
 
 mode_aux_obj = \
@@ -53,7 +53,7 @@ mode_aux_obj = \
 	${common_src}immis_aux.o \
 	${common_src}miscible_aux.o \
 	${common_src}mphase_aux.o \
-        ${common_src}nw_transport_aux.o \
+	${common_src}nw_transport_aux.o \
 	${common_src}pm_auxiliary.o \
 	${common_src}pm_base.o \
 	${common_src}pm_base_pointer.o \
@@ -66,7 +66,7 @@ mode_aux_obj = \
 	${common_src}pm_immis.o \
 	${common_src}pm_mphase.o \
 	${common_src}pm_miscible.o \
-        ${common_src}pm_nwt.o \
+	${common_src}pm_nwt.o \
 	${common_src}pm_richards.o \
 	${common_src}pm_richards_ts.o \
 	${common_src}pm_osrt.o \
@@ -99,7 +99,7 @@ mode_obj = \
 	${common_src}immis.o \
 	${common_src}miscible.o \
 	${common_src}mphase.o \
-        ${common_src}nw_transport.o \
+	${common_src}nw_transport.o \
 	${common_src}reactive_transport.o \
 	${common_src}richards.o \
 	${common_src}richards_common.o \
@@ -142,9 +142,9 @@ chem_obj = \
 	${common_src}reaction_sandbox_base.o \
 	${common_src}reaction_sandbox_clm_cn.o \
 	${common_src}reaction_sandbox_example.o \
-	${common_src}reaction_sandbox_pnnl_cyber.o \
+	${common_src}reaction_sandbox_pnnl_cyber2.o \
 	${common_src}reaction_sandbox_gas.o \
-        ${common_src}reaction_sandbox_simple.o \
+	${common_src}reaction_sandbox_simple.o \
 	${common_src}reaction_sandbox_ufd_wp.o \
 	${common_src}reaction_solid_solution.o \
 	${common_src}reaction_solid_solution_aux.o \
