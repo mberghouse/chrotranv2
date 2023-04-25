@@ -3862,7 +3862,6 @@ subroutine CalcFreezingTempDepression(sat,characteristic_curves,dTf,option)
   Tb = TQD !bulk freezing point
   dw = ICE_DENSITY !density of water
   sr = characteristic_curves%saturation_function%sr
-
   !Clausius-Clapeyron derivation
   call characteristic_curves%saturation_function% &
          CapillaryPressure(sat,Pc,dpc_dsatl,option)
