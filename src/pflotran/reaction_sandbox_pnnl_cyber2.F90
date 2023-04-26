@@ -491,7 +491,7 @@ subroutine CyberSetup(this,reaction,option)
 
   if (Initialized(this%inhibit_by_nh4) .and. &
       Uninitialized(this%inhibition_threshold_f)) then
-    this%inhibition_threshold_f = this%inhibit_by_nh4*1.d16
+    this%inhibition_threshold_f = 1.d5/this%inhibit_by_nh4
   endif
 
 end subroutine CyberSetup
