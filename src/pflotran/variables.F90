@@ -175,4 +175,7 @@ module Variables_module
   PetscInt, parameter, public :: SMECTITE                = 140
   PetscInt, parameter, public :: GAS_PARTIAL_PRESSURE    = 141
 
+  PetscInt, parameter, public :: SURFACE_FLOW_X_MOMENTUM = 142
+  PetscInt, parameter, public :: SURFACE_FLOW_Y_MOMENTUM = 143
+
 end module Variables_module

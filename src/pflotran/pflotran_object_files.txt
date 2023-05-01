@@ -97,6 +97,7 @@ mode_obj = \
 	${common_src}richards.o \
 	${common_src}richards_common.o \
 	${common_src}surface_global.o \
+	${common_src}swe.o \
 	${common_src}th.o \
 	${common_src}zflow.o \
 	${common_src}zflow_common.o \
