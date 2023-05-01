@@ -196,4 +196,7 @@ module Variables_module
 
   PetscInt, parameter, public :: VERTICAL_PERM_ANISOTROPY_RATIO = 158
 
+  PetscInt, parameter, public :: SURFACE_FLOW_X_MOMENTUM = 159
+  PetscInt, parameter, public :: SURFACE_FLOW_Y_MOMENTUM = 160
+
 end module Variables_module

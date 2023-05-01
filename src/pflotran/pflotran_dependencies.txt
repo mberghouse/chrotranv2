@@ -1265,6 +1265,8 @@ init_surface.o : \
 init_surface_flow.o : \
   option.o \
   patch.o \
+  pm_base.o \
+  pm_swe.o \
   realization_surface.o \
   simulation_surface.o
 inlinesurface.o : \
@@ -3571,6 +3573,10 @@ survey.o : \
   pflotran_constants.o \
   string.o \
   utility.o
+swe.o : \
+  output_aux.o \
+  realization_surface.o \
+  variables.o
 th.o : \
   characteristic_curves.o \
   characteristic_curves_thermal.o \
