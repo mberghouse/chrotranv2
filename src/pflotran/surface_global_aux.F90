@@ -11,9 +11,9 @@ module Surface_Global_Aux_module
 
   type, public :: surface_global_auxvar_type
     PetscInt :: istate
-    PetscReal, pointer :: head(:)   ! [m]
+    PetscReal :: h      ! [m]
     PetscReal :: temp   ! [C]
-    PetscReal, pointer :: den_kg(:) ! [kg/m^3]
+    PetscReal :: den_kg ! [kg/m^3]
     PetscBool :: is_dry
   end type surface_global_auxvar_type
   
@@ -87,10 +87,8 @@ subroutine SurfaceGlobalAuxVarInit(auxvar,option)
   
   auxvar%istate = 0
   auxvar%is_dry = PETSC_FALSE
-  allocate(auxvar%head(option%nphase))
-  auxvar%head = 0.d0
+  auxvar%h = 0.d0
   auxvar%temp = option%flow%reference_temperature
-  allocate(auxvar%den_kg(option%nphase))
   auxvar%den_kg = 0.d0
 
 end subroutine SurfaceGlobalAuxVarInit
@@ -114,7 +112,7 @@ subroutine SurfaceGlobalAuxVarCopy(auxvar,auxvar2,option)
 
   auxvar2%istate = auxvar%istate
   auxvar2%is_dry = auxvar%is_dry
-  auxvar2%head = auxvar%head
+  auxvar2%h = auxvar%h
   auxvar2%temp = auxvar%temp
   auxvar2%den_kg = auxvar%den_kg
 
@@ -183,10 +181,6 @@ subroutine SurfaceGlobalAuxVarStrip(auxvar)
   implicit none
 
   type(surface_global_auxvar_type) :: auxvar
-  
-  call DeallocateArray(auxvar%head)
-  call DeallocateArray(auxvar%den_kg)
-
 
 end subroutine SurfaceGlobalAuxVarStrip
 
@@ -203,7 +197,6 @@ subroutine SurfaceGlobalAuxDestroy(aux)
   implicit none
 
   type(surface_global_type), pointer :: aux
-  PetscInt :: iaux
   
   if (.not.associated(aux)) return
   

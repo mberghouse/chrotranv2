@@ -3514,10 +3514,12 @@ strata.o : \
 string.o : \
   pflotran_constants.o
 surface_auxiliary.o : \
-  surface_global_aux.o
+  surface_global_aux.o \
+  swe_aux.o
 surface_global_aux.o : \
   pflotran_constants.o \
-  option.o
+  option.o \
+  utility.o
 surface_global.o : \
   pflotran_constants.o \
   realization_surface.o \
@@ -3535,6 +3537,8 @@ swe.o : \
   output_aux.o \
   realization_surface.o \
   variables.o
+swe_aux.o : \
+  option.o
 th.o : \
   characteristic_curves.o \
   characteristic_curves_thermal.o \
