@@ -170,10 +170,10 @@ subroutine SurfaceGlobalSetAuxVarScalarPatch(surf_realization,value,ivar)
   select case(ivar)
     case(SURFACE_LIQUID_HEAD)
       do i=1, patch%surf_aux%SurfaceGlobal%num_aux
-        patch%surf_aux%SurfaceGlobal%auxvars(i)%head = value
+        patch%surf_aux%SurfaceGlobal%auxvars(i)%h = value
       enddo
       do i=1, patch%surf_aux%SurfaceGlobal%num_aux_bc
-        patch%surf_aux%SurfaceGlobal%auxvars_bc(i)%head = value
+        patch%surf_aux%SurfaceGlobal%auxvars_bc(i)%h = value
       enddo
   end select
   
@@ -257,8 +257,8 @@ subroutine SurfaceGlobalSetAuxVarVecLocPatch(surf_realization,vec_loc,ivar,isubv
       select case(isubvar)
         case default
           do ghosted_id=1, grid%ngmax
-            patch%surf_aux%SurfaceGlobal%auxvars(ghosted_id)%head(option%liquid_phase) &
-              = vec_loc_p(ghosted_id)
+            patch%surf_aux%SurfaceGlobal%auxvars(ghosted_id)%h = &
+              vec_loc_p(ghosted_id)
           enddo
       end select
   end select

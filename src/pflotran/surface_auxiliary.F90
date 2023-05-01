@@ -1,7 +1,7 @@
 module Surface_Auxiliary_module
 
   use Surface_Global_Aux_module
-!  use Surface_Flow_Aux_module
+  use SWE_Aux_module
 
   use PFLOTRAN_Constants_module
 
@@ -13,6 +13,7 @@ module Surface_Auxiliary_module
 
   type, public :: surface_auxiliary_type
     type(surface_global_type), pointer :: SurfaceGlobal
+    type(swe_type), pointer :: SWE
   end type surface_auxiliary_type
   
   public :: SurfaceAuxInit, &
@@ -35,6 +36,7 @@ subroutine SurfaceAuxInit(surf_aux)
   type(surface_auxiliary_type) :: surf_aux
   
   nullify(surf_aux%SurfaceGlobal)
+  nullify(surf_aux%SWE)
   
 end subroutine SurfaceAuxInit
 
