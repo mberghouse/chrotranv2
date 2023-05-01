@@ -173,15 +173,15 @@ subroutine GeneralSetup(realization)
     do ipara = 1, size(patch%material_property_array)
       patch%aux%General%general_parameter%dencpr(abs(patch%material_property_array(ipara)% &
                                           ptr%internal_id)) = &
-        patch%material_property_array(ipara)%ptr%rock_density*option%scale*&
-        patch%material_property_array(ipara)%ptr%specific_heat
+        patch%material_property_array(ipara)%ptr%rock_density * &
+        patch%material_property_array(ipara)%ptr%specific_heat * 1.d-6
     enddo
-    allocate(patch%aux%General%general_parameter%ckwet(size(patch%material_property_array)))
-    do ipara = 1, size(patch%material_property_array)
-      patch%aux%General%general_parameter%ckwet(abs(patch%material_property_array(ipara)% &
-                                         ptr%internal_id)) = &
-        patch%material_property_array(ipara)%ptr%thermal_conductivity_wet*option%scale
-    enddo
+    ! allocate(patch%aux%General%general_parameter%ckwet(size(patch%material_property_array)))
+    ! do ipara = 1, size(patch%material_property_array)
+    !   patch%aux%General%general_parameter%ckwet(abs(patch%material_property_array(ipara)% &
+    !                                      ptr%internal_id)) = &
+    !     patch%material_property_array(ipara)%ptr%thermal_conductivity_wet*option%scale
+    ! enddo
 
     initial_condition => patch%initial_condition_list%first
     allocate(general_sec_heat_vars(grid%nlmax))
@@ -386,6 +386,7 @@ subroutine GeneralUpdateSolution(realization)
       istart = iend-option%nflowdof+1
 
       sec_dencpr = general_parameter%dencpr(patch%cct_id(ghosted_id)) ! secondary rho*c_p same as primary for now
+      thermal_cc => patch%char_curves_thermal_array(patch%cct_id(ghosted_id))%ptr
       call thermal_cc%thermal_conductivity_function%TCondTensorToScalar(dummy_dist,option)
       call thermal_cc%thermal_conductivity_function%CalculateTCond(gen_auxvars(ZERO_INTEGER,ghosted_id)%sat(1), &
        gen_auxvars(ZERO_INTEGER,ghosted_id)%temp,gen_auxvars(ZERO_INTEGER,ghosted_id)%effective_porosity, &
@@ -394,7 +395,7 @@ subroutine GeneralUpdateSolution(realization)
       call SecHeatAuxVarCompute(general_sec_heat_vars(local_id), &
                                 !general_parameter%ckwet(patch%cct_id(ghosted_id)), &
                                 !patch%char_curves_thermal_array(patch%cct_id(ghosted_id))%ptr, &
-                                k_eff,&
+                                k_eff*1.d-6,&
                                 sec_dencpr,gen_auxvars(ZERO_INTEGER,ghosted_id)%temp, &
                                 option)
     enddo
@@ -1436,7 +1437,7 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
       istart = iend-option%nflowdof+1
 
       sec_dencpr = general_parameter%dencpr(patch%cct_id(ghosted_id)) ! secondary rho*c_p same as primary for now
-
+      thermal_cc => patch%char_curves_thermal_array(patch%cct_id(ghosted_id))%ptr
       call thermal_cc%thermal_conductivity_function%TCondTensorToScalar(dummy_dist,option)
       call thermal_cc%thermal_conductivity_function%CalculateTCond(gen_auxvars(ZERO_INTEGER,ghosted_id)%sat(1), &
        gen_auxvars(ZERO_INTEGER,ghosted_id)%temp,gen_auxvars(ZERO_INTEGER,ghosted_id)%effective_porosity, &
@@ -1444,7 +1445,7 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
       call SecondaryHeatResidual(general_sec_heat_vars(local_id), &
                                  !general_parameter%ckwet(patch%cct_id(ghosted_id)), &
                                  !patch%char_curves_thermal_array(patch%cct_id(ghosted_id))%ptr, &
-                                 k_eff,&
+                                 k_eff*1.d-6,&
                                  sec_dencpr,gen_auxvars(ZERO_INTEGER,ghosted_id)%temp, &
                                  option,res_sec_heat)
       r_p(iend) = r_p(iend) - res_sec_heat*material_auxvars(ghosted_id)%volume
@@ -1858,6 +1859,7 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
     if (option%use_sc) then
       if (.not.Equal((material_auxvars(ghosted_id)% &
           soil_properties(epsilon_index)),1.d0)) then
+        thermal_cc => patch%char_curves_thermal_array(patch%cct_id(ghosted_id))%ptr
         call thermal_cc%thermal_conductivity_function%TCondTensorToScalar(dummy_dist,option)
         call thermal_cc%thermal_conductivity_function%CalculateTCond(gen_auxvars(ZERO_INTEGER,ghosted_id)%sat(1), &
          gen_auxvars(ZERO_INTEGER,ghosted_id)%temp,gen_auxvars(ZERO_INTEGER,ghosted_id)%effective_porosity, &
@@ -1865,7 +1867,7 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
         call SecondaryHeatJacobian(sec_heat_vars(local_id), &
                                    !general_parameter%ckwet(patch%cct_id(ghosted_id)), &
                                    !patch%char_curves_thermal_array(patch%cct_id(ghosted_id))%ptr, &
-                                   k_eff,&
+                                   k_eff*1.d-6,&
                                    general_parameter%dencpr(patch%cct_id(ghosted_id)), &
                                    option,jac_sec_heat)
         Jup(option%nflowdof,GENERAL_ENERGY_EQUATION_INDEX) = &
