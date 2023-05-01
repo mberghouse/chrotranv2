@@ -175,6 +175,7 @@ condition_control.o : \
   reactive_transport.o \
   reactive_transport_aux.o \
   realization_subsurface.o \
+  realization_surface.o \
   region.o \
   secondary_continuum_aux.o \
   transport_constraint_base.o \
@@ -1263,6 +1264,7 @@ init_surface.o : \
   material.o \
   hdf5.o
 init_surface_flow.o : \
+  condition_control.o \
   option.o \
   patch.o \
   pm_base.o \
