@@ -334,6 +334,7 @@ subroutine GeneralUpdateSolution(realization)
   use Secondary_Continuum_Aux_module
   use Secondary_Continuum_module
   use Material_Aux_module
+  use Characteristic_Curves_Thermal_module
   use Utility_module, only: Equal
 
   implicit none
@@ -348,9 +349,11 @@ subroutine GeneralUpdateSolution(realization)
   type(general_parameter_type), pointer :: general_parameter
   type(global_auxvar_type), pointer :: global_auxvars(:)
   type(sec_heat_type), pointer :: general_sec_heat_vars(:)
+  type(cc_thermal_type), pointer :: thermal_cc
   
   PetscInt :: ghosted_id, local_id, istart, iend
-  PetscReal :: sec_dencpr
+  PetscReal :: sec_dencpr,k_eff,dkeff_dsatl,dkeff_dT
+  PetscReal :: dummy_dist(-1:3) = (/0.d0,1.d0,0.d0,0.d0,1.d0/)
 
   option => realization%option
   field => realization%field
@@ -383,9 +386,15 @@ subroutine GeneralUpdateSolution(realization)
       istart = iend-option%nflowdof+1
 
       sec_dencpr = general_parameter%dencpr(patch%cct_id(ghosted_id)) ! secondary rho*c_p same as primary for now
+      call thermal_cc%thermal_conductivity_function%TCondTensorToScalar(dummy_dist,option)
+      call thermal_cc%thermal_conductivity_function%CalculateTCond(gen_auxvars(ZERO_INTEGER,ghosted_id)%sat(1), &
+       gen_auxvars(ZERO_INTEGER,ghosted_id)%temp,gen_auxvars(ZERO_INTEGER,ghosted_id)%effective_porosity, &
+       k_eff,dkeff_dsatl,dkeff_dT,option)
 
       call SecHeatAuxVarCompute(general_sec_heat_vars(local_id), &
-                                general_parameter%ckwet(patch%cct_id(ghosted_id)), &
+                                !general_parameter%ckwet(patch%cct_id(ghosted_id)), &
+                                !patch%char_curves_thermal_array(patch%cct_id(ghosted_id))%ptr, &
+                                k_eff,&
                                 sec_dencpr,gen_auxvars(ZERO_INTEGER,ghosted_id)%temp, &
                                 option)
     enddo
@@ -1237,6 +1246,7 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
 
   use Secondary_Continuum_Aux_module
   use Secondary_Continuum_module
+  use Characteristic_Curves_Thermal_module
   use Utility_module, only : Equal
 
 
@@ -1273,6 +1283,7 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
   type(material_auxvar_type), pointer :: material_auxvars(:)
   type(connection_set_list_type), pointer :: connection_set_list
   type(connection_set_type), pointer :: cur_connection_set
+  type(cc_thermal_type), pointer :: thermal_cc
 
   PetscInt :: iconn
   PetscReal :: scale
@@ -1286,7 +1297,8 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
   PetscInt :: istart, iend
 
   PetscReal :: vol_frac_prim
-  PetscReal :: sec_dencpr
+  PetscReal :: sec_dencpr,k_eff,dkeff_dsatl,dkeff_dT
+  PetscReal :: dummy_dist(-1:3) = (/0.d0,1.d0,0.d0,0.d0,1.d0/)
   PetscReal :: res_sec_heat
 
   PetscReal, pointer :: r_p(:)
@@ -1425,8 +1437,14 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
 
       sec_dencpr = general_parameter%dencpr(patch%cct_id(ghosted_id)) ! secondary rho*c_p same as primary for now
 
+      call thermal_cc%thermal_conductivity_function%TCondTensorToScalar(dummy_dist,option)
+      call thermal_cc%thermal_conductivity_function%CalculateTCond(gen_auxvars(ZERO_INTEGER,ghosted_id)%sat(1), &
+       gen_auxvars(ZERO_INTEGER,ghosted_id)%temp,gen_auxvars(ZERO_INTEGER,ghosted_id)%effective_porosity, &
+       k_eff,dkeff_dsatl,dkeff_dT,option)
       call SecondaryHeatResidual(general_sec_heat_vars(local_id), &
-                                 general_parameter%ckwet(patch%cct_id(ghosted_id)), &
+                                 !general_parameter%ckwet(patch%cct_id(ghosted_id)), &
+                                 !patch%char_curves_thermal_array(patch%cct_id(ghosted_id))%ptr, &
+                                 k_eff,&
                                  sec_dencpr,gen_auxvars(ZERO_INTEGER,ghosted_id)%temp, &
                                  option,res_sec_heat)
       r_p(iend) = r_p(iend) - res_sec_heat*material_auxvars(ghosted_id)%volume
@@ -1711,6 +1729,7 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
   use Upwind_Direction_module
   use Secondary_Continuum_Aux_module
   use Secondary_Continuum_module
+  use Characteristic_Curves_Thermal_module
   use Utility_module, only: Equal
 
   implicit none
@@ -1732,7 +1751,8 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
   PetscInt :: local_id_up, local_id_dn
   PetscInt :: ghosted_id_up, ghosted_id_dn
 
-  PetscReal :: vol_frac_prim
+  PetscReal :: vol_frac_prim,k_eff,dkeff_dsatl,dkeff_dT
+  PetscReal :: dummy_dist(-1:3) = (/0.d0,1.d0,0.d0,0.d0,1.d0/)
   PetscReal :: jac_sec_heat
 
   Vec, parameter :: null_vec = tVec(0)
@@ -1760,6 +1780,8 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
   type(material_auxvar_type), pointer :: material_auxvars(:)
 
   type(sec_heat_type), pointer :: sec_heat_vars(:)
+
+  type(cc_thermal_type), pointer :: thermal_cc
 
   character(len=MAXSTRINGLENGTH) :: string
 
@@ -1836,8 +1858,14 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
     if (option%use_sc) then
       if (.not.Equal((material_auxvars(ghosted_id)% &
           soil_properties(epsilon_index)),1.d0)) then
+        call thermal_cc%thermal_conductivity_function%TCondTensorToScalar(dummy_dist,option)
+        call thermal_cc%thermal_conductivity_function%CalculateTCond(gen_auxvars(ZERO_INTEGER,ghosted_id)%sat(1), &
+         gen_auxvars(ZERO_INTEGER,ghosted_id)%temp,gen_auxvars(ZERO_INTEGER,ghosted_id)%effective_porosity, &
+         k_eff,dkeff_dsatl,dkeff_dT,option)
         call SecondaryHeatJacobian(sec_heat_vars(local_id), &
-                                   general_parameter%ckwet(patch%cct_id(ghosted_id)), &
+                                   !general_parameter%ckwet(patch%cct_id(ghosted_id)), &
+                                   !patch%char_curves_thermal_array(patch%cct_id(ghosted_id))%ptr, &
+                                   k_eff,&
                                    general_parameter%dencpr(patch%cct_id(ghosted_id)), &
                                    option,jac_sec_heat)
         Jup(option%nflowdof,GENERAL_ENERGY_EQUATION_INDEX) = &
