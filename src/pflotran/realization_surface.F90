@@ -504,6 +504,12 @@ subroutine RealizationSurfaceProcessCouplers(surf_realization)
     endif
     strata => strata%next
   enddo
+  call CouplerListComputeConnections(patch%grid,option, &
+                                     patch%initial_condition_list)
+  !call CouplerListComputeConnections(patch%grid,option, &
+  !                                   patch%boundary_condition_list)
+  !call CouplerListComputeConnections(patch%grid,option, &
+  !                                   patch%source_sink_list)
 
 end subroutine RealizationSurfaceProcessCouplers
 

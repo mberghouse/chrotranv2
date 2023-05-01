@@ -18,6 +18,7 @@ module Condition_Control_module
   public :: CondControlAssignFlowInitCond, &
             CondControlAssignRTTranInitCond, &
             CondControlAssignNWTranInitCond, &
+            CondControlAssignFlowInitCondSurface, &
             CondControlScaleSourceSink
 
 contains
@@ -1958,5 +1959,117 @@ subroutine CondControlReadTransportIC(realization,filename)
   call VecCopy(field%tran_xx,field%tran_yy,ierr);CHKERRQ(ierr)
 
 end subroutine CondControlReadTransportIC
+
+! ************************************************************************** !
+
+subroutine CondControlAssignFlowInitCondSurface(surface_realization)
+  !
+  ! Assigns flow initial conditions to model
+  !
+  ! Author: Glenn Hammond
+  ! Date: 11/02/07, 10/18/11
+  !
+  use Realization_Surface_class
+  use Discretization_module
+  use Field_Surface_module
+  use Option_module
+  use Patch_module
+  use Grid_module
+  use Coupler_module
+
+  implicit none
+
+  class(realization_surface_type), pointer :: surface_realization
+
+  type(option_type), pointer :: option
+  type(field_surface_type), pointer :: field_surface
+  type(patch_type), pointer :: patch
+  type(grid_type), pointer :: grid
+  type(discretization_type), pointer :: discretization
+  type(coupler_type), pointer :: initial_condition
+  PetscReal, pointer :: xx_p(:)
+  PetscErrorCode :: ierr
+
+  PetscInt :: iconn, idof
+  PetscInt :: local_id, ghosted_id, iend, ibegin
+  PetscInt :: num_connections
+  PetscInt, pointer :: conn_id_ptr(:)
+
+  option => surface_realization%option
+  discretization => surface_realization%discretization
+  field_surface => surface_realization%field_surface
+  patch => surface_realization%patch
+  grid => patch%grid
+
+  ! to catch uninitialized grid cells.  see VecMin check at bottom.
+  call VecSet(field_surface%work_loc,UNINITIALIZED_DOUBLE,ierr);CHKERRQ(ierr)
+
+  call VecGetArrayF90(field_surface%flow_xx,xx_p,ierr);CHKERRQ(ierr)
+  xx_p(:) = UNINITIALIZED_DOUBLE
+
+  select case(option%iflowmode)
+  case (SWE_MODE)
+
+    initial_condition => patch%initial_condition_list%first
+    do
+      if (.not.associated(initial_condition)) exit
+
+      if (.not.associated(initial_condition%flow_aux_real_var) .and. &
+          .not.associated(initial_condition%flow_condition)) then
+        option%io_buffer = 'Flow condition is NULL in initial condition'
+        call PrintErrMsg(option)
+      endif
+
+      if (associated(initial_condition%flow_aux_real_var)) then
+        num_connections = &
+          initial_condition%connection_set%num_connections
+        conn_id_ptr => initial_condition%connection_set%id_dn
+      else
+        num_connections = initial_condition%region%num_cells
+        conn_id_ptr => initial_condition%region%cell_ids
+      endif
+
+      do iconn=1, num_connections
+        local_id = conn_id_ptr(iconn)
+        ghosted_id = grid%nL2G(local_id)
+        iend = local_id*option%nflowdof
+        ibegin = iend-option%nflowdof+1
+        if (patch%imat(ghosted_id) <= 0) then
+          xx_p(ibegin:iend) = 0.d0
+          cycle
+        endif
+
+        if (associated(initial_condition%flow_aux_real_var)) then
+          do idof = 1, option%nflowdof
+            xx_p(ibegin+idof-1) =  &
+              initial_condition%flow_aux_real_var(idof,iconn)
+          enddo
+        else
+          ! TODO: Update `flow_condition_type` to include x-momentum and y-momentum
+          do idof = 1, 1!option%nflowdof
+            xx_p(ibegin+idof-1) = &
+              initial_condition%flow_condition% &
+                sub_condition_ptr(idof)%ptr%dataset%rarray(1)
+          enddo
+          do idof = 2, option%nflowdof
+            xx_p(ibegin+idof-1) = 0.d0
+          enddo
+        endif
+
+      enddo
+
+      initial_condition => initial_condition%next
+
+    enddo
+
+  case default
+    option%io_buffer = 'CondControlAssignFlowInitCondSurface not ' // &
+      'for this mode'
+    call PrintErrMsg(option)
+end select
+
+call VecRestoreArrayF90(field_surface%flow_xx,xx_p,ierr);CHKERRQ(ierr)
+
+end subroutine CondControlAssignFlowInitCondSurface
 
 end module Condition_Control_module

@@ -20,15 +20,20 @@ subroutine InitSurfaceFlowSetupRealization(simulation)
   ! Author: Gautam Bisht
   ! Date: 04/03/23
   !
+  use Condition_Control_module
   use Option_module
   use Patch_module
   use Realization_Surface_class
   use Simulation_Surface_class
+  use PM_Base_class
+  use PM_SWE_class
+  use SWE_module
 
   implicit none
 
   class(simulation_surface_type) :: simulation
 
+  class(pm_base_type), pointer :: pm_list
   class(realization_surface_type), pointer :: surface_realization
   type(option_type), pointer :: option
   type(patch_type), pointer :: patch
@@ -37,8 +42,27 @@ subroutine InitSurfaceFlowSetupRealization(simulation)
   option => surface_realization%option
   patch => surface_realization%patch
 
+  pm_list => simulation%surface_flow_process_model_coupler%pm_list
+  if (associated(pm_list%next)) then
+    option%io_buffer = 'Select type block in InitSurfaceFlowSetupRealization &
+      &Realization needs to be refactored since there is more than one &
+      &process model in simulation%flow_process_model_coupler%pm_list.'
+    call PrintErrMsg(option)
+  endif
 
-  write(*,*)'stopping in InitSurfaceFlowSetupRealization'
+  select type(pm => pm_list)
+    class is (pm_swe_type)
+      call SWESetup(surface_realization)
+    class default
+      option%io_buffer = 'Unknown surface flow mode found during setup'
+      call PrintErrMsg(option)
+  end select
+
+  call CondControlAssignFlowInitCondSurface(surface_realization)
+  !call InitSubsurfFlowReadInitCond()     =  Not implemented
+  !call RichardsUpdateAuxVars()           =  SurfaceFlowUpdateAuxVars
+
+  write(*,*)'stopping in InitSurfaceFlowSetupRealization: option%iflowmode = ',option%iflowmode
   call exit(0)
 
 end subroutine InitSurfaceFlowSetupRealization
