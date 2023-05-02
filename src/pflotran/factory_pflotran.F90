@@ -173,10 +173,7 @@ function FactoryPFLOTRANCreateSimulation(driver)
     class is(simulation_subsurface_type)
       call FactoryForwardInitialize(simulation,driver%input_filename,option)
     class is(simulation_surface_type)
-      write(*,*)'calling FactoryForwardSurfaceInitialize()'
       call FactoryForwardSurfaceInitialize(simulation,driver%input_filename,option)
-      write(*,*)'calling FactoryForwardSurfaceInitialize() done'
-      call exit(0)
     class is(simulation_inverse_type)
       call SimulationInverseRead(simulation,option)
     class is(simulation_multirealization_type)
