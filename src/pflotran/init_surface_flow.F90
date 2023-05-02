@@ -69,9 +69,6 @@ subroutine InitSurfaceFlowSetupRealization(simulation)
     call PrintErrMsg(option)
 end select
 
-write(*,*)'stopping in InitSurfaceFlowSetupRealization: option%iflowmode = ',option%iflowmode
-call exit(0)
-
 end subroutine InitSurfaceFlowSetupRealization
 
 end module Init_Surface_Flow_module
