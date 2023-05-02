@@ -48,6 +48,21 @@ module Secondary_Continuum_Aux_module
     PetscReal :: outer_spacing                 ! value of the outer most grid cell spacing
   end type sec_heat_type
 
+  type, public :: sec_gen_tran_type
+    PetscInt :: ncells                         ! number of secondary grid cells
+    PetscReal :: half_aperture                      ! fracture aperture
+    PetscReal :: epsilon                       ! vol. frac. of primary continuum
+    type(sec_continuum_type) :: sec_continuum
+    PetscReal, pointer :: sec_conc(:)          ! array of temp. at secondary grid cells
+    PetscReal, pointer :: area(:)              ! surface area
+    PetscReal, pointer :: vol(:)               ! volume     face      node       face
+    PetscReal, pointer :: dm_plus(:)           ! see fig.    |----------o----------|
+    PetscReal, pointer :: dm_minus(:)          ! see fig.      <dm_minus> <dm_plus>
+    PetscReal :: interfacial_area              ! interfacial area between prim. and sec. per unit volume of prim.+sec.
+    PetscBool :: log_spacing                   ! flag to check if log spacing is set
+    PetscReal :: outer_spacing                 ! value of the outer most grid cell spacing
+  end type sec_gen_tran_type
+
   type, public :: sec_transport_type
     PetscInt :: ncells                         ! number of secondary grid cells
     PetscReal :: half_aperture                      ! fracture aperture
@@ -75,11 +90,16 @@ module Secondary_Continuum_Aux_module
     type(sec_heat_type), pointer :: sec_heat_vars(:)
   end type sc_heat_type
 
+  type, public :: sc_gen_tran_type
+    type(sec_gen_tran_type), pointer :: sec_gen_tran_vars(:)
+  end type sc_gen_tran_type
+
   type, public :: sc_rt_type
     type(sec_transport_type), pointer :: sec_transport_vars(:)
   end type sc_rt_type
 
   public :: SecondaryAuxHeatCreate, SecondaryAuxHeatDestroy, &
+            SecondaryAuxGenTranCreate, SecondaryAuxGenTranDestroy, &
             SecondaryAuxRTCreate, SecondaryAuxRTDestroy
 
 contains
@@ -132,6 +152,55 @@ subroutine SecondaryAuxHeatDestroy(aux)
   nullify(aux)
 
 end subroutine SecondaryAuxHeatDestroy
+
+! ************************************************************************** !
+
+function SecondaryAuxGenTranCreate(option)
+  !
+  ! Allocate and initialize secondary continuum component transport
+  ! auxiliary object
+  !
+  ! Author: David Fukuyama
+  ! Date: 05/02/23
+  !
+
+  use Option_module
+
+  implicit none
+
+  type(option_type) :: option
+  type(sc_gen_tran_type), pointer :: SecondaryAuxGenTranCreate
+
+  type(sc_gen_tran_type), pointer :: aux
+
+  allocate(aux)
+  nullify(aux%sec_gen_tran_vars)
+
+  SecondaryAuxGenTranCreate => aux
+
+end function SecondaryAuxGenTranCreate
+
+! ************************************************************************** !
+
+subroutine SecondaryAuxGenTranDestroy(aux)
+  !
+  ! Deallocates a secondary continuum heat
+  ! auxiliary object
+  !
+  ! Author: David Fukuyama
+  ! Date: 05/02/23
+  !
+
+  implicit none
+
+  type(sc_gen_tran_type), pointer :: aux
+
+  if (.not.associated(aux)) return
+
+  deallocate(aux)
+  nullify(aux)
+
+end subroutine SecondaryAuxGenTranDestroy
 
 ! ************************************************************************** !
 

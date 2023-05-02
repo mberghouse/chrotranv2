@@ -29,6 +29,10 @@ module Secondary_Continuum_module
             SecHeatAuxVarCompute, &
             SecondaryHeatResidual, &
             SecondaryHeatJacobian, &
+            SecondaryGenAuxVarInit, &
+            SecondaryGenAuxVarCompute, &
+            SecondaryGenResidual, &
+            SecondaryGenJacobian, &
             SecondaryRTUpdateIterate, &
             SecondaryRTUpdateEquilState, &
             SecondaryRTUpdateKineticState, &
@@ -716,6 +720,81 @@ subroutine SecondaryHeatAuxVarInit(multicontinuum, &
   endif
 
 end subroutine SecondaryHeatAuxVarInit
+
+! ************************************************************************** !
+
+subroutine SecondaryGenAuxVarInit(multicontinuum, &
+                                  epsilon,half_matrix_width, &
+                                  sec_gen_tran_vars, initial_condition,option)
+
+  ! Initializes all the secondary continuum
+  ! transport variables in GENERAL mode
+  !
+  ! Author: David Fukuyama
+  ! Date: 05/02/23
+  
+  use Material_module
+  use Coupler_module
+  use Option_module
+
+  implicit none
+
+  type(sec_gen_tran_type) :: sec_gen_tran_vars
+  type(multicontinuum_property_type) :: multicontinuum
+  type(coupler_type), pointer :: initial_condition
+  type(option_type), pointer :: option
+
+  
+  PetscReal :: epsilon
+  PetscReal :: half_matrix_width
+  PetscReal :: area_per_vol
+  
+  call SecondaryContinuumSetProperties( &
+       sec_gen_tran_vars%sec_continuum, &
+       multicontinuum%name, &
+       half_matrix_width, &
+       multicontinuum%matrix_block_size, &
+       multicontinuum%fracture_spacing, &
+       multicontinuum%radius, &
+       multicontinuum%porosity, &
+       option)
+
+  sec_gen_tran_vars%ncells = multicontinuum%ncells
+  sec_gen_tran_vars%half_aperture = multicontinuum%half_aperture
+  sec_gen_tran_vars%epsilon = epsilon
+  sec_gen_tran_vars%log_spacing = multicontinuum%log_spacing
+  sec_gen_tran_vars%outer_spacing = multicontinuum%outer_spacing
+
+  allocate(sec_gen_tran_vars%area(sec_gen_tran_vars%ncells))
+  allocate(sec_gen_tran_vars%vol(sec_gen_tran_vars%ncells))
+  allocate(sec_gen_tran_vars%dm_minus(sec_gen_tran_vars%ncells))
+  allocate(sec_gen_tran_vars%dm_plus(sec_gen_tran_vars%ncells))
+  allocate(sec_gen_tran_vars%sec_continuum%distance(sec_gen_tran_vars%ncells))
+
+  call SecondaryContinuumType(sec_gen_tran_vars%sec_continuum, &
+                              sec_gen_tran_vars%ncells, &
+                              sec_gen_tran_vars%area, &
+                              sec_gen_tran_vars%vol, &
+                              sec_gen_tran_vars%dm_minus, &
+                              sec_gen_tran_vars%dm_plus, &
+                              sec_gen_tran_vars%half_aperture, &
+                              sec_gen_tran_vars%epsilon, &
+                              sec_gen_tran_vars%log_spacing, &
+                              sec_gen_tran_vars%outer_spacing, &
+                              area_per_vol, option)
+
+  sec_gen_tran_vars%interfacial_area = area_per_vol * &
+       (1.d0 - sec_gen_tran_vars%epsilon) * multicontinuum%area_scaling
+
+  allocate(sec_gen_tran_vars%sec_conc(sec_gen_tran_vars%ncells))
+
+  if (option%flow%set_secondary_init_conc) then
+     sec_gen_tran_vars%sec_conc = multicontinuum%init_conc
+  else
+     sec_gen_tran_vars%sec_conc = initial_condition%flow_condition%concentration%dataset%rarray(1)
+  endif
+
+end subroutine SecondaryGenAuxVarInit
   
 ! ************************************************************************** !
 
@@ -2091,6 +2170,99 @@ end subroutine SecHeatAuxVarCompute
 
 ! ************************************************************************** !
 
+subroutine SecondaryGenAuxVarCompute(sec_gen_tran_vars, &
+                                     therm_conductivity,dencpr, &
+                                     conc_primary_node,option)
+  !
+  ! Computes secondary auxillary variables for each
+  ! grid cell for transport of dissolved components 
+  !
+  ! Author: David Fukuyama
+  ! Date: 05/02/23
+  !
+
+  use Option_module
+
+  implicit none
+
+  type(sec_gen_tran_type) :: sec_gen_tran_vars
+  type(option_type) :: option
+  PetscReal :: coeff_left(sec_gen_tran_vars%ncells)
+  PetscReal :: coeff_diag(sec_gen_tran_vars%ncells)
+  PetscReal :: coeff_right(sec_gen_tran_vars%ncells)
+  PetscReal :: rhs(sec_gen_tran_vars%ncells)
+  PetscReal :: sec_conc(sec_gen_tran_vars%ncells)
+  PetscReal :: area(sec_gen_tran_vars%ncells)
+  PetscReal :: vol(sec_gen_tran_vars%ncells)
+  PetscReal :: dm_plus(sec_gen_tran_vars%ncells)
+  PetscReal :: dm_minus(sec_gen_tran_vars%ncells)
+  PetscInt :: i, ngcells
+  PetscReal :: area_fm
+  PetscReal :: alpha, therm_conductivity, dencpr
+  PetscReal :: conc_primary_node
+  PetscReal :: m
+
+  ngcells = sec_gen_tran_vars%ncells
+  area = sec_gen_tran_vars%area
+  vol = sec_gen_tran_vars%vol
+  dm_plus = sec_gen_tran_vars%dm_plus
+  dm_minus = sec_gen_tran_vars%dm_minus
+  area_fm = sec_gen_tran_vars%interfacial_area
+
+  coeff_left = 0.d0
+  coeff_diag = 0.d0
+  coeff_right = 0.d0
+  rhs = 0.d0
+  sec_conc = 0.d0
+
+  alpha = option%flow_dt*therm_conductivity/dencpr
+
+
+  ! Setting the coefficients
+  do i = 2, ngcells-1
+    coeff_left(i) = -alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i))
+    coeff_diag(i) = alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i)) + &
+                    alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i)) + 1.d0
+    coeff_right(i) = -alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i))
+  enddo
+
+  coeff_diag(1) = alpha*area(1)/((dm_minus(2) + dm_plus(1))*vol(1)) + 1.d0
+  coeff_right(1) = -alpha*area(1)/((dm_minus(2) + dm_plus(1))*vol(1))
+
+  coeff_left(ngcells) = -alpha*area(ngcells-1)/ &
+                       ((dm_minus(ngcells) + dm_plus(ngcells-1))*vol(ngcells))
+  coeff_diag(ngcells) = alpha*area(ngcells-1)/ &
+                       ((dm_minus(ngcells) + dm_plus(ngcells-1))*vol(ngcells)) &
+                       + alpha*area(ngcells)/(dm_plus(ngcells)*vol(ngcells)) &
+                       + 1.d0
+
+
+  rhs = sec_gen_tran_vars%sec_conc  ! secondary continuum values from previous time step
+  rhs(ngcells) = rhs(ngcells) + &
+                 alpha*area(ngcells)/(dm_plus(ngcells)*vol(ngcells))* &
+                 conc_primary_node
+
+  ! Thomas algorithm for tridiagonal system
+  ! Forward elimination
+  do i = 2, ngcells
+    m = coeff_left(i)/coeff_diag(i-1)
+    coeff_diag(i) = coeff_diag(i) - m*coeff_right(i-1)
+    rhs(i) = rhs(i) - m*rhs(i-1)
+  enddo
+
+  ! Back substitution
+  ! Calculate concentration in the secondary continuum
+  sec_conc(ngcells) = rhs(ngcells)/coeff_diag(ngcells)
+  do i = ngcells-1, 1, -1
+    sec_conc(i) = (rhs(i) - coeff_right(i)*sec_conc(i+1))/coeff_diag(i)
+  enddo
+
+  sec_gen_tran_vars%sec_conc = sec_conc
+
+end subroutine SecondaryGenAuxVarCompute
+
+! ************************************************************************** !
+
 subroutine SecondaryRTGetVariable(realization, vec, ivar, isubvar, mc_layer)
 
   ! Extracts a secondary continuum variable for a layer of secondary
@@ -2334,7 +2506,7 @@ subroutine SecondaryHeatJacobian(sec_heat_vars,therm_conductivity, &
   ! Calculates the source term jacobian contribution
   ! due to secondary continuum in the primary continuum residual
   !
-  ! Author: Satish Karra, LANL
+  ! Author: David Fukuyama
   ! Date: 06/6/12
   !
 
@@ -2412,6 +2584,188 @@ subroutine SecondaryHeatJacobian(sec_heat_vars,therm_conductivity, &
 
 
 end subroutine SecondaryHeatJacobian
+
+! ************************************************************************** !
+
+subroutine SecondaryGenResidual(sec_gen_tran_vars, &
+                                therm_conductivity,dencpr, &
+                                conc_primary_node,option,res_conc)
+
+  ! Calculates the source term contribution due to secondary
+  ! continuum in the primary continuum residual
+  !
+  ! Author: David Fukuyama
+  ! Date 05/02/23
+  
+  use Option_module
+
+  implicit none
+
+  type(sec_gen_tran_type) :: sec_gen_tran_vars
+  type(option_type) :: option
+  PetscReal :: therm_conductivity,dencpr,conc_primary_node
+  PetscReal :: res_conc
+
+  PetscReal :: coeff_left(sec_gen_tran_vars%ncells)
+  PetscReal :: coeff_diag(sec_gen_tran_vars%ncells)
+  PetscReal :: coeff_right(sec_gen_tran_vars%ncells)
+  PetscReal :: rhs(sec_gen_tran_vars%ncells)
+  PetscReal :: area(sec_gen_tran_vars%ncells)
+  PetscReal :: vol(sec_gen_tran_vars%ncells)
+  PetscReal :: dm_plus(sec_gen_tran_vars%ncells)
+  PetscReal :: dm_minus(sec_gen_tran_vars%ncells)
+  PetscInt :: i, ngcells
+  PetscReal :: area_fm
+  PetscReal :: alpha
+  PetscReal :: m
+  PetscReal :: conc_current_N
+
+  ngcells = sec_gen_tran_vars%ncells
+  area = sec_gen_tran_vars%area
+  vol = sec_gen_tran_vars%vol
+  dm_plus = sec_gen_tran_vars%dm_plus
+  dm_minus = sec_gen_tran_vars%dm_minus
+  area_fm = sec_gen_tran_vars%interfacial_area
+
+  coeff_left = 0.d0
+  coeff_diag = 0.d0
+  coeff_right = 0.d0
+  rhs = 0.d0
+
+  alpha = option%flow_dt*therm_conductivity/dencpr
+
+
+! Setting the coefficients
+  do i = 2, ngcells-1
+    coeff_left(i) = -alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i))
+    coeff_diag(i) = alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i)) + &
+                    alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i)) + 1.d0
+    coeff_right(i) = -alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i))
+  enddo
+
+  coeff_diag(1) = alpha*area(1)/((dm_minus(2) + dm_plus(1))*vol(1)) + 1.d0
+  coeff_right(1) = -alpha*area(1)/((dm_minus(2) + dm_plus(1))*vol(1))
+
+  coeff_left(ngcells) = -alpha*area(ngcells-1)/ &
+                       ((dm_minus(ngcells) + dm_plus(ngcells-1))*vol(ngcells))
+  coeff_diag(ngcells) = alpha*area(ngcells-1)/ &
+                       ((dm_minus(ngcells) + dm_plus(ngcells-1))*vol(ngcells)) &
+                       + alpha*area(ngcells)/(dm_plus(ngcells)*vol(ngcells)) &
+                       + 1.d0
+
+  ! secondary continuum values from previous time step
+  rhs = sec_gen_tran_vars%sec_conc
+  rhs(ngcells) = rhs(ngcells) + &
+                 alpha*area(ngcells)/(dm_plus(ngcells)*vol(ngcells))* &
+                 conc_primary_node
+
+  ! Thomas algorithm for tridiagonal system
+  ! Forward elimination
+  do i = 2, ngcells
+    m = coeff_left(i)/coeff_diag(i-1)
+    coeff_diag(i) = coeff_diag(i) - m*coeff_right(i-1)
+    rhs(i) = rhs(i) - m*rhs(i-1)
+  enddo
+
+  ! Back substitution
+  ! We only need the concentration at the outer-most node (closest to
+  ! primary node)
+  conc_current_N = rhs(ngcells)/coeff_diag(ngcells)
+
+  ! Calculate the coupling term
+  res_conc = area_fm*therm_conductivity*(conc_current_N - conc_primary_node)/ &
+             dm_plus(ngcells)
+
+end subroutine SecondaryGenResidual
+
+! ************************************************************************** !
+
+subroutine SecondaryGenJacobian(sec_gen_tran_vars,therm_conductivity, &
+                                 dencpr,option,jac_conc)
+  !
+  ! Calculates the source term jacobian contribution
+  ! due to secondary continuum in the primary continuum residual
+  !
+  ! Author: David Fukuyama
+  ! Date: 05/02/23
+  !
+
+  use Option_module
+  use Global_Aux_module
+  use Secondary_Continuum_Aux_module
+
+  implicit none  
+
+  type(sec_gen_tran_type) :: sec_gen_tran_vars
+  type(option_type) :: option
+  PetscReal :: coeff_left(sec_gen_tran_vars%ncells)
+  PetscReal :: coeff_diag(sec_gen_tran_vars%ncells)
+  PetscReal :: coeff_right(sec_gen_tran_vars%ncells)
+  PetscReal :: rhs(sec_gen_tran_vars%ncells)
+  PetscReal :: area(sec_gen_tran_vars%ncells)
+  PetscReal :: vol(sec_gen_tran_vars%ncells)
+  PetscReal :: dm_plus(sec_gen_tran_vars%ncells)
+  PetscReal :: dm_minus(sec_gen_tran_vars%ncells)
+  PetscInt :: i, ngcells
+  PetscReal :: area_fm
+  PetscReal :: alpha, therm_conductivity, dencpr
+  PetscReal :: m
+  PetscReal :: Dconc_N_Dconc_prim
+  PetscReal :: jac_conc
+
+  ngcells = sec_gen_tran_vars%ncells
+  area = sec_gen_tran_vars%area
+  vol = sec_gen_tran_vars%vol
+  dm_plus = sec_gen_tran_vars%dm_plus
+  area_fm = sec_gen_tran_vars%interfacial_area
+  dm_minus = sec_gen_tran_vars%dm_minus
+
+  coeff_left = 0.d0
+  coeff_diag = 0.d0
+  coeff_right = 0.d0
+  rhs = 0.d0
+
+  alpha = option%flow_dt*therm_conductivity/dencpr
+
+! Setting the coefficients
+  do i = 2, ngcells-1
+    coeff_left(i) = -alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i))
+    coeff_diag(i) = alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i)) + &
+                    alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i)) + 1.d0
+    coeff_right(i) = -alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i))
+  enddo
+
+  coeff_diag(1) = alpha*area(1)/((dm_minus(2) + dm_plus(1))*vol(1)) + 1.d0
+  coeff_right(1) = -alpha*area(1)/((dm_minus(2) + dm_plus(1))*vol(1))
+
+  coeff_left(ngcells) = -alpha*area(ngcells-1)/ &
+                       ((dm_minus(ngcells) + dm_plus(ngcells-1))*vol(ngcells))
+  coeff_diag(ngcells) = alpha*area(ngcells-1)/ &
+                       ((dm_minus(ngcells) + dm_plus(ngcells-1))*vol(ngcells)) &
+                       + alpha*area(ngcells)/(dm_plus(ngcells)*vol(ngcells)) &
+                       + 1.d0
+
+  ! Thomas algorithm for tridiagonal system
+  ! Forward elimination
+  do i = 2, ngcells
+    m = coeff_left(i)/coeff_diag(i-1)
+    coeff_diag(i) = coeff_diag(i) - m*coeff_right(i-1)
+    ! We do not have to calculate rhs terms
+  enddo
+
+  ! We need the temperature derivative at the outer-most node (closest
+  ! to primary node)
+  Dconc_N_Dconc_prim = 1.d0/coeff_diag(ngcells)*alpha*area(ngcells)/ &
+                       (dm_plus(ngcells)*vol(ngcells))
+
+  ! Calculate the jacobian term
+  jac_conc = area_fm*therm_conductivity*(Dconc_N_Dconc_prim - 1.d0)/ &
+             dm_plus(ngcells)
+
+
+end subroutine SecondaryGenJacobian
+
+! ************************************************************************** !
 
 end module Secondary_Continuum_module
 

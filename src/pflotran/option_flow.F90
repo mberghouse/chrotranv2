@@ -49,6 +49,9 @@ module Option_Flow_module
     PetscBool :: th_freezing
     ! If true, then secondary init temp is different from prim. init temp
     PetscBool :: set_secondary_init_temp
+    ! If true, then secondary init conc is different from primary initial concentration
+    ! this is used in GENERAL mode with secondary continuum
+    PetscBool :: set_secondary_init_conc
 
     PetscReal :: minimum_hydrostatic_pressure
 
@@ -156,13 +159,13 @@ subroutine OptionFlowInitRealization(option)
   option%store_state_variables_in_global = PETSC_FALSE
 
   option%set_secondary_init_temp = PETSC_FALSE
+  option%set_secondary_init_conc = PETSC_FALSE
   option%update_flow_perm = PETSC_FALSE
   option%rel_perm_aveg = UPWIND
   option%pct_updated = PETSC_FALSE
   option%inline_surface_flow           = PETSC_FALSE
   option%inline_surface_Mannings_coeff = 0.02d0
   option%inline_surface_region_name    = ""
-  option%set_secondary_init_temp = PETSC_FALSE
   option%minimum_hydrostatic_pressure = -MAX_DOUBLE
   option%th_freezing = PETSC_FALSE
   option%steady_state = PETSC_FALSE
