@@ -60,10 +60,17 @@ subroutine InitSurfaceFlowSetupRealization(simulation)
 
   call CondControlAssignFlowInitCondSurface(surface_realization)
   !call InitSubsurfFlowReadInitCond()     =  Not implemented
-  !call RichardsUpdateAuxVars()           =  SurfaceFlowUpdateAuxVars
 
-  write(*,*)'stopping in InitSurfaceFlowSetupRealization: option%iflowmode = ',option%iflowmode
-  call exit(0)
+  select case(option%iflowmode)
+  case (SWE_MODE)
+    call SWEUpdateAuxVars(surface_realization)
+  case default
+    option%io_buffer = 'Unknown flowmode found during <Mode>UpdateAuxVars'
+    call PrintErrMsg(option)
+end select
+
+write(*,*)'stopping in InitSurfaceFlowSetupRealization: option%iflowmode = ',option%iflowmode
+call exit(0)
 
 end subroutine InitSurfaceFlowSetupRealization
 

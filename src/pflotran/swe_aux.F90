@@ -20,7 +20,9 @@ module SWE_Aux_module
     type(swe_auxvar_type), pointer :: auxvars_ss(:)
   end type swe_type
 
-  public :: SWEAuxCreate
+  public :: SWEAuxCreate, &
+            SWEAuxVarInit, &
+            SWEAuxVarCompute
 
 contains
 
@@ -122,5 +124,45 @@ subroutine SWEAuxDestroy(aux)
   nullify(aux)
 
 end subroutine SWEAuxDestroy
+
+! ************************************************************************** !
+subroutine SWEAuxVarCompute(x,auxvar,surf_global_auxvar,option)
+  !
+  ! Delllocates an swe_type object
+  !
+  ! Author: Gautam Bisht
+  ! Date: 04/01/23
+  !
+  use Option_module
+  use Surface_Global_Aux_module
+
+  implicit none
+
+  type(option_type) :: option
+  PetscReal :: x(option%nflowdof)
+  type(swe_auxvar_type) :: auxvar
+  type(surface_global_auxvar_type) :: surf_global_auxvar
+
+end subroutine SWEAuxVarCompute
+
+! ************************************************************************** !
+subroutine SWEAuxVarInit(auxvar)
+  !
+  ! Initializes an swe_auxvar_type object
+  !
+  ! Author: Gautam Bisht
+  ! Date: 04/01/23
+  !
+
+  implicit none
+
+  type(swe_auxvar_type) :: auxvar
+
+  auxvar%hu = 0.d0
+  auxvar%hv = 0.d0
+  auxvar%u = 0.d0
+  auxvar%v = 0.d0
+
+end subroutine SWEAuxVarInit
 
 end module SWE_Aux_module
