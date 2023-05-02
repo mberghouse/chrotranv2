@@ -94,11 +94,9 @@ subroutine FactorySurfaceLinkSetupPMCLinages(simulation,pm_surface_flow)
   class(realization_surface_type), pointer :: surface_realization
   type(input_type), pointer :: input
 
-  write(*,*)'  ???????????? In FactorySurfaceLinkSetupPMCLinages'
-
   pmc_surface => PMCSurfaceCreate()
 
-  !call FactorySurfaceLinkAddPMCSurfaceFlow(simulation,pm_surface_flow,'PMCSurfaceFlow')
+  call FactorySurfaceLinkAddPMCSurfaceFlow(simulation,pm_surface_flow,'PMCSurfaceFlow')
 
   surface_realization => simulation%surface_realization
   option => surface_realization%option
@@ -122,13 +120,13 @@ subroutine FactorySurfaceLinkSetupPMCLinages(simulation,pm_surface_flow)
 
   call pmc_surface%pm_list%InitializeSolver()
 
-  input => InputCreate(IN_UNIT,option%input_filename,option)
-  call FactorySurfaceReadRequiredCards(simulation,input)
-  call FactorySurfaceReadInput(simulation,input)
-
   simulation%surface_flow_process_model_coupler => pmc_surface
   simulation%surface_flow_process_model_coupler_list => &
     simulation%surface_flow_process_model_coupler
+
+  input => InputCreate(IN_UNIT,option%input_filename,option)
+  call FactorySurfaceReadRequiredCards(simulation,input)
+  call FactorySurfaceReadInput(simulation,input)
 
   end subroutine FactorySurfaceLinkSetupPMCLinages
 
@@ -159,6 +157,8 @@ subroutine FactorySurfaceLinkAddPMCSurfaceFlow(simulation,pm_surface_flow,pmc_na
 
   surface_realization => simulation%surface_realization
   option => surface_realization%option
+
+  pmc_surface => PMCSurfaceCreate()
 
   call pmc_surface%SetName(pmc_name)
   call pmc_surface%SetOption(option)
