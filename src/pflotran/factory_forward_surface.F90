@@ -191,11 +191,8 @@ subroutine FactoryForwardSurfaceReadSimulationBlk(simulation,driver,option)
 
   select type(simulation)
     class is(simulation_surface_type)
-      write(*,*)'call FactorySurfaceInitialize'
       call FactorySurfaceInitialize(simulation)
   end select
-  write(*,*)'stopping in FactoryForwardSurfaceReadSimulationBlk'
-  call exit(0)
 
 end subroutine FactoryForwardSurfaceReadSimulationBlk
 
