@@ -506,7 +506,6 @@ subroutine FactorySurfaceReadInput(simulation,input)
 
   call PrintInitFlags(option%print_flags,option%driver%print_flags)
 
-#if 0
   ! must come after setup of timestepper steady above. otherwise, the
   ! destruction of the waypoint lists will fail with to pointer to the
   ! same list.
@@ -526,7 +525,6 @@ subroutine FactorySurfaceReadInput(simulation,input)
     call WaypointListMerge(simulation%waypoint_list_surface, &
                            master_pmc%timestepper%local_waypoint_list,option)
   endif
-#endif
 
 end  subroutine FactorySurfaceReadInput
 
