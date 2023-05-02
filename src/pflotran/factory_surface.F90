@@ -62,10 +62,8 @@ subroutine FactorySurfaceInitPostPetsc(simulation)
 
   nullify(pm_surface_flow)
 
-  write(*,*)'  call FactorySurfaceLinkExtractPMsFromPMList'
   call FactorySurfaceLinkExtractPMsFromPMList(simulation,pm_surface_flow)
 
-  write(*,*)'  call FactorySurfaceSetFlowMode'
   call FactorySurfaceSetFlowMode(pm_surface_flow,option)
 
   realization_surface => RealizationSurfaceCreate(option)
@@ -78,7 +76,7 @@ subroutine FactorySurfaceInitPostPetsc(simulation)
   call FactorySurfaceInitSimulation(simulation)
 
   ! set first process model coupler as the master
-  simulation%process_model_coupler_list%is_master = PETSC_TRUE
+  simulation%surface_flow_process_model_coupler_list%is_master = PETSC_TRUE
 
 end subroutine FactorySurfaceInitPostPetsc
 
@@ -148,6 +146,7 @@ subroutine FactorySurfaceInitSimulation(simulation)
   ! Date: 03/22/23
   !
 
+  use Discretization_module
   use Init_Common_module
   use Init_Surface_Flow_module
   use Option_module
@@ -164,7 +163,6 @@ subroutine FactorySurfaceInitSimulation(simulation)
   realization_surface => simulation%surface_realization
   option => realization_surface%option
 
-  write(*,*)'Add code in FactorySurfaceInitSimulation'
   call FactorySurfaceSetupRealization(simulation)
 
   call InitCommonAddOutputWaypoints(option,simulation%output_option, &
@@ -172,10 +170,13 @@ subroutine FactorySurfaceInitSimulation(simulation)
 
   call SurfaceGlobalSetup(realization_surface)
 
+  write(*,*)'call InitSurfaceFlowSetupRealization()'
   call InitSurfaceFlowSetupRealization(simulation)
 
-  write(*,*)'stopping in FactorySurfaceInitSimulation'
-  call exit(0)
+  call DiscretizationPrintInfo(realization_surface%discretization, &
+                               realization_surface%patch%grid,option)
+
+  call FactorySurfaceSetupWaypointList(simulation)
 
 end subroutine FactorySurfaceInitSimulation
 
@@ -228,5 +229,55 @@ subroutine FactorySurfaceSetupRealization(simulation)
   call RealizationSurfaceAddWaypointsToList(realization_surface,simulation%waypoint_list_surface)
 
 end subroutine FactorySurfaceSetupRealization
+
+! ************************************************************************** !
+
+subroutine FactorySurfaceSetupWaypointList(simulation)
+  !
+  ! Author: Gautam Bisht
+  ! Date: 04/02/23
+  !
+  use Checkpoint_module
+  use Realization_Surface_class
+  use Option_module
+  use Waypoint_module
+
+  implicit none
+
+  class(simulation_surface_type) :: simulation
+
+  class(realization_surface_type), pointer :: realization_surface
+  type(waypoint_list_type), pointer :: sync_waypoint_list
+  type(option_type), pointer :: option
+
+  realization_surface => simulation%surface_realization
+  option => realization_surface%option
+
+  ! create sync waypoint list to be used a few lines below
+  sync_waypoint_list => &
+    WaypointCreateSyncWaypointList(simulation%waypoint_list_surface)
+
+  ! add sync waypoints into outer list
+    call WaypointListMerge(simulation%waypoint_list_outer,sync_waypoint_list, &
+    option)
+
+! add in periodic time waypoints for checkpointing. these will not appear
+! in the outer list
+call CheckpointPeriodicTimeWaypoints(simulation%waypoint_list_surface, &
+                  option)
+! fill in holes in waypoint data
+call WaypointListFillIn(simulation%waypoint_list_surface,option)
+call WaypointListRemoveExtraWaypnts(simulation%waypoint_list_surface, &
+                 option)
+call WaypointListFindDuplicateTimes(simulation%waypoint_list_surface, &
+                 option)
+
+! debugging output
+if (realization_surface%debug%print_waypoints) then
+  call WaypointListPrint(simulation%waypoint_list_surface,option, &
+                         realization_surface%output_option)
+endif
+
+end subroutine FactorySurfaceSetupWaypointList
 
 end module Factory_Surface_module

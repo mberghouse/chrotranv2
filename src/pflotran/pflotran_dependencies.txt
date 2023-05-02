@@ -674,6 +674,7 @@ factory_subsurface_read.o : \
   waypoint.o \
   wipp.o
 factory_surface.o : \
+  discretization.o \
   factory_surface_linkage.o \
   input_aux.o \
   init_surface.o \
