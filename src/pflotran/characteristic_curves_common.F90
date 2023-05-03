@@ -1208,7 +1208,7 @@ subroutine SFExpFreezingCapillaryPressure(this,liquid_saturation, &
   PetscReal, intent(out) :: dpc_dsatl
   type(option_type), intent(inout) :: option
 
-  PetscReal :: w
+  PetscReal :: w, c
   PetscReal :: Se
   PetscReal :: dSe_dsatl
   PetscReal :: ICE_DENSITY = 50.86d0 !mol/L
@@ -1228,9 +1228,8 @@ subroutine SFExpFreezingCapillaryPressure(this,liquid_saturation, &
   Se = (liquid_saturation-this%Sr)*dSe_dsatl
 
   capillary_pressure = sqrt(-1*log(Se))*this%w * (L_ICE * ICE_DENSITY * 1.D6)/(273.15)
-  ! dpc_dsatl = capillary_pressure/Se_sup_neg_one_over_m_minus_one * &
-  !             one_over_n * neg_one_over_m * Se_sup_neg_one_over_m / Se * &
-  !             dSe_dsatl
+  c = this%w * L_ICE * ICE_DENSITY * 1.d6 / 273.15
+  dpc_dsatl = c / (2 * (this%sr - liquid_saturation) * (-1.d0 * log((this%sr - liquid_saturation)/(this%sr-1))) ** 0.5d0)
 
   if (capillary_pressure > this%pcmax) then
     capillary_pressure = this%pcmax
