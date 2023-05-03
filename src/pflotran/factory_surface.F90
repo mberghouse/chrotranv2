@@ -152,6 +152,8 @@ subroutine FactorySurfaceInitSimulation(simulation)
   use Option_module
   use Realization_Surface_class
   use Surface_Global_module
+  use PMC_Base_class
+  use Factory_Surface_linage_module
 
   implicit none
 
@@ -159,6 +161,7 @@ subroutine FactorySurfaceInitSimulation(simulation)
 
   class(realization_surface_type), pointer :: realization_surface
   type(option_type), pointer :: option
+  class(pmc_base_type), pointer :: cur_process_model_coupler_top
 
   realization_surface => simulation%surface_realization
   option => realization_surface%option
@@ -175,6 +178,12 @@ subroutine FactorySurfaceInitSimulation(simulation)
 
   call DiscretizationPrintInfo(realization_surface%discretization, &
                                realization_surface%patch%grid,option)
+
+  cur_process_model_coupler_top => simulation%surface_flow_process_model_coupler_list
+
+  if (associated(cur_process_model_coupler_top)) then
+    call FactorySurfaceLinkSetupPMApproach(cur_process_model_coupler_top, simulation)
+  endif
 
   call FactorySurfaceSetupWaypointList(simulation)
 
