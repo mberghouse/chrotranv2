@@ -186,6 +186,7 @@ subroutine FactorySurfaceInitSimulation(simulation)
   endif
 
   call FactorySurfaceSetupWaypointList(simulation)
+  call FactorySurfaceLinkSetPMCWaypointPtrs(simulation)
 
 end subroutine FactorySurfaceInitSimulation
 
@@ -267,25 +268,25 @@ subroutine FactorySurfaceSetupWaypointList(simulation)
     WaypointCreateSyncWaypointList(simulation%waypoint_list_surface)
 
   ! add sync waypoints into outer list
-    call WaypointListMerge(simulation%waypoint_list_outer,sync_waypoint_list, &
+  call WaypointListMerge(simulation%waypoint_list_outer,sync_waypoint_list, &
     option)
 
-! add in periodic time waypoints for checkpointing. these will not appear
-! in the outer list
-call CheckpointPeriodicTimeWaypoints(simulation%waypoint_list_surface, &
+  ! add in periodic time waypoints for checkpointing. these will not appear
+  ! in the outer list
+  call CheckpointPeriodicTimeWaypoints(simulation%waypoint_list_surface, &
+                    option)
+  ! fill in holes in waypoint data
+  call WaypointListFillIn(simulation%waypoint_list_surface,option)
+  call WaypointListRemoveExtraWaypnts(simulation%waypoint_list_surface, &
                   option)
-! fill in holes in waypoint data
-call WaypointListFillIn(simulation%waypoint_list_surface,option)
-call WaypointListRemoveExtraWaypnts(simulation%waypoint_list_surface, &
-                 option)
-call WaypointListFindDuplicateTimes(simulation%waypoint_list_surface, &
-                 option)
+  call WaypointListFindDuplicateTimes(simulation%waypoint_list_surface, &
+                  option)
 
-! debugging output
-if (realization_surface%debug%print_waypoints) then
-  call WaypointListPrint(simulation%waypoint_list_surface,option, &
-                         realization_surface%output_option)
-endif
+  ! debugging output
+  if (realization_surface%debug%print_waypoints) then
+    call WaypointListPrint(simulation%waypoint_list_surface,option, &
+                          realization_surface%output_option)
+  endif
 
 end subroutine FactorySurfaceSetupWaypointList
 

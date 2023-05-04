@@ -13,7 +13,8 @@ module Factory_Surface_linage_module
 
   public :: FactorySurfaceLinkSetupPMApproach, &
             FactorySurfaceLinkExtractPMsFromPMList, &
-            FactorySurfaceLinkSetupPMCLinages
+            FactorySurfaceLinkSetupPMCLinages, &
+            FactorySurfaceLinkSetPMCWaypointPtrs
 
 contains
 
@@ -209,6 +210,26 @@ subroutine FactorySurfaceLinkAddPMCSurfaceFlow(simulation,pm_surface_flow,pmc_na
   simulation%surface_flow_process_model_coupler_list => &
     simulation%surface_flow_process_model_coupler
 
-  end subroutine FactorySurfaceLinkAddPMCSurfaceFlow
+end subroutine FactorySurfaceLinkAddPMCSurfaceFlow
+
+! ************************************************************************** !
+
+subroutine FactorySurfaceLinkSetPMCWaypointPtrs(simulation)
+  !
+  ! Sets the process model coupler waypoint pointers to the first waypoint
+  !
+  ! Author: Gautam Bisht
+  ! Date: 03/22/23
+
+  implicit none
+
+  class(simulation_surface_type) :: simulation
+
+  if (associated(simulation%surface_flow_process_model_coupler)) then
+    call simulation%surface_flow_process_model_coupler% &
+           SetWaypointPtr(simulation%waypoint_list_surface)
+  endif
+
+end subroutine FactorySurfaceLinkSetPMCWaypointPtrs
 
 end module Factory_Surface_linage_module
