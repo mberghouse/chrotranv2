@@ -122,7 +122,6 @@ subroutine FactoryForwardSurfaceReadSimulationBlk(simulation,driver,option)
   nullify(checkpoint_waypoint_list)
   print_ekg = PETSC_FALSE
 
-  write(*,*)'In FactoryForwardSurfaceReadSimulationBlk'
   input => InputCreate(IN_UNIT,option%input_filename,option)
 
   simulation_type = ''
@@ -226,7 +225,6 @@ subroutine FactoryForwardSurfaceReadSimProcessModels(input,pm_master,option)
     nullify(cur_pm)
     nullify(new_pm)
   
-    write(*,*)'  FactoryForwardSurfaceReadSimProcessModels'
     call InputPushBlock(input,option)
     do
       call InputReadPflotranString(input,option)
@@ -257,7 +255,6 @@ subroutine FactoryForwardSurfaceReadSimProcessModels(input,pm_master,option)
       else
         cur_pm => new_pm
       endif
-      write(*,*)'associated(pm_master) ?',associated(pm_master)
       if (.not.associated(pm_master)) then
         pm_master => new_pm
       endif
