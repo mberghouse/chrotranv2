@@ -192,6 +192,7 @@ function FactoryPFLOTRANCreateSimulation(driver)
 
   select type(simulation)
     class is(simulation_subsurface_type)
+    class is(simulation_surface_type)
     class default
       ! only destroy option if not a forward simulation
       call OptionDestroy(option)
