@@ -48,6 +48,7 @@ subroutine SWESetup(surface_realization)
   option => surface_realization%option
   patch => surface_realization%patch
   patch%surf_aux%SWE => SWEAuxCreate(option)
+  grid => patch%grid
 
   allocate(swe_auxvars(grid%ngmax))
   do ghosted_id = 1, grid%ngmax
