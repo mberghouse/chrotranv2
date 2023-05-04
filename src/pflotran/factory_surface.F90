@@ -111,7 +111,6 @@ subroutine FactorySurfaceSetFlowMode(pm_surface_flow,option)
 
   select type(pm_surface_flow)
     class is (pm_swe_type)
-      write(*,*)'  In FactorySurfaceSetFlowMode: pm_swe_type'
       option%iflowmode = SWE_MODE
       option%nphase = 1
       option%nflowdof = 3
@@ -173,7 +172,6 @@ subroutine FactorySurfaceInitSimulation(simulation)
 
   call SurfaceGlobalSetup(realization_surface)
 
-  write(*,*)'call InitSurfaceFlowSetupRealization()'
   call InitSurfaceFlowSetupRealization(simulation)
 
   call DiscretizationPrintInfo(realization_surface%discretization, &

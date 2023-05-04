@@ -150,7 +150,6 @@ subroutine SimSurfaceExecuteRun(this)
   do
     if (this%stop_flag /= TS_CONTINUE) exit ! end simulation
     if (.not.associated(cur_waypoint)) exit
-    write(*,*)'final_time,cur_waypoint%time',final_time,cur_waypoint%time
     call this%RunToTime(min(final_time,cur_waypoint%time))
     cur_waypoint => cur_waypoint%next
   enddo
@@ -219,8 +218,6 @@ subroutine SimSurfaceRunToTime(this,target_time)
   call PrintMsg(this%option,'SimSurfaceRunToTime()')
 #endif
 
-  write(*,*)'In SimSurfaceRunToTime'
-  write(*,*)'  call this%surface_flow_process_model_coupler_list%RunToTime(): target_time = ',target_time
   call this%surface_flow_process_model_coupler_list%RunToTime(target_time,this%stop_flag)
 
 end subroutine SimSurfaceRunToTime

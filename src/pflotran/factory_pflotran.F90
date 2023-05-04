@@ -125,7 +125,6 @@ function FactoryPFLOTRANCreateSimulation(driver)
   character(len=MAXWORDLENGTH) :: simulation_type
   PetscBool :: stochastic_option_found, bool_flag
 
-  write(*,*)'In FactoryPFLOTRANCreateSimulation'
   option => OptionCreate()
   call OptionSetDriver(option,driver)
   call OptionSetComm(option,driver%comm)
@@ -161,7 +160,6 @@ function FactoryPFLOTRANCreateSimulation(driver)
         case('GEOMECHANICS_SUBSURFACE')
           simulation => GeomechanicsSimulationCreate(driver,option)
         case ('SURFACE')
-          write(*,*)'call SimSurfaceCreate()'
           simulation => SimSurfaceCreate(driver,option)
       end select
     case default

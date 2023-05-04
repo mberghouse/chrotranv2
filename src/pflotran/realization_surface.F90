@@ -107,17 +107,14 @@ subroutine RealizationSurfaceCreateDiscretization(surf_realization)
   field_surface => surf_realization%field_surface
   discretization => surf_realization%discretization
 
-  write(*,*)'calling DiscretizationCreateDMs()'
   call DiscretizationCreateDMs(discretization, option%nflowdof, &
                                ZERO_INTEGER, ZERO_INTEGER, &
                                ZERO_INTEGER, ZERO_INTEGER, &
                                option)
-  write(*,*)'calling DiscretizationCreateDMs() done'
 
   ! n degree of freedom, global
   call DiscretizationCreateVector(discretization,NFLOWDOF,field_surface%flow_xx,GLOBAL,option)
   call VecSet(field_surface%flow_xx,0.d0,ierr);CHKERRQ(ierr)
-  write(*,*)'field_surface%flow_xx created'
 
   call DiscretizationDuplicateVector(discretization,field_surface%flow_xx,field_surface%flow_yy)
   call DiscretizationDuplicateVector(discretization,field_surface%flow_xx,field_surface%flow_dxx)

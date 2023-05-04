@@ -40,7 +40,6 @@ subroutine FactorySurfaceReadFlowPM(input,option,pm)
   character(len=MAXSTRINGLENGTH) :: error_string
 
   error_string = 'SIMULATION,PROCESS_MODELS,SURFACE_FLOW'
-  write(*,*)'++++ FactorySurfaceReadFlowPM'
 
   nullify(pm)
   word = ''
@@ -50,7 +49,6 @@ subroutine FactorySurfaceReadFlowPM(input,option,pm)
     if (InputCheckExit(input,option)) exit
     call InputReadCard(input,option,word,PETSC_FALSE)
     call StringToUpper(word)
-    write(*,*)'word: ',trim(word)
     select case(word)
       case('MODE')
         call InputReadCard(input,option,word,PETSC_FALSE)
@@ -59,7 +57,6 @@ subroutine FactorySurfaceReadFlowPM(input,option,pm)
 
         select case(word)
           case('SWE')
-            write(*,*)'word: ',trim(word)
             pm => PMSWECreate()
           case default
             error_string = trim(error_string) // ',MODE'
@@ -140,7 +137,6 @@ subroutine FactorySurfaceReadRequiredCards(simulation,input)
   wname = '<missing>'
   found = PETSC_FALSE
 
-  write(*,*)'>>>>>>>>>> In FactorySurfaceReadRequiredCards'
   call InputPushBlock(input,'SURFACE',option)
 
   ! GRID information - GRID is a required card for every simulation
