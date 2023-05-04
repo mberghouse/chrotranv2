@@ -4,6 +4,7 @@ module PM_Surface_Flow_class
   use petscsys
   use PM_Base_class
   use Realization_Surface_class
+  use Communicator_Base_class
 
   implicit none
 
@@ -11,8 +12,10 @@ module PM_Surface_Flow_class
 
   type, public, extends (pm_base_type) :: pm_surface_flow_type
     class(realization_surface_type), pointer :: surface_realization
+    class(communicator_type), pointer :: comm1
   contains
-    !procedure, public :: Setup => PMSurfaceFlowStep
+    procedure, public :: Setup => PMSurfaceFlowStep
+    procedure, public :: SetRealization => PMSurfaceSetRealization
   end type
 
   public :: PMSurfaceFlowInit
@@ -34,7 +37,49 @@ subroutine PMSurfaceFlowInit(this)
 
   call PMBaseInit(this)
   nullify(this%surface_realization)
+  nullify(this%comm1)
 
 end subroutine PMSurfaceFlowInit
+
+! ************************************************************************** !
+
+subroutine PMSurfaceFlowStep(this)
+
+  ! Sets realization_surface_type 
+  !
+  ! Author: Gautam Bisht
+  ! Date: 05/03/23
+
+  use Realization_Subsurface_class
+
+  implicit none
+
+  class(pm_surface_flow_type) :: this
+
+  this%comm1 => this%surface_realization%comm1
+
+end subroutine PMSurfaceFlowStep
+
+
+! ************************************************************************** !
+
+subroutine PMSurfaceSetRealization(this,surface_realization)
+
+  ! Sets realization_surface_type 
+  !
+  ! Author: Gautam Bisht
+  ! Date: 05/02/23
+
+  use Realization_Subsurface_class
+
+  implicit none
+
+  class(pm_surface_flow_type) :: this
+  class(realization_surface_type), pointer :: surface_realization
+
+  this%surface_realization => surface_realization
+  this%realization_base => surface_realization
+
+end subroutine PMSurfaceSetRealization
 
 end module PM_Surface_Flow_class
