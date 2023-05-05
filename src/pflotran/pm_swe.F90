@@ -11,6 +11,9 @@ module PM_SWE_class
 
   type, public, extends(pm_surface_flow_type) :: pm_swe_type
   contains
+    procedure, public :: InitializeTimestep => PMSWEInitializeTimestep
+    procedure, public :: PreSolve => PMSWEPreSolve
+    procedure, public :: RHSFunction => PMSWERHSFunction
   end type pm_swe_type
 
   public :: PMSWECreate
@@ -44,5 +47,55 @@ function PMSWECreate()
 
 end function PMSWECreate
 
+! ************************************************************************** !
+
+subroutine PMSWEInitializeTimestep(this)
+  !
+  !
+  ! Author: Gautam Bisht
+  ! Date: 04/05/23
+  !
+
+  implicit none
+
+  class(pm_swe_type) :: this
+
+end subroutine PMSWEInitializeTimestep
+
+! ************************************************************************** !
+
+subroutine PMSWEPreSolve(this)
+  !
+  !
+  ! Author: Gautam Bisht
+  ! Date: 04/05/23
+  !
+
+  implicit none
+
+  class(pm_swe_type) :: this
+
+end subroutine PMSWEPreSolve
+
+! ************************************************************************** !
+
+subroutine PMSWERHSFunction(this,ts,time,xx,ff,ierr)
+
+  !
+  !
+  ! Author: Gautam Bisht
+  ! Date: 04/05/23
+  !
+
+  implicit none
+
+  class(pm_swe_type) :: this
+  TS :: ts
+  PetscReal :: time
+  Vec :: xx
+  Vec :: ff
+  PetscErrorCode :: ierr
+
+end subroutine PMSWERHSFunction
 
 end module PM_SWE_class

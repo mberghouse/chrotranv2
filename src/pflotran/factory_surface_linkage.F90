@@ -59,7 +59,7 @@ recursive subroutine FactorySurfaceLinkSetupPMApproach(pmc,simulation)
     if (.not.associated(cur_pm)) exit
 
     select type(cur_pm)
-      class is (pm_swe_type)
+      class is (pm_surface_flow_type)
         call cur_pm%SetRealization(surface_realization)
     end select
 
@@ -67,6 +67,18 @@ recursive subroutine FactorySurfaceLinkSetupPMApproach(pmc,simulation)
     call cur_pm%Setup()
     cur_pm => cur_pm%next
   enddo
+
+  call pmc%SetupSolvers()
+
+  ! call this function for this pmc's child
+  if (associated(pmc%child)) then
+    call FactorySurfaceLinkSetupPMApproach(pmc%child,simulation)
+  endif
+
+  ! call this function for this pmc's peer
+  if (associated(pmc%peer)) then
+    call FactorySurfaceLinkSetupPMApproach(pmc%peer,simulation)
+  endif
 
 end subroutine FactorySurfaceLinkSetupPMApproach
 
@@ -205,6 +217,7 @@ subroutine FactorySurfaceLinkAddPMCSurfaceFlow(simulation,pm_surface_flow,pmc_na
   pmc_surface%timestepper%name = 'SURFACE_FLOW'
 
   call pmc_surface%pm_list%InitializeSolver()
+  pmc_surface%timestepper%solver => pmc_surface%pm_list%solver
   
   simulation%surface_flow_process_model_coupler => pmc_surface
   simulation%surface_flow_process_model_coupler_list => &
