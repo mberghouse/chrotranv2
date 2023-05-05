@@ -80,6 +80,9 @@ subroutine PMSurfaceSetRealization(this,surface_realization)
   this%surface_realization => surface_realization
   this%realization_base => surface_realization
 
+  this%solution_vec = surface_realization%field_surface%flow_xx
+  this%residual_vec = surface_realization%field_surface%flow_r
+
 end subroutine PMSurfaceSetRealization
 
 end module PM_Surface_Flow_class
