@@ -1451,6 +1451,7 @@ function UGridPolyhedraComputeInternConnect(ugrid, grid_x, &
   type(option_type) :: option
 
   type(connection_set_type), pointer :: connections
+  type(internal_connection_auxvar_type), pointer :: internal_connections(:)
   type(unstructured_polyhedra_type), pointer :: pgrid
 
   PetscInt :: nconn, iconn
@@ -1806,6 +1807,7 @@ function UGridPolyhedraComputeInternConnect(ugrid, grid_x, &
   enddo
 
   connections => ConnectionCreate(nconn,INTERNAL_CONNECTION_TYPE)
+  internal_connections => connections%internal_connections
 
   allocate(ugrid%connection_to_face(nconn))
   ugrid%connection_to_face = 0
@@ -1854,9 +1856,15 @@ function UGridPolyhedraComputeInternConnect(ugrid, grid_x, &
           call PrintErrMsg(option)
         endif
 
-        connections%id_up(iconn) = local_id
-        connections%id_dn(iconn) = abs(dual_local_id)
-        connections%face_id(iconn) = cell_to_face(iface,local_id)
+        if (connections%new_format) then
+          internal_connections(iconn)%id_up = local_id
+          internal_connections(iconn)%id_dn = abs(dual_local_id)
+          internal_connections(iconn)%face_id = cell_to_face(iface,local_id)
+        else
+          connections%id_up(iconn) = local_id
+          connections%id_dn(iconn) = abs(dual_local_id)
+          connections%face_id(iconn) = cell_to_face(iface,local_id)
+        endif
 
         point_up%x = grid_x(local_id)
         point_up%y = grid_y(local_id)
@@ -1903,15 +1911,27 @@ function UGridPolyhedraComputeInternConnect(ugrid, grid_x, &
         dist_up = sqrt(DotProduct(v1,v1))
         dist_dn = sqrt(DotProduct(v2,v2))
 
-        connections%dist(-1:3,iconn) = 0.d0
-        connections%dist(-1,iconn) = dist_up/(dist_up + dist_dn)
-        connections%dist(0,iconn) = dist_up + dist_dn
-        v3 = v1 + v2
-        connections%dist(1:3,iconn) = v3/sqrt(DotProduct(v3,v3))
-        connections%area(iconn) = pgrid%face_areas(connections%face_id(iconn))
-        connections%intercp(1,iconn) = intercept%x
-        connections%intercp(2,iconn) = intercept%y
-        connections%intercp(3,iconn) = intercept%z
+        if (connections%new_format) then
+          internal_connections(iconn)%dist(-1:3) = 0.d0
+          internal_connections(iconn)%dist(-1) = dist_up/(dist_up + dist_dn)
+          internal_connections(iconn)%dist(0) = dist_up + dist_dn
+          v3 = v1 + v2
+          internal_connections(iconn)%dist(1:3) = v3/sqrt(DotProduct(v3,v3))
+          internal_connections(iconn)%area = pgrid%face_areas(connections%face_id(iconn))
+          internal_connections(iconn)%intercept(1) = intercept%x
+          internal_connections(iconn)%intercept(2) = intercept%y
+          internal_connections(iconn)%intercept(3) = intercept%z
+        else
+          connections%dist(-1:3,iconn) = 0.d0
+          connections%dist(-1,iconn) = dist_up/(dist_up + dist_dn)
+          connections%dist(0,iconn) = dist_up + dist_dn
+          v3 = v1 + v2
+          connections%dist(1:3,iconn) = v3/sqrt(DotProduct(v3,v3))
+          connections%area(iconn) = pgrid%face_areas(connections%face_id(iconn))
+          connections%intercp(1,iconn) = intercept%x
+          connections%intercp(2,iconn) = intercept%y
+          connections%intercp(3,iconn) = intercept%z
+        endif
 
        endif ! (local_id < abs(dual_local_id))
 
@@ -2073,6 +2093,7 @@ subroutine UGridPolyhedraPopulateConnection(ugrid, connection, iface_cell, &
 
   type(grid_unstructured_type) :: ugrid
   type(connection_set_type) :: connection
+  type(boundary_connection_auxvar_type), pointer :: boundary_connections(:)
   PetscInt :: iface_cell
   PetscInt :: iconn
   PetscInt :: ghosted_id
@@ -2120,15 +2141,28 @@ subroutine UGridPolyhedraPopulateConnection(ugrid, connection, iface_cell, &
 
       dist = sqrt(DotProduct(v1, v1))
       n_dist = v1/dist
-      connection%dist(0, iconn) = dist
-      connection%dist(1, iconn) = n_dist(1)
-      connection%dist(2, iconn) = n_dist(2)
-      connection%dist(3, iconn) = n_dist(3)
-      connection%area(iconn)    = pgrid%face_areas(face_id)
-      connection%intercp(1,iconn)= intercept%x
-      connection%intercp(2,iconn)= intercept%y
-      connection%intercp(3,iconn)= intercept%z
-      connection%face_id(iconn)  = face_id
+      if (connection%new_format) then
+        boundary_connections => connection%boundary_connections
+        boundary_connections(iconn)%dist(0) = dist
+        boundary_connections(iconn)%dist(1) = n_dist(1)
+        boundary_connections(iconn)%dist(2) = n_dist(2)
+        boundary_connections(iconn)%dist(3) = n_dist(3)
+        boundary_connections(iconn)%area = pgrid%face_areas(face_id)
+        boundary_connections(iconn)%intercept(1)= intercept%x
+        boundary_connections(iconn)%intercept(2)= intercept%y
+        boundary_connections(iconn)%intercept(3)= intercept%z
+        boundary_connections(iconn)%face_id = face_id
+      else
+        connection%dist(0, iconn) = dist
+        connection%dist(1, iconn) = n_dist(1)
+        connection%dist(2, iconn) = n_dist(2)
+        connection%dist(3, iconn) = n_dist(3)
+        connection%area(iconn)    = pgrid%face_areas(face_id)
+        connection%intercp(1,iconn)= intercept%x
+        connection%intercp(2,iconn)= intercept%y
+        connection%intercp(3,iconn)= intercept%z
+        connection%face_id(iconn)  = face_id
+      endif
 
   end select
 

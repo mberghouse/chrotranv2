@@ -938,6 +938,7 @@ subroutine OutputGetFaceVelUGrid(realization_base)
   PetscReal, pointer :: vy_ptr(:)
   PetscReal, pointer :: vz_ptr(:)
   PetscReal :: vel_vector(3)
+  PetscReal :: dist(3)
 
   Vec :: natural_vx_vec
   Vec :: natural_vy_vec
@@ -1024,8 +1025,12 @@ subroutine OutputGetFaceVelUGrid(realization_base)
       do dof=1,option%nflowspec
 
         ! Save velocity for iface_up of local_id_up cell using flowrate up-->dn
-        vel_vector = cur_connection_set%dist(1:3,iconn)* &
-                     patch%internal_velocities(dof,sum_connection)
+        if (cur_connection_set%new_format) then
+          dist = cur_connection_set%internal_connections(iconn)%dist(1:3)
+        else
+          dist = cur_connection_set%dist(1:3,iconn)
+        endif
+        vel_vector = dist(1:3)*patch%internal_velocities(dof,sum_connection)
 
         if (iface_up>0) then
           vx(dof,iface_up,local_id_up) = vel_vector(1)
@@ -1085,8 +1090,12 @@ subroutine OutputGetFaceVelUGrid(realization_base)
       do dof=1,option%nflowspec
 
         ! Save velocity for iface_dn of local_id_dn cell using -ve flowrate up-->dn
-        vel_vector = cur_connection_set%dist(1:3,iconn)* &
-                     patch%boundary_velocities(dof,sum_connection)
+        if (cur_connection_set%new_format) then
+          dist = cur_connection_set%boundary_connections(iconn)%dist(1:3)
+        else
+          dist = cur_connection_set%dist(1:3,iconn)
+        endif
+          vel_vector = dist(1:3)*patch%boundary_velocities(dof,sum_connection)
 
         idx = (local_id_dn-1)*offset + (dof-1)*MAX_FACE_PER_CELL + iface_dn + 1
 
@@ -1610,7 +1619,11 @@ subroutine OutputGetExplicitFlowrates(realization_base,count,vec_proc, &
             patch%internal_flow_fluxes(idof,sum_connection)
         enddo
         darcy(count) = patch%internal_velocities(1,sum_connection)
-        area(count) = cur_connection_set%area(iconn)
+        if (cur_connection_set%new_format) then
+          area(count) = cur_connection_set%internal_connections(iconn)%area
+        else
+          area(count) = cur_connection_set%area(iconn)
+        endif
       endif
     enddo
     cur_connection_set => cur_connection_set%next
@@ -1910,8 +1923,12 @@ subroutine OutputCollectVelocityOrFlux(realization_base, iphase, direction, &
       ghosted_id = cur_connection_set%id_up(iconn)
       local_id = grid%nG2L(ghosted_id) ! = zero for ghost nodes
       ! velocities are stored as the downwind face of the upwind cell
-      if (local_id <= 0 .or. &
-          dabs(cur_connection_set%dist(direction,iconn)) < 0.99d0) cycle
+      if (cur_connection_set%new_format) then
+        dist = cur_connection_set%internal_connections(iconn)%dist(:)
+      else
+        dist = cur_connection_set%dist(:,iconn)
+      endif
+      if (local_id <= 0 .or. dabs(dist(direction)) < 0.99d0) cycle
       if (output_flux) then
         ! iphase here is really the dof
         vec_ptr(ghosted_id) = patch%internal_flow_fluxes(iphase,sum_connection)
@@ -1946,7 +1963,11 @@ subroutine OutputCollectVelocityOrFlux(realization_base, iphase, direction, &
       sum_connection = sum_connection + 1
       local_id = cur_connection_set%id_dn(iconn)
       ghosted_id = grid%nL2G(local_id)
-      dist = cur_connection_set%dist(:,iconn)
+      if (cur_connection_set%new_format) then
+        dist = cur_connection_set%boundary_connections(iconn)%dist(:)
+      else
+        dist = cur_connection_set%dist(:,iconn)
+      endif
       if (dabs(dist(direction)) < 0.99d0) cycle
       scale = 1.d0
       if (dist(direction) < 0.d0) scale = -1.d0

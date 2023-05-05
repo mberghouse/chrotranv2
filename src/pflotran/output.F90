@@ -1527,6 +1527,8 @@ subroutine ComputeFlowCellVelocityStats(realization_base)
 
   PetscReal :: average, sum, max, min, std_dev
   PetscInt :: max_loc, min_loc
+  PetscReal :: area
+  PetscReal :: dist(-1:3)
   character(len=MAXSTRINGLENGTH) :: string
 
   PetscReal, pointer :: vec_ptr(:)
@@ -1569,9 +1571,15 @@ subroutine ComputeFlowCellVelocityStats(realization_base)
           local_id_up = grid%nG2L(ghosted_id_up) ! = zero for ghost nodes
           local_id_dn = grid%nG2L(ghosted_id_dn) ! = zero for ghost nodes
           ! velocities are stored as the downwind face of the upwind cell
+          if (cur_connection_set%new_format) then
+            area = cur_connection_set%internal_connections(iconn)%area
+            dist = cur_connection_set%internal_connections(iconn)%dist(:)
+          else
+            area = cur_connection_set%area(iconn)
+            dist = cur_connection_set%dist(:,iconn)
+          endif
           flux = patch%internal_velocities(iphase,sum_connection)* &
-                   cur_connection_set%area(iconn)* &
-                   cur_connection_set%dist(direction,iconn)
+                 area*dist(direction)
           if (local_id_up > 0) then
             vec_ptr(local_id_up) = vec_ptr(local_id_up) - flux
           endif
@@ -1591,10 +1599,17 @@ subroutine ComputeFlowCellVelocityStats(realization_base)
         do iconn = 1, cur_connection_set%num_connections
           sum_connection = sum_connection + 1
           local_id = cur_connection_set%id_dn(iconn)
+          if (cur_connection_set%new_format) then
+            area = cur_connection_set%boundary_connections(iconn)%area
+            dist = cur_connection_set%boundary_connections(iconn)%dist(:)
+          else
+            area = cur_connection_set%area(iconn)
+            dist = cur_connection_set%dist(:,iconn)
+          endif
           vec_ptr(local_id) = vec_ptr(local_id)+ &
-                              cur_connection_set%dist(direction,iconn)* &
-                              patch%boundary_velocities(iphase,sum_connection)* &
-                              cur_connection_set%area(iconn)
+                            dist(direction)* &
+                            patch%boundary_velocities(iphase,sum_connection)* &
+                            area
         enddo
         boundary_condition => boundary_condition%next
       enddo

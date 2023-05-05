@@ -1342,6 +1342,7 @@ subroutine WriteObservationDataForBC(fid,realization_base,patch,connection_set)
   PetscReal :: sum_volumetric_flux_global(realization_base%option%nphase)
   PetscReal :: sum_solute_flux(realization_base%option%ntrandof)
   PetscReal :: sum_solute_flux_global(realization_base%option%ntrandof)
+  PetscReal :: area
   type(option_type), pointer :: option
   class(reaction_rt_type), pointer :: reaction
   PetscErrorCode :: ierr
@@ -1365,9 +1366,13 @@ subroutine WriteObservationDataForBC(fid,realization_base,patch,connection_set)
         sum_volumetric_flux = 0.d0
         if (associated(connection_set)) then
           do iconn = 1, connection_set%num_connections
+            if (connection_set%new_format) then
+              area = connection_set%internal_connections(iconn)%area
+            else
+              area = connection_set%area(iconn)
+            endif
             sum_volumetric_flux(:) = sum_volumetric_flux(:) + &
-                            patch%boundary_velocities(iphase,offset+iconn)* &
-                            connection_set%area(iconn)
+                        patch%boundary_velocities(iphase,offset+iconn)*area
           enddo
         endif
         int_mpi = option%nphase
@@ -1386,9 +1391,13 @@ subroutine WriteObservationDataForBC(fid,realization_base,patch,connection_set)
       sum_solute_flux = 0.d0
       if (associated(connection_set)) then
         do iconn = 1, connection_set%num_connections
+          if (connection_set%new_format) then
+            area = connection_set%internal_connections(iconn)%area
+          else
+            area = connection_set%area(iconn)
+          endif
           sum_solute_flux(:) = sum_solute_flux(:) + &
-                               patch%boundary_tran_fluxes(:,offset+iconn)* &
-                               connection_set%area(iconn)
+                               patch%boundary_tran_fluxes(:,offset+iconn)*area
         enddo
       endif
       int_mpi = option%ntrandof
@@ -1522,6 +1531,7 @@ function GetVelocityAtCell(fid,realization_base,local_id,iphase)
   PetscInt :: local_id_up, local_id_dn
   PetscInt :: direction, iphase
   PetscReal :: area
+  PetscReal :: dist(-1:3)
   PetscReal :: sum_velocity(1:3), sum_area(1:3), velocity(1:3)
 
   option => realization_base%option
@@ -1545,12 +1555,17 @@ function GetVelocityAtCell(fid,realization_base,local_id,iphase)
       local_id_dn = grid%nG2L(cur_connection_set%id_dn(iconn)) ! = zero for ghost nodes
       if (local_id_up == local_id .or. local_id_dn == local_id) then
         do direction=1,3
-          area = cur_connection_set%area(iconn)* &
-                 !geh: no dabs() here
-                 cur_connection_set%dist(direction,iconn)
+          if (cur_connection_set%new_format) then
+            area = cur_connection_set%internal_connections(iconn)%area
+            dist = cur_connection_set%internal_connections(iconn)%dist(:)
+          else
+            area = cur_connection_set%area(iconn)
+            dist = cur_connection_set%dist(:,iconn)
+          endif
+          !geh: no dabs() here
+          area = area*dist(direction)
           sum_velocity(direction) = sum_velocity(direction) + &
-                                    patch%internal_velocities(iphase,sum_connection)* &
-                                    area
+                     patch%internal_velocities(iphase,sum_connection)*area
           sum_area(direction) = sum_area(direction) + dabs(area)
         enddo
       endif
@@ -1568,12 +1583,17 @@ function GetVelocityAtCell(fid,realization_base,local_id,iphase)
       sum_connection = sum_connection + 1
       if (cur_connection_set%id_dn(iconn) == local_id) then
         do direction=1,3
-          area = cur_connection_set%area(iconn)* &
-                 !geh: no dabs() here
-                 cur_connection_set%dist(direction,iconn)
+          if (cur_connection_set%new_format) then
+            area = cur_connection_set%boundary_connections(iconn)%area
+            dist = cur_connection_set%boundary_connections(iconn)%dist(:)
+          else
+            area = cur_connection_set%area(iconn)
+            dist = cur_connection_set%dist(:,iconn)
+          endif
+          !geh: no dabs() here
+          area = area*dist(direction)
           sum_velocity(direction) = sum_velocity(direction) + &
-                                    patch%boundary_velocities(iphase,sum_connection)* &
-                                    area
+                      patch%boundary_velocities(iphase,sum_connection)*area
           sum_area(direction) = sum_area(direction) + dabs(area)
         enddo
       endif
@@ -1680,6 +1700,8 @@ function GetVelocityAtCoord(fid,realization_base,local_id,x,y,z,iphase)
   PetscReal :: weight, distance
   PetscReal :: sum_velocity(1:3), velocity(1:3)
   PetscReal :: sum_weight(1:3)
+  PetscReal :: area
+  PetscReal :: dist(-1:3)
 
   option => realization_base%option
   patch => realization_base%patch
@@ -1711,28 +1733,33 @@ function GetVelocityAtCoord(fid,realization_base,local_id,x,y,z,iphase)
       local_id_up = grid%nG2L(cur_connection_set%id_up(iconn)) ! = zero for ghost nodes
       local_id_dn = grid%nG2L(cur_connection_set%id_dn(iconn)) ! = zero for ghost nodes
       if (local_id_up == local_id .or. local_id_dn == local_id) then
+        if (cur_connection_set%new_format) then
+          area = cur_connection_set%internal_connections(iconn)%area
+          dist = cur_connection_set%internal_connections(iconn)%dist
+        else
+          area = cur_connection_set%area(iconn)
+          dist = cur_connection_set%dist(:,iconn)
+        endif
         do direction=1,3
           if (local_id_up == local_id) then
             face_coord = cell_coord(direction) + &
-                         cur_connection_set%dist(-1,iconn)* &
-                         cur_connection_set%dist(0,iconn)* &
-                         cur_connection_set%dist(direction,iconn)
+                         dist(-1)* &
+                         dist(0)* &
+                         dist(direction)
           else
             face_coord = cell_coord(direction) - &
-                         (1.d0-cur_connection_set%dist(-1,iconn))* &
-                         cur_connection_set%dist(0,iconn)* &
-                         cur_connection_set%dist(direction,iconn)
+                         (1.d0-dist(-1))* &
+                         dist(0)* &
+                         dist(direction)
           endif
           distance = dabs(face_coord-coordinate(direction))
           if (distance < 1.d-40) distance = 1.d-40
-          weight = cur_connection_set%area(iconn)* &
-                 dabs(cur_connection_set%dist(direction,iconn))/ &
-                 distance
+          weight = area*dabs(dist(direction))/distance
 
           sum_velocity(direction) = sum_velocity(direction) + &
-                                    cur_connection_set%dist(direction,iconn)* &
-                                    patch%internal_velocities(iphase,sum_connection)* &
-                                    weight
+                            dist(direction)* &
+                            patch%internal_velocities(iphase,sum_connection)* &
+                            weight
           sum_weight(direction) = sum_weight(direction) + weight
        enddo
       endif
@@ -1749,20 +1776,25 @@ function GetVelocityAtCoord(fid,realization_base,local_id,x,y,z,iphase)
     do iconn = 1, cur_connection_set%num_connections
       sum_connection = sum_connection + 1
       if (cur_connection_set%id_dn(iconn) == local_id) then
+        if (cur_connection_set%new_format) then
+          area = cur_connection_set%boundary_connections(iconn)%area
+          dist = cur_connection_set%boundary_connections(iconn)%dist
+        else
+          area = cur_connection_set%area(iconn)
+          dist = cur_connection_set%dist(:,iconn)
+        endif
         do direction=1,3
           face_coord = cell_coord(direction) - &
                     !   (1.d0-cur_connection_set%dist(-1,iconn))* & ! fraction upwind is always 0.d0
-                       cur_connection_set%dist(0,iconn)* &
-                       cur_connection_set%dist(direction,iconn)
+                       dist(0)* &
+                       dist(direction)
           distance = dabs(face_coord-coordinate(direction))
           if (distance < 1.d-40) distance = 1.d-40
-          weight = cur_connection_set%area(iconn)* &
-                   dabs(cur_connection_set%dist(direction,iconn))/ &
-                   distance
+          weight = area*dabs(dist(direction))/distance
           sum_velocity(direction) = sum_velocity(direction) + &
-                                    cur_connection_set%dist(direction,iconn)* &
-                                    patch%boundary_velocities(iphase,sum_connection)* &
-                                    weight
+                           dist(direction)* &
+                           patch%boundary_velocities(iphase,sum_connection)* &
+                           weight
           sum_weight(direction) = sum_weight(direction) + weight
         enddo
       endif
@@ -2960,18 +2992,19 @@ subroutine OutputMassBalance(realization_base)
       if (.not.bcs_done) then
         sum_area = 0.d0
         do iconn = 1, coupler%connection_set%num_connections
-          sum_area(1) = sum_area(1) + &
-            coupler%connection_set%area(iconn)
+          if (coupler%connection_set%new_format) then
+            area = coupler%connection_set%boundary_connections(iconn)%area
+          else
+            area = coupler%connection_set%area(iconn)
+          endif
+          sum_area(1) = sum_area(1) + area
           if (global_auxvars_bc_or_ss(offset+iconn)%sat(1) >= 0.5d0) then
-            sum_area(2) = sum_area(2) + &
-              coupler%connection_set%area(iconn)
+            sum_area(2) = sum_area(2) + area
           endif
           if (global_auxvars_bc_or_ss(offset+iconn)%sat(1) > 0.99d0) then
-            sum_area(3) = sum_area(3) + &
-              coupler%connection_set%area(iconn)
+            sum_area(3) = sum_area(3) + area
           endif
-          sum_area(4) = sum_area(4) + &
-            coupler%connection_set%area(iconn)* &
+          sum_area(4) = sum_area(4) + area* &
             global_auxvars_bc_or_ss(offset+iconn)%sat(1)
         enddo
 

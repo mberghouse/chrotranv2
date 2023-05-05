@@ -4525,11 +4525,21 @@ subroutine PatchGetCouplerValueFromDataset(coupler,option,grid,dataset,iconn, &
       x = grid%x(ghosted_id)
       y = grid%y(ghosted_id)
       z = grid%z(ghosted_id)
-      if (associated(coupler%connection_set%dist)) then
-        dist = coupler%connection_set%dist(:,iconn)
-        x = x-dist(0)*dist(1)
-        y = y-dist(0)*dist(2)
-        z = z-dist(0)*dist(3)
+      if (coupler%connection_set%new_format) then
+        ! this may not be correct
+        if (coupler%connection_set%itype == BOUNDARY_CONNECTION_TYPE) then
+          dist = coupler%connection_set%boundary_connections(iconn)%dist(:)
+          x = x-dist(0)*dist(1)
+          y = y-dist(0)*dist(2)
+          z = z-dist(0)*dist(3)
+        endif
+      else
+        if (associated(coupler%connection_set%dist)) then
+          dist = coupler%connection_set%dist(:,iconn)
+          x = x-dist(0)*dist(1)
+          y = y-dist(0)*dist(2)
+          z = z-dist(0)*dist(3)
+        endif
       endif
       call DatasetGriddedHDF5InterpolateReal(dataset,x,y,z,value,option)
     class default
@@ -4577,11 +4587,21 @@ subroutine PatchUpdateCouplerGridDataset(coupler,option,grid,dataset,dof)
     x = grid%x(ghosted_id)
     y = grid%y(ghosted_id)
     z = grid%z(ghosted_id)
-    if (associated(coupler%connection_set%dist)) then
-      dist = coupler%connection_set%dist(:,iconn)
-      x = x-dist(0)*dist(1)
-      y = y-dist(0)*dist(2)
-      z = z-dist(0)*dist(3)
+    if (coupler%connection_set%new_format) then
+      ! this may not be correct
+      if (coupler%connection_set%itype == BOUNDARY_CONNECTION_TYPE) then
+        dist = coupler%connection_set%boundary_connections(iconn)%dist(:)
+        x = x-dist(0)*dist(1)
+        y = y-dist(0)*dist(2)
+        z = z-dist(0)*dist(3)
+      endif
+    else
+      if (associated(coupler%connection_set%dist)) then
+        dist = coupler%connection_set%dist(:,iconn)
+        x = x-dist(0)*dist(1)
+        y = y-dist(0)*dist(2)
+        z = z-dist(0)*dist(3)
+      endif
     endif
     call DatasetGriddedHDF5InterpolateReal(dataset,x,y,z,temp_real,option)
     coupler%flow_aux_real_var(dof,iconn) = temp_real
@@ -5301,6 +5321,7 @@ subroutine PatchUpdateUniformVelocity(patch,velocity,option)
   PetscInt :: iconn, sum_connection, iphase
   PetscReal :: phase_velocity(3,option%transport%nphase)
   PetscReal :: vdarcy
+  PetscReal :: dist(-1:3)
 
   grid => patch%grid
 
@@ -5315,9 +5336,13 @@ subroutine PatchUpdateUniformVelocity(patch,velocity,option)
     if (.not.associated(cur_connection_set)) exit
     do iconn = 1, cur_connection_set%num_connections
       sum_connection = sum_connection + 1
+      if (cur_connection_set%new_format) then
+        dist = cur_connection_set%internal_connections(iconn)%dist(:)
+      else
+        dist = cur_connection_set%dist(:,iconn)
+      endif
       do iphase = 1, option%transport%nphase
-        vdarcy = dot_product(phase_velocity(:,iphase), &
-                             cur_connection_set%dist(1:3,iconn))
+        vdarcy = dot_product(phase_velocity(:,iphase),dist(1:3))
         patch%internal_velocities(iphase,sum_connection) = vdarcy
       enddo
     enddo
@@ -5332,9 +5357,13 @@ subroutine PatchUpdateUniformVelocity(patch,velocity,option)
     cur_connection_set => boundary_condition%connection_set
     do iconn = 1, cur_connection_set%num_connections
       sum_connection = sum_connection + 1
+      if (cur_connection_set%new_format) then
+        dist = cur_connection_set%boundary_connections(iconn)%dist(:)
+      else
+        dist = cur_connection_set%dist(:,iconn)
+      endif
       do iphase = 1, option%transport%nphase
-        vdarcy = dot_product(phase_velocity(:,iphase), &
-                             cur_connection_set%dist(1:3,iconn))
+        vdarcy = dot_product(phase_velocity(:,iphase),dist(1:3))
         patch%boundary_velocities(iphase,sum_connection) = vdarcy
       enddo
     enddo
@@ -8741,6 +8770,7 @@ subroutine PatchCalculateCFL1Timestep(patch,option,max_dt_cfl_1, &
   PetscInt :: iphase
   PetscReal :: tempreal(2)
   PetscReal :: dt_cfl_1
+  PetscReal :: dist(-1:3)
   PetscErrorCode :: ierr
 
   field => patch%field
@@ -8764,8 +8794,13 @@ subroutine PatchCalculateCFL1Timestep(patch,option,max_dt_cfl_1, &
       local_id_dn = grid%nG2L(ghosted_id_dn) ! Ghost to local mapping
       if (patch%imat(ghosted_id_up) <= 0 .or.  &
           patch%imat(ghosted_id_dn) <= 0) cycle
-      distance = cur_connection_set%dist(0,iconn)
-      fraction_upwind = cur_connection_set%dist(-1,iconn)
+      if (cur_connection_set%new_format) then
+        dist = cur_connection_set%internal_connections(iconn)%dist(:)
+      else
+        dist = cur_connection_set%dist(:,iconn)
+      endif
+      distance = dist(0)
+      fraction_upwind = dist(-1)
       do iphase = 1, option%nphase
         ! if the phase is not present in either cell, skip the connection
         if (.not.(global_auxvars(ghosted_id_up)%sat(iphase) > 0.d0 .and. &
@@ -8806,7 +8841,12 @@ subroutine PatchCalculateCFL1Timestep(patch,option,max_dt_cfl_1, &
       ghosted_id_dn = grid%nL2G(local_id_dn)
       if (patch%imat(ghosted_id_dn) <= 0) cycle
       !geh: since on boundary, dist must be scaled by 2.d0
-      distance = 2.d0*cur_connection_set%dist(0,iconn)
+      if (cur_connection_set%new_format) then
+        dist = cur_connection_set%boundary_connections(iconn)%dist(:)
+      else
+        dist = cur_connection_set%dist(:,iconn)
+      endif
+      distance = 2.d0*dist(0)
       do iphase = 1, option%nphase
         ! the _ave variable is being reused. it is actually, max
         por_sat_ave = material_auxvars(ghosted_id_dn)%porosity* &
@@ -9017,8 +9057,13 @@ subroutine PatchGetCellCenteredVelocities(patch,iphase,velocities)
       local_id_up = grid%nG2L(ghosted_id_up) ! = zero for ghost nodes
       local_id_dn = grid%nG2L(ghosted_id_dn) ! = zero for ghost nodes
       ! velocities are stored as the downwind face of the upwind cell
-      area = cur_connection_set%area(iconn)* &
-             cur_connection_set%dist(1:3,iconn)
+      if (cur_connection_set%new_format) then
+        area = cur_connection_set%internal_connections(iconn)%area* &
+               cur_connection_set%internal_connections(iconn)%dist(1:3)
+      else
+        area = cur_connection_set%area(iconn)* &
+               cur_connection_set%dist(1:3,iconn)
+      endif
       velocity = patch%internal_velocities(iphase,sum_connection)*area
       if (local_id_up > 0) then
         sum_velocity(:,local_id_up) = sum_velocity(:,local_id_up) + velocity
@@ -9041,8 +9086,13 @@ subroutine PatchGetCellCenteredVelocities(patch,iphase,velocities)
     do iconn = 1, cur_connection_set%num_connections
       sum_connection = sum_connection + 1
       local_id = cur_connection_set%id_dn(iconn)
-      area = cur_connection_set%area(iconn)* &
-             cur_connection_set%dist(1:3,iconn)
+      if (cur_connection_set%new_format) then
+        area = cur_connection_set%boundary_connections(iconn)%area* &
+               cur_connection_set%boundary_connections(iconn)%dist(1:3)
+      else
+        area = cur_connection_set%area(iconn)* &
+               cur_connection_set%dist(1:3,iconn)
+      endif
       velocity = patch%boundary_velocities(iphase,sum_connection)*area
       sum_velocity(:,local_id) = sum_velocity(:,local_id) + velocity
       sum_area(:,local_id) = sum_area(:,local_id) + dabs(area)
@@ -9102,6 +9152,7 @@ subroutine PatchGetKOrthogonalityError(grid, material_auxvars, error)
   type(point3d_type) :: point1, point2, point3
   PetscReal, allocatable :: array_normal(:), array_error(:)
   PetscReal :: kx, kxy, kxz, ky, kyz, kz
+  PetscReal :: dist(-1:3)
 
   !unstructured_grid => patch%grid%unstructured_grid
   cur_connection_set => grid%internal_connection_set_list%first
@@ -9154,9 +9205,13 @@ subroutine PatchGetKOrthogonalityError(grid, material_auxvars, error)
       den(1) = normal(1)*kx + normal(2)*kxy + normal(3)*kxz
       den(2) = normal(1)*kxy + normal(2)*ky + normal(3)*kyz
       den(3) = normal(1)*kxz + normal(2)*kyz + normal(3)*kz
+      if (cur_connection_set%new_format) then
+        dist = cur_connection_set%internal_connections(iconn)%dist(:)
+      else
+        dist = cur_connection_set%dist(:,iconn)
+      endif
       ! numerator
-      num = den - DotProduct(den,cur_connection_set%dist(1:3,iconn)) * &
-                                      cur_connection_set%dist(1:3,iconn)
+      num = den - DotProduct(den,dist(1:3)) * dist(1:3)
       ! face error
       array_error(local_id_up) = array_error(local_id_up) + sqrt(DotProduct(num,num))
       array_normal(local_id_up) = array_normal(local_id_up) + &
@@ -9177,9 +9232,13 @@ subroutine PatchGetKOrthogonalityError(grid, material_auxvars, error)
       den(1) = normal(1)*kx + normal(2)*kxy + normal(3)*kxz
       den(2) = normal(1)*kxy + normal(2)*ky + normal(3)*kyz
       den(3) = normal(1)*kxz + normal(2)*kyz + normal(3)*kz
+      if (cur_connection_set%new_format) then
+        dist = cur_connection_set%internal_connections(iconn)%dist(:)
+      else
+        dist = cur_connection_set%dist(:,iconn)
+      endif
       ! numerator
-      num = den - DotProduct(den,cur_connection_set%dist(1:3,iconn)) * &
-                                      cur_connection_set%dist(1:3,iconn)
+      num = den - DotProduct(den,dist(1:3)) * dist(1:3)
       ! face error
       array_error(local_id_dn) = array_error(local_id_dn) + sqrt(DotProduct(num,num))
       array_normal(local_id_dn) = array_normal(local_id_dn) + &
@@ -9265,6 +9324,7 @@ subroutine PatchGetIntegralFluxConnections(patch,integral_flux,option)
   PetscInt :: num_vertices1, num_vertices2
   PetscInt :: num_to_be_found
   character(len=MAXSTRINGLENGTH) :: error_string
+  PetscReal :: dist(-1:3)
   PetscErrorCode :: ierr
 
   nullify(yet_to_be_found)
@@ -9407,9 +9467,18 @@ subroutine PatchGetIntegralFluxConnections(patch,integral_flux,option)
       if (.not.associated(cur_connection_set)) exit
       do iconn = 1, cur_connection_set%num_connections
         sum_connection = sum_connection + 1
-        magnitude = cur_connection_set%dist(0,iconn)
-        unit_direction(:) = &
-          cur_connection_set%dist(X_DIRECTION:Z_DIRECTION,iconn)
+        if (cur_connection_set%new_format) then
+          select case(ipass)
+            case(1)
+              dist = cur_connection_set%internal_connections(iconn)%dist(:)
+            case(2)
+              dist = cur_connection_set%boundary_connections(iconn)%dist(:)
+          end select 
+        else
+          dist = cur_connection_set%dist(:,iconn)
+        endif
+        magnitude = dist(0)
+        unit_direction(:) = dist(X_DIRECTION:Z_DIRECTION)
         select case(ipass)
           case(1) ! internal connections
             ghosted_id_up = cur_connection_set%id_up(iconn)
@@ -9434,7 +9503,7 @@ subroutine PatchGetIntegralFluxConnections(patch,integral_flux,option)
                 cycle
               endif
             endif
-            fraction_upwind = cur_connection_set%dist(-1,iconn)
+            fraction_upwind = dist(-1)
             x = grid%x(ghosted_id_up) + fraction_upwind * magnitude * &
                                         unit_direction(X_DIRECTION)
             y = grid%y(ghosted_id_up) + fraction_upwind * magnitude * &
@@ -9979,7 +10048,12 @@ subroutine PatchSetupUpwindDirection(patch,option)
     if (.not.associated(cur_connection_set)) exit
     do iconn = 1, cur_connection_set%num_connections
       sum_connection = sum_connection + 1
-      dist(1:3) = dabs(cur_connection_set%dist(1:3,iconn))
+      if (cur_connection_set%new_format) then
+        dist(1:3) = cur_connection_set%internal_connections(iconn)%dist(1:3)
+      else
+        dist(1:3) = cur_connection_set%dist(1:3,iconn)
+      endif
+      dist = dabs(dist)
       if (dist(1) > dist(2) .and. dist(1) > dist(3)) then
         i = X_DIRECTION
       else if (dist(2) > dist(1) .and. dist(2) > dist(3)) then
@@ -10001,7 +10075,12 @@ subroutine PatchSetupUpwindDirection(patch,option)
     cur_connection_set => boundary_condition%connection_set
     do iconn = 1, cur_connection_set%num_connections
       sum_connection = sum_connection + 1
-      dist(1:3) = dabs(cur_connection_set%dist(1:3,iconn))
+      if (cur_connection_set%new_format) then
+        dist(1:3) = cur_connection_set%boundary_connections(iconn)%dist(1:3)
+      else
+        dist(1:3) = cur_connection_set%dist(1:3,iconn)
+      endif
+      dist = dabs(dist)
       if (dist(1) > dist(2) .and. dist(1) > dist(3)) then
         i = X_DIRECTION
       else if (dist(2) > dist(1) .and. dist(2) > dist(3)) then

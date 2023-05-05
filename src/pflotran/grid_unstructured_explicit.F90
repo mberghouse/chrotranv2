@@ -1720,6 +1720,7 @@ function UGridExplicitSetInternConnect(explicit_grid,upwind_fraction_method, &
   type(option_type) :: option
 
   type(connection_set_type), pointer :: connections
+  type(internal_connection_auxvar_type), pointer :: internal_connections(:)
   PetscInt :: num_connections
   PetscInt :: iconn
   PetscInt :: id_up, id_dn
@@ -1728,6 +1729,7 @@ function UGridExplicitSetInternConnect(explicit_grid,upwind_fraction_method, &
 
   num_connections = size(explicit_grid%connections,2)
   connections => ConnectionCreate(num_connections,INTERNAL_CONNECTION_TYPE)
+  internal_connections => connections%internal_connections
 
   error = PETSC_FALSE
   do iconn = 1, num_connections
@@ -1747,12 +1749,22 @@ function UGridExplicitSetInternConnect(explicit_grid,upwind_fraction_method, &
     pt_center(1) = explicit_grid%face_centroids(iconn)%x
     pt_center(2) = explicit_grid%face_centroids(iconn)%y
     pt_center(3) = explicit_grid%face_centroids(iconn)%z
-    call UGridCalculateDist(pt_up,pt_dn,pt_center, &
-                            explicit_grid%cell_volumes(id_up), &
-                            explicit_grid%cell_volumes(id_dn), &
-                            upwind_fraction_method, &
-                            connections%dist(:,iconn),error,option)
-    connections%area(iconn) = explicit_grid%face_areas(iconn)
+    if (connections%new_format) then
+      call UGridCalculateDist(pt_up,pt_dn,pt_center, &
+                              explicit_grid%cell_volumes(id_up), &
+                              explicit_grid%cell_volumes(id_dn), &
+                              upwind_fraction_method, &
+                              internal_connections(iconn)%dist(:), &
+                              error,option)
+      internal_connections(iconn)%area = explicit_grid%face_areas(iconn)
+    else
+      call UGridCalculateDist(pt_up,pt_dn,pt_center, &
+                              explicit_grid%cell_volumes(id_up), &
+                              explicit_grid%cell_volumes(id_dn), &
+                              upwind_fraction_method, &
+                              connections%dist(:,iconn),error,option)
+      connections%area(iconn) = explicit_grid%face_areas(iconn)
+    endif
   enddo
   if (error) then
     option%io_buffer = 'Errors in UGridExplicitSetInternConnect(). &
@@ -1827,6 +1839,7 @@ function UGridExplicitSetBoundaryConnect(explicit_grid,cell_ids, &
   type(option_type) :: option
 
   type(connection_set_type), pointer :: connections
+  type(boundary_connection_auxvar_type), pointer :: boundary_connections(:)
   PetscInt :: num_connections
   PetscInt :: iconn
   PetscInt :: id
@@ -1837,6 +1850,7 @@ function UGridExplicitSetBoundaryConnect(explicit_grid,cell_ids, &
 
   num_connections = size(cell_ids)
   connections => ConnectionCreate(num_connections,BOUNDARY_CONNECTION_TYPE)
+  boundary_connections => connections%boundary_connections
 
   error = PETSC_FALSE
   do iconn = 1, num_connections
@@ -1860,10 +1874,17 @@ function UGridExplicitSetBoundaryConnect(explicit_grid,cell_ids, &
         trim(adjustl(string)) // ') '
       call PrintMsgByRank(option)
     endif
-    connections%dist(-1,iconn) = 0.d0
-    connections%dist(0,iconn) = distance
-    connections%dist(1:3,iconn) = v/distance
-    connections%area(iconn) = face_areas(iconn)
+    if (connections%new_format) then
+      boundary_connections(iconn)%dist(-1) = 0.d0
+      boundary_connections(iconn)%dist(0) = distance
+      boundary_connections(iconn)%dist(1:3) = v/distance
+      boundary_connections(iconn)%area = face_areas(iconn)
+    else
+      connections%dist(-1,iconn) = 0.d0
+      connections%dist(0,iconn) = distance
+      connections%dist(1:3,iconn) = v/distance
+      connections%area(iconn) = face_areas(iconn)
+    endif
   enddo
   if (error) then
     option%io_buffer = 'Coincident cell and face centroids found in ' // &
@@ -1878,8 +1899,8 @@ end function UGridExplicitSetBoundaryConnect
 
 ! ************************************************************************** !
 
-function UGridExplicitSetConnections(explicit_grid,cell_ids,connection_type, &
-                                     option)
+function UGridExplicitSetConnections(explicit_grid,cell_ids, &
+                                     connection_type,option)
   !
   ! Sets up the connectivity for a region
   !
@@ -1913,7 +1934,18 @@ function UGridExplicitSetConnections(explicit_grid,cell_ids,connection_type, &
 
   do iconn = 1, num_connections
     id = cell_ids(iconn)
-    connections%id_dn(iconn) = id
+    if (connections%new_format) then
+      select case(connection_type)
+        case(INTERNAL_CONNECTION_TYPE)
+          connections%internal_connections(iconn)%id_dn = id
+        case(BOUNDARY_CONNECTION_TYPE)
+          connections%boundary_connections(iconn)%id_dn = id
+        case(SRC_SINK_CONNECTION_TYPE)
+          connections%srcsink_connections(iconn)%id_dn = id
+      end select
+    else
+      connections%id_dn(iconn) = id
+    endif
   enddo
 
   UGridExplicitSetConnections => connections

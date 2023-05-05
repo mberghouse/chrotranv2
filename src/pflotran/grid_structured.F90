@@ -858,7 +858,11 @@ function StructGridComputeInternConnect(structured_grid, xc, yc, zc, option)
   PetscInt :: tvd_ghost_offset, ghost_count
   PetscReal :: dist_up, dist_dn
   PetscReal :: r1, r2
+  PetscReal :: total_distance
+  PetscReal :: area
+  PetscReal :: fraction_upwind
   type(connection_set_type), pointer :: connections
+  type(internal_connection_auxvar_type), pointer :: internal_connections(:)
 
   PetscReal, pointer :: radius(:)
 
@@ -877,10 +881,15 @@ function StructGridComputeInternConnect(structured_grid, xc, yc, zc, option)
   lenz = structured_grid%ngz - 1
 
   connections => ConnectionCreate(nconn,INTERNAL_CONNECTION_TYPE)
+  internal_connections => connections%internal_connections
 
   ! if using higher order advection, allocate associated arrays
   if (option%itranmode == EXPLICIT_ADVECTION .and. &
       option%transport%tvd_flux_limiter /= 1) then  ! 1 = upwind
+    if (connections%new_format) then
+      option%io_buffer = 'TVD not supported in new connection sets.'
+      call PrintErrMsg(option)
+    endif
     allocate(connections%id_up2(size(connections%id_up)))
     allocate(connections%id_dn2(size(connections%id_dn)))
     connections%id_up2 = 0
@@ -900,8 +909,13 @@ function StructGridComputeInternConnect(structured_grid, xc, yc, zc, option)
               iconn = iconn+1
               id_up = i + j * structured_grid%ngx + k * structured_grid%ngxy
               id_dn = id_up + 1
-              connections%id_up(iconn) = id_up
-              connections%id_dn(iconn) = id_dn
+              if (connections%new_format) then
+                internal_connections(iconn)%id_up = id_up
+                internal_connections(iconn)%id_dn = id_dn
+              else
+                connections%id_up(iconn) = id_up
+                connections%id_dn(iconn) = id_dn
+              endif
 
               if (associated(connections%id_up2)) then
                 if (i == 1) then
@@ -923,14 +937,25 @@ function StructGridComputeInternConnect(structured_grid, xc, yc, zc, option)
                 endif
               endif
 
-              connections%dist(-1:3,iconn) = 0.d0
               dist_up = 0.5d0*structured_grid%dx(id_up)
               dist_dn = 0.5d0*structured_grid%dx(id_dn)
-              connections%dist(-1,iconn) = dist_up/(dist_up+dist_dn)
-              connections%dist(0,iconn) = dist_up+dist_dn
-              connections%dist(1,iconn) = 1.d0  ! x component of unit vector
-              connections%area(iconn) = structured_grid%dy(id_up)* &
-                                        structured_grid%dz(id_up)
+              total_distance = dist_up+dist_dn
+              fraction_upwind = dist_up/(dist_up+dist_dn)
+              area = structured_grid%dy(id_up)*structured_grid%dz(id_up)
+              if (connections%new_format) then
+                internal_connections(iconn)%dist(-1:3) = 0.d0
+                internal_connections(iconn)%dist(-1) = fraction_upwind
+                internal_connections(iconn)%dist(0) = total_distance
+                ! x component of unit vector
+                internal_connections(iconn)%dist(1) = 1.d0
+                internal_connections(iconn)%area = area
+              else
+                connections%dist(-1:3,iconn) = 0.d0
+                connections%dist(-1,iconn) = fraction_upwind
+                connections%dist(0,iconn) = total_distance
+                connections%dist(1,iconn) = 1.d0  ! x component of unit vector
+                connections%area(iconn) = area
+              endif
             enddo
           enddo
         enddo
@@ -943,16 +968,31 @@ function StructGridComputeInternConnect(structured_grid, xc, yc, zc, option)
               iconn = iconn+1
               id_up = i + j * structured_grid%ngx + k * structured_grid%ngxy
               id_dn = id_up + 1
-              connections%id_up(iconn) = id_up
-              connections%id_dn(iconn) = id_dn
-              connections%dist(-1:3,iconn) = 0.d0
               dist_up = 0.5d0*structured_grid%dx(id_up)
               dist_dn = 0.5d0*structured_grid%dx(id_dn)
-              connections%dist(-1,iconn) = dist_up/(dist_up+dist_dn)
-              connections%dist(0,iconn) = dist_up+dist_dn
-              connections%dist(1,iconn) = 1.d0  ! x component of unit vector
-              connections%area(iconn) = 2.d0 * pi * (radius(id_up)+0.5d0*structured_grid%dx(id_up))* &
-                                        structured_grid%dz(id_up)
+              total_distance = dist_up+dist_dn
+              fraction_upwind = dist_up/(dist_up+dist_dn)
+              area = 2.d0 * pi * &
+                  (radius(id_up)+0.5d0*structured_grid%dx(id_up))* &
+                  structured_grid%dz(id_up)
+              if (connections%new_format) then
+                internal_connections(iconn)%id_up = id_up
+                internal_connections(iconn)%id_dn = id_dn
+                internal_connections(iconn)%dist(-1:3) = 0.d0
+                internal_connections(iconn)%dist(-1) = fraction_upwind
+                internal_connections(iconn)%dist(0) = total_distance
+                ! x component of unit vector
+                internal_connections(iconn)%dist(1) = 1.d0
+                internal_connections(iconn)%area = area
+              else
+                connections%id_up(iconn) = id_up
+                connections%id_dn(iconn) = id_dn
+                connections%dist(-1:3,iconn) = 0.d0
+                connections%dist(-1,iconn) = fraction_upwind
+                connections%dist(0,iconn) = total_distance
+                connections%dist(1,iconn) = 1.d0  ! x component of unit vector
+                connections%area(iconn) = area
+              endif
             enddo
           enddo
         enddo
@@ -963,15 +1003,30 @@ function StructGridComputeInternConnect(structured_grid, xc, yc, zc, option)
               iconn = iconn+1
               id_up = i + j * structured_grid%ngx + k * structured_grid%ngxy
               id_dn = id_up + 1
-              connections%id_up(iconn) = id_up
-              connections%id_dn(iconn) = id_dn
-              connections%dist(-1:3,iconn) = 0.d0
               dist_up = 0.5d0*structured_grid%dx(id_up)
               dist_dn = 0.5d0*structured_grid%dx(id_dn)
-              connections%dist(-1,iconn) = dist_up/(dist_up+dist_dn)
-              connections%dist(0,iconn) = dist_up+dist_dn
-              connections%dist(1,iconn) = 1.d0  ! x component of unit vector
-              connections%area(iconn) = 4.d0 * pi * (radius(id_up)+0.5d0*structured_grid%dx(id_up))**2
+              total_distance = dist_up+dist_dn
+              fraction_upwind = dist_up/(dist_up+dist_dn)
+              area = 4.d0 * pi * &
+                     (radius(id_up)+0.5d0*structured_grid%dx(id_up))**2
+              if (connections%new_format) then
+                internal_connections(iconn)%id_up = id_up
+                internal_connections(iconn)%id_dn = id_dn
+                internal_connections(iconn)%dist(-1:3) = 0.d0
+                internal_connections(iconn)%dist(-1) = fraction_upwind
+                internal_connections(iconn)%dist(0) = total_distance
+                ! x component of unit vector
+                internal_connections(iconn)%dist(1) = 1.d0
+                internal_connections(iconn)%area = area
+              else
+                connections%id_up(iconn) = id_up
+                connections%id_dn(iconn) = id_dn
+                connections%dist(-1:3,iconn) = 0.d0
+                connections%dist(-1,iconn) = fraction_upwind
+                connections%dist(0,iconn) = total_distance
+                connections%dist(1,iconn) = 1.d0  ! x component of unit vector
+                connections%area(iconn) = area
+              endif
             enddo
           enddo
         enddo
@@ -987,10 +1042,16 @@ function StructGridComputeInternConnect(structured_grid, xc, yc, zc, option)
             do j = 1, leny
               iconn = iconn+1
 
-              id_up = i + 1 + (j-1) * structured_grid%ngx + k * structured_grid%ngxy
+              id_up = i + 1 + (j-1) * structured_grid%ngx + &
+                      k * structured_grid%ngxy
               id_dn = id_up + structured_grid%ngx
-              connections%id_up(iconn) = id_up
-              connections%id_dn(iconn) = id_dn
+              if (connections%new_format) then
+                internal_connections(iconn)%id_up = id_up
+                internal_connections(iconn)%id_dn = id_dn
+              else
+                connections%id_up(iconn) = id_up
+                connections%id_dn(iconn) = id_dn
+              endif
 
               if (associated(connections%id_up2)) then
                 if (j == 1) then
@@ -1013,14 +1074,27 @@ function StructGridComputeInternConnect(structured_grid, xc, yc, zc, option)
                 endif
               endif
 
-              connections%dist(-1:3,iconn) = 0.d0
               dist_up = 0.5d0*structured_grid%dy(id_up)
               dist_dn = 0.5d0*structured_grid%dy(id_dn)
-              connections%dist(-1,iconn) = dist_up/(dist_up+dist_dn)
-              connections%dist(0,iconn) = dist_up+dist_dn
-              connections%dist(2,iconn) = 1.d0  ! y component of unit vector
-              connections%area(iconn) = structured_grid%dx(id_up)* &
-                                    structured_grid%dz(id_up)
+              total_distance = dist_up+dist_dn
+              fraction_upwind = dist_up/(dist_up+dist_dn)
+              area = structured_grid%dx(id_up)*structured_grid%dz(id_up)
+              if (connections%new_format) then
+                internal_connections(iconn)%id_up = id_up
+                internal_connections(iconn)%id_dn = id_dn
+                internal_connections(iconn)%dist(-1:3) = 0.d0
+                internal_connections(iconn)%dist(-1) = fraction_upwind
+                internal_connections(iconn)%dist(0) = total_distance
+                ! y component of unit vector
+                internal_connections(iconn)%dist(2) = 1.d0
+                internal_connections(iconn)%area = area
+              else
+                connections%dist(-1:3,iconn) = 0.d0
+                connections%dist(-1,iconn) = fraction_upwind
+                connections%dist(0,iconn) = total_distance
+                connections%dist(2,iconn) = 1.d0  ! y component of unit vector
+                connections%area(iconn) = area
+              endif
             enddo
           enddo
         enddo
@@ -1071,14 +1145,27 @@ function StructGridComputeInternConnect(structured_grid, xc, yc, zc, option)
                 endif
               endif
 
-              connections%dist(-1:3,iconn) = 0.d0
               dist_up = 0.5d0*structured_grid%dz(id_up)
               dist_dn = 0.5d0*structured_grid%dz(id_dn)
-              connections%dist(-1,iconn) = dist_up/(dist_up+dist_dn)
-              connections%dist(0,iconn) = dist_up+dist_dn
-              connections%dist(3,iconn) = 1.d0  ! z component of unit vector
-              connections%area(iconn) = structured_grid%dx(id_up) * &
-                                        structured_grid%dy(id_up)
+              total_distance = dist_up+dist_dn
+              fraction_upwind = dist_up/(dist_up+dist_dn)
+              area = structured_grid%dx(id_up)*structured_grid%dy(id_up)
+              if (connections%new_format) then
+                internal_connections(iconn)%id_up = id_up
+                internal_connections(iconn)%id_dn = id_dn
+                internal_connections(iconn)%dist(-1:3) = 0.d0
+                internal_connections(iconn)%dist(-1) = fraction_upwind
+                internal_connections(iconn)%dist(0) = total_distance
+                ! z component of unit vector
+                internal_connections(iconn)%dist(3) = 1.d0
+                internal_connections(iconn)%area = area
+              else
+                connections%dist(-1:3,iconn) = 0.d0
+                connections%dist(-1,iconn) = fraction_upwind
+                connections%dist(0,iconn) = total_distance
+                connections%dist(3,iconn) = 1.d0  ! z component of unit vector
+                connections%area(iconn) = area
+              endif
             enddo
           enddo
         enddo
@@ -1090,18 +1177,32 @@ function StructGridComputeInternConnect(structured_grid, xc, yc, zc, option)
               id_up = i + 1 + j * structured_grid%ngx + (k-1) * &
                   structured_grid%ngxy
               id_dn = id_up + structured_grid%ngxy
-              connections%id_up(iconn) = id_up
-              connections%id_dn(iconn) = id_dn
-              connections%dist(-1:3,iconn) = 0.d0
               dist_up = 0.5d0*structured_grid%dz(id_up)
               dist_dn = 0.5d0*structured_grid%dz(id_dn)
-              connections%dist(-1,iconn) = dist_up/(dist_up+dist_dn)
-              connections%dist(0,iconn) = dist_up+dist_dn
-              connections%dist(3,iconn) = 1.d0  ! z component of unit vector
+              total_distance = dist_up+dist_dn
+              fraction_upwind = dist_up/(dist_up+dist_dn)
               ! pi*(r2^2-r1^2)
               r2 = xc(id_up) + 0.5d0*structured_grid%dx(id_up)
               r1 = xc(id_up) - 0.5d0*structured_grid%dx(id_up)
-              connections%area(iconn) = pi * dabs(r2*r2 - r1*r1)
+              area = pi * dabs(r2*r2 - r1*r1)
+              if (connections%new_format) then
+                internal_connections(iconn)%id_up = id_up
+                internal_connections(iconn)%id_dn = id_dn
+                internal_connections(iconn)%dist(-1:3) = 0.d0
+                internal_connections(iconn)%dist(-1) = fraction_upwind
+                internal_connections(iconn)%dist(0) = total_distance
+                ! z component of unit vector
+                internal_connections(iconn)%dist(3) = 1.d0
+                internal_connections(iconn)%area = area
+              else
+                connections%id_up(iconn) = id_up
+                connections%id_dn(iconn) = id_dn
+                connections%dist(-1:3,iconn) = 0.d0
+                connections%dist(-1,iconn) = fraction_upwind
+                connections%dist(0,iconn) = total_distance
+                connections%dist(3,iconn) = 1.d0  ! z component of unit vector
+                connections%area(iconn) = area
+              endif
             enddo
           enddo
         enddo
@@ -1139,6 +1240,9 @@ subroutine StructGridPopulateConnection(radius,structured_grid,connection, &
   type(option_type) :: option
   PetscReal :: radius(:)
   PetscReal :: dist_scale
+  PetscReal :: total_distance
+  PetscReal :: area
+  type(boundary_connection_auxvar_type), pointer :: boundary_connections(:)
 
   PetscReal, parameter :: Pi=3.141592653590d0
 
@@ -1147,6 +1251,8 @@ subroutine StructGridPopulateConnection(radius,structured_grid,connection, &
   else
     dist_scale = 0.5d0
   endif
+
+  boundary_connections => connection%boundary_connections
 
   select case(connection%itype)
     case(BOUNDARY_CONNECTION_TYPE)
@@ -1157,18 +1263,29 @@ subroutine StructGridPopulateConnection(radius,structured_grid,connection, &
 
           select case(structured_grid%itype)
             case(CARTESIAN_GRID)
-              connection%dist(:,iconn) = 0.d0
-              connection%dist(0,iconn) = dist_scale* &
-                                         structured_grid%dx(ghosted_id)
-              connection%area(iconn) = structured_grid%dy(ghosted_id)* &
-                                   structured_grid%dz(ghosted_id)
-
-
-              if (iface ==  WEST_FACE) then
-                connection%dist(1,iconn) = 1.d0
+              total_distance = dist_scale*structured_grid%dx(ghosted_id)
+              area = structured_grid%dy(ghosted_id) * &
+                     structured_grid%dz(ghosted_id)
+              if (connection%new_format) then
+                boundary_connections(iconn)%dist(:) = 0.d0
+                boundary_connections(iconn)%dist(0) = total_distance
+                boundary_connections(iconn)%area = area
+                if (iface ==  WEST_FACE) then
+                  boundary_connections(iconn)%dist(1) = 1.d0
+                else
+                  boundary_connections(iconn)%dist(1) = -1.d0
+                endif
               else
-                connection%dist(1,iconn) = -1.d0
+                connection%dist(:,iconn) = 0.d0
+                connection%dist(0,iconn) = total_distance
+                connection%area(iconn) = area
+                if (iface ==  WEST_FACE) then
+                  connection%dist(1,iconn) = 1.d0
+                else
+                  connection%dist(1,iconn) = -1.d0
+                endif
               endif
+
               if (associated(connection%id_dn2)) then
                   connection%id_dn2(iconn) = &
                     StructGetTVDGhostConnection(ghosted_id, &
@@ -1176,32 +1293,68 @@ subroutine StructGridPopulateConnection(radius,structured_grid,connection, &
                                                 iface,option)
               endif
             case(CYLINDRICAL_GRID)
-              connection%dist(:,iconn) = 0.d0
-              connection%dist(0,iconn) = dist_scale* &
-                                         structured_grid%dx(ghosted_id)
-              if (iface ==  WEST_FACE) then
-                connection%dist(1,iconn) = 1.d0
-                connection%area(iconn) = 2.d0 * pi * (radius(ghosted_id)- &
-                                      0.5d0*structured_grid%dx(ghosted_id)) * &
-                                      structured_grid%dz(ghosted_id)
+              if (connection%new_format) then
+                boundary_connections(iconn)%dist(:) = 0.d0
+                boundary_connections(iconn)%dist(0) = &
+                  dist_scale*structured_grid%dx(ghosted_id)
+                if (iface ==  WEST_FACE) then
+                  boundary_connections(iconn)%dist(1) = 1.d0
+                  boundary_connections(iconn)%area = &
+                    2.d0 * pi * (radius(ghosted_id)- &
+                                 0.5d0*structured_grid%dx(ghosted_id)) * &
+                                structured_grid%dz(ghosted_id)
+                else
+                  boundary_connections(iconn)%dist(1) = -1.d0
+                  boundary_connections(iconn)%area = &
+                    2.d0 * pi * (radius(ghosted_id)+ &
+                                 0.5d0*structured_grid%dx(ghosted_id)) * &
+                                structured_grid%dz(ghosted_id)
+                endif
               else
-                connection%dist(1,iconn) = -1.d0
-                connection%area(iconn) = 2.d0 * pi * (radius(ghosted_id)+ &
-                                      0.5d0*structured_grid%dx(ghosted_id)) * &
-                                      structured_grid%dz(ghosted_id)
+                connection%dist(:,iconn) = 0.d0
+                connection%dist(0,iconn) = dist_scale* &
+                                           structured_grid%dx(ghosted_id)
+                if (iface ==  WEST_FACE) then
+                  connection%dist(1,iconn) = 1.d0
+                  connection%area(iconn) = 2.d0 * pi * (radius(ghosted_id)- &
+                                        0.5d0*structured_grid%dx(ghosted_id)) * &
+                                        structured_grid%dz(ghosted_id)
+                else
+                  connection%dist(1,iconn) = -1.d0
+                  connection%area(iconn) = 2.d0 * pi * (radius(ghosted_id)+ &
+                                        0.5d0*structured_grid%dx(ghosted_id)) * &
+                                        structured_grid%dz(ghosted_id)
+                endif
               endif
             case(SPHERICAL_GRID)
-              connection%dist(:,iconn) = 0.d0
-              connection%dist(0,iconn) = dist_scale* &
-                                         structured_grid%dx(ghosted_id)
-              if (iface ==  WEST_FACE) then
-                connection%dist(1,iconn) = 1.d0
-                connection%area(iconn) = 4.d0 * pi * (radius(ghosted_id)- &
-                                         0.5d0*structured_grid%dx(ghosted_id))**2
+              if (connection%new_format) then
+                boundary_connections(iconn)%dist(:) = 0.d0
+                boundary_connections(iconn)%dist(0) = &
+                  dist_scale*structured_grid%dx(ghosted_id)
+                if (iface ==  WEST_FACE) then
+                  boundary_connections%dist(1) = 1.d0
+                  boundary_connections%area = &
+                    4.d0 * pi * (radius(ghosted_id)- &
+                                 0.5d0*structured_grid%dx(ghosted_id))**2
+                else
+                  boundary_connections%dist(1) = -1.d0
+                  boundary_connections%area = &
+                    4.d0 * pi * (radius(ghosted_id)+ &
+                                 0.5d0*structured_grid%dx(ghosted_id))**2
+                endif
               else
-                connection%dist(1,iconn) = -1.d0
-                connection%area(iconn) = 4.d0 * pi * (radius(ghosted_id)+ &
-                                         0.5d0*structured_grid%dx(ghosted_id))**2
+                connection%dist(:,iconn) = 0.d0
+                connection%dist(0,iconn) = dist_scale* &
+                                          structured_grid%dx(ghosted_id)
+                if (iface ==  WEST_FACE) then
+                  connection%dist(1,iconn) = 1.d0
+                  connection%area(iconn) = 4.d0 * pi * (radius(ghosted_id)- &
+                                          0.5d0*structured_grid%dx(ghosted_id))**2
+                else
+                  connection%dist(1,iconn) = -1.d0
+                  connection%area(iconn) = 4.d0 * pi * (radius(ghosted_id)+ &
+                                          0.5d0*structured_grid%dx(ghosted_id))**2
+                endif
               endif
           end select
 
@@ -1209,15 +1362,28 @@ subroutine StructGridPopulateConnection(radius,structured_grid,connection, &
 
           select case(structured_grid%itype)
             case(CARTESIAN_GRID)
-              connection%dist(:,iconn) = 0.d0
-              connection%dist(0,iconn) = dist_scale* &
-                                         structured_grid%dy(ghosted_id)
-              connection%area(iconn) = structured_grid%dx(ghosted_id)* &
-                                   structured_grid%dz(ghosted_id)
-              if (iface == SOUTH_FACE) then
-                connection%dist(2,iconn) = 1.d0
+              if (connection%new_format) then
+                boundary_connections(iconn)%dist(:) = 0.d0
+                boundary_connections(iconn)%dist(0) = &
+                  dist_scale*structured_grid%dy(ghosted_id)
+                boundary_connections(iconn)%area = &
+                  structured_grid%dx(ghosted_id)*structured_grid%dz(ghosted_id)
+                if (iface == SOUTH_FACE) then
+                  boundary_connections(iconn)%dist(2) = 1.d0
+                else
+                  boundary_connections(iconn)%dist(2) = -1.d0
+                endif
               else
-                connection%dist(2,iconn) = -1.d0
+                connection%dist(:,iconn) = 0.d0
+                connection%dist(0,iconn) = dist_scale* &
+                                          structured_grid%dy(ghosted_id)
+                connection%area(iconn) = structured_grid%dx(ghosted_id)* &
+                                    structured_grid%dz(ghosted_id)
+                if (iface == SOUTH_FACE) then
+                  connection%dist(2,iconn) = 1.d0
+                else
+                  connection%dist(2,iconn) = -1.d0
+                endif
               endif
               if (associated(connection%id_dn2)) then
                   connection%id_dn2(iconn) = &
@@ -1237,25 +1403,49 @@ subroutine StructGridPopulateConnection(radius,structured_grid,connection, &
 
           select case(structured_grid%itype)
             case(CARTESIAN_GRID)
-              connection%dist(:,iconn) = 0.d0
-              connection%dist(0,iconn) = dist_scale* &
-                                         structured_grid%dz(ghosted_id)
-              connection%area(iconn) = structured_grid%dx(ghosted_id)* &
-                                   structured_grid%dy(ghosted_id)
-              if (structured_grid%invert_z_axis) then
-                if (iface == TOP_FACE) then
-                  option%io_buffer = 'Need to ensure that direction of ' // &
-                    'inverted z is correct in StructGridPopulateConnection()'
-                  call PrintErrMsg(option)
-                  connection%dist(3,iconn) = -1.d0
+              if (connection%new_format) then
+                boundary_connections(iconn)%dist(:) = 0.d0
+                boundary_connections(iconn)%dist(0) = &
+                  dist_scale*structured_grid%dz(ghosted_id)
+                boundary_connections(iconn)%area = &
+                  structured_grid%dx(ghosted_id)*structured_grid%dy(ghosted_id)
+                if (structured_grid%invert_z_axis) then
+                  if (iface == TOP_FACE) then
+                    option%io_buffer = 'Need to ensure that direction of ' // &
+                      'inverted z is correct in StructGridPopulateConnection()'
+                    call PrintErrMsg(option)
+                    boundary_connections(iconn)%dist(3) = -1.d0
+                  else
+                    boundary_connections(iconn)%dist(3) = 1.d0
+                  endif
                 else
-                  connection%dist(3,iconn) = 1.d0
+                  if (iface == BOTTOM_FACE) then
+                    boundary_connections(iconn)%dist(3) = 1.d0
+                  else
+                    boundary_connections(iconn)%dist(3) = -1.d0
+                  endif
                 endif
               else
-                if (iface == BOTTOM_FACE) then
-                  connection%dist(3,iconn) = 1.d0
+                connection%dist(:,iconn) = 0.d0
+                connection%dist(0,iconn) = dist_scale* &
+                                          structured_grid%dz(ghosted_id)
+                connection%area(iconn) = structured_grid%dx(ghosted_id)* &
+                                    structured_grid%dy(ghosted_id)
+                if (structured_grid%invert_z_axis) then
+                  if (iface == TOP_FACE) then
+                    option%io_buffer = 'Need to ensure that direction of ' // &
+                      'inverted z is correct in StructGridPopulateConnection()'
+                    call PrintErrMsg(option)
+                    connection%dist(3,iconn) = -1.d0
+                  else
+                    connection%dist(3,iconn) = 1.d0
+                  endif
                 else
-                  connection%dist(3,iconn) = -1.d0
+                  if (iface == BOTTOM_FACE) then
+                    connection%dist(3,iconn) = 1.d0
+                  else
+                    connection%dist(3,iconn) = -1.d0
+                  endif
                 endif
               endif
               if (associated(connection%id_dn2)) then
@@ -1265,22 +1455,44 @@ subroutine StructGridPopulateConnection(radius,structured_grid,connection, &
                                                 iface,option)
               endif
             case(CYLINDRICAL_GRID)
-              connection%dist(:,iconn) = 0.d0
-              connection%dist(0,iconn) = dist_scale* &
-                                         structured_grid%dz(ghosted_id)
-              connection%area(iconn) = 2.d0 * pi * radius(ghosted_id) * &
-                                        structured_grid%dx(ghosted_id)
-              if (structured_grid%invert_z_axis) then
-                if (iface ==  TOP_FACE) then
-                  connection%dist(3,iconn) = 1.d0
+              if (connection%new_format) then
+                boundary_connections(iconn)%dist(:) = 0.d0
+                boundary_connections(iconn)%dist(0) = &
+                  dist_scale*structured_grid%dz(ghosted_id)
+                boundary_connections(iconn)%area = &
+                  2.d0 * pi * radius(ghosted_id) * &
+                              structured_grid%dx(ghosted_id)
+                if (structured_grid%invert_z_axis) then
+                  if (iface ==  TOP_FACE) then
+                    boundary_connections(iconn)%dist(3) = 1.d0
+                  else
+                    boundary_connections(iconn)%dist(3) = -1.d0
+                  endif
                 else
-                  connection%dist(3,iconn) = -1.d0
+                  if (iface ==  TOP_FACE) then
+                    boundary_connections(iconn)%dist(3) = -1.d0
+                  else
+                    boundary_connections(iconn)%dist(3) = 1.d0
+                  endif
                 endif
               else
-                if (iface ==  TOP_FACE) then
-                  connection%dist(3,iconn) = -1.d0
+                connection%dist(:,iconn) = 0.d0
+                connection%dist(0,iconn) = dist_scale* &
+                                          structured_grid%dz(ghosted_id)
+                connection%area(iconn) = 2.d0 * pi * radius(ghosted_id) * &
+                                          structured_grid%dx(ghosted_id)
+                if (structured_grid%invert_z_axis) then
+                  if (iface ==  TOP_FACE) then
+                    connection%dist(3,iconn) = 1.d0
+                  else
+                    connection%dist(3,iconn) = -1.d0
+                  endif
                 else
-                  connection%dist(3,iconn) = 1.d0
+                  if (iface ==  TOP_FACE) then
+                    connection%dist(3,iconn) = -1.d0
+                  else
+                    connection%dist(3,iconn) = 1.d0
+                  endif
                 endif
               endif
             case(SPHERICAL_GRID)
@@ -1289,7 +1501,12 @@ subroutine StructGridPopulateConnection(radius,structured_grid,connection, &
               call PrintErrMsg(option)
           end select
       end select
-      if (connection%area(iconn) < 1.d-20) then
+      if (connection%new_format) then
+        area = boundary_connections(iconn)%area
+      else
+        area = connection%area(iconn)
+      endif
+      if (area < 1.d-20) then
         write(option%io_buffer,*) connection%id_dn(iconn)
         option%io_buffer = &
           'Zero area in boundary connection at grid cell ' // &

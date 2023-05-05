@@ -1771,6 +1771,8 @@ function UGridComputeInternConnect(unstructured_grid,grid_x,grid_y,grid_z, &
   type(grid_unstructured_type) :: unstructured_grid
 
   type(connection_set_type), pointer :: connections
+  type(internal_connection_auxvar_type), pointer :: internal_connections(:)
+
   PetscInt :: nconn, iconn
   PetscInt :: idual, dual_id
 
@@ -2096,8 +2098,8 @@ function UGridComputeInternConnect(unstructured_grid,grid_x,grid_y,grid_z, &
     enddo
   enddo
 
-
   connections => ConnectionCreate(nconn,INTERNAL_CONNECTION_TYPE)
+  internal_connections => connections%internal_connections
 
   allocate(unstructured_grid%face_area(face_count))
   allocate(unstructured_grid%connection_to_face(nconn))
@@ -2157,9 +2159,15 @@ function UGridComputeInternConnect(unstructured_grid,grid_x,grid_y,grid_z, &
           option%io_buffer = 'global face not found' // trim(string)
           call PrintErrMsg(option)
         endif
-        connections%id_up(iconn) = local_id
-        connections%id_dn(iconn) = abs(dual_local_id)
-        connections%face_id(iconn) = cell_to_face(iface,local_id)
+        if (connections%new_format) then
+          internal_connections(iconn)%id_up = local_id
+          internal_connections(iconn)%id_dn = abs(dual_local_id)
+          internal_connections(iconn)%face_id = cell_to_face(iface,local_id)
+        else
+          connections%id_up(iconn) = local_id
+          connections%id_dn(iconn) = abs(dual_local_id)
+          connections%face_id(iconn) = cell_to_face(iface,local_id)
+        endif
         if (face_type == LINE_FACE_TYPE) then
 
           point_up%x = grid_x(local_id)
@@ -2270,16 +2278,27 @@ function UGridComputeInternConnect(unstructured_grid,grid_x,grid_y,grid_z, &
         dist_up = sqrt(DotProduct(v1,v1))
         dist_dn = sqrt(DotProduct(v2,v2))
 
-        connections%dist(-1:3,iconn) = 0.d0
-        connections%dist(-1,iconn) = dist_up/(dist_up+dist_dn)
-        connections%dist(0,iconn) = dist_up + dist_dn
-        v3 = v1 + v2
-        connections%dist(1:3,iconn) = v3/sqrt(DotProduct(v3,v3))
-        connections%area(iconn) = area1 + area2
-        connections%intercp(1,iconn) = intercept%x
-        connections%intercp(2,iconn) = intercept%y
-        connections%intercp(3,iconn) = intercept%z
-
+        if (connections%new_format) then
+          internal_connections(iconn)%dist(-1:3) = 0.d0
+          internal_connections(iconn)%dist(-1) = dist_up/(dist_up+dist_dn)
+          internal_connections(iconn)%dist(0) = dist_up + dist_dn
+          v3 = v1 + v2
+          internal_connections(iconn)%dist(1:3) = v3/sqrt(DotProduct(v3,v3))
+          internal_connections(iconn)%area = area1 + area2
+          internal_connections(iconn)%intercept(1) = intercept%x
+          internal_connections(iconn)%intercept(2) = intercept%y
+          internal_connections(iconn)%intercept(3) = intercept%z
+        else
+          connections%dist(-1:3,iconn) = 0.d0
+          connections%dist(-1,iconn) = dist_up/(dist_up+dist_dn)
+          connections%dist(0,iconn) = dist_up + dist_dn
+          v3 = v1 + v2
+          connections%dist(1:3,iconn) = v3/sqrt(DotProduct(v3,v3))
+          connections%area(iconn) = area1 + area2
+          connections%intercp(1,iconn) = intercept%x
+          connections%intercp(2,iconn) = intercept%y
+          connections%intercp(3,iconn) = intercept%z
+        endif
       endif
     enddo
   enddo
@@ -2419,6 +2438,7 @@ subroutine UGridPopulateConnection(unstructured_grid, connection, iface_cell, &
   PetscInt :: ghosted_id
   type(option_type) :: option
 
+  type(boundary_connection_auxvar_type), pointer :: boundary_connections(:)
   PetscInt :: face_id
   PetscInt :: ivert,vert_id
   PetscInt :: face_type
@@ -2428,6 +2448,7 @@ subroutine UGridPopulateConnection(unstructured_grid, connection, iface_cell, &
   type(point3d_type) :: point, vertex1, vertex2, vertex3, intercept
   character(len=MAXWORDLENGTH) :: word
 
+  boundary_connections => connection%boundary_connections
 
   select case(connection%itype)
     case(BOUNDARY_CONNECTION_TYPE)
@@ -2483,16 +2504,27 @@ subroutine UGridPopulateConnection(unstructured_grid, connection, iface_cell, &
 
       dist = sqrt(DotProduct(v1, v1))
       n_dist = v1/dist
-      connection%dist(0, iconn) = dist
-      connection%dist(1, iconn) = n_dist(1)
-      connection%dist(2, iconn) = n_dist(2)
-      connection%dist(3, iconn) = n_dist(3)
-      connection%area(iconn)    = unstructured_grid%face_area(face_id)
-      connection%intercp(1,iconn)= intercept%x
-      connection%intercp(2,iconn)= intercept%y
-      connection%intercp(3,iconn)= intercept%z
-      connection%face_id(iconn)  = face_id
-
+      if (connection%new_format) then
+        boundary_connections(iconn)%dist(0) = dist
+        boundary_connections(iconn)%dist(1) = n_dist(1)
+        boundary_connections(iconn)%dist(2) = n_dist(2)
+        boundary_connections(iconn)%dist(3) = n_dist(3)
+        boundary_connections(iconn)%area = unstructured_grid%face_area(face_id)
+        boundary_connections(iconn)%intercept(1)= intercept%x
+        boundary_connections(iconn)%intercept(2)= intercept%y
+        boundary_connections(iconn)%intercept(3)= intercept%z
+        boundary_connections(iconn)%face_id  = face_id
+      else
+        connection%dist(0, iconn) = dist
+        connection%dist(1, iconn) = n_dist(1)
+        connection%dist(2, iconn) = n_dist(2)
+        connection%dist(3, iconn) = n_dist(3)
+        connection%area(iconn)    = unstructured_grid%face_area(face_id)
+        connection%intercp(1,iconn)= intercept%x
+        connection%intercp(2,iconn)= intercept%y
+        connection%intercp(3,iconn)= intercept%z
+        connection%face_id(iconn)  = face_id
+      endif
   end select
 
 end subroutine UGridPopulateConnection

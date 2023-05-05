@@ -7,7 +7,32 @@ module Connection_module
   implicit none
 
   private
+
+  type, public :: internal_connection_auxvar_type
+    PetscInt :: id_up
+    PetscInt :: id_dn
+    PetscInt :: face_id
+    PetscReal :: dist(-1:3)
+    PetscReal :: area
+    PetscReal :: intercept(3)
+    PetscReal, pointer :: aux_reals(:)
+  end type internal_connection_auxvar_type
+
+  type, public :: boundary_connection_auxvar_type
+    PetscInt :: id_dn
+    PetscInt :: face_id
+    PetscReal :: dist(-1:3)
+    PetscReal :: area
+    PetscReal :: intercept(3)
+    PetscReal, pointer :: aux_reals(:)
+  end type boundary_connection_auxvar_type
+
+  type, public :: srcsink_connection_auxvar_type
+    PetscInt :: id_dn
+  end type srcsink_connection_auxvar_type
+
   type, public :: connection_set_type
+    PetscBool :: new_format
     PetscInt :: id
     PetscInt :: itype                  ! connection type (boundary, internal, source sink
     PetscInt :: num_connections
@@ -26,9 +51,11 @@ module Connection_module
     PetscReal, pointer :: area(:)      ! list of areas of faces normal to distance vectors
     PetscReal, pointer :: cntr(:,:)    ! coordinates (1:3, num_connections) of the mass center of the face
     PetscInt, pointer :: face_id(:)    ! list of ids of faces (in local order)
+    type(internal_connection_auxvar_type), pointer :: internal_connections(:)
+    type(boundary_connection_auxvar_type), pointer :: boundary_connections(:)
+    type(srcsink_connection_auxvar_type), pointer :: srcsink_connections(:)
     type(connection_set_type), pointer :: next
   end type connection_set_type
-
 
   ! pointer data structure required for making an array of region pointers in F90
   type, public :: connection_set_ptr_type
@@ -70,8 +97,10 @@ function ConnectionCreate(num_connections,connection_itype)
   type(connection_set_type), pointer :: ConnectionCreate
 
   type(connection_set_type), pointer :: connection
+  PetscInt :: i
 
   allocate(connection)
+  connection%new_format = PETSC_FALSE
   connection%id = 0
   connection%itype = connection_itype
   connection%offset = 0
@@ -86,39 +115,140 @@ function ConnectionCreate(num_connections,connection_itype)
   nullify(connection%intercp)
   nullify(connection%area)
   nullify(connection%cntr)
+  nullify(connection%internal_connections)
+  nullify(connection%boundary_connections)
+  nullify(connection%srcsink_connections)
   select case(connection_itype)
     case(INTERNAL_CONNECTION_TYPE)
-      allocate(connection%id_up(num_connections))
-      allocate(connection%id_dn(num_connections))
-      allocate(connection%dist(-1:3,num_connections))
-      allocate(connection%intercp(1:3,num_connections))
-      allocate(connection%area(num_connections))
-      allocate(connection%face_id(num_connections))
-      connection%id_up = 0
-      connection%id_dn = 0
-      connection%face_id = 0
-      connection%dist = 0.d0
-      connection%intercp = 0.d0
-      connection%area = 0.d0
+      if (connection%new_format) then
+        allocate(connection%internal_connections(num_connections))
+        do i = 1, num_connections
+          call ConnectionInternalAuxInit(connection%internal_connections(i), &
+                                         ZERO_INTEGER)
+        enddo
+      else
+        allocate(connection%id_up(num_connections))
+        allocate(connection%id_dn(num_connections))
+        allocate(connection%face_id(num_connections))
+        allocate(connection%dist(-1:3,num_connections))
+        allocate(connection%area(num_connections))
+        allocate(connection%intercp(1:3,num_connections))
+        connection%id_up = 0
+        connection%id_dn = 0
+        connection%face_id = 0
+        connection%dist = 0.d0
+        connection%area = 0.d0
+        connection%intercp = 0.d0
+      endif
     case(BOUNDARY_CONNECTION_TYPE)
-      allocate(connection%id_dn(num_connections))
-      allocate(connection%dist(-1:3,num_connections))
-      allocate(connection%intercp(1:3,num_connections))
-      allocate(connection%area(num_connections))
-      allocate(connection%face_id(num_connections))
-      connection%id_dn = 0
-      connection%dist = 0.d0
-      connection%intercp = 0.d0
-      connection%area = 0.d0
+      if (connection%new_format) then
+        allocate(connection%boundary_connections(num_connections))
+        do i = 1, num_connections
+          call ConnectionBoundaryAuxInit(connection%boundary_connections(i), &
+                                         ZERO_INTEGER)
+        enddo
+      else
+        allocate(connection%id_dn(num_connections))
+        allocate(connection%face_id(num_connections))
+        allocate(connection%dist(-1:3,num_connections))
+        allocate(connection%area(num_connections))
+        allocate(connection%intercp(1:3,num_connections))
+        connection%id_dn = 0
+        connection%face_id = 0
+        connection%dist = 0.d0
+        connection%area = 0.d0
+        connection%intercp = 0.d0
+      endif
     case(SRC_SINK_CONNECTION_TYPE,INITIAL_CONNECTION_TYPE)
-      allocate(connection%id_dn(num_connections))
-      connection%id_dn = 0
+      if (connection%new_format) then
+        allocate(connection%srcsink_connections(num_connections))
+        do i = 1, num_connections
+          call ConnectionSrcSinkAuxInit(connection%srcsink_connections(i))
+        enddo
+      else
+        allocate(connection%id_dn(num_connections))
+        connection%id_dn = 0
+      endif
   end select
   nullify(connection%next)
 
   ConnectionCreate => connection
 
 end function ConnectionCreate
+
+! ************************************************************************** !
+
+subroutine ConnectionInternalAuxInit(int_conn_auxvar,num_aux_reals)
+  !
+  ! Initializes a new internal connection auxvar
+  !
+  ! Author: Glenn Hammond
+  ! Date: 04/24/23
+  !
+  implicit none
+
+  type(internal_connection_auxvar_type) :: int_conn_auxvar
+  PetscInt :: num_aux_reals
+
+  int_conn_auxvar%id_up = 0
+  int_conn_auxvar%id_dn = 0
+  int_conn_auxvar%face_id = 0
+  int_conn_auxvar%dist(:) = 0.d0
+  int_conn_auxvar%area = 0.d0
+  int_conn_auxvar%intercept = 0.d0
+  if (num_aux_reals > 0) then
+    allocate(int_conn_auxvar%aux_reals(num_aux_reals))
+    int_conn_auxvar%aux_reals = 0.d0
+  else
+    nullify(int_conn_auxvar%aux_reals)
+  endif
+
+end subroutine ConnectionInternalAuxInit
+
+! ************************************************************************** !
+
+subroutine ConnectionBoundaryAuxInit(boundary_conn_auxvar,num_aux_reals)
+  !
+  ! Initializes a new internal connection auxvar
+  !
+  ! Author: Glenn Hammond
+  ! Date: 04/24/23
+  !
+  implicit none
+
+  type(boundary_connection_auxvar_type) :: boundary_conn_auxvar
+  PetscInt :: num_aux_reals
+
+  boundary_conn_auxvar%id_dn = 0
+  boundary_conn_auxvar%face_id = 0
+  boundary_conn_auxvar%dist(:) = 0.d0
+  boundary_conn_auxvar%area = 0.d0
+  boundary_conn_auxvar%intercept = 0.d0
+  if (num_aux_reals > 0) then
+    allocate(boundary_conn_auxvar%aux_reals(num_aux_reals))
+    boundary_conn_auxvar%aux_reals = 0.d0
+  else
+    nullify(boundary_conn_auxvar%aux_reals)
+  endif
+
+end subroutine ConnectionBoundaryAuxInit
+
+! ************************************************************************** !
+
+subroutine ConnectionSrcSinkAuxInit(srcsink_conn_auxvar)
+  !
+  ! Initializes a new internal connection auxvar
+  !
+  ! Author: Glenn Hammond
+  ! Date: 04/24/23
+  !
+  implicit none
+
+  type(srcsink_connection_auxvar_type) :: srcsink_conn_auxvar
+
+  srcsink_conn_auxvar%id_dn = 0
+
+end subroutine ConnectionSrcSinkAuxInit
 
 ! ************************************************************************** !
 
@@ -273,19 +403,41 @@ subroutine ConnectionDestroy(connection)
   implicit none
 
   type(connection_set_type), pointer :: connection
+  PetscInt :: i
 
   if (.not.associated(connection)) return
 
-  call DeallocateArray(connection%local)
-  call DeallocateArray(connection%id_up)
-  call DeallocateArray(connection%id_dn)
-  call DeallocateArray(connection%id_up2)
-  call DeallocateArray(connection%id_dn2)
-  call DeallocateArray(connection%face_id)
-  call DeallocateArray(connection%dist)
-  call DeallocateArray(connection%intercp)
-  call DeallocateArray(connection%area)
-  call DeallocateArray(connection%cntr)
+  if (connection%new_format) then
+    if (associated(connection%internal_connections)) then
+      do i = 1, connection%num_connections
+        call DeallocateArray(connection%internal_connections(i)%aux_reals)
+      enddo
+      deallocate(connection%internal_connections)
+      nullify(connection%internal_connections)
+    endif
+    if (associated(connection%boundary_connections)) then
+      do i = 1, connection%num_connections
+        call DeallocateArray(connection%boundary_connections(i)%aux_reals)
+      enddo
+      deallocate(connection%boundary_connections)
+      nullify(connection%boundary_connections)
+    endif
+    if (associated(connection%srcsink_connections)) then
+      deallocate(connection%srcsink_connections)
+      nullify(connection%srcsink_connections)
+    endif
+  else
+    call DeallocateArray(connection%local)
+    call DeallocateArray(connection%id_up)
+    call DeallocateArray(connection%id_dn)
+    call DeallocateArray(connection%id_up2)
+    call DeallocateArray(connection%id_dn2)
+    call DeallocateArray(connection%face_id)
+    call DeallocateArray(connection%dist)
+    call DeallocateArray(connection%intercp)
+    call DeallocateArray(connection%area)
+    call DeallocateArray(connection%cntr)
+  endif
 
   nullify(connection%next)
 
