@@ -1860,11 +1860,12 @@ function UGridPolyhedraComputeInternConnect(ugrid, grid_x, &
           internal_connections(iconn)%id_up = local_id
           internal_connections(iconn)%id_dn = abs(dual_local_id)
           internal_connections(iconn)%face_id = cell_to_face(iface,local_id)
-        else
+!gehfix        else
+endif
           connections%id_up(iconn) = local_id
           connections%id_dn(iconn) = abs(dual_local_id)
           connections%face_id(iconn) = cell_to_face(iface,local_id)
-        endif
+!gehfix        endif
 
         point_up%x = grid_x(local_id)
         point_up%y = grid_y(local_id)
@@ -1921,7 +1922,8 @@ function UGridPolyhedraComputeInternConnect(ugrid, grid_x, &
           internal_connections(iconn)%intercept(1) = intercept%x
           internal_connections(iconn)%intercept(2) = intercept%y
           internal_connections(iconn)%intercept(3) = intercept%z
-        else
+!gehfix        else
+endif
           connections%dist(-1:3,iconn) = 0.d0
           connections%dist(-1,iconn) = dist_up/(dist_up + dist_dn)
           connections%dist(0,iconn) = dist_up + dist_dn
@@ -1931,7 +1933,7 @@ function UGridPolyhedraComputeInternConnect(ugrid, grid_x, &
           connections%intercp(1,iconn) = intercept%x
           connections%intercp(2,iconn) = intercept%y
           connections%intercp(3,iconn) = intercept%z
-        endif
+!gehfix        endif
 
        endif ! (local_id < abs(dual_local_id))
 
@@ -2152,7 +2154,8 @@ subroutine UGridPolyhedraPopulateConnection(ugrid, connection, iface_cell, &
         boundary_connections(iconn)%intercept(2)= intercept%y
         boundary_connections(iconn)%intercept(3)= intercept%z
         boundary_connections(iconn)%face_id = face_id
-      else
+!gehfix      else
+endif
         connection%dist(0, iconn) = dist
         connection%dist(1, iconn) = n_dist(1)
         connection%dist(2, iconn) = n_dist(2)
@@ -2162,7 +2165,7 @@ subroutine UGridPolyhedraPopulateConnection(ugrid, connection, iface_cell, &
         connection%intercp(2,iconn)= intercept%y
         connection%intercp(3,iconn)= intercept%z
         connection%face_id(iconn)  = face_id
-      endif
+!gehfix      endif
 
   end select
 

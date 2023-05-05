@@ -100,7 +100,8 @@ function ConnectionCreate(num_connections,connection_itype)
   PetscInt :: i
 
   allocate(connection)
-  connection%new_format = PETSC_FALSE
+!gehfix  connection%new_format = PETSC_FALSE
+  connection%new_format = PETSC_TRUE
   connection%id = 0
   connection%itype = connection_itype
   connection%offset = 0
@@ -126,7 +127,8 @@ function ConnectionCreate(num_connections,connection_itype)
           call ConnectionInternalAuxInit(connection%internal_connections(i), &
                                          ZERO_INTEGER)
         enddo
-      else
+!gehfix      else
+endif
         allocate(connection%id_up(num_connections))
         allocate(connection%id_dn(num_connections))
         allocate(connection%face_id(num_connections))
@@ -139,7 +141,7 @@ function ConnectionCreate(num_connections,connection_itype)
         connection%dist = 0.d0
         connection%area = 0.d0
         connection%intercp = 0.d0
-      endif
+!gehfix      endif
     case(BOUNDARY_CONNECTION_TYPE)
       if (connection%new_format) then
         allocate(connection%boundary_connections(num_connections))
@@ -147,7 +149,8 @@ function ConnectionCreate(num_connections,connection_itype)
           call ConnectionBoundaryAuxInit(connection%boundary_connections(i), &
                                          ZERO_INTEGER)
         enddo
-      else
+!gehfix      else
+endif
         allocate(connection%id_dn(num_connections))
         allocate(connection%face_id(num_connections))
         allocate(connection%dist(-1:3,num_connections))
@@ -158,17 +161,18 @@ function ConnectionCreate(num_connections,connection_itype)
         connection%dist = 0.d0
         connection%area = 0.d0
         connection%intercp = 0.d0
-      endif
+!gehfix      endif
     case(SRC_SINK_CONNECTION_TYPE,INITIAL_CONNECTION_TYPE)
       if (connection%new_format) then
         allocate(connection%srcsink_connections(num_connections))
         do i = 1, num_connections
           call ConnectionSrcSinkAuxInit(connection%srcsink_connections(i))
         enddo
-      else
+!gehfix      else
+endif
         allocate(connection%id_dn(num_connections))
         connection%id_dn = 0
-      endif
+!gehfix    endif
   end select
   nullify(connection%next)
 
@@ -426,7 +430,8 @@ subroutine ConnectionDestroy(connection)
       deallocate(connection%srcsink_connections)
       nullify(connection%srcsink_connections)
     endif
-  else
+!gehfix  else
+  endif
     call DeallocateArray(connection%local)
     call DeallocateArray(connection%id_up)
     call DeallocateArray(connection%id_dn)
@@ -437,7 +442,7 @@ subroutine ConnectionDestroy(connection)
     call DeallocateArray(connection%intercp)
     call DeallocateArray(connection%area)
     call DeallocateArray(connection%cntr)
-  endif
+!gehfix  endif
 
   nullify(connection%next)
 

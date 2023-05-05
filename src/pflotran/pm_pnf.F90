@@ -371,10 +371,11 @@ subroutine PMPNFSetupLinearSystem(this,A,solution,right_hand_side,ierr)
       if (this%use_darcy) then
         tempreal = pnf_density_kg * &
                   material_auxvars(ghosted_id_up)%permeability(1) * &
-                  cur_connection_set%area(iconn) / &
+                  cur_connection_set%internal_connections(iconn)%area / &
                   (pnf_viscosity * cur_connection_set%dist(0,iconn))
       else
-        tempreal = g_sup_h_constant * cur_connection_set%area(iconn)**2 / &
+        tempreal = g_sup_h_constant * &
+                  cur_connection_set%internal_connections(iconn)%area**2 / &
                   cur_connection_set%dist(0,iconn)
       endif
       if (local_id_up > 0) then
@@ -404,14 +405,13 @@ subroutine PMPNFSetupLinearSystem(this,A,solution,right_hand_side,ierr)
       sum_connection = sum_connection + 1
       local_id = cur_connection_set%id_dn(iconn)
       ghosted_id = grid%nL2G(local_id)
-      area = cur_connection_set%area(iconn)
+      area = cur_connection_set%boundary_connections(iconn)%area
       rvalue = boundary_condition%flow_aux_real_var(1,iconn)
       select case(itype)
         case(DIRICHLET_BC)
           if (this%use_darcy) then
             tempreal = pnf_density_kg * &
-                      material_auxvars(ghosted_id)%permeability(1) * &
-                      cur_connection_set%area(iconn) / &
+                      material_auxvars(ghosted_id)%permeability(1) * area / &
                       (pnf_viscosity * cur_connection_set%dist(0,iconn))
           else
             tempreal = g_sup_h_constant * area**2 / &  ! w^3*b
@@ -557,7 +557,8 @@ subroutine PMPNFCalculateVelocities(this)
         tempreal = material_auxvars(ghosted_id_up)%permeability(1) / &
                   (pnf_viscosity * cur_connection_set%dist(0,iconn))
       else
-        tempreal = g_sup_h_constant * cur_connection_set%area(iconn) / & ! **2 -> **1
+        tempreal = g_sup_h_constant * &
+                  cur_connection_set%internal_connections(iconn)%area / & ! **2 -> **1
                   cur_connection_set%dist(0,iconn)
       endif
       velocity = tempreal * &
@@ -578,7 +579,7 @@ subroutine PMPNFCalculateVelocities(this)
       sum_connection = sum_connection + 1
       local_id = cur_connection_set%id_dn(iconn)
       ghosted_id = grid%nL2G(local_id)
-      area = cur_connection_set%area(iconn)
+      area = cur_connection_set%boundary_connections(iconn)%area
       rvalue = boundary_condition%flow_aux_real_var(1,iconn)
       select case(itype)
         case(DIRICHLET_BC)

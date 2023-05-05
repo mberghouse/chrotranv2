@@ -1757,14 +1757,15 @@ function UGridExplicitSetInternConnect(explicit_grid,upwind_fraction_method, &
                               internal_connections(iconn)%dist(:), &
                               error,option)
       internal_connections(iconn)%area = explicit_grid%face_areas(iconn)
-    else
+!gehfix    else
+endif
       call UGridCalculateDist(pt_up,pt_dn,pt_center, &
                               explicit_grid%cell_volumes(id_up), &
                               explicit_grid%cell_volumes(id_dn), &
                               upwind_fraction_method, &
                               connections%dist(:,iconn),error,option)
       connections%area(iconn) = explicit_grid%face_areas(iconn)
-    endif
+!gehfix    endif
   enddo
   if (error) then
     option%io_buffer = 'Errors in UGridExplicitSetInternConnect(). &
@@ -1879,12 +1880,13 @@ function UGridExplicitSetBoundaryConnect(explicit_grid,cell_ids, &
       boundary_connections(iconn)%dist(0) = distance
       boundary_connections(iconn)%dist(1:3) = v/distance
       boundary_connections(iconn)%area = face_areas(iconn)
-    else
+!gehfix    else
+endif
       connections%dist(-1,iconn) = 0.d0
       connections%dist(0,iconn) = distance
       connections%dist(1:3,iconn) = v/distance
       connections%area(iconn) = face_areas(iconn)
-    endif
+!gehfix    endif
   enddo
   if (error) then
     option%io_buffer = 'Coincident cell and face centroids found in ' // &
@@ -1943,9 +1945,10 @@ function UGridExplicitSetConnections(explicit_grid,cell_ids, &
         case(SRC_SINK_CONNECTION_TYPE)
           connections%srcsink_connections(iconn)%id_dn = id
       end select
-    else
+!geh_fix    else
+endif
       connections%id_dn(iconn) = id
-    endif
+!gehfix    endif
   enddo
 
   UGridExplicitSetConnections => connections
