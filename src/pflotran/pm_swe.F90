@@ -86,6 +86,7 @@ subroutine PMSWERHSFunction(this,ts,time,xx,ff,ierr)
   ! Author: Gautam Bisht
   ! Date: 04/05/23
   !
+  use SWE_module
 
   implicit none
 
@@ -95,6 +96,8 @@ subroutine PMSWERHSFunction(this,ts,time,xx,ff,ierr)
   Vec :: xx
   Vec :: ff
   PetscErrorCode :: ierr
+
+  call SWERHSFunction(ts,time,xx,ff,this%surface_realization,ierr);CHKERRQ(ierr)
 
 end subroutine PMSWERHSFunction
 

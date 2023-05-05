@@ -8,7 +8,8 @@ module SWE_module
   private
 
   public :: SWESetup, &
-            SWEUpdateAuxVars
+            SWEUpdateAuxVars, &
+            SWERHSFunction
 
 contains
 
@@ -175,5 +176,121 @@ subroutine SWEUpdateAuxVars(surface_realization)
   call VecRestoreArrayF90(field_surface%flow_xx_loc,xx_loc_p, ierr);CHKERRQ(ierr)
 
 end subroutine SWEUpdateAuxVars
+
+! ************************************************************************** !
+
+subroutine SWERHSFunctionInternalConn(f,surface_realization,ierr)
+  !
+  ! Sets up the variable list for output and observation.
+  !
+  ! Author: Gautam Bisht
+  ! Date: 04/01/23
+  !
+  use Realization_Surface_class
+  use Option_module
+  use Field_Surface_module
+  use Field_Surface_module
+  use Discretization_module
+  use Patch_module
+  use Grid_module
+  use Connection_module
+
+  implicit none
+
+  Vec :: f
+  class (realization_surface_type) :: surface_realization
+  PetscErrorCode :: ierr
+
+  type(grid_type), pointer :: grid
+  type(patch_type), pointer :: patch
+  type(discretization_type), pointer :: discretization
+  type(field_surface_type), pointer :: field_surface
+  type(option_type), pointer :: option
+  type(connection_set_list_type), pointer :: connection_set_list
+  type(connection_set_type), pointer :: cur_connection_set
+
+  PetscInt :: iconn, sum_connection
+  PetscInt :: local_id_up, local_id_dn
+  PetscInt :: ghosted_id_up, ghosted_id_dn
+  PetscReal, pointer :: f_p(:)
+
+  field_surface => surface_realization%field_surface
+  discretization => surface_realization%discretization
+  option => surface_realization%option
+  patch => surface_realization%patch
+  grid => patch%grid
+
+  write(*,*)'In SWERHSFunctionInternalConn'
+
+  call VecGetArrayF90(f,f_p,ierr);CHKERRQ(ierr)
+
+  connection_set_list => grid%internal_connection_set_list
+  cur_connection_set => connection_set_list%first
+  sum_connection = 0
+  do
+    if (.not.associated(cur_connection_set)) exit
+    do iconn = 1, cur_connection_set%num_connections
+      sum_connection = sum_connection + 1
+
+      ghosted_id_up = cur_connection_set%id_up(iconn)
+      ghosted_id_dn = cur_connection_set%id_dn(iconn)
+
+      local_id_up = grid%nG2L(ghosted_id_up) ! = zero for ghost nodes
+      local_id_dn = grid%nG2L(ghosted_id_dn) ! Ghost to local mapping
+
+    enddo
+  enddo
+
+  call VecRestoreArrayF90(f,f_p,ierr);CHKERRQ(ierr)
+
+  write(*,*)'stopping in SWERHSFunctionInternalConn'
+  call exit(0)
+
+end subroutine SWERHSFunctionInternalConn
+
+! ************************************************************************** !
+
+subroutine SWERHSFunction(ts,time,x,f,surface_realization,ierr)
+  !
+  ! Sets up the variable list for output and observation.
+  !
+  ! Author: Gautam Bisht
+  ! Date: 04/01/23
+  !
+  use PFLOTRAN_Constants_module
+  use Realization_Surface_class
+  use Option_module
+  use Field_Surface_module
+  use Field_Surface_module
+  use Discretization_module
+
+  implicit none
+
+  TS :: ts
+  PetscReal :: time
+  Vec :: x
+  Vec :: f
+  class (realization_surface_type) :: surface_realization
+  PetscErrorCode :: ierr
+
+  type(discretization_type), pointer :: discretization
+  type(field_surface_type), pointer :: field_surface
+  type(option_type), pointer :: option
+
+  field_surface => surface_realization%field_surface
+  discretization => surface_realization%discretization
+  option => surface_realization%option
+
+  write(*,*)'In SWERHSFunction'
+  call VecZeroEntries(f,ierr);CHKERRQ(ierr)
+
+  call DiscretizationGlobalToLocal(discretization,x,field_surface%flow_xx_loc,NFLOWDOF)
+
+  call SWERHSFunctionInternalConn(f,surface_realization,ierr);CHKERRQ(ierr)
+
+  write(*,*)'stopping in SWERHSFunction'
+  call exit(0)
+
+end subroutine SWERHSFunction
 
 end module SWE_module
