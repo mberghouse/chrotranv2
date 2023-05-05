@@ -3583,7 +3583,8 @@ swe.o : \
   realization_surface.o \
   variables.o
 swe_aux.o : \
-  option.o
+  option.o \
+  surface_global_aux.o
 th.o : \
   characteristic_curves.o \
   characteristic_curves_thermal.o \
