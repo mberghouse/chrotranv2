@@ -599,6 +599,7 @@ subroutine UGridReadHDF5SurfGrid(unstructured_grid,filename,option)
   type(option_type) :: option
   character(len=MAXSTRINGLENGTH) :: filename
   character(len=MAXSTRINGLENGTH) :: group_name
+  character(len=MAXSTRINGLENGTH) :: string
 
   PetscMPIInt :: hdf5_err
   PetscMPIInt :: rank_mpi
@@ -607,11 +608,12 @@ subroutine UGridReadHDF5SurfGrid(unstructured_grid,filename,option)
   PetscInt :: num_cells_local_save
   PetscInt :: num_vertices_local
   PetscInt :: remainder
+  PetscInt :: error_count
   ! must be 'integer' so that ibuffer does not switch to 64-bit integers
   ! when PETSc is configured with --with-64-bit-indices=yes.
   integer, pointer :: int_buffer(:,:)
   PetscReal, pointer :: double_buffer(:,:)
-  PetscInt, parameter :: max_nvert_per_cell = 8
+  PetscInt, parameter :: max_nvert_per_cell = 4
   PetscErrorCode :: ierr
 
   integer(HID_T) :: file_id
@@ -710,10 +712,31 @@ subroutine UGridReadHDF5SurfGrid(unstructured_grid,filename,option)
                                              num_cells_local))
   unstructured_grid%cell_vertices = -1
 
+  ! check for incorrectly assigned cell types
+  error_count = 0
   do ii = 1, num_cells_local
-    do jj = 1, INT(dims_h5(1))
+    select case(int_buffer(1,ii))
+      case(4,3)
+      case default
+        write(string,*) int_buffer(1,ii)
+        option%io_buffer = 'Unknown cell type : ' // trim(adjustl(string))
+        error_count = error_count + 1
+        if (error_count < 10) then
+          call PrintMsgByRank(option)
+        endif
+    end select
+  enddo
+  call MPI_Allreduce(MPI_IN_PLACE,error_count,ONE_INTEGER_MPI,MPI_INTEGER, &
+                     MPI_MAX,option%mycomm,ierr);CHKERRQ(ierr)
+  if (error_count > 0) then
+    option%io_buffer = 'Unknown cell types in ' // trim(filename) // '.'
+    call PrintErrMsg(option)
+  endif
+
+  do ii = 1, num_cells_local
+    do jj = 2, int_buffer(1,ii) + 1
       if (int_buffer(jj, ii) > 0) then
-        unstructured_grid%cell_vertices(jj, ii) = int_buffer(jj, ii)
+        unstructured_grid%cell_vertices(jj-1, ii) = int_buffer(jj, ii)
       end if
     enddo
   enddo
