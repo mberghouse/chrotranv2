@@ -145,7 +145,7 @@ subroutine FactorySurfaceReadRequiredCards(simulation,input)
   call InputFindStringErrorMsg(input,option,string)
 
   call InputPushBlock(input,'GRID',option)
-  call DiscretizationReadRequiredCards(discretization,input,option)
+  call DiscretizationSurfaceReadRequiredCards(discretization,input,option)
 
   select case(discretization%itype)
     case(STRUCTURED_GRID,UNSTRUCTURED_GRID)
