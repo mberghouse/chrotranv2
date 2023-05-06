@@ -44,6 +44,7 @@ module Discretization_module
   public :: DiscretizationCreate, &
             DiscretizationDestroy, &
             DiscretizationReadRequiredCards, &
+            DiscretizationSurfaceReadRequiredCards, &
             DiscretizationRead, &
             DiscretizationCreateVector, &
             DiscretizationDuplicateVector, &
@@ -306,6 +307,110 @@ subroutine DiscretizationReadRequiredCards(discretization,input,option)
   nullify(grid)
 
 end subroutine DiscretizationReadRequiredCards
+
+! ************************************************************************** !
+
+subroutine DiscretizationSurfaceReadRequiredCards(discretization,input,option)
+  !
+  ! Reads a discretization for surfac grid from the input file
+  !
+  ! Author: Gautam Bisht
+  ! Date: 05/04/23
+  !
+
+  use Option_module
+  use Input_Aux_module
+  use String_module
+  use Material_Aux_module
+
+  implicit none
+
+  type(option_type), pointer :: option
+  type(input_type), pointer :: input
+  type(discretization_type),pointer :: discretization
+  character(len=MAXWORDLENGTH) :: word
+  type(grid_type), pointer :: grid
+  type(grid_structured_type), pointer :: str_grid
+  type(grid_unstructured_type), pointer :: un_str_grid
+  character(len=MAXWORDLENGTH) :: structured_grid_ctype
+  character(len=MAXWORDLENGTH) :: unstructured_grid_ctype
+
+  PetscInt :: structured_grid_itype
+  PetscInt :: unstructured_grid_itype
+  PetscInt :: nx, ny, nz
+
+  nx = 0
+  ny = 0
+  nz = 0
+
+! we initialize the word to blanks to avoid error reported by valgrind
+  word = ''
+
+  call InputPushBlock(input,option)
+  do
+
+    call InputReadPflotranString(input,option)
+    if (input%ierr /= 0) exit
+
+    if (InputCheckExit(input,option)) exit
+
+    call InputReadCard(input,option,word)
+    call InputErrorMsg(input,option,'keyword','GRID')
+    call StringToUpper(word)
+
+    select case(trim(word))
+      case('TYPE')
+        call InputReadCard(input,option,discretization%ctype)
+        call InputErrorMsg(input,option,'type','GRID')
+        call StringToUpper(discretization%ctype)
+        select case(trim(discretization%ctype))
+          case('UNSTRUCTURED')
+            discretization%itype = UNSTRUCTURED_GRID
+            word = discretization%ctype
+            discretization%ctype = 'UNSTRUCTURED'
+            unstructured_grid_itype = IMPLICIT_UNSTRUCTURED_GRID
+            unstructured_grid_ctype = 'IMPLICIT UNSTRUCTURED'
+            call InputReadFilename(input,option,discretization%filename)
+            call InputErrorMsg(input,option,'unstructured filename','GRID')
+          case default
+            call InputKeywordUnrecognized(input,discretization%ctype, &
+                                          'discretization type',option)
+        end select
+      case default
+        call InputKeywordUnrecognized(input,word,'DISCRETIZATION',option)
+    end select
+  enddo
+  call InputPopBlock(input,option)
+
+  if (discretization%itype == NULL_GRID) then
+    option%io_buffer = 'Discretization type not defined under ' // &
+                       'keyword GRID.'
+    call PrintErrMsg(option)
+  endif
+
+  grid => GridCreate()
+  select case(discretization%itype)
+    case(UNSTRUCTURED_GRID)
+
+      un_str_grid => UGridCreate()
+
+      un_str_grid%grid_type = TWO_DIM_GRID
+      select case(unstructured_grid_itype)
+        case(IMPLICIT_UNSTRUCTURED_GRID)
+          if (index(discretization%filename,'.h5') > 0) then
+            call UGridReadHDF5SurfGrid(un_str_grid,discretization%filename,option)
+          else
+            call PrintErrMsg(option,'Surface grid only support in .h5 format.')
+          endif
+          grid%unstructured_grid => un_str_grid
+      end select
+      grid%itype = unstructured_grid_itype
+      grid%ctype = unstructured_grid_ctype
+  end select
+  discretization%grid => grid
+  nullify(grid)
+
+end subroutine DiscretizationSurfaceReadRequiredCards
 
 ! ************************************************************************** !
 
