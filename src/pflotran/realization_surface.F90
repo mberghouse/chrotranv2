@@ -153,6 +153,8 @@ subroutine RealizationSurfaceCreateDiscretization(surf_realization)
       option%io_buffer = 'Surface flow is only supported for an unstructured grid.'
       call PrintErrMsg(option)
   end select
+  call GridComputeInternalConnect(grid,option)
+  call GridComputeAreas(grid,field_surface%area,option)
 
 end subroutine RealizationSurfaceCreateDiscretization
 
