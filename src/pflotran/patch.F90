@@ -920,6 +920,13 @@ subroutine PatchInitCouplerAuxVars(coupler_list,patch,option)
                 coupler%flow_aux_real_var = 0.d0
                 coupler%flow_aux_int_var = 0
 
+              case (SWE_MODE)
+                temp_int = 3
+                allocate(coupler%flow_aux_real_var(temp_int,num_connections))
+                allocate(coupler%flow_aux_int_var(1,num_connections))
+                coupler%flow_aux_real_var = 0.d0
+                coupler%flow_aux_int_var = 0
+
               case(ZFLOW_MODE)
                 ndof = option%nflowdof
                 temp_int = 0
