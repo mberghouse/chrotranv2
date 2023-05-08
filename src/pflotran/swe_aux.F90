@@ -20,6 +20,8 @@ module SWE_Aux_module
     type(swe_auxvar_type), pointer :: auxvars_ss(:)
   end type swe_type
 
+  PetscReal :: tiny_h
+
   public :: SWEAuxCreate, &
             SWEAuxVarInit, &
             SWEAuxVarCompute
@@ -142,6 +144,16 @@ subroutine SWEAuxVarCompute(x,auxvar,surf_global_auxvar,option)
   PetscReal :: x(option%nflowdof)
   type(swe_auxvar_type) :: auxvar
   type(surface_global_auxvar_type) :: surf_global_auxvar
+
+  surf_global_auxvar%h = x(1)
+  auxvar%hu = x(2)
+  auxvar%hv = x(3)
+
+  ! compute velocity from momentum
+  if (x(1) > tiny_h) then
+    auxvar%u = x(2)/x(1)
+    auxvar%v = x(2)/x(1)
+  endif
 
 end subroutine SWEAuxVarCompute
 
