@@ -28,6 +28,7 @@ subroutine SWESetup(surface_realization)
   use Option_module
   use Grid_module
   use SWE_Aux_module
+  use Coupler_module
 
   implicit none
 
@@ -38,7 +39,12 @@ subroutine SWESetup(surface_realization)
   type(patch_type), pointer :: patch
   type(grid_type), pointer :: grid
   type(swe_auxvar_type), pointer :: swe_auxvars(:)
+  type(swe_auxvar_type), pointer :: swe_auxvars_bc(:)
+  type(swe_auxvar_type), pointer :: swe_auxvars_ss(:)
+  type(coupler_type), pointer :: boundary_condition
+  type(coupler_type), pointer :: source_sink
   PetscInt :: ghosted_id
+  PetscInt :: iconn, sum_connection
 
   list => surface_realization%output_option%output_snap_variable_list
   call SWESetPlotVariables(list)
@@ -57,6 +63,30 @@ subroutine SWESetup(surface_realization)
   enddo
   patch%surf_aux%SWE%auxvars => swe_auxvars
   patch%surf_aux%SWE%num_aux = grid%ngmax
+
+  boundary_condition => patch%boundary_condition_list%first
+  do
+    if (.not.associated(boundary_condition)) exit
+    sum_connection = sum_connection + boundary_condition%connection_set%num_connections
+    boundary_condition => boundary_condition%next
+  end do
+  allocate(swe_auxvars_bc(sum_connection))
+  do ghosted_id = 1, sum_connection
+    call SWEAuxVarInit(swe_auxvars_bc(ghosted_id))
+  enddo
+  patch%surf_aux%SWE%auxvars_bc => swe_auxvars_bc
+
+  source_sink => patch%source_sink_list%first
+  do
+    if (.not.associated(source_sink)) exit
+    sum_connection = sum_connection + source_sink%connection_set%num_connections
+    source_sink => source_sink%next
+  end do
+  allocate(swe_auxvars_ss(sum_connection))
+  do ghosted_id = 1, sum_connection
+    call SWEAuxVarInit(swe_auxvars_ss(ghosted_id))
+  enddo
+  patch%surf_aux%SWE%auxvars_ss => swe_auxvars_ss
 
 end subroutine SWESetup
 
@@ -468,6 +498,192 @@ subroutine SWERHSFunctionInternalConn(f,surface_realization,ierr)
 end subroutine SWERHSFunctionInternalConn
 
 ! ************************************************************************** !
+subroutine ComputeUpwindBCAuxVar(swe_auxvar_dn,surf_global_auxvar_dn, &
+                                 swe_auxvar_up,surf_global_auxvar_up, &
+                                 cn,sn)
+
+  use SWE_Aux_module
+  use Surface_Global_Aux_module
+
+  implicit none
+
+  type (swe_auxvar_type) :: swe_auxvar_dn, swe_auxvar_up
+  type (surface_global_auxvar_type) :: surf_global_auxvar_dn, surf_global_auxvar_up
+  PetscReal :: cn, sn
+
+  PetscReal :: dum1, dum2
+
+  surf_global_auxvar_up%h = surf_global_auxvar_dn%h
+
+  dum1 = (sn**2.d0) - (cn**2.d0)
+  dum2 = 2.d0 * sn * cn
+
+  swe_auxvar_up%u =  swe_auxvar_dn%u * dum1 - swe_auxvar_dn%v * dum2
+  swe_auxvar_up%v = -swe_auxvar_dn%u * dum2 - swe_auxvar_dn%v * dum1
+
+end subroutine ComputeUpwindBCAuxVar
+
+! ************************************************************************** !
+
+subroutine SWERHSFunctionBoundaryConn(f,surface_realization,ierr)
+  !
+  ! Sets up the variable list for output and observation.
+  !
+  ! Author: Gautam Bisht
+  ! Date: 04/01/23
+  !
+  use Realization_Surface_class
+  use Option_module
+  use Field_Surface_module
+  use Field_Surface_module
+  use Discretization_module
+  use Patch_module
+  use Grid_module
+  use Connection_module
+  use SWE_Aux_module
+  use Surface_Global_Aux_module
+  use Coupler_module
+
+  implicit none
+
+  Vec :: f
+  class (realization_surface_type) :: surface_realization
+  PetscErrorCode :: ierr
+
+  type(grid_type), pointer :: grid
+  type(patch_type), pointer :: patch
+  type(discretization_type), pointer :: discretization
+  type(field_surface_type), pointer :: field_surface
+  type(option_type), pointer :: option
+  type(coupler_type), pointer :: boundary_condition
+  type(connection_set_type), pointer :: cur_connection_set
+  type(swe_auxvar_type), pointer :: swe_auxvars(:)
+  type(swe_auxvar_type), pointer :: swe_auxvars_bc(:)
+  type(surface_global_auxvar_type), pointer :: surf_global_auxvars(:)
+  type(surface_global_auxvar_type), pointer :: surf_global_auxvars_bc(:)
+
+  PetscInt :: iconn, sum_connection
+  PetscInt :: local_id_dn, face_id
+  PetscInt :: ghosted_id_dn
+  PetscInt :: vertex_id_up, vertex_id_dn
+  PetscReal, pointer :: f_p(:)
+  PetscReal :: x_up, y_up, x_dn, y_dn
+  PetscReal :: dx, dy, ds
+  PetscReal :: sn, cn
+  PetscInt, pointer :: face_to_vertex(:,:)
+  PetscReal :: flux(surface_realization%option%nflowdof)
+  PetscReal :: amax
+  PetscReal, pointer :: area_p(:)
+  PetscReal :: edge_len,area_up,area_dn
+  PetscReal :: cnum, max_courant_num
+  PetscInt :: idof, istart
+
+  field_surface => surface_realization%field_surface
+  discretization => surface_realization%discretization
+  option => surface_realization%option
+  patch => surface_realization%patch
+  grid => discretization%grid
+
+  swe_auxvars => patch%surf_aux%SWE%auxvars
+  swe_auxvars_bc => patch%surf_aux%SWE%auxvars_bc
+  surf_global_auxvars => patch%surf_aux%SurfaceGlobal%auxvars
+  surf_global_auxvars_bc => patch%surf_aux%SurfaceGlobal%auxvars_bc
+
+  call VecGetArrayF90(f,f_p,ierr);CHKERRQ(ierr)
+  call VecGetArrayF90(field_surface%area,area_p,ierr);CHKERRQ(ierr)
+
+  boundary_condition => patch%boundary_condition_list%first
+  face_to_vertex => grid%unstructured_grid%face_to_vertex
+  sum_connection = 0
+  max_courant_num = 0.d0
+
+  do
+    if (.not.associated(boundary_condition)) exit
+
+    cur_connection_set => boundary_condition%connection_set
+
+    do iconn = 1, cur_connection_set%num_connections
+      sum_connection = sum_connection + 1
+
+      local_id_dn = cur_connection_set%id_dn(iconn)
+      ghosted_id_dn = grid%nL2G(local_id_dn)
+
+      ghosted_id_dn = cur_connection_set%id_dn(iconn)
+
+      face_id = cur_connection_set%face_id(iconn)
+
+      local_id_dn = grid%nG2L(ghosted_id_dn)
+
+      vertex_id_up = face_to_vertex(1,face_id)
+      vertex_id_dn = face_to_vertex(2,face_id)
+
+      ! If 'h' is below a threshold, assume the cell is dry
+      if (surf_global_auxvars_bc(local_id_dn)%h < tiny_h) cycle
+
+
+
+      !
+      !                   vertex_dn
+      !                       o
+      !                      /
+      !                     /
+      !                    /
+      !   ghosted_up -----/-----> ghosted_dn
+      !                  /
+      !                 /
+      !                /
+      !               o
+      !            vertex_up
+
+      x_up = grid%unstructured_grid%vertices(vertex_id_up)%x
+      y_up = grid%unstructured_grid%vertices(vertex_id_up)%y
+
+      x_dn = grid%unstructured_grid%vertices(vertex_id_dn)%x
+      y_dn = grid%unstructured_grid%vertices(vertex_id_dn)%y
+
+      dx = x_dn - x_up
+      dy = y_dn - y_up
+      ds = (dx**2.d0 + dy**2.d0)**0.5d0
+
+      sn = -dx/ds
+      cn = dy/ds
+
+      edge_len = cur_connection_set%area(iconn)
+      area_dn = area_p(ghosted_id_dn)
+
+      call ComputeUpwindBCAuxVar(swe_auxvars(local_id_dn),surf_global_auxvars(local_id_dn),&
+                                 swe_auxvars_bc(sum_connection),surf_global_auxvars_bc(sum_connection),&
+                                 cn,sn)
+
+      call ComputeRoeFlux(swe_auxvars_bc(sum_connection),surf_global_auxvars_bc(sum_connection), &
+                          swe_auxvars(ghosted_id_dn),surf_global_auxvars(ghosted_id_dn), &
+                          sn,cn,option,flux,amax)
+
+      cnum = amax * edge_len / min(area_up, area_dn) * option%flow_dt;
+      if (cnum > max_courant_num) then
+        max_courant_num = cnum
+      endif
+
+      do idof = 1, option%nflowdof
+
+        if (local_id_dn > 0) then
+          istart = (local_id_dn-1)*option%nflowdof + idof
+          f_p(istart) = f_p(istart) + flux(idof) * edge_len / area_dn;
+        endif
+      enddo
+
+    enddo
+
+    boundary_condition => boundary_condition%next
+
+  enddo
+
+  call VecRestoreArrayF90(f,f_p,ierr);CHKERRQ(ierr)
+  call VecRestoreArrayF90(field_surface%area,area_p,ierr);CHKERRQ(ierr)
+
+end subroutine SWERHSFunctionBoundaryConn
+
+! ************************************************************************** !
 
 subroutine SWERHSFunction(ts,time,x,f,surface_realization,ierr)
   !
@@ -508,6 +724,7 @@ subroutine SWERHSFunction(ts,time,x,f,surface_realization,ierr)
   call SWEUpdateAuxVars(surface_realization)
 
   call SWERHSFunctionInternalConn(f,surface_realization,ierr);CHKERRQ(ierr)
+  call SWERHSFunctionBoundaryConn(f,surface_realization,ierr);CHKERRQ(ierr)
 
   write(*,*)'stopping in SWERHSFunction'
   call exit(0)
