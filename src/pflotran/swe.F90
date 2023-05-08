@@ -685,6 +685,112 @@ end subroutine SWERHSFunctionBoundaryConn
 
 ! ************************************************************************** !
 
+subroutine SWERHSFunctionAddAccumulationTerm(f,surface_realization,ierr)
+  !
+  ! Add accumulation term to the RHS function
+  !
+  ! Author: Gautam Bisht
+  ! Date: 05/08/23
+  !
+  use Realization_Surface_class
+  use Option_module
+  use Field_Surface_module
+  use Field_Surface_module
+  use Discretization_module
+  use Patch_module
+  use Grid_module
+  use Connection_module
+  use SWE_Aux_module
+  use Surface_Global_Aux_module
+  use Coupler_module
+
+  implicit none
+
+  Vec :: f
+  class (realization_surface_type) :: surface_realization
+  PetscErrorCode :: ierr
+
+  PetscReal :: h,hu,hv,u,v
+  PetscReal :: g,dt
+  PetscReal :: bedx, bedy
+  PetscReal :: dz_dx, dz_dy
+  PetscReal :: tbx,tby,tb
+  PetscReal :: Fsum_x,Fsum_y
+  PetscReal :: N_mannings
+  PetscReal :: Cd,velocity,factor
+  PetscInt :: local_id, ghosted_id
+  PetscInt :: idof, istart
+  PetscReal, pointer :: f_p(:)
+
+  type(grid_type), pointer :: grid
+  type(patch_type), pointer :: patch
+  type(discretization_type), pointer :: discretization
+  type(field_surface_type), pointer :: field_surface
+  type(option_type), pointer :: option
+  type(swe_auxvar_type), pointer :: swe_auxvars(:)
+  type(surface_global_auxvar_type), pointer :: surf_global_auxvars(:)
+
+  field_surface => surface_realization%field_surface
+  discretization => surface_realization%discretization
+  option => surface_realization%option
+  patch => surface_realization%patch
+  grid => discretization%grid
+
+  swe_auxvars => patch%surf_aux%SWE%auxvars
+  surf_global_auxvars => patch%surf_aux%SurfaceGlobal%auxvars
+
+  call VecGetArrayF90(f,f_p,ierr);CHKERRQ(ierr)
+
+  g = abs(option%gravity(3))
+  dt = option%flow_dt
+  N_mannings = 0.015d0
+
+  do local_id = 1, grid%nlmax
+    ghosted_id = grid%nL2G(local_id)
+    istart = (local_id-1)*option%nflowdof
+
+    h = surf_global_auxvars(local_id)%h
+    hu = swe_auxvars(local_id)%hu
+    hv = swe_auxvars(local_id)%hv
+    u = swe_auxvars(local_id)%u
+    v = swe_auxvars(local_id)%v
+
+    dz_dx = 0.d0
+    dz_dy = 0.d0
+
+    bedx = dz_dx*g*h
+    bedy = dz_dy*g*h
+
+    Fsum_x = f_p(istart + 2)
+    Fsum_y = f_p(istart + 3)
+
+    tbx = 0.d0
+    tby = 0.d0
+
+    if (h > tiny_h) then
+
+      Cd = g*(N_mannings**2.d0)*(h**(-1.d0/3.d0))
+      velocity = (u**2.d0 + v**2.d0)**0.5d0
+      tb = Cd*velocity/h
+      factor = tb/(1.d0 + dt*tb)
+
+      tbx = (hu + dt*Fsum_x - dt*bedx)*factor
+      tby = (hv + dt*Fsum_y - dt*bedy)*factor
+
+      f_p(istart + 1) = f_p(istart + 1) + 0.d0
+      f_p(istart + 2) = f_p(istart + 2) - bedx - tbx
+      f_p(istart + 3) = f_p(istart + 3) - bedy - tby
+    endif
+
+  enddo
+
+  call VecRestoreArrayF90(f,f_p,ierr);CHKERRQ(ierr)
+
+end subroutine SWERHSFunctionAddAccumulationTerm
+
+
+! ************************************************************************** !
+
 subroutine SWERHSFunction(ts,time,x,f,surface_realization,ierr)
   !
   ! Sets up the variable list for output and observation.
@@ -716,7 +822,6 @@ subroutine SWERHSFunction(ts,time,x,f,surface_realization,ierr)
   discretization => surface_realization%discretization
   option => surface_realization%option
 
-  write(*,*)'In SWERHSFunction'
   call VecZeroEntries(f,ierr);CHKERRQ(ierr)
 
   call DiscretizationGlobalToLocal(discretization,x,field_surface%flow_xx_loc,NFLOWDOF)
@@ -725,9 +830,7 @@ subroutine SWERHSFunction(ts,time,x,f,surface_realization,ierr)
 
   call SWERHSFunctionInternalConn(f,surface_realization,ierr);CHKERRQ(ierr)
   call SWERHSFunctionBoundaryConn(f,surface_realization,ierr);CHKERRQ(ierr)
-
-  write(*,*)'stopping in SWERHSFunction'
-  call exit(0)
+  call SWERHSFunctionAddAccumulationTerm(f,surface_realization,ierr);CHKERRQ(ierr)
 
 end subroutine SWERHSFunction
 
