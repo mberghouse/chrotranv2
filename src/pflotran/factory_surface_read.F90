@@ -481,6 +481,14 @@ subroutine FactorySurfaceReadInput(simulation,input)
         call RealizationAddCoupler(realization%patch,coupler)
         nullify(coupler)
 
+      case ('SURFACE_BOUNDARY_CONDITION')
+        coupler => CouplerCreate(BOUNDARY_COUPLER_TYPE)
+        call InputReadWord(input,option,coupler%name,PETSC_TRUE)
+        call InputDefaultMsg(input,option,'Initial Condition name')
+        call CouplerRead(coupler,input,option)
+        call RealizationAddCoupler(realization%patch,coupler)
+        nullify(coupler)
+
         !....................
       case ('STRATIGRAPHY','STRATA')
         strata => StrataCreate()
