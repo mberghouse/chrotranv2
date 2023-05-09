@@ -44,7 +44,7 @@ subroutine SWESetup(surface_realization)
   type(coupler_type), pointer :: boundary_condition
   type(coupler_type), pointer :: source_sink
   PetscInt :: ghosted_id
-  PetscInt :: iconn, sum_connection
+  PetscInt :: sum_connection
 
   list => surface_realization%output_option%output_snap_variable_list
   call SWESetPlotVariables(list)
@@ -65,6 +65,7 @@ subroutine SWESetup(surface_realization)
   patch%surf_aux%SWE%num_aux = grid%ngmax
 
   boundary_condition => patch%boundary_condition_list%first
+  sum_connection = 0
   do
     if (.not.associated(boundary_condition)) exit
     sum_connection = sum_connection + boundary_condition%connection_set%num_connections
@@ -77,6 +78,7 @@ subroutine SWESetup(surface_realization)
   patch%surf_aux%SWE%auxvars_bc => swe_auxvars_bc
 
   source_sink => patch%source_sink_list%first
+  sum_connection = 0
   do
     if (.not.associated(source_sink)) exit
     sum_connection = sum_connection + source_sink%connection_set%num_connections
@@ -157,9 +159,6 @@ subroutine SWEUpdateAuxVars(surface_realization)
   type(patch_type), pointer :: patch
   type(grid_type), pointer :: grid
   type(field_surface_type), pointer :: field_surface
-  type(coupler_type), pointer :: boundary_condition
-  type(coupler_type), pointer :: source_sink
-  type(connection_set_type), pointer :: cur_connection_set
   type(swe_auxvar_type), pointer :: swe_auxvars(:)
   type(swe_auxvar_type), pointer :: swe_auxvars_bc(:)
   type(swe_auxvar_type), pointer :: swe_auxvars_ss(:)
@@ -346,7 +345,7 @@ end subroutine ComputeRoeFlux
 
 ! ************************************************************************** !
 
-subroutine SWERHSFunctionInternalConn(f,surface_realization,ierr)
+subroutine SWERHSFunctionInternalConn(f,surface_realization,max_courant_num)
   !
   ! Sets up the variable list for output and observation.
   !
@@ -368,6 +367,7 @@ subroutine SWERHSFunctionInternalConn(f,surface_realization,ierr)
 
   Vec :: f
   class (realization_surface_type) :: surface_realization
+  PetscReal :: max_courant_num
   PetscErrorCode :: ierr
 
   type(grid_type), pointer :: grid
@@ -393,7 +393,7 @@ subroutine SWERHSFunctionInternalConn(f,surface_realization,ierr)
   PetscReal :: amax
   PetscReal, pointer :: area_p(:)
   PetscReal :: edge_len,area_up,area_dn
-  PetscReal :: cnum, max_courant_num
+  PetscReal :: cnum
   PetscInt :: idof, istart
 
   field_surface => surface_realization%field_surface
@@ -412,7 +412,6 @@ subroutine SWERHSFunctionInternalConn(f,surface_realization,ierr)
   cur_connection_set => connection_set_list%first
   face_to_vertex => grid%unstructured_grid%face_to_vertex
   sum_connection = 0
-  max_courant_num = 0.d0
 
   do
     if (.not.associated(cur_connection_set)) exit
@@ -525,7 +524,7 @@ end subroutine ComputeUpwindBCAuxVar
 
 ! ************************************************************************** !
 
-subroutine SWERHSFunctionBoundaryConn(f,surface_realization,ierr)
+subroutine SWERHSFunctionBoundaryConn(f,surface_realization,max_courant_num)
   !
   ! Sets up the variable list for output and observation.
   !
@@ -548,7 +547,7 @@ subroutine SWERHSFunctionBoundaryConn(f,surface_realization,ierr)
 
   Vec :: f
   class (realization_surface_type) :: surface_realization
-  PetscErrorCode :: ierr
+  PetscReal :: max_courant_num
 
   type(grid_type), pointer :: grid
   type(patch_type), pointer :: patch
@@ -574,9 +573,11 @@ subroutine SWERHSFunctionBoundaryConn(f,surface_realization,ierr)
   PetscReal :: flux(surface_realization%option%nflowdof)
   PetscReal :: amax
   PetscReal, pointer :: area_p(:)
-  PetscReal :: edge_len,area_up,area_dn
-  PetscReal :: cnum, max_courant_num
+  PetscReal :: edge_len,area_dn
+  PetscReal :: cnum
   PetscInt :: idof, istart
+
+  PetscErrorCode :: ierr
 
   field_surface => surface_realization%field_surface
   discretization => surface_realization%discretization
@@ -595,7 +596,6 @@ subroutine SWERHSFunctionBoundaryConn(f,surface_realization,ierr)
   boundary_condition => patch%boundary_condition_list%first
   face_to_vertex => grid%unstructured_grid%face_to_vertex
   sum_connection = 0
-  max_courant_num = 0.d0
 
   do
     if (.not.associated(boundary_condition)) exit
@@ -608,17 +608,13 @@ subroutine SWERHSFunctionBoundaryConn(f,surface_realization,ierr)
       local_id_dn = cur_connection_set%id_dn(iconn)
       ghosted_id_dn = grid%nL2G(local_id_dn)
 
-      ghosted_id_dn = cur_connection_set%id_dn(iconn)
-
       face_id = cur_connection_set%face_id(iconn)
-
-      local_id_dn = grid%nG2L(ghosted_id_dn)
 
       vertex_id_up = face_to_vertex(1,face_id)
       vertex_id_dn = face_to_vertex(2,face_id)
 
       ! If 'h' is below a threshold, assume the cell is dry
-      if (surf_global_auxvars_bc(local_id_dn)%h < tiny_h) cycle
+      if (surf_global_auxvars_bc(sum_connection)%h < tiny_h) cycle
 
 
 
@@ -659,7 +655,7 @@ subroutine SWERHSFunctionBoundaryConn(f,surface_realization,ierr)
                           swe_auxvars(ghosted_id_dn),surf_global_auxvars(ghosted_id_dn), &
                           sn,cn,option,flux,amax)
 
-      cnum = amax * edge_len / min(area_up, area_dn) * option%flow_dt;
+      cnum = amax * edge_len / area_dn * option%flow_dt
       if (cnum > max_courant_num) then
         max_courant_num = cnum
       endif
@@ -668,7 +664,7 @@ subroutine SWERHSFunctionBoundaryConn(f,surface_realization,ierr)
 
         if (local_id_dn > 0) then
           istart = (local_id_dn-1)*option%nflowdof + idof
-          f_p(istart) = f_p(istart) + flux(idof) * edge_len / area_dn;
+          f_p(istart) = f_p(istart) - flux(idof) * edge_len / area_dn;
         endif
       enddo
 
@@ -719,7 +715,7 @@ subroutine SWERHSFunctionAddAccumulationTerm(f,surface_realization,ierr)
   PetscReal :: N_mannings
   PetscReal :: Cd,velocity,factor
   PetscInt :: local_id, ghosted_id
-  PetscInt :: idof, istart
+  PetscInt :: istart
   PetscReal, pointer :: f_p(:)
 
   type(grid_type), pointer :: grid
@@ -812,6 +808,7 @@ subroutine SWERHSFunction(ts,time,x,f,surface_realization,ierr)
   Vec :: x
   Vec :: f
   class (realization_surface_type) :: surface_realization
+  PetscReal :: max_courant_num
   PetscErrorCode :: ierr
 
   type(discretization_type), pointer :: discretization
@@ -828,9 +825,13 @@ subroutine SWERHSFunction(ts,time,x,f,surface_realization,ierr)
 
   call SWEUpdateAuxVars(surface_realization)
 
-  call SWERHSFunctionInternalConn(f,surface_realization,ierr);CHKERRQ(ierr)
-  call SWERHSFunctionBoundaryConn(f,surface_realization,ierr);CHKERRQ(ierr)
+  max_courant_num = 0.d0
+  call SWERHSFunctionInternalConn(f,surface_realization,max_courant_num);
+  call SWERHSFunctionBoundaryConn(f,surface_realization,max_courant_num);
   call SWERHSFunctionAddAccumulationTerm(f,surface_realization,ierr);CHKERRQ(ierr)
+
+  call MPI_Allreduce(MPI_IN_PLACE,max_courant_num,ONE_INTEGER_MPI,MPI_DOUBLE_PRECISION,MPI_MAX,option%mycomm,ierr);CHKERRQ(ierr);
+  write(*,*)'max_courant_num = ',max_courant_num
 
 end subroutine SWERHSFunction
 
