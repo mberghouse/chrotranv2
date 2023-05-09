@@ -18,6 +18,7 @@ module PM_Surface_Flow_class
     procedure, public :: SetRealization => PMSurfaceSetRealization
     procedure, public :: UpdateSolution => PMSurfaceUpdateSolution
     procedure, public :: UpdateTimestep => PMSurfaceUpdateTimestep
+    procedure, public :: InitializeRun => PMSurfaceInitializeRun
   end type
 
   public :: PMSurfaceFlowInit
@@ -132,5 +133,23 @@ subroutine PMSurfaceUpdateTimestep(this,update_dt, &
   PetscReal :: time_step_max_growth_factor
 
 end subroutine PMSurfaceUpdateTimestep
+
+! ************************************************************************** !
+
+subroutine PMSurfaceInitializeRun(this)
+  !
+  ! Initializes the PM
+  !
+  ! Author: Gautam Bisht
+  ! Date: 05/08/23
+  !
+  use petscvec
+
+  implicit none
+
+  class(pm_surface_flow_type) :: this
+
+end subroutine PMSurfaceInitializeRun
+
 
 end module PM_Surface_Flow_class
