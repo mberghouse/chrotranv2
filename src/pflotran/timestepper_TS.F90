@@ -218,8 +218,6 @@ subroutine TimestepperTSStepDT(this,process_model,stop_flag)
   call process_model%PreSolve()
 
   call TSSetTime(solver%ts,0.d0,ierr);CHKERRQ(ierr)
-  option%flow_dt = 1.0
-  write(*,*)'option%flow_dt = ',option%flow_dt
   call TSSetMaxTime(solver%ts,option%flow_dt,ierr);CHKERRQ(ierr)
   call TSSetTimeStep(solver%ts,option%flow_dt,ierr);CHKERRQ(ierr)
 
