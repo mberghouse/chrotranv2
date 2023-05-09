@@ -450,6 +450,26 @@ subroutine FactorySurfaceReadInput(simulation,input)
             endif
           endif
         endif
+
+        if (Initialized(dt_min)) then
+          if (Initialized(master_pmc%timestepper%dt_min)) then
+            option%io_buffer = 'MININUM_TIMESTEP_SIZE may be included &
+              &under either the TIME or TIMESTEPPER ' // &
+              trim(master_pmc%timestepper%name) // ' card, but not both.'
+            call PrintErrMsg(option)
+          endif
+          if (associated(simulation%surface_flow_process_model_coupler)) then
+            temp_timestepper => &
+              simulation%surface_flow_process_model_coupler%timestepper
+            if (associated(temp_timestepper)) then
+              if (Uninitialized(temp_timestepper%dt_min)) then
+                temp_timestepper%dt_min = dt_min
+              endif
+            endif
+          endif
+        endif
+        write(*,*)'simulation%surface_flow_process_model_coupler%timestepper%dt_init = ', &
+          simulation%surface_flow_process_model_coupler%timestepper%dt_init
 !....................
       case ('REGION')
         region => RegionCreate()
