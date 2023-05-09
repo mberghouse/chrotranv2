@@ -33,6 +33,7 @@ use Realization_Surface_class
     type(waypoint_list_type), pointer :: waypoint_list_surface
     type(waypoint_list_type), pointer :: waypoint_list_outer ! outer sync loop
   contains
+    procedure, public :: InitializeRun => SimSurfaceInitializeRun
     procedure, public :: ExecuteRun => SimSurfaceExecuteRun
     procedure, public :: RunToTime => SimSurfaceRunToTime
   end type simulation_surface_type
@@ -68,6 +69,34 @@ function SimSurfaceCreate(driver,option)
   call SimSurfaceInit(SimSurfaceCreate,driver,option)
 
 end function SimSurfaceCreate
+
+! ************************************************************************** !
+
+subroutine SimSurfaceInitializeRun(this)
+  !
+  ! Initializes simulation
+  !
+  ! Author: Gautam Bisht
+  ! Date: 05/09/23
+  !
+  use Timestepper_Base_class, only : TS_CONTINUE
+  use Waypoint_module
+  use Driver_class
+  use Option_module
+
+  implicit none
+
+  class(simulation_surface_type) :: this
+
+#ifdef DEBUG
+  call PrintMsg(this%option,'SimSurfaceInitializeRun()')
+#endif
+
+  call SimulationBaseInitializeRun(this)
+
+  call this%surface_flow_process_model_coupler_list%InitializeRun()
+
+end subroutine SimSurfaceInitializeRun
 
 ! ************************************************************************** !
 
