@@ -62,6 +62,8 @@ subroutine PMSWEInitializeTimestep(this)
 
   class(pm_swe_type) :: this
 
+  this%option%flow_dt = this%option%dt
+
 end subroutine PMSWEInitializeTimestep
 
 ! ************************************************************************** !
