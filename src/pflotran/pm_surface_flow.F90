@@ -16,6 +16,8 @@ module PM_Surface_Flow_class
   contains
     procedure, public :: Setup => PMSurfaceFlowStep
     procedure, public :: SetRealization => PMSurfaceSetRealization
+    procedure, public :: UpdateSolution => PMSurfaceUpdateSolution
+    procedure, public :: UpdateTimestep => PMSurfaceUpdateTimestep
   end type
 
   public :: PMSurfaceFlowInit
@@ -84,5 +86,51 @@ subroutine PMSurfaceSetRealization(this,surface_realization)
   this%residual_vec = surface_realization%field_surface%flow_r
 
 end subroutine PMSurfaceSetRealization
+
+! ************************************************************************** !
+
+subroutine PMSurfaceUpdateSolution(this)
+  !
+  ! Updates the solution
+  !
+  ! Author: Gautam Bisht
+  ! Date: 05/08/23
+  !
+  use petscvec
+
+  implicit none
+
+  class(pm_surface_flow_type) :: this
+
+  PetscErrorCode :: ierr
+
+  call VecCopy(this%surface_realization%field_surface%flow_xx, &
+               this%surface_realization%field_surface%flow_yy,ierr);CHKERRQ(ierr)
+
+end subroutine PMSurfaceUpdateSolution
+
+! ************************************************************************** !
+subroutine PMSurfaceUpdateTimestep(this,update_dt, &
+                                dt,dt_min,dt_max,iacceleration, &
+                                num_newton_iterations,tfac, &
+                                time_step_max_growth_factor)
+  !
+  ! Updates the solution
+  !
+  ! Author: Gautam Bisht
+  ! Date: 05/08/23
+  !
+  implicit none
+  !
+  class(pm_surface_flow_type) :: this
+  PetscBool :: update_dt
+  PetscReal :: dt
+  PetscReal :: dt_min,dt_max
+  PetscInt :: iacceleration
+  PetscInt :: num_newton_iterations
+  PetscReal :: tfac(:)
+  PetscReal :: time_step_max_growth_factor
+
+end subroutine PMSurfaceUpdateTimestep
 
 end module PM_Surface_Flow_class

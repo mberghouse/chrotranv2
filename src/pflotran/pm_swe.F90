@@ -14,6 +14,8 @@ module PM_SWE_class
     procedure, public :: InitializeTimestep => PMSWEInitializeTimestep
     procedure, public :: PreSolve => PMSWEPreSolve
     procedure, public :: RHSFunction => PMSWERHSFunction
+    procedure, public :: PostSolve => PMSWEPostSolve
+    procedure, public :: FinalizeTimeStep => PMSWEFinalizeTimeSetup
   end type pm_swe_type
 
   public :: PMSWECreate
@@ -100,5 +102,36 @@ subroutine PMSWERHSFunction(this,ts,time,xx,ff,ierr)
   call SWERHSFunction(ts,time,xx,ff,this%surface_realization,ierr);CHKERRQ(ierr)
 
 end subroutine PMSWERHSFunction
+
+! ************************************************************************** !
+
+subroutine PMSWEPostSolve(this)
+  !
+  !
+  ! Author: Gautam Bisht
+  ! Date: 05/08/23
+  !
+
+  implicit none
+
+  class(pm_swe_type) :: this
+
+end subroutine PMSWEPostSolve
+
+! ************************************************************************** !
+
+subroutine PMSWEFinalizeTimeSetup(this)
+  !
+  !
+  ! Author: Gautam Bisht
+  ! Date: 05/08/23
+  !
+
+  implicit none
+
+  class(pm_swe_type) :: this
+
+end subroutine PMSWEFinalizeTimeSetup
+
 
 end module PM_SWE_class
