@@ -95,7 +95,8 @@ module Utility_module
             DigitsOfAccuracy, &
             CalcParallelSum, &
             MatCompare, &
-            ArrayIsSMonotonicInc
+            ArrayIsSMonotonicInc, &
+            LUDecomposition
             
 contains
 
@@ -2520,5 +2521,98 @@ function ArrayIsSMonotonicInc(array)
 end function ArrayIsSMonotonicInc
 
 ! ************************************************************************** !
+
+subroutine LUDecomposition(A,N,INDX,D,stop_on_error,ierror)
+  !
+  ! Given an NxN matrix A, with physical dimension NP, this routine replaces it
+  ! by the LU decomposition of a rowwise permutation of itself.
+  ! A and N are input. A is output; INDX is output vector which records the
+  ! row permutation effected by the partial pivoting; D id output as +1 or -1
+  ! depending on whether the number of row interchanges was odd or even,
+  ! respectively. This routine is used in combination with LUBackSubstitution
+  ! to solve linear equations or invert a matrix.
+  !
+
+  implicit none
+
+  PetscInt :: N
+  PetscReal, parameter :: tiny=1.0d-20
+  PetscReal :: A(N,N),VV(N)
+  PetscInt :: INDX(N)
+  PetscInt :: D
+  PetscBool :: stop_on_error
+  PetscInt :: ierror
+
+  PetscInt :: i, j, k, imax
+  PetscReal :: aamax, sum, dum
+  PetscMPIInt ::  rank
+  PetscErrorCode :: ierr
+
+  D=1
+  do i=1,N
+    aamax=0.d0
+    do j=1,N
+      if (abs(A(i,j)).gt.aamax) aamax=abs(A(i,j))
+    enddo
+    if (aamax <= 0.d0) then
+      if (stop_on_error) then
+        call MPI_Comm_rank(MPI_COMM_WORLD,rank,ierr);CHKERRQ(ierr)
+        print *, "ERROR: Singular value encountered in LUDecomposition() on &
+                 &processor: ", rank, ' aamax = ',aamax,' row = ',i
+        do k = 1, N
+          print *, "Jacobian: ",k,(j,A(k,j),j=1,N)
+        enddo
+        call MPI_Abort(MPI_COMM_WORLD,ONE_INTEGER_MPI,ierr);CHKERRQ(ierr)
+        call MPI_Finalize(ierr);CHKERRQ(ierr)
+        stop
+      else
+        ierror = 1
+        return
+      endif
+    endif
+    VV(i)=1./aamax
+  enddo
+  do j=1,N
+    do i=1,j-1
+      sum=A(i,j)
+      do k=1,i-1
+        sum=sum-A(i,k)*A(k,j)
+      enddo
+      A(i,j)=sum
+    enddo
+    aamax=0
+    do i=j,N
+      sum=A(i,j)
+      do k=1,j-1
+        sum=sum-A(i,k)*A(k,j)
+      enddo
+      A(i,j)=sum
+      dum=VV(i)*abs(sum)
+      if (dum.ge.aamax) then
+        imax=i
+        aamax=dum
+      endif
+    enddo
+    if (j.ne.imax) then
+      do k=1,N
+        dum=A(imax,k)
+        A(imax,k)=A(j,k)
+        A(j,k)=dum
+      enddo
+      D=-D
+      VV(imax)=VV(j)
+    endif
+    INDX(j)=imax
+    if (A(j,j).eq.0.d0) A(j,j)=tiny
+    if (j.ne.N) then
+      dum=1.d0/A(j,j)
+      do i=j+1,N
+        A(i,j)=A(i,j)*dum
+      enddo
+    endif
+  enddo
+  return
+
+end subroutine LUDecomposition
 
 end module Utility_module

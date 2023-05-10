@@ -2045,7 +2045,7 @@ subroutine ReactionEquilibrateConstraint(rt_auxvar,global_auxvar, &
     endif
       
     call RSolve(Res,Jac,rt_auxvar%pri_molal,update,reaction%naqcomp, &
-                use_log_formulation)
+                use_log_formulation,PETSC_TRUE,iflag)
     
     prev_molal = rt_auxvar%pri_molal
 
@@ -3546,6 +3546,7 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
   PetscInt :: ierror
   
   PetscReal :: residual(reaction%ncomp)
+  PetscReal :: initial_total(reaction%ncomp)
   PetscReal :: res(reaction%ncomp)
   PetscReal :: J(reaction%ncomp,reaction%ncomp)
   PetscReal :: one_over_dt
@@ -3612,6 +3613,14 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
 !    call RActivityCoefficients(rt_auxvar,global_auxvar,reaction,option)
 !  endif
 
+  ! store initial concentrations for error reporting
+  initial_total(1:naqcomp) = rt_auxvar%total(:,1)
+  if (nimmobile > 0) then
+    initial_total(immobile_start:immobile_end) = &
+      tran_xx(immobile_start:immobile_end)
+  endif
+
+
   ! initialize guesses to stored solution
   rt_auxvar%pri_molal(:) = tran_xx(1:naqcomp)
   if (nimmobile > 0) then
@@ -3656,7 +3665,21 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
       conc(immobile_start:immobile_end) = rt_auxvar%immobile(:)
     endif
 
-    call RSolve(residual,J,conc,update,ncomp,reaction%use_log_formulation)
+    call RSolve(residual,J,conc,update,ncomp,reaction%use_log_formulation, &
+                PETSC_FALSE,ierror)
+
+    if (ierror /= 0) then
+      print *, 'Error in RSolve: stop'
+      print *, '  initial total: ' // trim(StringWrite(initial_total))
+      print *, '  initial primary: ' // trim(StringWrite(tran_xx))
+      print *, '  residual: ' // trim(StringWrite(residual))
+      print *, '  new solution: ' // trim(StringWrite(new_solution))
+      print *, '  Grid cell: ' // trim(StringWrite(natural_id))
+      if (option%mycommsize > 1) then
+        print *, '  Process rank: ' // trim(StringWrite(option%myrank))
+      endif
+      stop
+    endif
     
     prev_solution(1:naqcomp) = rt_auxvar%pri_molal(1:naqcomp)
     if (nimmobile > 0) then
@@ -3697,38 +3720,36 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
         scale = 0.001d0
       else
         print *, 'Maximum iterations in RReact: stop: ' // &
-                 trim(StringWrite(num_iterations))
-        print *, 'Maximum iterations in RReact: residual: ' // &
-                 trim(StringWrite(residual))
-        print *, 'Maximum iterations in RReact: new solution: ' // &
-                 trim(StringWrite(new_solution))
-        print *, 'Grid cell: ' // trim(StringWrite(natural_id))
+                  trim(StringWrite(num_iterations))
+        print *, '  initial total: ' // trim(StringWrite(initial_total))
+        print *, '  initial primary: ' // trim(StringWrite(tran_xx))
+        print *, '  residual: ' // trim(StringWrite(residual))
+        print *, '  new solution: ' // trim(StringWrite(new_solution))
+        print *, '  Grid cell: ' // trim(StringWrite(natural_id))
         if (option%mycommsize > 1) then
-          print *, 'Process rank: ' // trim(StringWrite(option%myrank))
+          print *, '  Process rank: ' // trim(StringWrite(option%myrank))
         endif
-        num_iterations_ = num_iterations
-        ierror = 1
-        return
+        stop
       endif
       if (scale < 0.99d0) then
         ! apply scaling
         new_solution = scale*(new_solution-prev_solution(:))+prev_solution(:)
       endif
     endif
-    
+
     rt_auxvar%pri_molal(1:naqcomp) = new_solution(1:naqcomp)
     if (nimmobile > 0) then
       rt_auxvar%immobile(1:nimmobile) = &
         new_solution(immobile_start:immobile_end)
-    endif    
-  
+    endif
+
   enddo
 
   ! one last update
   call RTAuxVarCompute(rt_auxvar,global_auxvar,material_auxvar,reaction,option)
 
   num_iterations_ = num_iterations
-  
+
 end subroutine RReact
 
 ! ************************************************************************** !
@@ -5181,17 +5202,18 @@ end subroutine RGeneral
 
 ! ************************************************************************** !
 
-subroutine RSolve(Res,Jac,conc,update,ncomp,use_log_formulation)
-  ! 
+subroutine RSolve(Res,Jac,conc,update,ncomp,use_log_formulation, &
+                  stop_on_error,ierror)
+  !
   ! Computes the kinetic mineral precipitation/dissolution
   ! rates
-  ! 
+  !
   ! Author: Glenn Hammond
   ! Date: 09/04/08
-  ! 
+  !
 
   use Utility_module
-  
+
   implicit none
 
   PetscInt :: ncomp
@@ -5200,7 +5222,9 @@ subroutine RSolve(Res,Jac,conc,update,ncomp,use_log_formulation)
   PetscReal :: update(ncomp)
   PetscReal :: conc(ncomp)
   PetscBool :: use_log_formulation
-  
+  PetscBool :: stop_on_error
+  PetscInt :: ierror
+
   PetscInt :: indices(ncomp)
   PetscReal :: rhs(ncomp)
   PetscInt :: icomp
@@ -5213,7 +5237,7 @@ subroutine RSolve(Res,Jac,conc,update,ncomp,use_log_formulation)
     rhs(icomp) = Res(icomp)*norm
     Jac(icomp,:) = Jac(icomp,:)*norm
   enddo
-    
+
   if (use_log_formulation) then
     ! for derivatives with respect to ln conc
     do icomp = 1, ncomp
@@ -5221,10 +5245,12 @@ subroutine RSolve(Res,Jac,conc,update,ncomp,use_log_formulation)
     enddo
   endif
 
-  call ludcmp(Jac,ncomp,indices,icomp)
-  call lubksb(Jac,ncomp,indices,rhs)
-  
-  update = rhs
+  ierror = 0
+  call LUDecomposition(Jac,ncomp,indices,icomp,stop_on_error,ierror)
+  if (ierror == 0) then
+    call lubksb(Jac,ncomp,indices,rhs)
+    update = rhs
+  endif
 
 end subroutine RSolve
 
