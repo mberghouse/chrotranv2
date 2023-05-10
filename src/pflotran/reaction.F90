@@ -3546,6 +3546,7 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
   PetscInt :: ierror
   
   PetscReal :: residual(reaction%ncomp)
+  PetscReal :: residual_store(reaction%ncomp)
   PetscReal :: initial_total(reaction%ncomp)
   PetscReal :: res(reaction%ncomp)
   PetscReal :: J(reaction%ncomp,reaction%ncomp)
@@ -3565,6 +3566,7 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
   PetscInt :: immobile_start, immobile_end
   PetscReal :: ratio, min_ratio
   PetscReal :: scale
+  PetscReal :: last_40_norms(40)
 
   PetscInt, parameter :: iphase = 1
 
@@ -3578,6 +3580,7 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
 
   one_over_dt = 1.d0/option%tran_dt
   num_iterations = 0
+  last_40_norms = 0.d0
 
   if (reaction%ncoll > 0) then
     option%io_buffer = 'Colloids not set up for operator split mode.'
@@ -3665,6 +3668,9 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
       conc(immobile_start:immobile_end) = rt_auxvar%immobile(:)
     endif
 
+    last_40_norms(2:40) = last_40_norms(1:39)
+    residual_store = residual
+    last_40_norms(1) = sqrt(dot_product(residual_store,residual_store))
     call RSolve(residual,J,conc,update,ncomp,reaction%use_log_formulation, &
                 PETSC_FALSE,ierror)
 
@@ -3680,9 +3686,11 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
       print *, '  liquid density: ' // trim(StringWrite(global_auxvar%den_kg(1)))
       print *, '  initial total: ' // trim(StringWrite(initial_total))
       print *, '  initial primary: ' // trim(StringWrite(tran_xx))
-      print *, '  residual: ' // trim(StringWrite(residual))
+      print *, '  residual: ' // trim(StringWrite(residual_store))
       print *, '  new solution: ' // trim(StringWrite(new_solution))
       print *, '  Grid cell: ' // trim(StringWrite(natural_id))
+      print *, '  Last 40 norms: ' // &
+        trim(StringWrite(last_40_norms(1:min(num_iterations+1,40))))
       if (option%mycommsize > 1) then
         print *, '  Process rank: ' // trim(StringWrite(option%myrank))
       endif
