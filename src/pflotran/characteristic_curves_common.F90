@@ -1266,6 +1266,7 @@ subroutine SFExpFreezingSaturation(this,capillary_pressure, &
   PetscReal, parameter :: dpc_dpres = -1.d0
   PetscReal :: ICE_DENSITY = 50.86D0 !mol/L
   PetscReal :: L_ICE = 6033.54 !J/mol
+  PetscReal :: dTf
 
   dsat_dpres = 0.d0
 
@@ -1273,10 +1274,10 @@ subroutine SFExpFreezingSaturation(this,capillary_pressure, &
     liquid_saturation = 1.d0
     return
   else
-    liquid_saturation = (1.d0 - this%sr) * -1.d0 * exp((capillary_pressure * 273.15 /&
-                        (L_ICE * ICE_DENSITY * 1.D6))**2) + this%sr
+    dTf = -1.d0 * (capillary_pressure * 273.15) /(L_ICE * ICE_DENSITY * 1.D6)
+    liquid_saturation = (1.d0 - this%sr) * exp(-1.d0 * (dTf/this%w)**2) + this%sr
   endif
-
+  
 end subroutine SFExpFreezingSaturation
 
 ! ************************************************************************** !
