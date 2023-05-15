@@ -3664,6 +3664,9 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
     call RReaction(residual,J,PETSC_TRUE,rt_auxvar,global_auxvar, &
                    material_auxvar,reaction,option)
     
+    residual_store = residual
+    last_40_norms(2:40) = last_40_norms(1:39)
+    last_40_norms(1) = sqrt(dot_product(residual_store,residual_store))
     if (maxval(abs(residual)) < reaction%max_residual_tolerance) exit
 
     conc(1:naqcomp) = rt_auxvar%pri_molal(1:naqcomp)
@@ -3671,9 +3674,6 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
       conc(immobile_start:immobile_end) = rt_auxvar%immobile(:)
     endif
 
-    last_40_norms(2:40) = last_40_norms(1:39)
-    residual_store = residual
-    last_40_norms(1) = sqrt(dot_product(residual_store,residual_store))
     call RSolve(residual,J,conc,update,ncomp,reaction%use_log_formulation, &
                 PETSC_FALSE,ierror)
 
@@ -3758,7 +3758,7 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
                     trim(StringWrite(global_auxvar%den_kg(1)))
         print *, '  initial total: ' // trim(StringWrite(initial_total))
         print *, '  initial primary: ' // trim(StringWrite(tran_xx))
-        print *, '  residual: ' // trim(StringWrite(residual))
+        print *, '  residual: ' // trim(StringWrite(residual_store))
         print *, '  new solution: ' // trim(StringWrite(new_solution))
         print *, '  Grid cell: ' // trim(StringWrite(natural_id))
         print *, '  Last 40 maximum absolute changes: ' // &
