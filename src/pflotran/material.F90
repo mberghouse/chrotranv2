@@ -107,6 +107,8 @@ module Material_module
     PetscReal :: half_aperture
     PetscReal :: init_temp
     PetscReal :: init_conc
+    PetscReal :: init_salt_conc
+    PetscReal :: init_pres
     PetscReal :: porosity
     PetscReal :: diff_coeff(2)
     PetscReal :: mnrl_volfrac

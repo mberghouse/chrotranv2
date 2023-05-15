@@ -725,7 +725,7 @@ end subroutine SecondaryHeatAuxVarInit
 
 subroutine SecondaryGenAuxVarInit(multicontinuum, &
                                   epsilon,half_matrix_width, &
-                                  sec_gen_tran_vars, initial_condition,option)
+                                  sec_gen_vars, initial_condition,option)
 
   ! Initializes all the secondary continuum
   ! transport variables in GENERAL mode
@@ -739,7 +739,7 @@ subroutine SecondaryGenAuxVarInit(multicontinuum, &
 
   implicit none
 
-  type(sec_gen_tran_type) :: sec_gen_tran_vars
+  type(sec_gen_type) :: sec_gen_vars
   type(multicontinuum_property_type) :: multicontinuum
   type(coupler_type), pointer :: initial_condition
   type(option_type), pointer :: option
@@ -750,7 +750,7 @@ subroutine SecondaryGenAuxVarInit(multicontinuum, &
   PetscReal :: area_per_vol
   
   call SecondaryContinuumSetProperties( &
-       sec_gen_tran_vars%sec_continuum, &
+       sec_gen_vars%sec_continuum, &
        multicontinuum%name, &
        half_matrix_width, &
        multicontinuum%matrix_block_size, &
@@ -759,39 +759,56 @@ subroutine SecondaryGenAuxVarInit(multicontinuum, &
        multicontinuum%porosity, &
        option)
 
-  sec_gen_tran_vars%ncells = multicontinuum%ncells
-  sec_gen_tran_vars%half_aperture = multicontinuum%half_aperture
-  sec_gen_tran_vars%epsilon = epsilon
-  sec_gen_tran_vars%log_spacing = multicontinuum%log_spacing
-  sec_gen_tran_vars%outer_spacing = multicontinuum%outer_spacing
+  sec_gen_vars%ncells = multicontinuum%ncells
+  sec_gen_vars%half_aperture = multicontinuum%half_aperture
+  sec_gen_vars%epsilon = epsilon
+  sec_gen_vars%log_spacing = multicontinuum%log_spacing
+  sec_gen_vars%outer_spacing = multicontinuum%outer_spacing
 
-  allocate(sec_gen_tran_vars%area(sec_gen_tran_vars%ncells))
-  allocate(sec_gen_tran_vars%vol(sec_gen_tran_vars%ncells))
-  allocate(sec_gen_tran_vars%dm_minus(sec_gen_tran_vars%ncells))
-  allocate(sec_gen_tran_vars%dm_plus(sec_gen_tran_vars%ncells))
-  allocate(sec_gen_tran_vars%sec_continuum%distance(sec_gen_tran_vars%ncells))
+  allocate(sec_gen_vars%area(sec_gen_vars%ncells))
+  allocate(sec_gen_vars%vol(sec_gen_vars%ncells))
+  allocate(sec_gen_vars%dm_minus(sec_gen_vars%ncells))
+  allocate(sec_gen_vars%dm_plus(sec_gen_vars%ncells))
+  allocate(sec_gen_vars%sec_continuum%distance(sec_gen_vars%ncells))
 
-  call SecondaryContinuumType(sec_gen_tran_vars%sec_continuum, &
-                              sec_gen_tran_vars%ncells, &
-                              sec_gen_tran_vars%area, &
-                              sec_gen_tran_vars%vol, &
-                              sec_gen_tran_vars%dm_minus, &
-                              sec_gen_tran_vars%dm_plus, &
-                              sec_gen_tran_vars%half_aperture, &
-                              sec_gen_tran_vars%epsilon, &
-                              sec_gen_tran_vars%log_spacing, &
-                              sec_gen_tran_vars%outer_spacing, &
+  call SecondaryContinuumType(sec_gen_vars%sec_continuum, &
+                              sec_gen_vars%ncells, &
+                              sec_gen_vars%area, &
+                              sec_gen_vars%vol, &
+                              sec_gen_vars%dm_minus, &
+                              sec_gen_vars%dm_plus, &
+                              sec_gen_vars%half_aperture, &
+                              sec_gen_vars%epsilon, &
+                              sec_gen_vars%log_spacing, &
+                              sec_gen_vars%outer_spacing, &
                               area_per_vol, option)
 
-  sec_gen_tran_vars%interfacial_area = area_per_vol * &
-       (1.d0 - sec_gen_tran_vars%epsilon) * multicontinuum%area_scaling
+  sec_gen_vars%interfacial_area = area_per_vol * &
+       (1.d0 - sec_gen_vars%epsilon) * multicontinuum%area_scaling
 
-  allocate(sec_gen_tran_vars%sec_conc(sec_gen_tran_vars%ncells))
+  allocate(sec_gen_vars%sec_conc(sec_gen_vars%ncells))
 
   if (option%flow%set_secondary_init_conc) then
-     sec_gen_tran_vars%sec_conc = multicontinuum%init_conc
+     sec_gen_vars%sec_conc = multicontinuum%init_conc
   else
-     sec_gen_tran_vars%sec_conc = initial_condition%flow_condition%concentration%dataset%rarray(1)
+!     sec_gen_vars%sec_conc = initial_condition%flow_condition%mole_fraction%dataset%rarray(1)
+  endif
+!   if (general_salt) then
+!     if (option%flow%set_secondary_init_salt_conc) then
+!        sec_gen_vars%sec_conc = multicontinuum%init_salt_conc
+!     else
+!       sec_gen_vars%sec_conc = initial_condition%flow_condition%salt_fraction%dataset%rarray(1)
+!     endif
+!   endif
+  if (option%flow%set_secondary_init_temp) then
+     sec_gen_vars%sec_temp = multicontinuum%init_temp
+  else
+     sec_gen_vars%sec_temp = initial_condition%flow_condition%temperature%dataset%rarray(1)
+  endif
+  if (option%flow%set_secondary_init_pres) then
+     sec_gen_vars%sec_pres = multicontinuum%init_pres
+  else
+     sec_gen_vars%sec_pres = initial_condition%flow_condition%pressure%dataset%rarray(1)
   endif
 
 end subroutine SecondaryGenAuxVarInit
@@ -2170,11 +2187,10 @@ end subroutine SecHeatAuxVarCompute
 
 ! ************************************************************************** !
 
-subroutine SecondaryGenAuxVarCompute(sec_gen_tran_vars, &
-                                     therm_conductivity,dencpr, &
-                                     conc_primary_node,option)
+subroutine SecondaryGenAuxVarCompute(sec_gen_vars,option)
+
   !
-  ! Computes secondary auxillary variables for each
+  ! Computes auxillary variables for each
   ! grid cell for transport of dissolved components 
   !
   ! Author: David Fukuyama
@@ -2185,29 +2201,30 @@ subroutine SecondaryGenAuxVarCompute(sec_gen_tran_vars, &
 
   implicit none
 
-  type(sec_gen_tran_type) :: sec_gen_tran_vars
+  type(sec_gen_type) :: sec_gen_vars
   type(option_type) :: option
-  PetscReal :: coeff_left(sec_gen_tran_vars%ncells)
-  PetscReal :: coeff_diag(sec_gen_tran_vars%ncells)
-  PetscReal :: coeff_right(sec_gen_tran_vars%ncells)
-  PetscReal :: rhs(sec_gen_tran_vars%ncells)
-  PetscReal :: sec_conc(sec_gen_tran_vars%ncells)
-  PetscReal :: area(sec_gen_tran_vars%ncells)
-  PetscReal :: vol(sec_gen_tran_vars%ncells)
-  PetscReal :: dm_plus(sec_gen_tran_vars%ncells)
-  PetscReal :: dm_minus(sec_gen_tran_vars%ncells)
+
+  PetscReal :: coeff_left(sec_gen_vars%ncells)
+  PetscReal :: coeff_diag(sec_gen_vars%ncells)
+  PetscReal :: coeff_right(sec_gen_vars%ncells)
+  PetscReal :: rhs(sec_gen_vars%ncells)
+  PetscReal :: sec_conc(sec_gen_vars%ncells)
+  PetscReal :: area(sec_gen_vars%ncells)
+  PetscReal :: vol(sec_gen_vars%ncells)
+  PetscReal :: dm_plus(sec_gen_vars%ncells)
+  PetscReal :: dm_minus(sec_gen_vars%ncells)
   PetscInt :: i, ngcells
   PetscReal :: area_fm
   PetscReal :: alpha, therm_conductivity, dencpr
   PetscReal :: conc_primary_node
   PetscReal :: m
 
-  ngcells = sec_gen_tran_vars%ncells
-  area = sec_gen_tran_vars%area
-  vol = sec_gen_tran_vars%vol
-  dm_plus = sec_gen_tran_vars%dm_plus
-  dm_minus = sec_gen_tran_vars%dm_minus
-  area_fm = sec_gen_tran_vars%interfacial_area
+  ngcells = sec_gen_vars%ncells
+  area = sec_gen_vars%area
+  vol = sec_gen_vars%vol
+  dm_plus = sec_gen_vars%dm_plus
+  dm_minus = sec_gen_vars%dm_minus
+  area_fm = sec_gen_vars%interfacial_area
 
   coeff_left = 0.d0
   coeff_diag = 0.d0
@@ -2215,49 +2232,7 @@ subroutine SecondaryGenAuxVarCompute(sec_gen_tran_vars, &
   rhs = 0.d0
   sec_conc = 0.d0
 
-  alpha = option%flow_dt*therm_conductivity/dencpr
 
-
-  ! Setting the coefficients
-  do i = 2, ngcells-1
-    coeff_left(i) = -alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i))
-    coeff_diag(i) = alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i)) + &
-                    alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i)) + 1.d0
-    coeff_right(i) = -alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i))
-  enddo
-
-  coeff_diag(1) = alpha*area(1)/((dm_minus(2) + dm_plus(1))*vol(1)) + 1.d0
-  coeff_right(1) = -alpha*area(1)/((dm_minus(2) + dm_plus(1))*vol(1))
-
-  coeff_left(ngcells) = -alpha*area(ngcells-1)/ &
-                       ((dm_minus(ngcells) + dm_plus(ngcells-1))*vol(ngcells))
-  coeff_diag(ngcells) = alpha*area(ngcells-1)/ &
-                       ((dm_minus(ngcells) + dm_plus(ngcells-1))*vol(ngcells)) &
-                       + alpha*area(ngcells)/(dm_plus(ngcells)*vol(ngcells)) &
-                       + 1.d0
-
-
-  rhs = sec_gen_tran_vars%sec_conc  ! secondary continuum values from previous time step
-  rhs(ngcells) = rhs(ngcells) + &
-                 alpha*area(ngcells)/(dm_plus(ngcells)*vol(ngcells))* &
-                 conc_primary_node
-
-  ! Thomas algorithm for tridiagonal system
-  ! Forward elimination
-  do i = 2, ngcells
-    m = coeff_left(i)/coeff_diag(i-1)
-    coeff_diag(i) = coeff_diag(i) - m*coeff_right(i-1)
-    rhs(i) = rhs(i) - m*rhs(i-1)
-  enddo
-
-  ! Back substitution
-  ! Calculate concentration in the secondary continuum
-  sec_conc(ngcells) = rhs(ngcells)/coeff_diag(ngcells)
-  do i = ngcells-1, 1, -1
-    sec_conc(i) = (rhs(i) - coeff_right(i)*sec_conc(i+1))/coeff_diag(i)
-  enddo
-
-  sec_gen_tran_vars%sec_conc = sec_conc
 
 end subroutine SecondaryGenAuxVarCompute
 
@@ -2587,7 +2562,7 @@ end subroutine SecondaryHeatJacobian
 
 ! ************************************************************************** !
 
-subroutine SecondaryGenResidual(sec_gen_tran_vars, &
+subroutine SecondaryGenResidual(sec_gen_vars, &
                                 therm_conductivity,dencpr, &
                                 conc_primary_node,option,res_conc)
 
@@ -2601,31 +2576,31 @@ subroutine SecondaryGenResidual(sec_gen_tran_vars, &
 
   implicit none
 
-  type(sec_gen_tran_type) :: sec_gen_tran_vars
+  type(sec_gen_type) :: sec_gen_vars
   type(option_type) :: option
   PetscReal :: therm_conductivity,dencpr,conc_primary_node
   PetscReal :: res_conc
 
-  PetscReal :: coeff_left(sec_gen_tran_vars%ncells)
-  PetscReal :: coeff_diag(sec_gen_tran_vars%ncells)
-  PetscReal :: coeff_right(sec_gen_tran_vars%ncells)
-  PetscReal :: rhs(sec_gen_tran_vars%ncells)
-  PetscReal :: area(sec_gen_tran_vars%ncells)
-  PetscReal :: vol(sec_gen_tran_vars%ncells)
-  PetscReal :: dm_plus(sec_gen_tran_vars%ncells)
-  PetscReal :: dm_minus(sec_gen_tran_vars%ncells)
+  PetscReal :: coeff_left(sec_gen_vars%ncells)
+  PetscReal :: coeff_diag(sec_gen_vars%ncells)
+  PetscReal :: coeff_right(sec_gen_vars%ncells)
+  PetscReal :: rhs(sec_gen_vars%ncells)
+  PetscReal :: area(sec_gen_vars%ncells)
+  PetscReal :: vol(sec_gen_vars%ncells)
+  PetscReal :: dm_plus(sec_gen_vars%ncells)
+  PetscReal :: dm_minus(sec_gen_vars%ncells)
   PetscInt :: i, ngcells
   PetscReal :: area_fm
   PetscReal :: alpha
   PetscReal :: m
   PetscReal :: conc_current_N
 
-  ngcells = sec_gen_tran_vars%ncells
-  area = sec_gen_tran_vars%area
-  vol = sec_gen_tran_vars%vol
-  dm_plus = sec_gen_tran_vars%dm_plus
-  dm_minus = sec_gen_tran_vars%dm_minus
-  area_fm = sec_gen_tran_vars%interfacial_area
+  ngcells = sec_gen_vars%ncells
+  area = sec_gen_vars%area
+  vol = sec_gen_vars%vol
+  dm_plus = sec_gen_vars%dm_plus
+  dm_minus = sec_gen_vars%dm_minus
+  area_fm = sec_gen_vars%interfacial_area
 
   coeff_left = 0.d0
   coeff_diag = 0.d0
@@ -2636,11 +2611,19 @@ subroutine SecondaryGenResidual(sec_gen_tran_vars, &
 
 
 ! Setting the coefficients
+  ! do i = 2, ngcells-1
+  !   coeff_left(i) = -alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i))
+  !   coeff_diag(i) = alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i)) + &
+  !                   alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i)) + 1.d0
+  !   coeff_right(i) = -alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i))
+  ! enddo
+
+  ! order of operations
+  ! cal
+
+  !r_p = -accum_p
   do i = 2, ngcells-1
-    coeff_left(i) = -alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i))
-    coeff_diag(i) = alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i)) + &
-                    alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i)) + 1.d0
-    coeff_right(i) = -alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i))
+    
   enddo
 
   coeff_diag(1) = alpha*area(1)/((dm_minus(2) + dm_plus(1))*vol(1)) + 1.d0
@@ -2654,7 +2637,7 @@ subroutine SecondaryGenResidual(sec_gen_tran_vars, &
                        + 1.d0
 
   ! secondary continuum values from previous time step
-  rhs = sec_gen_tran_vars%sec_conc
+  rhs = sec_gen_vars%sec_conc
   rhs(ngcells) = rhs(ngcells) + &
                  alpha*area(ngcells)/(dm_plus(ngcells)*vol(ngcells))* &
                  conc_primary_node
@@ -2680,7 +2663,7 @@ end subroutine SecondaryGenResidual
 
 ! ************************************************************************** !
 
-subroutine SecondaryGenJacobian(sec_gen_tran_vars,therm_conductivity, &
+subroutine SecondaryGenJacobian(sec_gen_vars,therm_conductivity, &
                                  dencpr,option,jac_conc)
   !
   ! Calculates the source term jacobian contribution
@@ -2696,16 +2679,16 @@ subroutine SecondaryGenJacobian(sec_gen_tran_vars,therm_conductivity, &
 
   implicit none  
 
-  type(sec_gen_tran_type) :: sec_gen_tran_vars
+  type(sec_gen_type) :: sec_gen_vars
   type(option_type) :: option
-  PetscReal :: coeff_left(sec_gen_tran_vars%ncells)
-  PetscReal :: coeff_diag(sec_gen_tran_vars%ncells)
-  PetscReal :: coeff_right(sec_gen_tran_vars%ncells)
-  PetscReal :: rhs(sec_gen_tran_vars%ncells)
-  PetscReal :: area(sec_gen_tran_vars%ncells)
-  PetscReal :: vol(sec_gen_tran_vars%ncells)
-  PetscReal :: dm_plus(sec_gen_tran_vars%ncells)
-  PetscReal :: dm_minus(sec_gen_tran_vars%ncells)
+  PetscReal :: coeff_left(sec_gen_vars%ncells)
+  PetscReal :: coeff_diag(sec_gen_vars%ncells)
+  PetscReal :: coeff_right(sec_gen_vars%ncells)
+  PetscReal :: rhs(sec_gen_vars%ncells)
+  PetscReal :: area(sec_gen_vars%ncells)
+  PetscReal :: vol(sec_gen_vars%ncells)
+  PetscReal :: dm_plus(sec_gen_vars%ncells)
+  PetscReal :: dm_minus(sec_gen_vars%ncells)
   PetscInt :: i, ngcells
   PetscReal :: area_fm
   PetscReal :: alpha, therm_conductivity, dencpr
@@ -2713,12 +2696,12 @@ subroutine SecondaryGenJacobian(sec_gen_tran_vars,therm_conductivity, &
   PetscReal :: Dconc_N_Dconc_prim
   PetscReal :: jac_conc
 
-  ngcells = sec_gen_tran_vars%ncells
-  area = sec_gen_tran_vars%area
-  vol = sec_gen_tran_vars%vol
-  dm_plus = sec_gen_tran_vars%dm_plus
-  area_fm = sec_gen_tran_vars%interfacial_area
-  dm_minus = sec_gen_tran_vars%dm_minus
+  ngcells = sec_gen_vars%ncells
+  area = sec_gen_vars%area
+  vol = sec_gen_vars%vol
+  dm_plus = sec_gen_vars%dm_plus
+  area_fm = sec_gen_vars%interfacial_area
+  dm_minus = sec_gen_vars%dm_minus
 
   coeff_left = 0.d0
   coeff_diag = 0.d0

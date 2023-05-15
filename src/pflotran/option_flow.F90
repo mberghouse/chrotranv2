@@ -52,6 +52,8 @@ module Option_Flow_module
     ! If true, then secondary init conc is different from primary initial concentration
     ! this is used in GENERAL mode with secondary continuum
     PetscBool :: set_secondary_init_conc
+    PetscBool :: set_secondary_init_salt_conc
+    PetscBool :: set_secondary_init_pres
 
     PetscReal :: minimum_hydrostatic_pressure
 
@@ -160,6 +162,8 @@ subroutine OptionFlowInitRealization(option)
 
   option%set_secondary_init_temp = PETSC_FALSE
   option%set_secondary_init_conc = PETSC_FALSE
+  option%set_secondary_init_salt_conc = PETSC_FALSE
+  option%set_secondary_init_pres = PETSC_FALSE
   option%update_flow_perm = PETSC_FALSE
   option%rel_perm_aveg = UPWIND
   option%pct_updated = PETSC_FALSE
