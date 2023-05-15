@@ -1012,11 +1012,13 @@ hdf5.o : \
   string.o \
   utility.o
 hdf5_aux.o : \
+  communicator_aux.o \
   driver.o \
   input_aux.o \
   logging.o \
   option.o \
   pflotran_constants.o \
+  print.o \
   string.o
 hydrate.o : \
   connection.o \
@@ -1110,6 +1112,7 @@ init_common.o : \
   utility.o \
   waypoint.o
 init_subsurface.o : \
+  dataset.o \
   dataset_base.o \
   dataset_common_hdf5.o \
   dataset_gridded_hdf5.o \
@@ -1205,6 +1208,7 @@ integral_flux.o : \
   utility.o
 inversion_aux.o : \
   characteristic_curves.o \
+  communicator_aux.o \
   driver.o \
   inversion_coupled_aux.o \
   inversion_measurement_aux.o \
@@ -1273,6 +1277,7 @@ inversion_parameter.o : \
   units.o \
   variables.o
 inversion_subsurface.o : \
+  communicator_aux.o \
   connection.o \
   coupler.o \
   debug.o \
@@ -1306,6 +1311,7 @@ inversion_subsurface.o : \
   solver.o \
   string.o \
   timer.o \
+  timestepper_base.o \
   units.o \
   utility.o \
   variables.o \
@@ -1335,6 +1341,7 @@ inversion_zflow.o : \
   option.o \
   patch.o \
   pflotran_constants.o \
+  print.o \
   realization_base.o \
   string.o \
   timer.o \
@@ -1504,6 +1511,7 @@ option_flow.o : \
 option_geophysics.o : \
   pflotran_constants.o
 option_inversion.o : \
+  communicator_aux.o \
   pflotran_constants.o
 option_transport.o : \
   pflotran_constants.o
@@ -2578,7 +2586,8 @@ reaction_aux.o : \
   reaction_surf_complex_aux.o \
   string.o \
   utility.o
-reaction_base.o :
+reaction_base.o : \
+  utility.o
 reaction_clm.o : \
   global_aux.o \
   input_aux.o \
@@ -2875,6 +2884,7 @@ reaction_sandbox_pnnl_lambda.o : \
   option.o \
   pflotran_constants.o \
   reaction_aux.o \
+  reaction_mineral_aux.o \
   reaction_sandbox_base.o \
   reactive_transport_aux.o \
   string.o \
@@ -2887,6 +2897,7 @@ reaction_sandbox_radon.o : \
   option.o \
   pflotran_constants.o \
   reaction_aux.o \
+  reaction_mineral_aux.o \
   reaction_sandbox_base.o \
   reactive_transport_aux.o \
   string.o \
@@ -3023,6 +3034,7 @@ realization_subsurface.o : \
   dm_kludge.o \
   field.o \
   fluid.o \
+  global_aux.o \
   grid.o \
   grid_structured.o \
   grid_unstructured.o \
@@ -3139,11 +3151,11 @@ saturation_function.o : \
 secondary_continuum.o : \
   block_solve.o \
   block_tridiag.o \
+  coupler.o \
   global_aux.o \
   grid.o \
   material.o \
   material_aux.o \
-  mphase_aux.o \
   option.o \
   patch.o \
   pflotran_constants.o \
