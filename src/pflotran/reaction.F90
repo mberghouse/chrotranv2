@@ -3556,6 +3556,7 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
   PetscReal :: update(reaction%ncomp)
   PetscReal :: conc(reaction%ncomp)
   PetscReal :: maximum_relative_change
+  PetscReal :: maximum_absolute_change
   PetscReal :: accumulation_coef
   PetscReal :: fixed_accum(reaction%ncomp)
   PetscInt :: num_iterations
@@ -3567,6 +3568,7 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
   PetscReal :: ratio, min_ratio
   PetscReal :: scale
   PetscReal :: last_40_norms(40)
+  PetscReal :: last_40_maxchng(40,2)
 
   PetscInt, parameter :: iphase = 1
 
@@ -3581,6 +3583,7 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
   one_over_dt = 1.d0/option%tran_dt
   num_iterations = 0
   last_40_norms = 0.d0
+  last_40_maxchng = 0.d0
 
   if (reaction%ncoll > 0) then
     option%io_buffer = 'Colloids not set up for operator split mode.'
@@ -3690,6 +3693,10 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
       print *, '  residual: ' // trim(StringWrite(residual_store))
       print *, '  new solution: ' // trim(StringWrite(new_solution))
       print *, '  Grid cell: ' // trim(StringWrite(natural_id))
+      print *, '  Last 40 maximum absolute changes: ' // &
+        trim(StringWrite(last_40_maxchng(1:min(num_iterations+1,40),1)))
+      print *, '  Last 40 maximum relative changes: ' // &
+        trim(StringWrite(last_40_maxchng(1:min(num_iterations+1,40),2)))
       print *, '  Last 40 norms: ' // &
         trim(StringWrite(last_40_norms(1:min(num_iterations+1,40))))
       if (option%mycommsize > 1) then
@@ -3722,8 +3729,12 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
       new_solution = prev_solution - update
     endif
 
+    maximum_absolute_change = maxval(abs(new_solution-prev_solution))
     maximum_relative_change = maxval(abs((new_solution-prev_solution)/ &
                                          prev_solution))
+    last_40_maxchng(2:40,:) = last_40_maxchng(1:39,:)
+    last_40_maxchng(1,1) = maximum_absolute_change
+    last_40_maxchng(1,2) = maximum_relative_change
     
     if (maximum_relative_change < reaction%max_relative_change_tolerance) exit
 
@@ -3750,6 +3761,10 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
         print *, '  residual: ' // trim(StringWrite(residual))
         print *, '  new solution: ' // trim(StringWrite(new_solution))
         print *, '  Grid cell: ' // trim(StringWrite(natural_id))
+        print *, '  Last 40 maximum absolute changes: ' // &
+          trim(StringWrite(last_40_maxchng(1:min(num_iterations+1,40),1)))
+        print *, '  Last 40 maximum relative changes: ' // &
+          trim(StringWrite(last_40_maxchng(1:min(num_iterations+1,40),2)))
         print *, '  Last 40 norms: ' // &
           trim(StringWrite(last_40_norms(1:min(num_iterations+1,40))))
         if (option%mycommsize > 1) then
