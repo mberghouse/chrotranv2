@@ -3683,7 +3683,8 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
       print *, '  porosity: ' // trim(StringWrite(material_auxvar%porosity))
       print *, '  liquid saturation : ' // &
                   trim(StringWrite(global_auxvar%sat(1)))
-      print *, '  liquid density: ' // trim(StringWrite(global_auxvar%den_kg(1)))
+      print *, '  liquid density: ' // &
+                  trim(StringWrite(global_auxvar%den_kg(1)))
       print *, '  initial total: ' // trim(StringWrite(initial_total))
       print *, '  initial primary: ' // trim(StringWrite(tran_xx))
       print *, '  residual: ' // trim(StringWrite(residual_store))
@@ -3737,11 +3738,20 @@ subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
       else
         print *, 'Maximum iterations in RReact: stop: ' // &
                   trim(StringWrite(num_iterations))
+        print *, '  dt: ' // trim(StringWrite(option%tran_dt))
+        print *, '  volume: ' // trim(StringWrite(material_auxvar%volume))
+        print *, '  porosity: ' // trim(StringWrite(material_auxvar%porosity))
+        print *, '  liquid saturation : ' // &
+                    trim(StringWrite(global_auxvar%sat(1)))
+        print *, '  liquid density: ' // &
+                    trim(StringWrite(global_auxvar%den_kg(1)))
         print *, '  initial total: ' // trim(StringWrite(initial_total))
         print *, '  initial primary: ' // trim(StringWrite(tran_xx))
         print *, '  residual: ' // trim(StringWrite(residual))
         print *, '  new solution: ' // trim(StringWrite(new_solution))
         print *, '  Grid cell: ' // trim(StringWrite(natural_id))
+        print *, '  Last 40 norms: ' // &
+          trim(StringWrite(last_40_norms(1:min(num_iterations+1,40))))
         if (option%mycommsize > 1) then
           print *, '  Process rank: ' // trim(StringWrite(option%myrank))
         endif
