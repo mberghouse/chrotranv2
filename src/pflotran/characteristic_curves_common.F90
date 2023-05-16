@@ -1208,7 +1208,7 @@ subroutine SFExpFreezingCapillaryPressure(this,liquid_saturation, &
   PetscReal, intent(out) :: dpc_dsatl
   type(option_type), intent(inout) :: option
 
-  PetscReal :: w, c
+  PetscReal :: c
   PetscReal :: Se
   PetscReal :: dSe_dsatl
   PetscReal :: ICE_DENSITY = 50.86d0 !mol/L
@@ -1261,8 +1261,6 @@ subroutine SFExpFreezingSaturation(this,capillary_pressure, &
   PetscReal, intent(out) :: dsat_dpres
   type(option_type), intent(inout) :: option
 
-  PetscReal :: Se
-  PetscReal :: dSe_dpc
   PetscReal, parameter :: dpc_dpres = -1.d0
   PetscReal :: ICE_DENSITY = 50.86D0 !mol/L
   PetscReal :: L_ICE = 6033.54 !J/mol
