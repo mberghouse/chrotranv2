@@ -668,7 +668,7 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
   PetscReal :: K_H_tilde, K_H_tilde_hyd
   PetscInt :: apid, cpid, vpid, spid
   PetscReal :: Hg_mixture_fractioned
-  PetscReal :: H_hyd, U_ice, PE_hyd, du_ice_dT
+  PetscReal :: H_hyd, U_ice, PE_hyd, du_ice_dT, du_ice_dP
   PetscReal :: aux(1)
   PetscReal :: hw
   PetscReal :: dpor_dp
@@ -1563,8 +1563,8 @@ subroutine HydrateAuxVarCompute(x,hyd_auxvar,global_auxvar,material_auxvar, &
   hyd_auxvar%mobility(hid) = 0.d0
 
   !call EOSIceEnergy(hyd_auxvar%temp, U_ice)
-  call EOSWaterInternalEnergyIce(hyd_auxvar%temp, U_ice, du_ice_dT)
-  U_ice = U_ice * 1.d-3
+  call EOSWaterInternalEnergyIce(hyd_auxvar%temp, U_ice, du_ice_dT,du_ice_dP,ierr)
+  U_ice = U_ice * 1.d-3 ! J/mol to MJ/kmol
   hyd_auxvar%xmol(wid,iid) = 1.d0
   hyd_auxvar%xmol(gid,iid) = 0.d0
   !call EOSWaterDensityIcePainter(hyd_auxvar%temp,hyd_auxvar%pres(lid), &
