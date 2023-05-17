@@ -72,6 +72,7 @@ module Reaction_Sandbox_Cyber_class
     PetscBool :: mobile_biomass
     PetscReal :: inhibit_by_nh4
     PetscReal :: inhibition_threshold_f
+    PetscReal :: inhibit_by_reactants
     PetscInt, pointer :: nrow(:)
     PetscInt, pointer :: ncol(:)
     PetscInt, pointer :: irow(:,:)
@@ -153,6 +154,7 @@ function CyberCreate()
   CyberCreate%mobile_biomass = PETSC_FALSE
   CyberCreate%inhibit_by_nh4 = UNINITIALIZED_DOUBLE
   CyberCreate%inhibition_threshold_f = UNINITIALIZED_DOUBLE
+  CyberCreate%inhibit_by_reactants = UNINITIALIZED_DOUBLE
   nullify(CyberCreate%nrow)
   nullify(CyberCreate%ncol)
   nullify(CyberCreate%irow)
@@ -282,11 +284,15 @@ subroutine CyberRead(this,input,option)
       case('INHIBIT_BY_NH4')
         call InputReadDouble(input,option,this%inhibit_by_nh4)
         call InputErrorMsg(input,option,'NH4 inhibition concentration', &
-                           error_string)
+                           trim(error_string)//','//trim(word))
       case('INHIBITION_SCALING_FACTOR')
         call InputReadDouble(input,option,this%inhibition_threshold_f)
         call InputErrorMsg(input,option,'NH4 inhibition threshold &
                            &scaling factor',error_string)
+      case('INHIBIT_BY_REACTANTS')
+        call InputReadDouble(input,option,this%inhibit_by_reactants)
+        call InputErrorMsg(input,option,'reactant inhibition concentration', &
+                           trim(error_string)//','//trim(word))
       case default
         call InputKeywordUnrecognized(input,word,error_string,option)
     end select
@@ -489,6 +495,10 @@ subroutine CyberSetup(this,reaction,option)
   this%icol(4,irxn) = this%o2_id
   endif
 
+  if (Initialized(this%inhibit_by_reactants) .and. &
+      Uninitialized(this%inhibit_by_nh4)) then
+    this%inhibit_by_nh4 = this%inhibit_by_reactants
+  endif
   if (Initialized(this%inhibit_by_nh4) .and. &
       Uninitialized(this%inhibition_threshold_f)) then
     this%inhibition_threshold_f = 1.d5/this%inhibit_by_nh4
@@ -616,6 +626,10 @@ subroutine CyberReact(this,Residual,Jacobian,compute_derivative, &
   PetscReal :: k1_scaled, k2_scaled, k3_scaled, k_deg_scaled
   PetscReal :: volume, rate_scale
   PetscReal :: dX_dbiomass
+  PetscReal :: doc_inhibition, drate_ddoc_inhib
+  PetscReal :: no3_inhibition, drate_dno3_inhib
+  PetscReal :: no2_inhibition, drate_dno2_inhib
+  PetscReal :: o2_inhibition, drate_do2_inhib
 
   PetscReal :: nh4_inhibition, dnh4_inhibition_dnh4
   PetscReal :: tempreal
@@ -668,9 +682,27 @@ subroutine CyberReact(this,Residual,Jacobian,compute_derivative, &
     dX_dbiomass =  1.d0
   endif
 
+  ! do not worry about molarity to molality or activity coefficients
+  if (Initialized(this%inhibit_by_reactants)) then
+    call ReactionThresholdInhibition(Cdoc,this%inhibit_by_reactants, &
+                                     doc_inhibition, drate_ddoc_inhib)
+    call ReactionThresholdInhibition(Co2,this%inhibit_by_reactants, &
+                                     o2_inhibition, drate_do2_inhib)
+    call ReactionThresholdInhibition(Cno3,this%inhibit_by_reactants, &
+                                     no3_inhibition, drate_dno3_inhib)
+    call ReactionThresholdInhibition(Cno2,this%inhibit_by_reactants, &
+                                     no2_inhibition, drate_dno2_inhib)
+  else
+    doc_inhibition = 1.d0; drate_ddoc_inhib = 0.d0
+    o2_inhibition = 1.d0;  drate_do2_inhib = 0.d0
+    no3_inhibition = 1.d0; drate_dno3_inhib = 0.d0
+    no2_inhibition = 1.d0; drate_dno2_inhib = 0.d0
+  endif
+
   nh4_inhibition = 1.d0
   dnh4_inhibition_dnh4 = 0.d0
   if (Initialized(this%inhibit_by_nh4)) then
+#if 1
     tempreal = (Cnh4 - this%inhibit_by_nh4)*this%inhibition_threshold_f
     nh4_inhibition = 0.5d0 + atan(tempreal)/PI
     ! derivative of atan(X) = 1 / (1 + X^2) dX
@@ -678,6 +710,14 @@ subroutine CyberReact(this,Residual,Jacobian,compute_derivative, &
                            rt_auxvar%pri_act_coef(this%nh4_id) * &
                            molality_to_molarity / &
                            (1.d0 + tempreal*tempreal) / PI
+#else
+    call ReactionThresholdInhibition(Cnh4,this%inhibit_by_nh4, &
+                                     nh4_inhibition, &
+                                     dnh4_inhibition_dnh4)
+    dnh4_inhibition_dnh4 = dnh4_inhibition_dnh4 * &
+                           rt_auxvar%pri_act_coef(this%nh4_id) * &
+                           molality_to_molarity
+#endif
   endif
 
   k1_scaled = this%k1 * temperature_scaling_factor
@@ -690,21 +730,21 @@ subroutine CyberReact(this,Residual,Jacobian,compute_derivative, &
   r1docmonod = Cdoc/r1docmonod_denom
   r1no3monod_denom = Cno3+this%Ka1
   r1no3monod = Cno3/r1no3monod_denom
-  r1kin = k1_scaled*r1docmonod*r1no3monod
+  r1kin = k1_scaled*r1docmonod*r1no3monod*doc_inhibition*no3_inhibition
 
   ! NO2- -> N2
   r2docmonod_denom = Cdoc+this%Kd2
   r2docmonod = Cdoc/r2docmonod_denom
   r2no2monod_denom = Cno2+this%Ka2
   r2no2monod = Cno2/r2no2monod_denom
-  r2kin = k2_scaled*r2docmonod*r2no2monod
+  r2kin = k2_scaled*r2docmonod*r2no2monod*doc_inhibition*no2_inhibition
 
   ! O2 ->
   r3docmonod_denom = Cdoc+this%Kd3
   r3docmonod = Cdoc/r3docmonod_denom
   r3o2monod_denom = Co2+this%Ka3
   r3o2monod = Co2/r3o2monod_denom
-  r3kin = k3_scaled*r3docmonod*r3o2monod
+  r3kin = k3_scaled*r3docmonod*r3o2monod*doc_inhibition*o2_inhibition
 
   sumkin = r1kin + r2kin + r3kin
   sumkinsq = sumkin * sumkin
@@ -798,27 +838,39 @@ subroutine CyberReact(this,Residual,Jacobian,compute_derivative, &
     dr1kin_ddoc = k1_scaled * &
                   (r1docmonod/Cdoc - r1docmonod/r1docmonod_denom) * &
                   r1no3monod * &
-                  rt_auxvar%pri_act_coef(this%doc_id)*molality_to_molarity
+                  rt_auxvar%pri_act_coef(this%doc_id)*molality_to_molarity * &
+                  doc_inhibition * no3_inhibition + &
+                  r1kin/doc_inhibition*drate_ddoc_inhib
     dr1kin_dno3 = k1_scaled * &
                   r1docmonod * &
                   (r1no3monod/Cno3 - r1no3monod/r1no3monod_denom) * &
-                  rt_auxvar%pri_act_coef(this%no3_id)*molality_to_molarity
+                  rt_auxvar%pri_act_coef(this%no3_id)*molality_to_molarity * &
+                  doc_inhibition * no3_inhibition + &
+                  r1kin/no3_inhibition*drate_dno3_inhib
     dr2kin_ddoc = k2_scaled * &
                   (r2docmonod/Cdoc - r2docmonod/r2docmonod_denom) * &
                   r2no2monod * &
-                  rt_auxvar%pri_act_coef(this%doc_id)*molality_to_molarity
+                  rt_auxvar%pri_act_coef(this%doc_id)*molality_to_molarity * &
+                  doc_inhibition * no2_inhibition + &
+                  r2kin/doc_inhibition*drate_ddoc_inhib
     dr2kin_dno2 = k2_scaled * &
                   r2docmonod * &
                   (r2no2monod/Cno2 - r2no2monod/r2no2monod_denom) * &
-                  rt_auxvar%pri_act_coef(this%no2_id)*molality_to_molarity
+                  rt_auxvar%pri_act_coef(this%no2_id)*molality_to_molarity * &
+                  doc_inhibition * no2_inhibition + &
+                  r1kin/no2_inhibition*drate_dno2_inhib
     dr3kin_ddoc = k3_scaled * &
                   (r3docmonod/Cdoc - r3docmonod/r3docmonod_denom) * &
                   r3o2monod * &
-                  rt_auxvar%pri_act_coef(this%doc_id)*molality_to_molarity
+                  rt_auxvar%pri_act_coef(this%doc_id)*molality_to_molarity * &
+                  doc_inhibition * o2_inhibition + &
+                  r3kin/doc_inhibition*drate_ddoc_inhib
     dr3kin_do2 = k3_scaled * &
                   r3docmonod * &
                   (r3o2monod/Co2 - r3o2monod/r3o2monod_denom) * &
-                  rt_auxvar%pri_act_coef(this%o2_id)*molality_to_molarity
+                  rt_auxvar%pri_act_coef(this%o2_id)*molality_to_molarity * &
+                  doc_inhibition * o2_inhibition + &
+                  r1kin/o2_inhibition*drate_do2_inhib
 
     du_denom_dr = -1.d0/sumkinsq
     du1_dr1kin = 1.d0/sumkin + r1kin*du_denom_dr

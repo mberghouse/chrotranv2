@@ -422,7 +422,8 @@ module Reaction_Aux_module
             IonExchangeCationCreate, &
             ReactionInputRecord, &
             ReactionDestroy, &
-            LogKeh
+            LogKeh, &
+            ReactionThresholdInhibition
              
 contains
 
@@ -1855,6 +1856,35 @@ subroutine ReactionInputRecord(rxn)
   endif
   
 end subroutine ReactionInputRecord
+
+ ! ************************************************************************** !
+ 
+subroutine ReactionThresholdInhibition(concentration,threshold_concentration, &
+                                       inhibition_factor,derivative)
+  !
+  ! Calculates threshold inhibition for a reactant
+  !
+  ! Author: Glenn Hammond
+  ! Date: 05/17/23
+  !
+
+  implicit none
+
+  PetscReal :: concentration
+  PetscReal :: threshold_concentration
+  PetscReal :: inhibition_factor
+  PetscReal :: derivative
+
+  PetscReal :: threshold_f
+  PetscReal :: tempreal
+
+  threshold_f = 1.d5/threshold_concentration
+  tempreal = (concentration-threshold_concentration)*threshold_f
+  inhibition_factor = 0.5d0 + atan(tempreal)/PI
+  ! derivative of atan(X) = 1 / (1 + X^2) dX
+  derivative = threshold_f / (1.d0+tempreal*tempreal) / PI
+
+end subroutine ReactionThresholdInhibition
 
 ! ************************************************************************** !
 
