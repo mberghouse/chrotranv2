@@ -431,8 +431,8 @@ subroutine SWERHSFunctionInternalConn(f,surface_realization,max_courant_num)
 
       ! If 'h' up and down of the edge are both below the given threshold,
       ! assume both cells are dry and skip them
-      if ((surf_global_auxvars(local_id_up)%h < tiny_h .and. &
-           surf_global_auxvars(local_id_dn)%h < tiny_h)) cycle
+      if ((surf_global_auxvars(ghosted_id_up)%h < tiny_h .and. &
+           surf_global_auxvars(ghosted_id_dn)%h < tiny_h)) cycle
 
 
 
@@ -466,8 +466,8 @@ subroutine SWERHSFunctionInternalConn(f,surface_realization,max_courant_num)
       area_up = area_p(ghosted_id_up)
       area_dn = area_p(ghosted_id_dn)
 
-      call ComputeRoeFlux(swe_auxvars(local_id_up),surf_global_auxvars(local_id_up), &
-                          swe_auxvars(local_id_dn),surf_global_auxvars(local_id_dn), &
+      call ComputeRoeFlux(swe_auxvars(ghosted_id_up),surf_global_auxvars(ghosted_id_up), &
+                          swe_auxvars(ghosted_id_dn),surf_global_auxvars(ghosted_id_dn), &
                           sn,cn,option,flux,amax)
 
       cnum = amax * edge_len / min(area_up, area_dn) * option%flow_dt;
@@ -647,7 +647,7 @@ subroutine SWERHSFunctionBoundaryConn(f,surface_realization,max_courant_num)
       edge_len = cur_connection_set%area(iconn)
       area_dn = area_p(ghosted_id_dn)
 
-      call ComputeUpwindBCAuxVar(swe_auxvars(local_id_dn),surf_global_auxvars(local_id_dn),&
+      call ComputeUpwindBCAuxVar(swe_auxvars(ghosted_id_dn),surf_global_auxvars(ghosted_id_dn),&
                                  swe_auxvars_bc(sum_connection),surf_global_auxvars_bc(sum_connection),&
                                  cn,sn)
 
