@@ -2008,7 +2008,7 @@ subroutine CondControlAssignFlowInitCondSurface(surface_realization)
   xx_p(:) = UNINITIALIZED_DOUBLE
 
   select case(option%iflowmode)
-  case (SWE_MODE)
+  case (SWE_MODE,DWAVE_MODE)
 
     initial_condition => patch%initial_condition_list%first
     do

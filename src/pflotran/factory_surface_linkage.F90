@@ -6,6 +6,7 @@ module Factory_Surface_linage_module
   use PFLOTRAN_Constants_module
   use PM_Surface_Flow_class
   use PM_SWE_class
+  use PM_DWave_class
 
   implicit none
 
@@ -209,6 +210,8 @@ subroutine FactorySurfaceLinkAddPMCSurfaceFlow(simulation,pm_surface_flow,pmc_na
 
   select type(pm_surface_flow)
     class is (pm_swe_type)
+      pmc_surface%timestepper => TimestepperTSCreate()
+    class is (pm_dwave_type)
       pmc_surface%timestepper => TimestepperTSCreate()
     class default
       option%io_buffer = 'Unsupported PM in FactorySurfaceLinkSetupPMCLinages'

@@ -93,6 +93,7 @@ subroutine FactorySurfaceSetFlowMode(pm_surface_flow,option)
   use PM_Surface_Flow_class
   use PM_Base_class
   use PM_SWE_class
+  use PM_DWave_class
   use Option_module
 
   implicit none
@@ -114,6 +115,13 @@ subroutine FactorySurfaceSetFlowMode(pm_surface_flow,option)
       option%iflowmode = SWE_MODE
       option%nphase = 1
       option%nflowdof = 3
+      option%nflowspec = 1
+      option%use_isothermal = PETSC_TRUE
+
+    class is (pm_dwave_type)
+      option%iflowmode = DWAVE_MODE
+      option%nphase = 1
+      option%nflowdof = 1
       option%nflowspec = 1
       option%use_isothermal = PETSC_TRUE
 

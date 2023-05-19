@@ -28,6 +28,7 @@ subroutine FactorySurfaceReadFlowPM(input,option,pm)
 
   use PM_Base_class
   use PM_SWE_class
+  use PM_DWave_class
   use Init_Common_module
 
   implicit none
@@ -58,6 +59,8 @@ subroutine FactorySurfaceReadFlowPM(input,option,pm)
         select case(word)
           case('SWE')
             pm => PMSWECreate()
+          case ('DWAVE')
+            pm => PMDWaveCreate()
           case default
             error_string = trim(error_string) // ',MODE'
             call InputKeywordUnrecognized(input,word,error_string,option)

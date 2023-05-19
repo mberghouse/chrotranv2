@@ -1531,7 +1531,7 @@ subroutine FlowConditionRead(condition,input,option)
       if (associated(energy_rate)) &
         condition%itype(TWO_INTEGER) = energy_rate%itype
 
-    case (SWE_MODE)
+    case (SWE_MODE,DWAVE_MODE)
       if (.not.associated(pressure) ) then
         option%io_buffer = 'pressure condition is null in &
                            &condition: ' // trim(condition%name)

@@ -26,8 +26,11 @@ subroutine InitSurfaceFlowSetupRealization(simulation)
   use Realization_Surface_class
   use Simulation_Surface_class
   use PM_Base_class
+  use PM_DWave_class
   use PM_SWE_class
   use SWE_module
+  use DWave_module
+  use DWave_module
 
   implicit none
 
@@ -53,6 +56,8 @@ subroutine InitSurfaceFlowSetupRealization(simulation)
   select type(pm => pm_list)
     class is (pm_swe_type)
       call SWESetup(surface_realization)
+    class is (pm_dwave_type)
+      call DWaveSetup(surface_realization)
     class default
       option%io_buffer = 'Unknown surface flow mode found during setup'
       call PrintErrMsg(option)
@@ -64,6 +69,8 @@ subroutine InitSurfaceFlowSetupRealization(simulation)
   select case(option%iflowmode)
   case (SWE_MODE)
     call SWEUpdateAuxVars(surface_realization)
+  case (DWAVE_MODE)
+    call DWaveUpdateAuxVars(surface_realization)
   case default
     option%io_buffer = 'Unknown flowmode found during <Mode>UpdateAuxVars'
     call PrintErrMsg(option)

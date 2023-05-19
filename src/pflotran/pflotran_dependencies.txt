@@ -315,6 +315,16 @@ driver.o : \
   communicator_aux.o \
   pflotran_constants.o \
   print.o
+dwave.o :\
+  connection.o \
+  coupler.o \
+  field_surface.o \
+  grid.o \
+  option.o \
+  output_aux.o \
+  patch.o \
+  surface_global_aux.o \
+  realization_surface.o 
 eos.o : \
   co2_span_wagner.o \
   communicator_aux.o \
@@ -681,6 +691,7 @@ factory_surface.o : \
   init_surface_flow.o \
   option.o \
   pm_base.o \
+  pm_dwave.o \
   pm_surface_flow.o \
   pm_swe.o \
   realization_subsurface.o \
@@ -694,6 +705,7 @@ factory_surface_linkage.o : \
   pflotran_constants.o \
   pmc_surface.o \
   pm_base.o \
+  pm_dwave.o \
   pm_surface_flow.o \
   pm_swe.o \
   realization_surface.o \
@@ -704,6 +716,8 @@ factory_surface_read.o : \
   material_surface.o \
   option.o \
   pm_base.o \
+  pm_dwave.o \
+  pm_swe.o \
   simulation_subsurface.o \
   simulation_surface.o \
   string.o
@@ -1254,9 +1268,11 @@ init_surface.o : \
   hdf5.o
 init_surface_flow.o : \
   condition_control.o \
+  dwave.o \
   option.o \
   patch.o \
   pm_base.o \
+  pm_dwave.o \
   pm_swe.o \
   realization_surface.o \
   simulation_surface.o
@@ -1907,6 +1923,19 @@ pm_base.o : \
 pm_base_pointer.o : \
   pflotran_constants.o \
   pm_base.o
+pm_dwave.o : \
+  convergence.o \
+  field.o \
+  grid.o \
+  input_aux.o \
+  option.o \
+  patch.o \
+  pflotran_constants.o \
+  pm_base.o \
+  pm_surface_flow.o \
+  realization_subsurface.o \
+  string.o \
+  utility.o
 pm_ert.o : \
   communicator_base.o \
   connection.o \

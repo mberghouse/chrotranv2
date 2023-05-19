@@ -113,6 +113,7 @@ subroutine PMCSurfaceSetupSolvers_TS(this)
   use PM_Base_class
   use PM_Surface_Flow_class
   use PM_SWE_class
+  use PM_DWave_class
   use Solver_module
   use Timestepper_Base_class
   use Timestepper_TS_class
@@ -173,9 +174,38 @@ subroutine PMCSurfaceSetupSolvers_TS(this)
 
       call PrintMsg(option,"  Finished setting up FLOW SNES ")
 
+    class is (pm_dwave_type)
+      call PrintMsg(option,"  Beginning setup of Diffusion Wave TS ")
+
+      select case(option%iflowmode)
+        case(DWAVE_MODE)
+        case default
+          option%io_buffer = 'Timestepper TS unsupported for mode: '// option%flowmode
+          call PrintErrMsg(option)
+      end select
+
+      write(option%io_buffer,'(" number of dofs = ",i3,", number of &
+                &phases = ",i3,i2)') option%nflowdof,option%nphase
+      call PrintMsg(option)
+      select case(option%iflowmode)
+        case(DWAVE_MODE)
+          option%io_buffer = " mode = DWave: h"
+      end select
+      call PrintMsg(option)
+
+      call TSSetOptionsPrefix(solver%ts,"dwave_",ierr);CHKERRQ(ierr)
+      call TSSetFromOptions(solver%ts,ierr);CHKERRQ(ierr)
+
+      call SolverCheckCommandLine(solver)
+
+      call TSSetSolution(solver%ts,this%pm_ptr%pm%solution_vec,ierr);CHKERRQ(ierr)
+      call TSSetRHSFunction(solver%ts,this%pm_ptr%pm%residual_vec, &
+                            PMRHSFunctionPtr,this%pm_ptr,ierr);CHKERRQ(ierr)
+
+      call PrintMsg(option,"  Finished setting up FLOW SNES ")
     class default
 
-      option%io_buffer = 'Timestepper TS supported only for pm_swe_type '
+      option%io_buffer = 'Timestepper TS supported only for pm_swe_type and pm_dwave_type'
       call PrintErrMsg(option)
 
   end select
