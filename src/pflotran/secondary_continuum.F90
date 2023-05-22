@@ -2239,6 +2239,9 @@ subroutine SecondaryGenAuxVarCompute(sec_gen_vars,option)
   PetscInt :: ngcells, ncomp
   PetscInt :: pivot(option%nflowaqcomp,sec_gen_vars%ncells)
 
+  ngcells = sec_gen_vars%ncells
+  ncomp = option%nflowaqcomp
+
   coeff_left = 0.d0
   coeff_diag = 0.d0
   coeff_right = 0.d0
@@ -2530,7 +2533,7 @@ subroutine SecondaryHeatJacobian(sec_heat_vars,therm_conductivity, &
   ! Calculates the source term jacobian contribution
   ! due to secondary continuum in the primary continuum residual
   !
-  ! Author: David Fukuyama
+  ! Author: Satish Karra, LANL
   ! Date: 06/6/12
   !
 
@@ -2594,7 +2597,7 @@ subroutine SecondaryHeatJacobian(sec_heat_vars,therm_conductivity, &
   do i = 2, ngcells
     m = coeff_left(i)/coeff_diag(i-1)
     coeff_diag(i) = coeff_diag(i) - m*coeff_right(i-1)
-    ! We do not have to calculate rhs termso
+    ! We do not have to calculate rhs terms
   enddo
 
   ! We need the temperature derivative at the outer-most node (closest
