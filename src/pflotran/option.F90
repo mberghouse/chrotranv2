@@ -60,6 +60,7 @@ module Option_module
     PetscInt :: phase_map(MAX_PHASE)
     PetscInt :: nflowdof
     PetscInt :: nflowspec
+    PetscInt :: nflowaqcomp
     PetscInt :: nmechdof
     PetscInt :: nsec_cells
     PetscInt :: num_table_indices

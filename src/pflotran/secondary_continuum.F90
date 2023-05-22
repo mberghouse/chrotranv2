@@ -1,5 +1,4 @@
 ! added by S. Karra 07/11/12
-
 module Secondary_Continuum_module
 
 #include "petsc/finclude/petscsnes.h"
@@ -744,20 +743,19 @@ subroutine SecondaryGenAuxVarInit(multicontinuum, &
   type(coupler_type), pointer :: initial_condition
   type(option_type), pointer :: option
 
-  
+  PetscInt :: cell
+  PetscReal :: area_per_vol
   PetscReal :: epsilon
   PetscReal :: half_matrix_width
-  PetscReal :: area_per_vol
-  
+
   call SecondaryContinuumSetProperties( &
-       sec_gen_vars%sec_continuum, &
-       multicontinuum%name, &
-       half_matrix_width, &
-       multicontinuum%matrix_block_size, &
-       multicontinuum%fracture_spacing, &
-       multicontinuum%radius, &
-       multicontinuum%porosity, &
-       option)
+        sec_gen_vars%sec_continuum, &
+        multicontinuum%name, &
+        half_matrix_width, &
+        multicontinuum%matrix_block_size, &
+        multicontinuum%fracture_spacing, &
+        multicontinuum%radius, &
+        multicontinuum%porosity, option)
 
   sec_gen_vars%ncells = multicontinuum%ncells
   sec_gen_vars%half_aperture = multicontinuum%half_aperture
@@ -769,7 +767,8 @@ subroutine SecondaryGenAuxVarInit(multicontinuum, &
   allocate(sec_gen_vars%vol(sec_gen_vars%ncells))
   allocate(sec_gen_vars%dm_minus(sec_gen_vars%ncells))
   allocate(sec_gen_vars%dm_plus(sec_gen_vars%ncells))
-  allocate(sec_gen_vars%sec_continuum%distance(sec_gen_vars%ncells))
+  allocate(sec_gen_vars%sec_continuum% &
+             distance(sec_gen_vars%ncells))
 
   call SecondaryContinuumType(sec_gen_vars%sec_continuum, &
                               sec_gen_vars%ncells, &
@@ -781,35 +780,58 @@ subroutine SecondaryGenAuxVarInit(multicontinuum, &
                               sec_gen_vars%epsilon, &
                               sec_gen_vars%log_spacing, &
                               sec_gen_vars%outer_spacing, &
-                              area_per_vol, option)
+                              area_per_vol,option)
+  sec_gen_vars%interfacial_area = area_per_vol* &
+         (1.d0 - sec_gen_vars%epsilon)*multicontinuum% &
+         area_scaling
 
-  sec_gen_vars%interfacial_area = area_per_vol * &
-       (1.d0 - sec_gen_vars%epsilon) * multicontinuum%area_scaling
+  ! ! Initializing the secondary RT auxvars
+  ! allocate(sec_gen_vars%sec_rt_auxvar(sec_gen_vars%ncells))
+  ! do cell = 1, sec_gen_vars%ncells
+  !   call RTAuxVarInit(sec_gen_vars%sec_rt_auxvar(cell),reaction,option)
+  ! enddo
 
-  allocate(sec_gen_vars%sec_conc(sec_gen_vars%ncells))
+  allocate(sec_gen_vars%sec_jac(option%nflowaqcomp,option%nflowaqcomp))
 
-  if (option%flow%set_secondary_init_conc) then
-     sec_gen_vars%sec_conc = multicontinuum%init_conc
+  ! Allocate diagonal terms
+  allocate(sec_gen_vars%cxm(option%nflowaqcomp,option%nflowaqcomp,&
+           sec_gen_vars%ncells))
+  allocate(sec_gen_vars%cxp(option%nflowaqcomp,option%nflowaqcomp,&
+           sec_gen_vars%ncells))
+  allocate(sec_gen_vars%cdl(option%nflowaqcomp,option%nflowaqcomp,&
+           sec_gen_vars%ncells))
+  allocate(sec_gen_vars% &
+           r(option%nflowaqcomp*sec_gen_vars%ncells))
+  allocate(sec_gen_vars% &
+           updated_mole_fracs(option%nflowaqcomp,sec_gen_vars%ncells))
+
+  sec_gen_vars%sec_jac_update = PETSC_FALSE
+  sec_gen_vars%sec_jac = 0.d0
+  sec_gen_vars%cxm = 0.d0
+  sec_gen_vars%cxp = 0.d0
+  sec_gen_vars%cdl = 0.d0
+  sec_gen_vars%r = 0.d0
+
+  allocate(sec_gen_vars%sec_mole_fracs(option%nflowaqcomp,sec_gen_vars%ncells))
+
+  if (option%flow%set_secondary_init_mole_frac) then
+     sec_gen_vars%sec_mole_fracs(1,:) = multicontinuum%init_mole_frac
   else
-!     sec_gen_vars%sec_conc = initial_condition%flow_condition%mole_fraction%dataset%rarray(1)
+     !sec_gen_vars%sec_mole_frac = initial_condition%flow_condition%mole_fraction%dataset%rarray(1)
   endif
-!   if (general_salt) then
-!     if (option%flow%set_secondary_init_salt_conc) then
-!        sec_gen_vars%sec_conc = multicontinuum%init_salt_conc
-!     else
-!       sec_gen_vars%sec_conc = initial_condition%flow_condition%salt_fraction%dataset%rarray(1)
-!     endif
-!   endif
+  !if (general_salt) then
+    if (option%flow%set_secondary_init_salt_mole_frac) then
+       sec_gen_vars%sec_mole_fracs(2,:) = multicontinuum%init_salt_mole_frac
+    else
+      !sec_gen_vars%sec_salt_mole_frac = initial_condition%flow_condition%salt_mole_fraction%dataset%rarray(1)
+    endif
+  !endif
   if (option%flow%set_secondary_init_temp) then
      sec_gen_vars%sec_temp = multicontinuum%init_temp
   else
      sec_gen_vars%sec_temp = initial_condition%flow_condition%temperature%dataset%rarray(1)
   endif
-  if (option%flow%set_secondary_init_pres) then
-     sec_gen_vars%sec_pres = multicontinuum%init_pres
-  else
-     sec_gen_vars%sec_pres = initial_condition%flow_condition%pressure%dataset%rarray(1)
-  endif
+
 
 end subroutine SecondaryGenAuxVarInit
   
@@ -984,7 +1006,6 @@ subroutine SecondaryRTResJacMulti(sec_transport_vars,auxvar, &
   dtotal_prim = auxvar%aqueous%dtotal(:,:,:)
   pordt = porosity/option%tran_dt * 1.d3
   pordiff = porosity*diffusion_coefficient * 1.d3 * global_auxvar%sat
-
   call RTAuxVarInit(rt_auxvar,reaction,option)
   do i = 1, ngcells
     call RTAuxVarCopy(rt_auxvar,sec_transport_vars%sec_rt_auxvar(i),option)
@@ -2198,40 +2219,68 @@ subroutine SecondaryGenAuxVarCompute(sec_gen_vars,option)
   !
 
   use Option_module
-
+  use Block_Solve_module
+  use Block_Tridiag_module
+  use Utility_module
   implicit none
 
   type(sec_gen_type) :: sec_gen_vars
   type(option_type) :: option
 
-  PetscReal :: coeff_left(sec_gen_vars%ncells)
-  PetscReal :: coeff_diag(sec_gen_vars%ncells)
-  PetscReal :: coeff_right(sec_gen_vars%ncells)
-  PetscReal :: rhs(sec_gen_vars%ncells)
-  PetscReal :: sec_conc(sec_gen_vars%ncells)
-  PetscReal :: area(sec_gen_vars%ncells)
-  PetscReal :: vol(sec_gen_vars%ncells)
-  PetscReal :: dm_plus(sec_gen_vars%ncells)
-  PetscReal :: dm_minus(sec_gen_vars%ncells)
-  PetscInt :: i, ngcells
-  PetscReal :: area_fm
-  PetscReal :: alpha, therm_conductivity, dencpr
-  PetscReal :: conc_primary_node
-  PetscReal :: m
-
-  ngcells = sec_gen_vars%ncells
-  area = sec_gen_vars%area
-  vol = sec_gen_vars%vol
-  dm_plus = sec_gen_vars%dm_plus
-  dm_minus = sec_gen_vars%dm_minus
-  area_fm = sec_gen_vars%interfacial_area
+  PetscReal :: coeff_left(option%nflowaqcomp,option%nflowaqcomp, &
+                 sec_gen_vars%ncells)
+  PetscReal :: coeff_diag(option%nflowaqcomp,option%nflowaqcomp, &
+                 sec_gen_vars%ncells)
+  PetscReal :: coeff_right(option%nflowaqcomp,option%nflowaqcomp, &
+                 sec_gen_vars%ncells)
+  PetscReal :: rhs(sec_gen_vars%ncells*option%nflowaqcomp)
+  PetscReal :: conc_upd(option%nflowaqcomp,sec_gen_vars%ncells)
+  PetscInt :: i, j, n
+  PetscInt :: ngcells, ncomp
+  PetscInt :: pivot(option%nflowaqcomp,sec_gen_vars%ncells)
 
   coeff_left = 0.d0
   coeff_diag = 0.d0
   coeff_right = 0.d0
   rhs = 0.d0
-  sec_conc = 0.d0
 
+  conc_upd = sec_gen_vars%updated_mole_fracs
+
+  ! Use the stored coefficient matrices from LU decomposition of the
+  ! block triagonal sytem
+  coeff_left = sec_gen_vars%cxm
+  coeff_right = sec_gen_vars%cxp
+  coeff_diag = sec_gen_vars%cdl
+  rhs = sec_gen_vars%r
+
+  select case (option%secondary_continuum_solver)
+    case(1)
+      call bl3dsolb(ngcells,ncomp,coeff_right,coeff_diag,coeff_left,pivot, &
+                    ONE_INTEGER,rhs)
+    case(2)
+      call solbtb(ncomp,ngcells,ncomp,coeff_diag,coeff_right,coeff_left, &
+                  pivot,rhs)
+    case(3)
+      do i = ngcells-1, 1, -1
+        rhs(i) = (rhs(i) - coeff_right(ncomp,ncomp,i)*rhs(i+1))/ &
+                             coeff_diag(ncomp,ncomp,i)
+      enddo
+    case default
+      option%io_buffer = 'SECONDARY_CONTINUUM_SOLVER can be only ' // &
+                         'HINDMARSH or KEARST. For single component'// &
+                         'chemistry THOMAS can be used.'
+      call PrintErrMsg(option)
+  end select
+
+  do j = 1, ncomp
+    do i = 1, ngcells
+      n = j + (i - 1)*ncomp
+      conc_upd(j,i) = rhs(n) + conc_upd(j,i)
+      !if (conc_upd(j,i) < 0.d0) conc_upd(j,i) = 1.d-8
+    enddo
+  enddo
+
+  sec_gen_vars%updated_mole_fracs = conc_upd
 
 
 end subroutine SecondaryGenAuxVarCompute
@@ -2545,7 +2594,7 @@ subroutine SecondaryHeatJacobian(sec_heat_vars,therm_conductivity, &
   do i = 2, ngcells
     m = coeff_left(i)/coeff_diag(i-1)
     coeff_diag(i) = coeff_diag(i) - m*coeff_right(i-1)
-    ! We do not have to calculate rhs terms
+    ! We do not have to calculate rhs termso
   enddo
 
   ! We need the temperature derivative at the outer-most node (closest
@@ -2562,10 +2611,8 @@ end subroutine SecondaryHeatJacobian
 
 ! ************************************************************************** !
 
-subroutine SecondaryGenResidual(sec_gen_vars, &
-                                therm_conductivity,dencpr, &
-                                conc_primary_node,option,res_conc)
-
+subroutine SecondaryGenResidual(sec_gen_vars,global_auxvar,gen_auxvar,general_parameter,&
+                                prim_vol,porosity,option)
   ! Calculates the source term contribution due to secondary
   ! continuum in the primary continuum residual
   !
@@ -2573,27 +2620,98 @@ subroutine SecondaryGenResidual(sec_gen_vars, &
   ! Date 05/02/23
   
   use Option_module
+  use Material_Aux_module
+  use General_Aux_module
+  use Global_Aux_module
+  use Block_Solve_module
+  use Block_Tridiag_module
+  use Utility_module
 
   implicit none
 
   type(sec_gen_type) :: sec_gen_vars
   type(option_type) :: option
-  PetscReal :: therm_conductivity,dencpr,conc_primary_node
-  PetscReal :: res_conc
-
-  PetscReal :: coeff_left(sec_gen_vars%ncells)
-  PetscReal :: coeff_diag(sec_gen_vars%ncells)
-  PetscReal :: coeff_right(sec_gen_vars%ncells)
-  PetscReal :: rhs(sec_gen_vars%ncells)
+  type(global_auxvar_type) :: global_auxvar
+  type(general_auxvar_type) :: gen_auxvar
+  type(general_parameter_type) :: general_parameter
+  PetscReal :: coeff_left(option%nflowaqcomp,option%nflowaqcomp, & ! dissolved species diffusion only
+                          sec_gen_vars%ncells)
+  PetscReal :: coeff_diag(option%nflowaqcomp,option%nflowaqcomp, &
+                          sec_gen_vars%ncells)
+  PetscReal :: coeff_right(option%nflowaqcomp,option%nflowaqcomp, &
+                          sec_gen_vars%ncells)
+  PetscReal :: beta_left(option%nflowaqcomp,option%nflowaqcomp, &
+                          sec_gen_vars%ncells)
+  PetscReal :: alpha_diag(option%nflowaqcomp,option%nflowaqcomp, &
+                          sec_gen_vars%ncells)
+  PetscReal :: gamma_right(option%nflowaqcomp,option%nflowaqcomp, &
+                           sec_gen_vars%ncells)
+  PetscReal :: res(sec_gen_vars%ncells*(option%nflowaqcomp))
+  PetscReal :: rhs(sec_gen_vars%ncells*(option%nflowaqcomp))
+  PetscReal :: D_M(option%nflowaqcomp,option%nflowaqcomp)
+  PetscReal :: identity(option%nflowaqcomp,option%nflowaqcomp)
+  PetscReal :: a_m(option%nflowaqcomp,option%nflowaqcomp)
+  PetscReal :: sec_jac(option%nflowaqcomp,option%nflowaqcomp)
+  PetscReal :: inv_D_M(option%nflowaqcomp,option%nflowaqcomp)
+  PetscReal :: conc_upd(option%nflowaqcomp,sec_gen_vars%ncells)
+  PetscReal :: conc_prev(option%nflowaqcomp,sec_gen_vars%ncells)
+  PetscReal :: conc_current_M(option%nflowaqcomp)
+  PetscReal :: conc_primary_node(option%nflowaqcomp)
   PetscReal :: area(sec_gen_vars%ncells)
   PetscReal :: vol(sec_gen_vars%ncells)
   PetscReal :: dm_plus(sec_gen_vars%ncells)
   PetscReal :: dm_minus(sec_gen_vars%ncells)
-  PetscInt :: i, ngcells
-  PetscReal :: area_fm
-  PetscReal :: alpha
+  PetscReal :: res_gen(option%nflowaqcomp)
+  PetscReal :: jac_gen(option%nflowaqcomp,option%nflowaqcomp)
+  PetscReal :: dtotal(option%nflowaqcomp,option%nflowaqcomp,sec_gen_vars%ncells,1)
+  PetscReal :: dconc_prim(option%nflowaqcomp,option%nflowaqcomp,1)
+  PetscInt :: i, j, k, n, l, igas
+  PetscInt :: ngcells, ncomp, nphase, icomp
+  PetscReal :: area_fm, RT
+  PetscReal :: porosity, den
+  PetscReal :: pordt, pordiff(1)
+  PetscReal :: prim_vol ! volume of primary grid cell
+  PetscReal :: dCsec_dCprim(option%nflowaqcomp,option%nflowaqcomp)
+  PetscReal :: dPsisec_dCprim(option%nflowaqcomp,option%nflowaqcomp,1)
+  PetscInt :: jcomp, lcomp, kcomp, icplx, ncompeq
+  PetscReal :: diffusion_coef(option%nflowaqcomp)
+
+  PetscInt :: pivot(option%nflowaqcomp,sec_gen_vars%ncells)
+  PetscInt :: indx(option%nflowaqcomp)
+  PetscInt :: d, ier
   PetscReal :: m
-  PetscReal :: conc_current_N
+
+  ! Quantities for numerical jacobian
+  PetscReal :: conc_prim(option%nflowaqcomp)
+  PetscReal :: conc_prim_pert(option%nflowaqcomp)
+  PetscReal :: sec_jac_num(option%nflowaqcomp,option%nflowaqcomp)
+  PetscReal :: conc_current_M_pert(option%nflowaqcomp)
+  PetscReal :: total_current_M_pert(option%nflowaqcomp)
+  PetscReal :: res_gen_pert(option%nflowaqcomp)
+  PetscReal :: total_primary_node_pert(option%nflowaqcomp)
+  PetscReal :: dtotal_prim_num(option%nflowaqcomp,option%nflowaqcomp)
+  PetscReal :: dPsisec_dCprim_num(option%nflowaqcomp,option%nflowaqcomp)
+  PetscReal :: pert
+  PetscReal :: coeff_diag_dm(option%nflowaqcomp,option%nflowaqcomp, &
+                          sec_gen_vars%ncells)
+  PetscReal :: coeff_left_dm(option%nflowaqcomp,option%nflowaqcomp, &
+                          sec_gen_vars%ncells)
+  PetscReal :: coeff_right_dm(option%nflowaqcomp,option%nflowaqcomp, &
+                          sec_gen_vars%ncells)
+  PetscReal :: coeff_left_pert(option%nflowaqcomp,option%nflowaqcomp, &
+                          sec_gen_vars%ncells)
+  PetscReal :: coeff_diag_pert(option%nflowaqcomp,option%nflowaqcomp, &
+                          sec_gen_vars%ncells)
+  PetscReal :: coeff_right_pert(option%nflowaqcomp,option%nflowaqcomp, &
+                           sec_gen_vars%ncells)
+  PetscReal :: coeff_left_copy(option%nflowaqcomp,option%nflowaqcomp, &
+                          sec_gen_vars%ncells)
+  PetscReal :: coeff_diag_copy(option%nflowaqcomp,option%nflowaqcomp, &
+                          sec_gen_vars%ncells)
+  PetscReal :: coeff_right_copy(option%nflowaqcomp,option%nflowaqcomp, &
+                           sec_gen_vars%ncells)
+
+  type(material_auxvar_type), allocatable :: material_auxvar
 
   ngcells = sec_gen_vars%ncells
   area = sec_gen_vars%area
@@ -2601,70 +2719,319 @@ subroutine SecondaryGenResidual(sec_gen_vars, &
   dm_plus = sec_gen_vars%dm_plus
   dm_minus = sec_gen_vars%dm_minus
   area_fm = sec_gen_vars%interfacial_area
+  ncomp = option%nflowaqcomp
+  nphase = 1
 
+  conc_primary_node(:) = gen_auxvar%xmol(:,1)
+
+  diffusion_coef(1) = general_parameter%diffusion_coefficient(1)
+  if (general_salt) then
+    diffusion_coef(2) = general_parameter%diffusion_coefficient(3)
+  endif
+ 
+  allocate(material_auxvar)
+  call MaterialAuxVarInit(material_auxvar,option)
+  material_auxvar%porosity = porosity
+
+  do j = 1, ncomp
+    do i = 1, ngcells
+      conc_prev(j,i) = sec_gen_vars%sec_mole_fracs(j,i)
+    enddo
+  enddo
+  conc_upd(:,:) = sec_gen_vars%updated_mole_fracs
+  
   coeff_left = 0.d0
   coeff_diag = 0.d0
   coeff_right = 0.d0
+  beta_left = 0.d0
+  alpha_diag = 0.d0
+  gamma_right = 0.d0
+  res = 0.d0
   rhs = 0.d0
+  D_M = 0.d0
+  identity = 0.d0
+  a_m = 0.d0
+  inv_D_M = 0.d0
+  conc_current_M = 0.d0
+  dPsisec_dCprim = 0.d0
+  dCsec_dCprim = 0.d0
 
-  alpha = option%flow_dt*therm_conductivity/dencpr
+  !dconc_prim = auxvar%aqueous%dtotal(:,:,:)
+  pordt = porosity/option%flow_dt
+  pordiff = porosity*diffusion_coef * global_auxvar%sat
+  den = 1000.d0 ! Density in the matrix is constant - prevent mass balance issues
+
+!================ Calculate the secondary residual =============================
+
+  do j = 1, ncomp
+
+    ! Accumulation
+    do i = 1, ngcells
+      n = j + (i-1)*ncomp
+      ! sat(lid) = 1.d0 assumption
+      res(n) = pordt*den*(conc_upd(j,i) - conc_prev(j,i))*vol(i)
+    enddo
+
+    ! Flux terms
+    do i = 2, ngcells - 1
+      n = j + (i-1)*ncomp
+      res(n) = res(n) - porosity * diffusion_coef(j) * &
+                         den * area(i)/(dm_minus(i+1) + dm_plus(i))* &
+                        (conc_upd(j,i+1) - conc_upd(j,i))
+      res(n) = res(n) + porosity * diffusion_coef(j) * &
+                        den * area(i-1)/(dm_minus(i) + dm_plus(i-1))* &
+                        (conc_upd(j,i) - conc_upd(j,i-1))
+    enddo
 
 
-! Setting the coefficients
-  ! do i = 2, ngcells-1
-  !   coeff_left(i) = -alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i))
-  !   coeff_diag(i) = alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i)) + &
-  !                   alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i)) + 1.d0
-  !   coeff_right(i) = -alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i))
+    ! Apply boundary conditions
+    ! Inner boundary
+    res(j) = res(j) - porosity * diffusion_coef(j) * &
+                      den * area(1)/(dm_minus(2) + dm_plus(1))* &
+                      (conc_upd(j,2) - conc_upd(j,1))
+
+    ! Outer boundary
+    res(j+(ngcells-1)*ncomp) = res(j+(ngcells-1)*ncomp) - &
+                               porosity * diffusion_coef(j) * &
+                               den*area(ngcells)/dm_plus(ngcells)* &
+                               (conc_primary_node(j) - conc_upd(j,ngcells))
+    res(j+(ngcells-1)*ncomp) = res(j+(ngcells-1)*ncomp) + &
+                               pordiff(k)*area(ngcells-1)/(dm_minus(ngcells) &
+                               + dm_plus(ngcells-1))*(conc_upd(j,ngcells) - &
+                               conc_upd(j,ngcells-1))
+
+  enddo
+!================ Calculate the secondary jacobian =============================
+
+
+  do j = 1, ncomp
+    do k = 1, ncomp
+      ! Accumulation
+      do i = 1, ngcells
+        alpha_diag(j,k,i) = alpha_diag(j,k,i) + pordt*vol(i)*den
+      enddo
+
+      ! Flux terms
+      do i = 2, ngcells-1
+        alpha_diag(j,k,i) = alpha_diag(j,k,i) + &
+                            porosity * diffusion_coef(j) * &
+                            den*area(i)/(dm_minus(i+1) + dm_plus(i)) + &
+                            porosity * diffusion_coef(j) * &
+                            den*area(i-1)/(dm_minus(i) + dm_plus(i-1))
+        beta_left(j,k,i) = beta_left(j,k,i) - &
+                           porosity * diffusion_coef(j) * &
+                           den*area(i-1)/(dm_minus(i) + dm_plus(i-1))
+        gamma_right(j,k,i) = gamma_right(j,k,i) - &
+                             porosity * diffusion_coef(j) * &
+                             den*area(i)/(dm_minus(i+1) + dm_plus(i))
+      enddo
+
+
+      ! Apply boundary conditions
+      ! Inner boundary
+      alpha_diag(j,k,1) = alpha_diag(j,k,1) + &
+                            porosity * diffusion_coef(j) * &
+                            den*area(1)/(dm_minus(2) + dm_plus(1))
+
+      gamma_right(j,k,1) = gamma_right(j,k,1) - &
+                           porosity * diffusion_coef(j) * &
+                           den*area(1)/(dm_minus(2) + dm_plus(1))
+
+      ! Outer boundary -- closest to primary node
+      alpha_diag(j,k,ngcells) = alpha_diag(j,k,ngcells) + &
+                                porosity * diffusion_coef(j) * &
+                                den*area(ngcells-1)/(dm_minus(ngcells) &
+                                + dm_plus(ngcells-1)) + &
+                                porosity * diffusion_coef(j) * &
+                                den*area(ngcells)/dm_plus(ngcells)
+      beta_left(j,k,ngcells) = beta_left(j,k,ngcells) - &
+                               porosity * diffusion_coef(j) * &
+                               den*area(ngcells-1)/(dm_minus(ngcells) + &
+                               dm_plus(ngcells-1))
+    enddo
+  enddo
+
+!============================== Forward solve ==================================
+
+  rhs = -res
+
+  ! First do an LU decomposition for calculating D_M matrix
+  coeff_diag_dm = coeff_diag
+  coeff_left_dm = coeff_left
+  coeff_right_dm = coeff_right
+
+  select case (option%secondary_continuum_solver)
+    case(1)
+      do i = 2, ngcells
+        coeff_left_dm(:,:,i-1) = coeff_left_dm(:,:,i)
+      enddo
+      coeff_left_dm(:,:,ngcells) = 0.d0
+      call bl3dfac(ngcells,ncomp,coeff_right_dm,coeff_diag_dm,coeff_left_dm,pivot)
+    case(2)
+      call decbt(ncomp,ngcells,ncomp,coeff_diag_dm,coeff_right_dm,coeff_left_dm,pivot,ier)
+      if (ier /= 0) then
+        print *,'error in matrix decbt: ier = ',ier
+        stop
+      endif
+    case(3)
+      ! Thomas algorithm for tridiagonal system
+      ! Forward elimination
+      if (ncomp /= 1) then
+        option%io_buffer = 'THOMAS algorithm can be used only with single '// &
+                           'component chemistry'
+        call PrintErrMsg(option)
+      endif
+      do i = 2, ngcells
+        m = coeff_left_dm(ncomp,ncomp,i)/coeff_diag_dm(ncomp,ncomp,i-1)
+        coeff_diag_dm(ncomp,ncomp,i) = coeff_diag_dm(ncomp,ncomp,i) - &
+                                    m*coeff_right_dm(ncomp,ncomp,i-1)
+      enddo
+    case default
+      option%io_buffer = 'SECONDARY_CONTINUUM_SOLVER can be only ' // &
+                         'HINDMARSH or KEARST. For single component'// &
+                         'chemistry THOMAS can be used.'
+      call PrintErrMsg(option)
+  end select
+
+  ! Set the values of D_M matrix and create identity matrix of size ncomp x ncomp
+  do i = 1, ncomp
+    do j = 1, ncomp
+      D_M(i,j) = coeff_diag_dm(i,j,ngcells)
+      if (j == i) then
+        identity(i,j) = 1.d0
+      else
+        identity(i,j) = 0.d0
+      endif
+    enddo
+  enddo
+
+  ! Find the inverse of D_M
+  call LUDecomposition(D_M,ncomp,indx,d)
+  do j = 1, ncomp
+    call LUBackSubstitution(D_M,ncomp,indx,identity(1,j))
+  enddo
+  inv_D_M = identity
+
+  if (option%numerical_derivatives_multi_coupling) then
+    ! Store the coeffs for numerical jacobian
+    coeff_diag_copy = coeff_diag
+    coeff_left_copy = coeff_left
+    coeff_right_copy = coeff_right
+  endif
+
+  select case (option%secondary_continuum_solver)
+    case(1)
+      do i = 2, ngcells
+        coeff_left(:,:,i-1) = coeff_left(:,:,i)
+      enddo
+      coeff_left(:,:,ngcells) = 0.d0
+      call bl3dfac(ngcells,ncomp,coeff_right,coeff_diag,coeff_left,pivot)
+      call bl3dsolf(ngcells,ncomp,coeff_right,coeff_diag,coeff_left,pivot, &
+                    ONE_INTEGER,rhs)
+    case(2)
+      call decbt(ncomp,ngcells,ncomp,coeff_diag,coeff_right,coeff_left, &
+                 pivot,ier)
+      if (ier /= 0) then
+        print *,'error in matrix decbt: ier = ',ier
+        stop
+      endif
+      call solbtf(ncomp,ngcells,ncomp,coeff_diag,coeff_right,coeff_left, &
+                  pivot,rhs)
+    case(3)
+      ! Thomas algorithm for tridiagonal system
+      ! Forward elimination
+      if (ncomp /= 1) then
+        option%io_buffer = 'THOMAS algorithm can be used only with single '// &
+                           'component chemistry'
+        call PrintErrMsg(option)
+      endif
+      do i = 2, ngcells
+        m = coeff_left(ncomp,ncomp,i)/coeff_diag(ncomp,ncomp,i-1)
+        coeff_diag(ncomp,ncomp,i) = coeff_diag(ncomp,ncomp,i) - &
+                                    m*coeff_right(ncomp,ncomp,i-1)
+        rhs(i) = rhs(i) - m*rhs(i-1)
+      enddo
+      rhs(ngcells) = rhs(ngcells)/coeff_diag(ncomp,ncomp,ngcells)
+    case default
+      option%io_buffer = 'SECONDARY_CONTINUUM_SOLVER can be only ' // &
+                         'HINDMARSH or KEARST. For single component'// &
+                         'chemistry THOMAS can be used.'
+      call PrintErrMsg(option)
+  end select
+  ! Update the secondary concentrations
+  do i = 1, ncomp
+      conc_current_M(i) = conc_upd(i,ngcells) + rhs(i+(ngcells-1)*ncomp)
+  enddo
+
+  ! Update the secondary continuum totals at the outer matrix node
+  ! call RTAuxVarCopy(rt_auxvar,sec_gen_vars%sec_rt_auxvar(ngcells), &
+  !                   option)
+  ! rt_auxvar%pri_molal = conc_current_M ! in mol/kg
+  ! call RTotalAqueous(rt_auxvar,global_auxvar,reaction,option)
+  ! conc_current_M(:,1) = rt_auxvar%total(:,1)
+
+  conc_current_M = gen_auxvar%xmol(:,1)
+  ! do k = 1, nphase
+  !   a_m(:,:,k) = pordiff(k)/dm_plus(ngcells)*area(ngcells)*inv_D_M ! in L/kg  For log formulation, L/mol
+  !   dCsec_dCprim = dCsec_dCprim + a_m(:,:,k)*dconc_prim(:,:,k)
   ! enddo
 
-  ! order of operations
-  ! cal
+  ! Calculate the dervative of outer matrix node total with respect to the
+  ! primary node concentration
 
-  !r_p = -accum_p
-  do i = 2, ngcells-1
-    
-  enddo
+!    dPsisec_dCprim(:,:) = dCsec_dCprim       ! dimensionless
 
-  coeff_diag(1) = alpha*area(1)/((dm_minus(2) + dm_plus(1))*vol(1)) + 1.d0
-  coeff_right(1) = -alpha*area(1)/((dm_minus(2) + dm_plus(1))*vol(1))
+  !   if (reaction%neqcplx > 0) then
+  !     do icplx = 1, reaction%neqcplx
+  !       ncompeq = reaction%eqcplxspecid(0,icplx)
+  !       do j = 1, ncompeq
+  !         jcomp = reaction%eqcplxspecid(j,icplx)
+  !         do l = 1, ncompeq
+  !           lcomp = reaction%eqcplxspecid(l,icplx)
+  !           do k = 1, ncompeq
+  !             kcomp = reaction%eqcplxspecid(k,icplx)
+  !             dPsisec_dCprim(jcomp,lcomp,1) = dPsisec_dCprim(jcomp,lcomp,1) + &
+  !                                           reaction%eqcplxstoich(j,icplx)* &
+  !                                           reaction%eqcplxstoich(k,icplx)* &
+  !                                           dCsec_dCprim(kcomp,lcomp)/ &
+  !                                           conc_current_M(kcomp)
+  !           enddo
+  !         enddo
+  !       enddo
+  !     enddo
+  !   endif
 
-  coeff_left(ngcells) = -alpha*area(ngcells-1)/ &
-                       ((dm_minus(ngcells) + dm_plus(ngcells-1))*vol(ngcells))
-  coeff_diag(ngcells) = alpha*area(ngcells-1)/ &
-                       ((dm_minus(ngcells) + dm_plus(ngcells-1))*vol(ngcells)) &
-                       + alpha*area(ngcells)/(dm_plus(ngcells)*vol(ngcells)) &
-                       + 1.d0
+  ! call RTAuxVarStrip(rt_auxvar)
 
-  ! secondary continuum values from previous time step
-  rhs = sec_gen_vars%sec_conc
-  rhs(ngcells) = rhs(ngcells) + &
-                 alpha*area(ngcells)/(dm_plus(ngcells)*vol(ngcells))* &
-                 conc_primary_node
+  dPsisec_dCprim = dPsisec_dCprim*den*1.d-3 ! in kg/L
 
-  ! Thomas algorithm for tridiagonal system
-  ! Forward elimination
-  do i = 2, ngcells
-    m = coeff_left(i)/coeff_diag(i-1)
-    coeff_diag(i) = coeff_diag(i) - m*coeff_right(i-1)
-    rhs(i) = rhs(i) - m*rhs(i-1)
-  enddo
-
-  ! Back substitution
-  ! We only need the concentration at the outer-most node (closest to
-  ! primary node)
-  conc_current_N = rhs(ngcells)/coeff_diag(ngcells)
-
+  sec_jac = 0.d0
   ! Calculate the coupling term
-  res_conc = area_fm*therm_conductivity*(conc_current_N - conc_primary_node)/ &
-             dm_plus(ngcells)
+  res_gen = res_gen + porosity * diffusion_coef(:)*den/dm_plus(ngcells)*area_fm* &
+                     (conc_current_M(:) - conc_primary_node(:))*prim_vol
+  ! sec_jac = sec_jac + area_fm*porosity*diffusion_coef(:)*den/dm_plus(ngcells)* &
+  !              (dPsisec_dCprim(:,:) - dconc_prim(:,:))* prim_vol ! in kg water/s
+
+  ! Store the contribution to the primary jacobian term
+  sec_gen_vars%sec_jac = sec_jac
+  sec_gen_vars%sec_jac_update = PETSC_TRUE
+
+  ! Store the coefficients from LU decomposition of the block tridiagonal
+  ! sytem. These will be called later to perform backsolve to the get the
+  ! updated secondary continuum concentrations at the end of the timestep
+  sec_gen_vars%cxm = coeff_left
+  sec_gen_vars%cxp = coeff_right
+  sec_gen_vars%cdl = coeff_diag
+
+  ! Store the solution of the forward solve
+  sec_gen_vars%r = rhs  
 
 end subroutine SecondaryGenResidual
 
 ! ************************************************************************** !
 
-subroutine SecondaryGenJacobian(sec_gen_vars,therm_conductivity, &
-                                 dencpr,option,jac_conc)
+subroutine SecondaryGenJacobian(sec_gen_vars,global_auxvar,gen_auxvar,general_parameter,&
+                                prim_vol,porosity,option)
   !
   ! Calculates the source term jacobian contribution
   ! due to secondary continuum in the primary continuum residual
@@ -2672,79 +3039,261 @@ subroutine SecondaryGenJacobian(sec_gen_vars,therm_conductivity, &
   ! Author: David Fukuyama
   ! Date: 05/02/23
   !
-
   use Option_module
+  use Material_Aux_module
+  use General_Aux_module
   use Global_Aux_module
-  use Secondary_Continuum_Aux_module
+  use Block_Solve_module
+  use Block_Tridiag_module
+  use Utility_module
 
-  implicit none  
+  implicit none
 
   type(sec_gen_type) :: sec_gen_vars
   type(option_type) :: option
-  PetscReal :: coeff_left(sec_gen_vars%ncells)
-  PetscReal :: coeff_diag(sec_gen_vars%ncells)
-  PetscReal :: coeff_right(sec_gen_vars%ncells)
-  PetscReal :: rhs(sec_gen_vars%ncells)
+  type(global_auxvar_type) :: global_auxvar
+  type(general_auxvar_type) :: gen_auxvar
+  type(general_parameter_type) :: general_parameter
+  PetscReal :: coeff_left(option%nflowaqcomp,option%nflowaqcomp, & ! dissolved species diffusion only
+                          sec_gen_vars%ncells)
+  PetscReal :: coeff_diag(option%nflowaqcomp,option%nflowaqcomp, &
+                          sec_gen_vars%ncells)
+  PetscReal :: coeff_right(option%nflowaqcomp,option%nflowaqcomp, &
+                          sec_gen_vars%ncells)
+  PetscReal :: beta_left(option%nflowaqcomp,option%nflowaqcomp, &
+                          sec_gen_vars%ncells)
+  PetscReal :: alpha_diag(option%nflowaqcomp,option%nflowaqcomp, &
+                          sec_gen_vars%ncells)
+  PetscReal :: gamma_right(option%nflowaqcomp,option%nflowaqcomp, &
+                           sec_gen_vars%ncells)
+  PetscReal :: res(sec_gen_vars%ncells*(option%nflowaqcomp))
+  PetscReal :: rhs(sec_gen_vars%ncells*(option%nflowaqcomp))
+  PetscReal :: D_M(option%nflowaqcomp,option%nflowaqcomp)
+  PetscReal :: identity(option%nflowaqcomp,option%nflowaqcomp)
+  PetscReal :: a_m(option%nflowaqcomp,option%nflowaqcomp)
+  PetscReal :: sec_jac(option%nflowaqcomp,option%nflowaqcomp)
+  PetscReal :: inv_D_M(option%nflowaqcomp,option%nflowaqcomp)
+  PetscReal :: conc_upd(option%nflowaqcomp,sec_gen_vars%ncells)
+  PetscReal :: conc_prev(option%nflowaqcomp,sec_gen_vars%ncells)
+  PetscReal :: conc_current_M(option%nflowaqcomp)
+  PetscReal :: conc_primary_node(option%nflowaqcomp)
   PetscReal :: area(sec_gen_vars%ncells)
   PetscReal :: vol(sec_gen_vars%ncells)
   PetscReal :: dm_plus(sec_gen_vars%ncells)
   PetscReal :: dm_minus(sec_gen_vars%ncells)
-  PetscInt :: i, ngcells
-  PetscReal :: area_fm
-  PetscReal :: alpha, therm_conductivity, dencpr
+  PetscReal :: res_gen(option%nflowaqcomp)
+  PetscReal :: jac_gen(option%nflowaqcomp,option%nflowaqcomp)
+  PetscReal :: dtotal(option%nflowaqcomp,option%nflowaqcomp,sec_gen_vars%ncells,1)
+  PetscReal :: dconc_prim(option%nflowaqcomp,option%nflowaqcomp,1)
+  PetscInt :: i, j, k, n, l, igas
+  PetscInt :: ngcells, ncomp, nphase, icomp
+  PetscReal :: area_fm, RT
+  PetscReal :: porosity, den
+  PetscReal :: pordt, pordiff(1)
+  PetscReal :: prim_vol ! volume of primary grid cell
+  PetscReal :: dCsec_dCprim(option%nflowaqcomp,option%nflowaqcomp)
+  PetscReal :: dPsisec_dCprim(option%nflowaqcomp,option%nflowaqcomp,1)
+  PetscInt :: jcomp, lcomp, kcomp, icplx, ncompeq
+  PetscReal :: diffusion_coef(option%nflowaqcomp)
+
+  PetscInt :: pivot(option%nflowaqcomp,sec_gen_vars%ncells)
+  PetscInt :: indx(option%nflowaqcomp)
+  PetscInt :: d, ier
   PetscReal :: m
-  PetscReal :: Dconc_N_Dconc_prim
-  PetscReal :: jac_conc
+
+  ! Quantities for numerical jacobian
+  PetscReal :: conc_prim(option%nflowaqcomp)
+  PetscReal :: conc_prim_pert(option%nflowaqcomp)
+  PetscReal :: sec_jac_num(option%nflowaqcomp,option%nflowaqcomp)
+  PetscReal :: conc_current_M_pert(option%nflowaqcomp)
+  PetscReal :: total_current_M_pert(option%nflowaqcomp)
+  PetscReal :: res_gen_pert(option%nflowaqcomp)
+  PetscReal :: total_primary_node_pert(option%nflowaqcomp)
+  PetscReal :: dtotal_prim_num(option%nflowaqcomp,option%nflowaqcomp)
+  PetscReal :: dPsisec_dCprim_num(option%nflowaqcomp,option%nflowaqcomp)
+  PetscReal :: pert
+  PetscReal :: coeff_diag_dm(option%nflowaqcomp,option%nflowaqcomp, &
+                          sec_gen_vars%ncells)
+  PetscReal :: coeff_left_dm(option%nflowaqcomp,option%nflowaqcomp, &
+                          sec_gen_vars%ncells)
+  PetscReal :: coeff_right_dm(option%nflowaqcomp,option%nflowaqcomp, &
+                          sec_gen_vars%ncells)
+  PetscReal :: coeff_left_pert(option%nflowaqcomp,option%nflowaqcomp, &
+                          sec_gen_vars%ncells)
+  PetscReal :: coeff_diag_pert(option%nflowaqcomp,option%nflowaqcomp, &
+                          sec_gen_vars%ncells)
+  PetscReal :: coeff_right_pert(option%nflowaqcomp,option%nflowaqcomp, &
+                           sec_gen_vars%ncells)
+  PetscReal :: coeff_left_copy(option%nflowaqcomp,option%nflowaqcomp, &
+                          sec_gen_vars%ncells)
+  PetscReal :: coeff_diag_copy(option%nflowaqcomp,option%nflowaqcomp, &
+                          sec_gen_vars%ncells)
+  PetscReal :: coeff_right_copy(option%nflowaqcomp,option%nflowaqcomp, &
+                           sec_gen_vars%ncells)
+
+  type(material_auxvar_type), allocatable :: material_auxvar
 
   ngcells = sec_gen_vars%ncells
   area = sec_gen_vars%area
   vol = sec_gen_vars%vol
   dm_plus = sec_gen_vars%dm_plus
-  area_fm = sec_gen_vars%interfacial_area
   dm_minus = sec_gen_vars%dm_minus
+  area_fm = sec_gen_vars%interfacial_area
+  ncomp = option%nflowaqcomp
+  nphase = 1
 
-  coeff_left = 0.d0
-  coeff_diag = 0.d0
-  coeff_right = 0.d0
-  rhs = 0.d0
+  conc_primary_node(:) = gen_auxvar%xmol(:,1)
 
-  alpha = option%flow_dt*therm_conductivity/dencpr
+  diffusion_coef(1) = general_parameter%diffusion_coefficient(1)
+  if (general_salt) then
+    diffusion_coef(2) = general_parameter%diffusion_coefficient(3)
+  endif
+ 
+  allocate(material_auxvar)
+  call MaterialAuxVarInit(material_auxvar,option)
+  material_auxvar%porosity = porosity
+!---------
+!============== Numerical jacobian for coupling term ===========================
 
-! Setting the coefficients
-  do i = 2, ngcells-1
-    coeff_left(i) = -alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i))
-    coeff_diag(i) = alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i)) + &
-                    alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i)) + 1.d0
-    coeff_right(i) = -alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i))
-  enddo
 
-  coeff_diag(1) = alpha*area(1)/((dm_minus(2) + dm_plus(1))*vol(1)) + 1.d0
-  coeff_right(1) = -alpha*area(1)/((dm_minus(2) + dm_plus(1))*vol(1))
+!   call RTAuxVarInit(rt_auxvar,reaction,option)
+!   conc_prim = auxvar%pri_molal
+!   conc_prim_pert = conc_prim
 
-  coeff_left(ngcells) = -alpha*area(ngcells-1)/ &
-                       ((dm_minus(ngcells) + dm_plus(ngcells-1))*vol(ngcells))
-  coeff_diag(ngcells) = alpha*area(ngcells-1)/ &
-                       ((dm_minus(ngcells) + dm_plus(ngcells-1))*vol(ngcells)) &
-                       + alpha*area(ngcells)/(dm_plus(ngcells)*vol(ngcells)) &
-                       + 1.d0
+!   do l = 1, ncomp
 
-  ! Thomas algorithm for tridiagonal system
-  ! Forward elimination
-  do i = 2, ngcells
-    m = coeff_left(i)/coeff_diag(i-1)
-    coeff_diag(i) = coeff_diag(i) - m*coeff_right(i-1)
-    ! We do not have to calculate rhs terms
-  enddo
+!     conc_prim_pert = conc_prim
+!     pert = conc_prim(l)*perturbation_tolerance
+!     conc_prim_pert(l) = conc_prim_pert(l) + pert
 
-  ! We need the temperature derivative at the outer-most node (closest
-  ! to primary node)
-  Dconc_N_Dconc_prim = 1.d0/coeff_diag(ngcells)*alpha*area(ngcells)/ &
-                       (dm_plus(ngcells)*vol(ngcells))
+!     res = 0.d0
+!     rhs = 0.d0
 
-  ! Calculate the jacobian term
-  jac_conc = area_fm*therm_conductivity*(Dconc_N_Dconc_prim - 1.d0)/ &
-             dm_plus(ngcells)
+!     coeff_diag_pert = coeff_diag_copy
+!     coeff_left_pert = coeff_left_copy
+!     coeff_right_pert = coeff_right_copy
 
+!     call RTAuxVarCopy(rt_auxvar,auxvar,option)
+!     rt_auxvar%pri_molal = conc_prim_pert ! in mol/kg
+!     call RTotalAqueous(rt_auxvar,global_auxvar,reaction,option)
+!     conc_primary_node_pert = rt_auxvar%total(:,1)
+
+! !================ Calculate the secondary residual =============================
+
+!     do j = 1, ncomp
+
+!       ! Accumulation
+!       do i = 1, ngcells
+!         n = j + (i-1)*ncomp
+!         res(n) = pordt*(conc_upd(j,i,1) - conc_prev(j,i,1))*vol(i)
+!       enddo
+
+!       ! Flux terms
+!       do i = 2, ngcells - 1
+!         n = j + (i-1)*ncomp
+!         res(n) = res(n) - pordiff(1)*area(i)/(dm_minus(i+1) + dm_plus(i))* &
+!                           (conc_upd(j,i+1,1) - conc_upd(j,i,1))
+!         res(n) = res(n) + pordiff(1)*area(i-1)/(dm_minus(i) + dm_plus(i-1))* &
+!                           (conc_upd(j,i,1) - conc_upd(j,i-1,1))
+!       enddo
+
+
+!       ! Apply boundary conditions
+!       ! Inner boundary
+!       res(j) = res(j) - pordiff(1)*area(1)/(dm_minus(2) + dm_plus(1))* &
+!                         (conc_upd(j,2,1) - conc_upd(j,1,1))
+
+!       ! Outer boundary
+!       res(j+(ngcells-1)*ncomp) = res(j+(ngcells-1)*ncomp) - &
+!                                  pordiff(1)*area(ngcells)/dm_plus(ngcells)* &
+!                                  (conc_primary_node_pert(j) -  &
+!                                  conc_upd(j,ngcells,1))
+!       res(j+(ngcells-1)*ncomp) = res(j+(ngcells-1)*ncomp) + &
+!                                  pordiff(1)*area(ngcells-1)/(dm_minus(ngcells) &
+!                                  + dm_plus(ngcells-1))*(conc_upd(j,ngcells,1) - &
+!                                  conc_upd(j,ngcells-1,1))
+
+!     enddo
+
+! !============================== Forward solve ==================================
+
+!     rhs = -res
+
+!   select case (option%secondary_continuum_solver)
+!     case(1)
+!       call bl3dfac(ngcells,ncomp,coeff_right_pert,coeff_diag_pert, &
+!                     coeff_left_pert,pivot)
+!       call bl3dsolf(ngcells,ncomp,coeff_right_pert,coeff_diag_pert, &
+!                      coeff_left_pert,pivot,ONE_INTEGER,rhs)
+!     case(2)
+!       call decbt(ncomp,ngcells,ncomp,coeff_diag_pert,coeff_right_pert, &
+!                   coeff_left_pert,pivot,ier)
+!       if (ier /= 0) then
+!         print *,'error in matrix decbt: ier = ',ier
+!         stop
+!       endif
+!       call solbtf(ncomp,ngcells,ncomp,coeff_diag_pert,coeff_right_pert, &
+!                    coeff_left_pert,pivot,rhs)
+!     case(3)
+!       ! Thomas algorithm for tridiagonal system
+!       ! Forward elimination
+!       if (ncomp /= 1) then
+!         option%io_buffer = 'THOMAS algorithm can be used only with '// &
+!                            'single component chemistry'
+!         call PrintErrMsg(option)
+!       endif
+!       do i = 2, ngcells
+!         m = coeff_left_pert(ncomp,ncomp,i)/coeff_diag_pert(ncomp,ncomp,i-1)
+!         coeff_diag_pert(ncomp,ncomp,i) = coeff_diag_pert(ncomp,ncomp,i) - &
+!                                     m*coeff_right_pert(ncomp,ncomp,i-1)
+!         rhs(i) = rhs(i) - m*rhs(i-1)
+!       enddo
+!       rhs(ngcells) = rhs(ngcells)/coeff_diag(ncomp,ncomp,ngcells)
+!     case default
+!       option%io_buffer = 'SECONDARY_CONTINUUM_SOLVER can be only ' // &
+!                          'HINDMARSH or KEARST. For single component'// &
+!                          'chemistry THOMAS can be used.'
+!       call PrintErrMsg(option)
+!     end select
+
+!     ! Update the secondary concentrations
+!     do i = 1, ncomp
+!       if (reaction%use_log_formulation) then
+!         ! convert log concentration to concentration
+!         rhs(i+(ngcells-1)*ncomp) = dsign(1.d0,rhs(i+(ngcells-1)*ncomp))* &
+!           min(dabs(rhs(i+(ngcells-1)*ncomp)),reaction%max_dlnC)
+!         conc_current_M_pert(i) = conc_upd(i,ngcells)* &
+!                                    exp(rhs(i+(ngcells-1)*ncomp))
+!       else
+!         conc_current_M_pert(i) = conc_upd(i,ngcells) + &
+!                                    rhs(i+(ngcells-1)*ncomp)
+!       endif
+!     enddo
+
+!     ! Update the secondary continuum totals at the outer matrix node
+!     call RTAuxVarCopy(rt_auxvar,sec_transport_vars%sec_rt_auxvar(ngcells), &
+!                       option)
+!     rt_auxvar%pri_molal = conc_current_M_pert ! in mol/kg
+!     call RTotalAqueous(rt_auxvar,global_auxvar,reaction,option)
+!     conc_current_M_pert = rt_auxvar%total(:,1)
+
+!     ! Calculate the coupling term
+!     res_transport_pert = pordiff(1)/dm_plus(ngcells)*area_fm* &
+!                          (conc_current_M_pert - conc_primary_node_pert)* &
+!                          prim_vol ! in mol/s
+
+!     dconc_prim_num(:,l) = (conc_primary_node_pert(:) - &
+!                              conc_primary_node(:,1))/pert
+
+!     dPsisec_dCprim_num(:,l) = (conc_current_M_pert(:) - &
+!                                 conc_current_M(:,1))/pert
+
+!     sec_jac_num(:,l) = (res_transport_pert(:) - res_transport(:))/pert
+
+!   enddo
+
+!   call RTAuxVarStrip(rt_auxvar)
+!   sec_transport_vars%sec_jac = sec_jac_num
 
 end subroutine SecondaryGenJacobian
 

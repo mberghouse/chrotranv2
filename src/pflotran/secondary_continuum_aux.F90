@@ -56,12 +56,18 @@ module Secondary_Continuum_Aux_module
     type(sec_continuum_type) :: sec_continuum
     type(general_auxvar_type), pointer :: sec_gen_auxvar(:)
     PetscReal, pointer :: sec_temp(:)
-    PetscReal, pointer :: sec_conc(:)         ! array of conc. at secondary grid cells
-    PetscReal, pointer :: sec_pres(:)
+    PetscReal, pointer :: sec_mole_fracs(:,:)    ! array of conc. at secondary grid cells
     PetscReal, pointer :: area(:)              ! surface area
     PetscReal, pointer :: vol(:)               ! volume     face      node       face
     PetscReal, pointer :: dm_plus(:)           ! see fig.    |----------o----------|
     PetscReal, pointer :: dm_minus(:)          ! see fig.      <dm_minus> <dm_plus>
+    PetscReal, pointer :: sec_jac(:,:)         ! stores the secondary continuum jacobian value (naqcomp x naqcomp)
+    PetscBool :: sec_jac_update                ! flag to check if secondary jacobian is updated
+    PetscReal, pointer :: cxm(:,:,:)           ! stores the coeff of left diag in block triag system (ncomp x ncomp x ncells-1)
+    PetscReal, pointer :: cxp(:,:,:)           ! stores the coeff of right diag in block triag system (ncomp x ncomp x ncells-1)
+    PetscReal, pointer :: cdl(:,:,:)           ! stores the coeff of central diag in block triag system (ncomp x ncomp x ncells)
+    PetscReal, pointer :: r(:)                 ! stores the solution of the forward solve
+    PetscReal, pointer :: updated_mole_fracs(:,:)! stores the update of molalities at end of each primary iteration
     PetscReal :: interfacial_area              ! interfacial area between prim. and sec. per unit volume of prim.+sec.
     PetscBool :: log_spacing                   ! flag to check if log spacing is set
     PetscReal :: outer_spacing                 ! value of the outer most grid cell spacing

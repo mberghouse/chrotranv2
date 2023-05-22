@@ -179,6 +179,7 @@ subroutine PMGeneralSetFlowMode(pm,option)
 
   if (option%nflowdof == 0 .or. option%nflowdof == 3) then
     option%nphase = 2
+    option%nflowaqcomp = 2
     option%nflowdof = 3
     option%nflowspec = 2
     general_max_states = 3
@@ -186,6 +187,7 @@ subroutine PMGeneralSetFlowMode(pm,option)
     option%energy_id = 3
   elseif (option%nflowdof == 4) then
     option%nflowspec = 3
+    option%nflowaqcomp = 2
     option%salt_id = 3
     option%energy_id = 4
     option%nphase = 3

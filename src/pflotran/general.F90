@@ -74,6 +74,7 @@ subroutine GeneralSetup(realization)
   type(material_auxvar_type), pointer :: material_auxvars(:)
   type(fluid_property_type), pointer :: cur_fluid_property
   type(sec_heat_type), pointer :: general_sec_heat_vars(:)
+  type(sec_gen_type), pointer :: general_sec_gen_vars(:)
   type(coupler_type), pointer :: initial_condition
 
   option => realization%option
@@ -82,6 +83,7 @@ subroutine GeneralSetup(realization)
 
   patch%aux%General => GeneralAuxCreate(option)
   patch%aux%SC_heat => SecondaryAuxHeatCreate(option)
+  patch%aux%SC_gen => SecondaryAuxGenCreate(option)
   
   general_analytical_derivatives = .not.option%flow%numerical_derivatives
 
@@ -185,6 +187,7 @@ subroutine GeneralSetup(realization)
 
     initial_condition => patch%initial_condition_list%first
     allocate(general_sec_heat_vars(grid%nlmax))
+    allocate(general_sec_gen_vars(grid%nlmax))
 
     do local_id = 1, grid%nlmax
       ghosted_id = grid%nL2G(local_id)
@@ -194,10 +197,14 @@ subroutine GeneralSetup(realization)
            patch%aux%Material%auxvars(ghosted_id)%soil_properties(epsilon_index), &
            patch%aux%Material%auxvars(ghosted_id)%soil_properties(half_matrix_width_index), &
            general_sec_heat_vars(local_id), initial_condition, option)
-           
+      call SecondaryGenAuxVarInit(patch%material_property_array(patch%imat(ghosted_id))%ptr%multicontinuum, &
+           patch%aux%Material%auxvars(ghosted_id)%soil_properties(epsilon_index), &
+           patch%aux%Material%auxvars(ghosted_id)%soil_properties(half_matrix_width_index), &
+           general_sec_gen_vars(local_id), initial_condition, option)
     enddo      
 
     patch%aux%SC_heat%sec_heat_vars => general_sec_heat_vars
+    patch%aux%SC_gen%sec_gen_vars => general_sec_gen_vars
     do i = 1, size(patch%material_property_array)
       if (.not. patch%material_property_array(1)%ptr%multicontinuum%ncells &
            == patch%material_property_array(i)%ptr%multicontinuum%ncells) then
@@ -359,6 +366,7 @@ subroutine GeneralUpdateSolution(realization)
   type(general_parameter_type), pointer :: general_parameter
   type(global_auxvar_type), pointer :: global_auxvars(:)
   type(sec_heat_type), pointer :: general_sec_heat_vars(:)
+  type(sec_gen_type), pointer :: general_sec_gen_vars(:)
   type(cc_thermal_type), pointer :: thermal_cc
   
   PetscInt :: ghosted_id, local_id, istart, iend
@@ -375,6 +383,7 @@ subroutine GeneralUpdateSolution(realization)
 
   if (option%use_sc) then
     general_sec_heat_vars => patch%aux%SC_heat%sec_heat_vars
+    general_sec_gen_vars => patch%aux%SC_gen%sec_gen_vars
   endif
 
   if (realization%option%compute_mass_balance_new) then
@@ -408,6 +417,7 @@ subroutine GeneralUpdateSolution(realization)
                                 k_eff*1.d-6,&
                                 sec_dencpr,gen_auxvars(ZERO_INTEGER,ghosted_id)%temp, &
                                 option)
+      call SecondaryGenAuxVarCompute(general_sec_gen_vars(local_id), option)
     enddo
 
   endif
@@ -1244,6 +1254,7 @@ subroutine GeneralUpdateFixedAccum(realization)
   type(material_auxvar_type), pointer :: material_auxvars(:)
   type(material_parameter_type), pointer :: material_parameter
   type(sec_heat_type), pointer :: general_sec_heat_vars(:)
+  type(sec_gen_type), pointer :: general_sec_gen_vars(:)
 
   PetscInt :: ghosted_id, local_id, local_start, local_end, natural_id
   PetscInt :: imat
@@ -1265,6 +1276,7 @@ subroutine GeneralUpdateFixedAccum(realization)
   material_auxvars => patch%aux%Material%auxvars
   material_parameter => patch%aux%Material%material_parameter
   general_sec_heat_vars => patch%aux%SC_heat%sec_heat_vars
+  general_sec_gen_vars => patch%aux%SC_gen%sec_gen_vars
 
   call VecGetArrayReadF90(field%flow_xx,xx_p,ierr);CHKERRQ(ierr)
   call VecGetArrayF90(field%flow_accum,accum_p,ierr);CHKERRQ(ierr)
@@ -1375,6 +1387,7 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
   type(general_auxvar_type), pointer :: gen_auxvars(:,:), gen_auxvars_bc(:), &
                                         gen_auxvars_ss(:,:)
   type(sec_heat_type), pointer :: general_sec_heat_vars(:)
+  type(sec_gen_type), pointer :: general_sec_gen_vars(:)
   type(global_auxvar_type), pointer :: global_auxvars(:)
   type(global_auxvar_type), pointer :: global_auxvars_bc(:)
   type(global_auxvar_type), pointer :: global_auxvars_ss(:)
@@ -1428,6 +1441,7 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
   global_auxvars_ss => patch%aux%Global%auxvars_ss
   material_auxvars => patch%aux%Material%auxvars
   general_sec_heat_vars => patch%aux%SC_heat%sec_heat_vars
+  general_sec_gen_vars => patch%aux%SC_gen%sec_gen_vars
 
   ! bragflo uses the following logic, update when
   !   it == 1, before entering iteration loop
@@ -1545,6 +1559,8 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
                                  k_eff*1.d-6,&
                                  sec_dencpr,gen_auxvars(ZERO_INTEGER,ghosted_id)%temp, &
                                  option,res_sec_heat)
+      call SecondaryGenResidual(general_sec_gen_vars(local_id),global_auxvars(ghosted_id), gen_auxvars(ZERO_INTEGER,ghosted_id),&
+                                general_parameter,vol_frac_prim,material_auxvars(ghosted_id)%porosity,option)
       r_p(iend) = r_p(iend) - res_sec_heat*material_auxvars(ghosted_id)%volume
 
     enddo
@@ -1890,6 +1906,7 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
   type(material_auxvar_type), pointer :: material_auxvars(:)
 
   type(sec_heat_type), pointer :: sec_heat_vars(:)
+  type(sec_gen_type), pointer :: sec_gen_vars(:)
 
   type(cc_thermal_type), pointer :: thermal_cc
 
@@ -1909,6 +1926,7 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
   global_auxvars_ss => patch%aux%Global%auxvars_ss
   material_auxvars => patch%aux%Material%auxvars
   sec_heat_vars => patch%aux%SC_heat%sec_heat_vars
+  sec_gen_vars => patch%aux%SC_gen%sec_gen_vars
 
   call SNESGetIterationNumber(snes,general_newton_iteration_number, &
                               ierr);CHKERRQ(ierr)
@@ -1991,6 +2009,9 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
         Jup(option%nflowdof,GENERAL_ENERGY_EQUATION_INDEX) = &
                                  Jup(option%nflowdof,GENERAL_ENERGY_EQUATION_INDEX) - &
                                  jac_sec_heat*material_auxvars(ghosted_id)%volume
+        call SecondaryGenJacobian(sec_gen_vars(local_id), global_auxvars(ghosted_id),&
+                                  gen_auxvars(ZERO_INTEGER,ghosted_id),general_parameter,&
+                                  vol_frac_prim,material_auxvars(ghosted_id)%porosity,option)
       endif
     endif
     call MatSetValuesBlockedLocal(A,1,ghosted_id-1,1,ghosted_id-1,Jup, &

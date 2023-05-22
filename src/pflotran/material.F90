@@ -107,7 +107,8 @@ module Material_module
     PetscReal :: half_aperture
     PetscReal :: init_temp
     PetscReal :: init_conc
-    PetscReal :: init_salt_conc
+    PetscReal :: init_mole_frac
+    PetscReal :: init_salt_mole_frac
     PetscReal :: init_pres
     PetscReal :: porosity
     PetscReal :: diff_coeff(2)
@@ -887,6 +888,18 @@ subroutine MaterialPropertyRead(material_property,input,option)
               call InputErrorMsg(input,option,'secondary continuum init temp', &
                            'MATERIAL_PROPERTY')
               option%flow%set_secondary_init_temp = PETSC_TRUE
+            case('MOLE_FRACTION')
+              call InputReadDouble(input,option, &
+                             material_property%multicontinuum%init_mole_frac)
+              call InputErrorMsg(input,option,'secondary continuum init mole_frac', &
+                           'MATERIAL_PROPERTY')
+              option%flow%set_secondary_init_mole_frac = PETSC_TRUE
+            case('SALT_MOLE_FRACTION')
+              call InputReadDouble(input,option, &
+                             material_property%multicontinuum%init_salt_mole_frac)
+              call InputErrorMsg(input,option,'secondary continuum init salt_mole_frac', &
+                           'MATERIAL_PROPERTY')
+              option%flow%set_secondary_init_salt_mole_frac = PETSC_TRUE
             case('CONCENTRATION')
               call InputReadDouble(input,option, &
                              material_property%multicontinuum%init_conc)
