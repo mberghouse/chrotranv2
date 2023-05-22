@@ -55,7 +55,7 @@ module Secondary_Continuum_Aux_module
     PetscReal :: epsilon                       ! vol. frac. of primary continuum
     type(sec_continuum_type) :: sec_continuum
     type(general_auxvar_type), pointer :: sec_gen_auxvar(:)
-    PetscReal, pointer :: sec_temp(:)
+!    PetscReal, pointer :: sec_temp(:)
     PetscReal, pointer :: sec_mole_fracs(:,:)    ! array of conc. at secondary grid cells
     PetscReal, pointer :: area(:)              ! surface area
     PetscReal, pointer :: vol(:)               ! volume     face      node       face

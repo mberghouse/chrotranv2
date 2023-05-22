@@ -826,11 +826,11 @@ subroutine SecondaryGenAuxVarInit(multicontinuum, &
       !sec_gen_vars%sec_salt_mole_frac = initial_condition%flow_condition%salt_mole_fraction%dataset%rarray(1)
     endif
   !endif
-  if (option%flow%set_secondary_init_temp) then
-     sec_gen_vars%sec_temp = multicontinuum%init_temp
-  else
-     sec_gen_vars%sec_temp = initial_condition%flow_condition%temperature%dataset%rarray(1)
-  endif
+  ! if (option%flow%set_secondary_init_temp) then
+  !    sec_gen_vars%sec_temp = multicontinuum%init_temp
+  ! else
+  !    sec_gen_vars%sec_temp = initial_condition%flow_condition%temperature%dataset%rarray(1)
+  ! endif
 
 
 end subroutine SecondaryGenAuxVarInit

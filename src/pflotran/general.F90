@@ -2009,9 +2009,9 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
         Jup(option%nflowdof,GENERAL_ENERGY_EQUATION_INDEX) = &
                                  Jup(option%nflowdof,GENERAL_ENERGY_EQUATION_INDEX) - &
                                  jac_sec_heat*material_auxvars(ghosted_id)%volume
-        call SecondaryGenJacobian(sec_gen_vars(local_id), global_auxvars(ghosted_id),&
-                                  gen_auxvars(ZERO_INTEGER,ghosted_id),general_parameter,&
-                                  vol_frac_prim,material_auxvars(ghosted_id)%porosity,option)
+        ! call SecondaryGenJacobian(sec_gen_vars(local_id), global_auxvars(ghosted_id),&
+        !                           gen_auxvars(ZERO_INTEGER,ghosted_id),general_parameter,&
+        !                           vol_frac_prim,material_auxvars(ghosted_id)%porosity,option)
       endif
     endif
     call MatSetValuesBlockedLocal(A,1,ghosted_id-1,1,ghosted_id-1,Jup, &
