@@ -203,6 +203,7 @@ subroutine PMCSubsurfaceOSRTStepDT(this,stop_flag)
   PetscInt :: tempint
   PetscReal :: tconv
   PetscReal :: tempreal
+  PetscReal :: guess(this%realization%reaction%ncomp)
 
   character(len=MAXSTRINGLENGTH) :: string
   character(len=MAXWORDLENGTH) :: tunit
@@ -374,14 +375,17 @@ subroutine PMCSubsurfaceOSRTStepDT(this,stop_flag)
       offset_global = (local_id-1)*reaction%ncomp
       istart = offset_global + 1
       iend = offset_global + reaction%ncomp
+      ! guess has to be free ion concentration
+      guess(:) = rt_auxvars(ghosted_id)%pri_molal(:)
       if (nimmobile > 0) then
         tempint = istart+reaction%offset_immobile
         rt_auxvars(ghosted_id)%immobile = tran_xx_p(tempint:tempint+nimmobile-1)
+        guess(reaction%offset_immobile+1:nimmobile) = &
+          rt_auxvars(ghosted_id)%immobile
       endif
-      call RReact(tran_xx_p(istart:iend),rt_auxvars(ghosted_id), &
-                  global_auxvars(ghosted_id),material_auxvars(ghosted_id), &
-                  num_iterations,reaction,grid%nG2A(ghosted_id),option, &
-                  rreact_error)
+      call RReact(guess,rt_auxvars(ghosted_id),global_auxvars(ghosted_id), &
+                  material_auxvars(ghosted_id),num_iterations,reaction, &
+                  grid%nG2A(ghosted_id),option,rreact_error)
       if (rreact_error /= 0) exit
       ! set primary dependent var back to free-ion molality
       iend = offset_global + reaction%naqcomp

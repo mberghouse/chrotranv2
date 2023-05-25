@@ -3531,8 +3531,8 @@ end subroutine RJumpStartKineticSorption
 
 ! ************************************************************************** !
 
-recursive subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
-                  num_iterations_,reaction,natural_id,option,ierror)
+recursive subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
+                            num_iterations_,reaction,natural_id,option,ierror)
   !
   ! Solves reaction portion of operator splitting using Newton-Raphson
   !
@@ -3545,7 +3545,7 @@ recursive subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
   implicit none
 
   class(reaction_rt_type), pointer :: reaction
-  PetscReal :: tran_xx(reaction%ncomp)
+  PetscReal :: guess(reaction%ncomp)
   type(reactive_transport_auxvar_type) :: rt_auxvar
   type(global_auxvar_type) :: global_auxvar
   class(material_auxvar_type) :: material_auxvar
@@ -3557,11 +3557,12 @@ recursive subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
   PetscReal :: residual(reaction%ncomp)
   PetscReal :: residual_store(reaction%ncomp)
   PetscReal :: initial_total(reaction%ncomp)
+  PetscReal :: current_total(reaction%ncomp)
   PetscReal :: res(reaction%ncomp)
   PetscReal :: J(reaction%ncomp,reaction%ncomp)
   PetscReal :: one_over_dt
   PetscReal :: prev_solution(reaction%ncomp)
-  PetscReal :: new_solution(reaction%ncomp)
+  PetscReal :: latest_solution(reaction%ncomp)
   PetscReal :: update(reaction%ncomp)
   PetscReal :: conc(reaction%ncomp)
   PetscReal :: maximum_relative_change
@@ -3569,6 +3570,7 @@ recursive subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
   PetscReal :: accumulation_coef
   PetscReal :: fixed_accum(reaction%ncomp)
   PetscInt :: num_iterations
+  PetscInt :: num_inner_iterations
   PetscInt :: ncomp
   PetscInt :: naqcomp
   PetscInt :: nimmobile
@@ -3576,10 +3578,9 @@ recursive subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
   PetscInt :: immobile_start, immobile_end
   PetscReal :: ratio, min_ratio
   PetscReal :: scale
-  PetscReal :: last_40_norms(40)
-  PetscReal :: last_40_maxchng(40,2)
+  PetscReal :: last_5_norms(5)
+  PetscReal :: last_5_maxchng(5,2)
 
-  PetscInt :: sub_iterations
   PetscReal :: final_time
   PetscReal :: cumulative_time
   character(len=MAXWORDLENGTH) :: word
@@ -3598,8 +3599,8 @@ recursive subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
   cumulative_time = 0.d0
   final_time = option%tran_dt
   num_iterations = 0
-  last_40_norms = 0.d0
-  last_40_maxchng = 0.d0
+  last_5_norms = 0.d0
+  last_5_maxchng = 0.d0
 
   if (reaction%ncoll > 0) then
     option%io_buffer = 'Colloids not set up for operator split mode.'
@@ -3638,15 +3639,13 @@ recursive subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
   ! store initial concentrations for error reporting
   initial_total(1:naqcomp) = rt_auxvar%total(:,1)
   if (nimmobile > 0) then
-    initial_total(immobile_start:immobile_end) = &
-      tran_xx(immobile_start:immobile_end)
+    initial_total(immobile_start:immobile_end) = rt_auxvar%immobile(:)
   endif
 
-
   ! initialize guesses to stored solution
-  rt_auxvar%pri_molal(:) = tran_xx(1:naqcomp)
+  rt_auxvar%pri_molal(:) = guess(1:naqcomp)
   if (nimmobile > 0) then
-    rt_auxvar%immobile(:) = tran_xx(immobile_start:immobile_end)
+    rt_auxvar%immobile(:) = guess(immobile_start:immobile_end)
   endif
 
   do
@@ -3659,6 +3658,12 @@ recursive subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
     endif
     call RTAuxVarCompute(rt_auxvar,global_auxvar,material_auxvar,reaction, &
                          option)
+
+print *, '--total: ', rt_auxvar%total(2,1), rt_auxvar%total(6,1), &
+                      rt_auxvar%total(4,1), rt_auxvar%total(3,1)
+print *, '  +free: ', rt_auxvar%pri_molal(2), rt_auxvar%pri_molal(6), &
+                      rt_auxvar%pri_molal(4), rt_auxvar%pri_molal(3)
+print *
 
     ! Accumulation
     ! residual is overwritten in RTAccumulation()
@@ -3681,8 +3686,8 @@ recursive subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
                    material_auxvar,reaction,option)
 
     residual_store = residual
-    last_40_norms(2:40) = last_40_norms(1:39)
-    last_40_norms(1) = sqrt(dot_product(residual_store,residual_store))
+    last_5_norms(2:5) = last_5_norms(1:4)
+    last_5_norms(1) = sqrt(dot_product(residual_store,residual_store))
     if (maxval(abs(residual)) < reaction%max_residual_tolerance) exit
 
     conc(1:naqcomp) = rt_auxvar%pri_molal(1:naqcomp)
@@ -3705,16 +3710,18 @@ recursive subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
       print *, '  liquid density: ' // &
                   trim(StringWrite(global_auxvar%den_kg(1)))
       print *, '  initial total: ' // trim(StringWrite(initial_total))
-      print *, '  initial primary: ' // trim(StringWrite(tran_xx))
       print *, '  residual: ' // trim(StringWrite(residual_store))
-      print *, '  new solution: ' // trim(StringWrite(new_solution))
+      print *, '  latest solution: ' // trim(StringWrite(latest_solution))
       print *, '  Grid cell: ' // trim(StringWrite(natural_id))
-      print *, '  Last 40 maximum absolute changes: ' // &
-        trim(StringWrite(last_40_maxchng(1:min(num_iterations+1,40),1)))
-      print *, '  Last 40 maximum relative changes: ' // &
-        trim(StringWrite(last_40_maxchng(1:min(num_iterations+1,40),2)))
-      print *, '  Last 40 norms: ' // &
-        trim(StringWrite(last_40_norms(1:min(num_iterations+1,40))))
+      print *, '  Last 5 maximum absolute changes: ' // &
+        trim(StringWrite(last_5_maxchng(1:min(num_iterations, &
+                                              size(last_5_maxchng,1)),1)))
+      print *, '  Last 5 maximum relative changes: ' // &
+        trim(StringWrite(last_5_maxchng(1:min(num_iterations, &
+                                        size(last_5_maxchng,1)),2)))
+      print *, '  Last 5 norms: ' // &
+        trim(StringWrite(last_5_norms(1:min(num_iterations, &
+                                       size(last_5_norms)))))
       if (option%mycommsize > 1) then
         print *, '  Process rank: ' // trim(StringWrite(option%myrank))
       endif
@@ -3728,7 +3735,7 @@ recursive subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
 
     if (reaction%use_log_formulation) then
       update = dsign(1.d0,update)*min(dabs(update),reaction%max_dlnC)
-      new_solution = prev_solution*exp(-update)
+      latest_solution = prev_solution*exp(-update)
     else ! linear upage
       ! ensure non-negative concentration
       min_ratio = 1.d20 ! large number
@@ -3742,15 +3749,15 @@ recursive subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
         ! scale by 0.99 to make the update slightly smaller than the min_ratio
         update = update*min_ratio*0.99d0
       endif
-      new_solution = prev_solution - update
+      latest_solution = prev_solution - update
     endif
 
-    maximum_absolute_change = maxval(abs(new_solution-prev_solution))
-    maximum_relative_change = maxval(abs((new_solution-prev_solution)/ &
+    maximum_absolute_change = maxval(abs(latest_solution-prev_solution))
+    maximum_relative_change = maxval(abs((latest_solution-prev_solution)/ &
                                          prev_solution))
-    last_40_maxchng(2:40,:) = last_40_maxchng(1:39,:)
-    last_40_maxchng(1,1) = maximum_absolute_change
-    last_40_maxchng(1,2) = maximum_relative_change
+    last_5_maxchng(2:5,:) = last_5_maxchng(1:4,:)
+    last_5_maxchng(1,1) = maximum_absolute_change
+    last_5_maxchng(1,2) = maximum_relative_change
 
     if (maximum_relative_change < reaction%max_relative_change_tolerance) exit
 
@@ -3773,20 +3780,34 @@ recursive subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
           ' sec) in attempt to converge'
       endif
       option%tran_dt = 0.5d0*option%tran_dt
+      num_inner_iterations = 0
       do
         if (cumulative_time >= final_time) then
           option%iflag = option%iflag - 1
           option%tran_dt = final_time
-          if (option%iflag == 0) then
+          if (option%iflag == 0) then ! top of recursion
             ierror = 0
+            num_iterations_ = 2 ! ats uses this to select new time step size
           else
             ierror = -1 ! this means success
           endif
           return
         endif
-        call RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
-                    sub_iterations,reaction,natural_id,option,ierror)
-        num_iterations = num_iterations + sub_iterations
+        if (num_inner_iterations == 0) then
+          ! have to reset solution back to initial concentraions for
+          ! sub reaction step
+          rt_auxvar%total(:,1) = initial_total(1:naqcomp)
+          if (nimmobile > 0) then
+            rt_auxvar%immobile(:) = initial_total(immobile_start:immobile_end)
+          endif
+        endif
+        call RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
+                    num_inner_iterations,reaction,natural_id,option,ierror)
+        num_iterations = num_iterations + num_inner_iterations
+        current_total(1:naqcomp) = rt_auxvar%total(:,1)
+        if (nimmobile > 0) then
+          current_total(immobile_start:immobile_end) = rt_auxvar%immobile(:)
+        endif
         ! ierror < 0: RReact successfully completed the inner loop,
         !             but skip update below
         ! ierror = 0: RReact succeeded but keep stepping in current loop
@@ -3798,15 +3819,41 @@ recursive subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
         else if (ierror > 0) then
           option%iflag = option%iflag - 1
           if (option%iflag > 0) then
+#if 0
+            print *, ' -----------iflag: ' // trim(StringWrite(option%iflag))
+            print *, '               dt: ' // trim(StringWrite(option%tran_dt))
+            print *, '           volume: ' // trim(StringWrite(material_auxvar%volume))
+            print *, '         porosity: ' // trim(StringWrite(material_auxvar%porosity))
+            print *, '  liq saturation : ' // &
+                        trim(StringWrite(global_auxvar%sat(1)))
+            print *, '   liquid density: ' // &
+                        trim(StringWrite(global_auxvar%den_kg(1)))
+            print *, '    initial total: ' // trim(StringWrite(initial_total))
+            print *, '    current total: ' // trim(StringWrite(current_total))
+            print *, ' current free ion: ' // &
+                        trim(StringWrite(rt_auxvar%pri_molal))
+            print *, '    current guess: ' // trim(StringWrite(guess))
+            print *, '         residual: ' // trim(StringWrite(residual_store))
+            print *, '        Grid cell: ' // trim(StringWrite(natural_id))
+            print *, '  Last 5 maximum absolute changes: ' // &
+              trim(StringWrite(last_5_maxchng(1:min(num_iterations, &
+                                                    size(last_5_maxchng,1)),1)))
+            print *, '  Last 5 maximum relative changes: ' // &
+              trim(StringWrite(last_5_maxchng(1:min(num_iterations, &
+                                              size(last_5_maxchng,1)),2)))
+            print *, '                     Last 5 norms: ' // &
+              trim(StringWrite(last_5_norms(1:min(num_iterations, &
+                                              size(last_5_norms)))))
+#endif
             return
           else
             exit
           endif
         else ! ierror = 0
-          tran_xx(1:reaction%naqcomp) = rt_auxvar%pri_molal(:)
+          guess(1:reaction%naqcomp) = rt_auxvar%pri_molal(:)
           if (reaction%immobile%nimmobile > 0) then
-            tran_xx(1+reaction%offset_immobile: &
-                    reaction%offset_immobile+reaction%immobile%nimmobile) = &
+            guess(1+reaction%offset_immobile: &
+                  reaction%offset_immobile+reaction%immobile%nimmobile) = &
               rt_auxvar%immobile(:)
           endif
           cumulative_time = cumulative_time + option%tran_dt
@@ -3821,34 +3868,38 @@ recursive subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
       enddo
       print *, 'Maximum iterations in RReact: stop: ' // &
                 trim(StringWrite(num_iterations))
-      print *, '  dt: ' // trim(StringWrite(option%tran_dt))
-      print *, '  volume: ' // trim(StringWrite(material_auxvar%volume))
-      print *, '  porosity: ' // trim(StringWrite(material_auxvar%porosity))
-      print *, '  liquid saturation : ' // &
+      print *, '               dt: ' // trim(StringWrite(option%tran_dt))
+      print *, '           volume: ' // trim(StringWrite(material_auxvar%volume))
+      print *, '         porosity: ' // trim(StringWrite(material_auxvar%porosity))
+      print *, '  liq saturation : ' // &
                   trim(StringWrite(global_auxvar%sat(1)))
-      print *, '  liquid density: ' // &
+      print *, '   liquid density: ' // &
                   trim(StringWrite(global_auxvar%den_kg(1)))
-      print *, '  initial total: ' // trim(StringWrite(initial_total))
-      print *, '  initial primary: ' // trim(StringWrite(tran_xx))
-      print *, '  residual: ' // trim(StringWrite(residual_store))
-      print *, '  new solution: ' // trim(StringWrite(new_solution))
-      print *, '  Grid cell: ' // trim(StringWrite(natural_id))
-      print *, '  Last 40 maximum absolute changes: ' // &
-        trim(StringWrite(last_40_maxchng(1:min(num_iterations+1,40),1)))
-      print *, '  Last 40 maximum relative changes: ' // &
-        trim(StringWrite(last_40_maxchng(1:min(num_iterations+1,40),2)))
-      print *, '  Last 40 norms: ' // &
-        trim(StringWrite(last_40_norms(1:min(num_iterations+1,40))))
+      print *, '    initial total: ' // trim(StringWrite(initial_total))
+      print *, '    current total: ' // trim(StringWrite(current_total))
+      print *, ' current free ion: ' // trim(StringWrite(rt_auxvar%pri_molal))
+      print *, '    current guess: ' // trim(StringWrite(guess))
+      print *, '         residual: ' // trim(StringWrite(residual_store))
+      print *, '        Grid cell: ' // trim(StringWrite(natural_id))
+      print *, '  Last 5 maximum absolute changes: ' // &
+        trim(StringWrite(last_5_maxchng(1:min(num_iterations, &
+                                              size(last_5_maxchng,1)),1)))
+      print *, '  Last 5 maximum relative changes: ' // &
+        trim(StringWrite(last_5_maxchng(1:min(num_iterations, &
+                                        size(last_5_maxchng,1)),2)))
+      print *, '                     Last 5 norms: ' // &
+        trim(StringWrite(last_5_norms(1:min(num_iterations, &
+                                        size(last_5_norms)))))
       if (option%mycommsize > 1) then
         print *, '  Process rank: ' // trim(StringWrite(option%myrank))
       endif
       if (reaction%stop_on_rreact_failure) stop
     endif
 
-    rt_auxvar%pri_molal(1:naqcomp) = new_solution(1:naqcomp)
+    rt_auxvar%pri_molal(1:naqcomp) = latest_solution(1:naqcomp)
     if (nimmobile > 0) then
       rt_auxvar%immobile(1:nimmobile) = &
-        new_solution(immobile_start:immobile_end)
+        latest_solution(immobile_start:immobile_end)
     endif
 
   enddo
@@ -3857,18 +3908,6 @@ recursive subroutine RReact(tran_xx,rt_auxvar,global_auxvar,material_auxvar, &
   call RTAuxVarCompute(rt_auxvar,global_auxvar,material_auxvar,reaction,option)
 
   num_iterations_ = num_iterations
-
-#if 0
-      print *, 'max res tol: ',  reaction%max_residual_tolerance
-      print *, 'max rel change tol: ',  reaction%max_relative_change_tolerance
-      print *, '  residual: ' // trim(StringWrite(residual_store))
-      print *, '  Last 4 maximum absolute changes: ' // &
-        trim(StringWrite(last_40_maxchng(1:min(num_iterations+1,4),1)))
-      print *, '  Last 4 maximum relative changes: ' // &
-        trim(StringWrite(last_40_maxchng(1:min(num_iterations+1,4),2)))
-      print *, '  Last 4 norms: ' // &
-        trim(StringWrite(last_40_norms(1:min(num_iterations+1,4))))
-#endif
 
 end subroutine RReact
 
