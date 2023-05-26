@@ -1034,6 +1034,9 @@ subroutine ReactionReadPass1(reaction,input,option)
       case('MAXIMUM_REACTION_CUTS')
         call InputReadInt(input,option,reaction%maximum_reaction_cuts)
         call InputErrorMsg(input,option,'maximum_reaction_cuts','CHEMISTRY')
+      case('MAXIMUM_REACTION_ITERATIONS')
+        call InputReadInt(input,option,reaction%maximum_reaction_iterations)
+        call InputErrorMsg(input,option,'maximum_reaction_cuts','CHEMISTRY')
       case('DONT_STOP_ON_RREACT_FAILURE')
         reaction%stop_on_rreact_failure = PETSC_FALSE
       case default
@@ -3535,8 +3538,184 @@ end subroutine RJumpStartKineticSorption
 
 ! ************************************************************************** !
 
-recursive subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
-                            num_iterations_,reaction,natural_id,option,ierror)
+subroutine RReactConvergenceStats(header,guess, &
+                                  initial_total,current_total, &
+                                  residual_store,last_5_maxchng, &
+                                  last_5_norms,reaction, &
+                                  rt_auxvar,global_auxvar, &
+                                  material_auxvar,num_iterations, &
+                                  natural_id,option)
+  !
+  ! Substeps the original reaction step until the full step is reached
+  !
+  ! Author: Glenn Hammond
+  ! Date: 05/25/23
+
+  use Option_module
+  use String_module
+
+  implicit none
+
+  character(len=MAXSTRINGLENGTH) :: header
+  class(reaction_rt_type) :: reaction
+  PetscReal :: guess(reaction%ncomp)
+  PetscReal :: initial_total(reaction%ncomp)
+  PetscReal :: current_total(reaction%ncomp)
+  PetscReal :: residual_store(reaction%ncomp)
+  PetscReal :: last_5_maxchng(5,2)
+  PetscReal :: last_5_norms(5)
+  type(reactive_transport_auxvar_type) :: rt_auxvar
+  type(global_auxvar_type) :: global_auxvar
+  class(material_auxvar_type) :: material_auxvar
+  PetscInt :: num_iterations
+  PetscInt :: natural_id
+  type(option_type) :: option
+
+  print *
+  print *, trim(header)
+  print *, 'Process ' // trim(StringWrite(option%myrank)) // &
+           ' Cell ' // trim(StringWrite(natural_id))
+  print *, '       iterations: ' // trim(StringWrite(num_iterations))
+  print *, '               dt: ' // trim(StringWrite(option%tran_dt))
+  print *, '           volume: ' // trim(StringWrite(material_auxvar%volume))
+  print *, '         porosity: ' // trim(StringWrite(material_auxvar%porosity))
+  print *, '  liq saturation : ' // &
+              trim(StringWrite(global_auxvar%sat(1)))
+  print *, '   liquid density: ' // &
+              trim(StringWrite(global_auxvar%den_kg(1)))
+  print *, '    current guess: ' // trim(StringWrite(guess))
+  print *, '    initial total: ' // trim(StringWrite(initial_total))
+  print *, '    current total: ' // trim(StringWrite(current_total))
+  print *, ' current free ion: ' // trim(StringWrite(rt_auxvar%pri_molal))
+  print *, '         residual: ' // trim(StringWrite(residual_store))
+  print *, '  Last 5 maximum absolute changes: ' // &
+    trim(StringWrite(last_5_maxchng(1:min(num_iterations, &
+                                          size(last_5_maxchng,1)),1)))
+  print *, '  Last 5 maximum relative changes: ' // &
+    trim(StringWrite(last_5_maxchng(1:min(num_iterations, &
+                                    size(last_5_maxchng,1)),2)))
+  print *, '                     Last 5 norms: ' // &
+    trim(StringWrite(last_5_norms(1:min(num_iterations, &
+                                    size(last_5_norms)))))
+
+end subroutine RReactConvergenceStats
+
+! ************************************************************************** !
+
+subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
+                  num_iterations_,reaction,natural_id,option,ierror)
+  !
+  ! Substeps the original reaction step until the full step is reached
+  !
+  ! Author: Glenn Hammond
+  ! Date: 05/25/23
+
+  use Option_module
+  use String_module
+
+  implicit none
+
+  class(reaction_rt_type), pointer :: reaction
+  PetscReal :: guess(reaction%ncomp)
+  type(reactive_transport_auxvar_type) :: rt_auxvar
+  type(global_auxvar_type) :: global_auxvar
+  class(material_auxvar_type) :: material_auxvar
+  PetscInt :: num_iterations_
+  PetscInt :: natural_id
+  type(option_type) :: option
+  PetscInt :: ierror
+
+  character(len=MAXWORDLENGTH) :: info
+  PetscInt :: num_iterations
+  PetscInt :: num_timesteps
+  PetscInt :: num_inner_iterations
+  PetscInt :: num_constant_timesteps_after_cut
+  PetscInt :: num_cuts
+  PetscReal :: target_time
+  PetscReal :: cumulative_time
+  PetscReal :: current_total(reaction%ncomp)
+
+  info = 'Process ' // trim(StringWrite(option%myrank)) // &
+         ' Cell ' // trim(StringWrite(natural_id)) // ' :'
+
+  target_time = option%tran_dt
+  cumulative_time = 0.d0
+  num_iterations = 0
+  num_timesteps = 0
+  num_constant_timesteps_after_cut = 0
+  num_cuts = 0
+  do
+    if (cumulative_time >= target_time) then
+      option%tran_dt = target_time
+      exit
+    endif
+    call RReact2(guess,rt_auxvar,global_auxvar,material_auxvar, &
+                 num_inner_iterations,reaction,natural_id,num_cuts, &
+                 option,ierror)
+    num_iterations = num_iterations + num_inner_iterations
+    if (ierror /= 0) then
+      num_cuts = num_cuts + 1
+      if (num_cuts > reaction%maximum_reaction_cuts) then
+        print *, trim(info) // &
+          ' Too many reaction cuts (' // trim(StringWrite(num_cuts)) // &
+          ')'
+        ierror = 1
+        if (reaction%stop_on_rreact_failure) stop
+        return
+      endif
+      if (reaction%logging_verbosity > 9) then
+        print *, trim(info) // ' Cutting reaction dt (' // &
+          trim(StringWrite(option%tran_dt)) // ' -> ' // &
+          trim(StringWrite(0.5*option%tran_dt)) // &
+          ' sec) in attempt to converge'
+      endif
+      option%tran_dt = 0.5d0*option%tran_dt
+      num_constant_timesteps_after_cut = 0
+    else ! ierror == 0
+      cumulative_time = cumulative_time + option%tran_dt
+      num_timesteps = num_timesteps + 1
+      num_constant_timesteps_after_cut = num_constant_timesteps_after_cut + 1
+      if (reaction%logging_verbosity > 9 .and. num_timesteps > 1) then
+        print *, trim(info) // &
+          ' Step ' // trim(StringWrite(num_timesteps)) // &
+          ' Converged at ' // &
+          trim(StringWrite(option%time+cumulative_time)) // &
+          ' with a dt of ' // trim(StringWrite(option%tran_dt)) // ' sec'
+        if (reaction%logging_verbosity > 19) then
+          current_total(1:reaction%naqcomp) = rt_auxvar%total(:,1)
+          if (reaction%immobile%nimmobile > 0) then
+            current_total(1+reaction%offset_immobile: &
+                    reaction%offset_immobile+reaction%immobile%nimmobile) = &
+              rt_auxvar%immobile(:)
+          endif
+          print *, '    current total: ' // trim(StringWrite(current_total))
+        endif
+      endif
+      guess(1:reaction%naqcomp) = rt_auxvar%pri_molal(:)
+      if (reaction%immobile%nimmobile > 0) then
+        guess(1+reaction%offset_immobile: &
+              reaction%offset_immobile+reaction%immobile%nimmobile) = &
+          rt_auxvar%immobile(:)
+      endif
+      if (num_constant_timesteps_after_cut >= 4) then
+        num_cuts = num_cuts - 1
+        option%tran_dt = min(2.d0*option%tran_dt, &
+                             target_time-cumulative_time)
+      endif
+    endif
+  enddo
+
+  ! reset time step back for subsequent steps
+  option%tran_dt = target_time
+  num_iterations_ = num_iterations
+
+end subroutine RReact
+
+! ************************************************************************** !
+
+subroutine RReact2(guess,rt_auxvar,global_auxvar,material_auxvar, &
+                   num_iterations_,reaction,natural_id,num_cuts, &
+                   option,ierror)
   !
   ! Solves reaction portion of operator splitting using Newton-Raphson
   !
@@ -3555,6 +3734,7 @@ recursive subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
   class(material_auxvar_type) :: material_auxvar
   PetscInt :: num_iterations_
   PetscInt :: natural_id
+  PetscInt :: num_cuts
   type(option_type) :: option
   PetscInt :: ierror
 
@@ -3589,6 +3769,7 @@ recursive subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
   PetscReal :: final_time
   PetscReal :: cumulative_time
   character(len=MAXWORDLENGTH) :: word
+  character(len=MAXSTRINGLENGTH) :: string
 
   PetscInt, parameter :: iphase = 1
 
@@ -3664,6 +3845,28 @@ recursive subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
     call RTAuxVarCompute(rt_auxvar,global_auxvar,material_auxvar,reaction, &
                          option)
 
+    if (num_iterations > 20) then
+      current_total(1:naqcomp) = rt_auxvar%total(:,1)
+      if (nimmobile > 0) then
+        current_total(immobile_start:immobile_end) = rt_auxvar%immobile(:)
+      endif
+      if (reaction%logging_verbosity > 9 .or. &
+          num_cuts >= reaction%maximum_reaction_cuts) then
+        string = 'Maximum iterations in RReact'
+        call RReactConvergenceStats(string,guess,initial_total, &
+                                    current_total,residual_store, &
+                                    last_5_maxchng,last_5_norms,reaction, &
+                                    rt_auxvar,global_auxvar,material_auxvar, &
+                                    num_iterations,natural_id,option)
+      endif
+      ierror = 1
+      rt_auxvar%total(:,1) = initial_total(1:naqcomp)
+      if (nimmobile > 0) then
+        rt_auxvar%immobile(:) = initial_total(immobile_start:immobile_end)
+      endif
+      return
+    endif
+
     ! Accumulation
     ! residual is overwritten in RTAccumulation()
     call RTAccumulation(rt_auxvar,global_auxvar,material_auxvar,reaction, &
@@ -3701,33 +3904,18 @@ recursive subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
                 PETSC_FALSE,ierror)
 
     if (ierror /= 0) then
-      print *, 'Error in RSolve: stop'
-      print *, 'Current iteration: ' // &
-                  trim(StringWrite(num_iterations))
-      print *, '  dt: ' // trim(StringWrite(option%tran_dt))
-      print *, '  volume: ' // trim(StringWrite(material_auxvar%volume))
-      print *, '  porosity: ' // trim(StringWrite(material_auxvar%porosity))
-      print *, '  liquid saturation : ' // &
-                  trim(StringWrite(global_auxvar%sat(1)))
-      print *, '  liquid density: ' // &
-                  trim(StringWrite(global_auxvar%den_kg(1)))
-      print *, '  initial total: ' // trim(StringWrite(initial_total))
-      print *, '  residual: ' // trim(StringWrite(residual_store))
-      print *, '  latest solution: ' // trim(StringWrite(latest_solution))
-      print *, '  Grid cell: ' // trim(StringWrite(natural_id))
-      print *, '  Last 5 maximum absolute changes: ' // &
-        trim(StringWrite(last_5_maxchng(1:min(num_iterations, &
-                                              size(last_5_maxchng,1)),1)))
-      print *, '  Last 5 maximum relative changes: ' // &
-        trim(StringWrite(last_5_maxchng(1:min(num_iterations, &
-                                        size(last_5_maxchng,1)),2)))
-      print *, '  Last 5 norms: ' // &
-        trim(StringWrite(last_5_norms(1:min(num_iterations, &
-                                       size(last_5_norms)))))
-      if (option%mycommsize > 1) then
-        print *, '  Process rank: ' // trim(StringWrite(option%myrank))
-      endif
+      string = 'Error in RSolve: stop'
+      call RReactConvergenceStats(string,guess,initial_total, &
+                                  current_total,residual_store, &
+                                  last_5_maxchng,last_5_norms,reaction, &
+                                  rt_auxvar,global_auxvar,material_auxvar, &
+                                  num_iterations,natural_id,option)
       if (reaction%stop_on_rreact_failure) stop
+      rt_auxvar%total(:,1) = initial_total(1:naqcomp)
+      if (nimmobile > 0) then
+        rt_auxvar%immobile(:) = initial_total(immobile_start:immobile_end)
+      endif
+      return
     endif
 
     prev_solution(1:naqcomp) = rt_auxvar%pri_molal(1:naqcomp)
@@ -3763,141 +3951,6 @@ recursive subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
 
     if (maximum_relative_change < reaction%max_relative_change_tolerance) exit
 
-    if (num_iterations > 20) then
-      word = 'Process ' // trim(StringWrite(option%myrank)) // &
-             ' Cell ' // trim(StringWrite(natural_id)) // ' :'
-      option%iflag = option%iflag + 1
-      if (option%iflag > reaction%maximum_reaction_cuts) then
-        print *, trim(word) // &
-          ' Too many reaction cuts (' // trim(StringWrite(option%iflag)) // &
-          ')'
-        option%iflag = option%iflag - 1
-        ierror = 1
-        return
-      endif
-      if (reaction%logging_verbosity > 9) then
-        print *, trim(word) // ' Cutting reaction dt (' // &
-          trim(StringWrite(option%tran_dt)) // ' -> ' // &
-          trim(StringWrite(0.5*option%tran_dt)) // &
-          ' sec) in attempt to converge'
-      endif
-      option%tran_dt = 0.5d0*option%tran_dt
-      num_inner_iterations = 0
-      do
-        if (cumulative_time >= final_time) then
-          option%iflag = option%iflag - 1
-          option%tran_dt = final_time
-          if (option%iflag == 0) then ! top of recursion
-            ierror = 0
-            num_iterations_ = 2 ! ats uses this to select new time step size
-          else
-            ierror = -1 ! this means success
-          endif
-          return
-        endif
-        if (num_inner_iterations == 0) then
-          ! have to reset solution back to initial concentraions for
-          ! sub reaction step
-          rt_auxvar%total(:,1) = initial_total(1:naqcomp)
-          if (nimmobile > 0) then
-            rt_auxvar%immobile(:) = initial_total(immobile_start:immobile_end)
-          endif
-        endif
-        call RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
-                    num_inner_iterations,reaction,natural_id,option,ierror)
-        num_iterations = num_iterations + num_inner_iterations
-        current_total(1:naqcomp) = rt_auxvar%total(:,1)
-        if (nimmobile > 0) then
-          current_total(immobile_start:immobile_end) = rt_auxvar%immobile(:)
-        endif
-        ! ierror < 0: RReact successfully completed the inner loop,
-        !             but skip update below
-        ! ierror = 0: RReact succeeded but keep stepping in current loop
-        ! ierror > 0: RReact failed. The outer simulator must resolve
-        if (ierror < 0) then
-          ! skip the update because RReact returned from the inner loop
-          ierror = 0
-          cumulative_time = option%tran_dt
-        else if (ierror > 0) then
-          option%iflag = option%iflag - 1
-          if (option%iflag > 0) then
-#if 0
-            print *, ' -----------iflag: ' // trim(StringWrite(option%iflag))
-            print *, '               dt: ' // trim(StringWrite(option%tran_dt))
-            print *, '           volume: ' // trim(StringWrite(material_auxvar%volume))
-            print *, '         porosity: ' // trim(StringWrite(material_auxvar%porosity))
-            print *, '  liq saturation : ' // &
-                        trim(StringWrite(global_auxvar%sat(1)))
-            print *, '   liquid density: ' // &
-                        trim(StringWrite(global_auxvar%den_kg(1)))
-            print *, '    initial total: ' // trim(StringWrite(initial_total))
-            print *, '    current total: ' // trim(StringWrite(current_total))
-            print *, ' current free ion: ' // &
-                        trim(StringWrite(rt_auxvar%pri_molal))
-            print *, '    current guess: ' // trim(StringWrite(guess))
-            print *, '         residual: ' // trim(StringWrite(residual_store))
-            print *, '        Grid cell: ' // trim(StringWrite(natural_id))
-            print *, '  Last 5 maximum absolute changes: ' // &
-              trim(StringWrite(last_5_maxchng(1:min(num_iterations, &
-                                                    size(last_5_maxchng,1)),1)))
-            print *, '  Last 5 maximum relative changes: ' // &
-              trim(StringWrite(last_5_maxchng(1:min(num_iterations, &
-                                              size(last_5_maxchng,1)),2)))
-            print *, '                     Last 5 norms: ' // &
-              trim(StringWrite(last_5_norms(1:min(num_iterations, &
-                                              size(last_5_norms)))))
-#endif
-            return
-          else
-            exit
-          endif
-        else ! ierror = 0
-          guess(1:reaction%naqcomp) = rt_auxvar%pri_molal(:)
-          if (reaction%immobile%nimmobile > 0) then
-            guess(1+reaction%offset_immobile: &
-                  reaction%offset_immobile+reaction%immobile%nimmobile) = &
-              rt_auxvar%immobile(:)
-          endif
-          cumulative_time = cumulative_time + option%tran_dt
-          if (reaction%logging_verbosity > 9) then
-            print *, trim(word) // ' Converged at ' // &
-              trim(StringWrite(cumulative_time)) // ' with a dt of ' // &
-              trim(StringWrite(option%tran_dt)) // ' sec'
-          endif
-          option%tran_dt = 2.d0*option%tran_dt
-        endif
-        option%tran_dt = min(option%tran_dt,final_time-cumulative_time)
-      enddo
-      print *, 'Maximum iterations in RReact: stop: ' // &
-                trim(StringWrite(num_iterations))
-      print *, '               dt: ' // trim(StringWrite(option%tran_dt))
-      print *, '           volume: ' // trim(StringWrite(material_auxvar%volume))
-      print *, '         porosity: ' // trim(StringWrite(material_auxvar%porosity))
-      print *, '  liq saturation : ' // &
-                  trim(StringWrite(global_auxvar%sat(1)))
-      print *, '   liquid density: ' // &
-                  trim(StringWrite(global_auxvar%den_kg(1)))
-      print *, '    initial total: ' // trim(StringWrite(initial_total))
-      print *, '    current total: ' // trim(StringWrite(current_total))
-      print *, ' current free ion: ' // trim(StringWrite(rt_auxvar%pri_molal))
-      print *, '    current guess: ' // trim(StringWrite(guess))
-      print *, '         residual: ' // trim(StringWrite(residual_store))
-      print *, '        Grid cell: ' // trim(StringWrite(natural_id))
-      print *, '  Last 5 maximum absolute changes: ' // &
-        trim(StringWrite(last_5_maxchng(1:min(num_iterations, &
-                                              size(last_5_maxchng,1)),1)))
-      print *, '  Last 5 maximum relative changes: ' // &
-        trim(StringWrite(last_5_maxchng(1:min(num_iterations, &
-                                        size(last_5_maxchng,1)),2)))
-      print *, '                     Last 5 norms: ' // &
-        trim(StringWrite(last_5_norms(1:min(num_iterations, &
-                                        size(last_5_norms)))))
-      if (option%mycommsize > 1) then
-        print *, '  Process rank: ' // trim(StringWrite(option%myrank))
-      endif
-      if (reaction%stop_on_rreact_failure) stop
-    endif
-
     rt_auxvar%pri_molal(1:naqcomp) = latest_solution(1:naqcomp)
     if (nimmobile > 0) then
       rt_auxvar%immobile(1:nimmobile) = &
@@ -3911,7 +3964,7 @@ recursive subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
 
   num_iterations_ = num_iterations
 
-end subroutine RReact
+end subroutine RReact2
 
 ! ************************************************************************** !
 

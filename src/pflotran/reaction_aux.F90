@@ -184,6 +184,7 @@ module Reaction_Aux_module
     PetscInt :: num_dbase_parameters
     PetscInt :: logging_verbosity
     PetscInt :: maximum_reaction_cuts
+    PetscInt :: maximum_reaction_iterations
     PetscBool :: stop_on_rreact_failure
     PetscReal, pointer :: dbase_temperatures(:)
     type(species_idx_type), pointer :: species_idx
@@ -485,6 +486,7 @@ function ReactionCreate()
   reaction%print_secondary_conc_type = 0
   reaction%logging_verbosity = 0
   reaction%maximum_reaction_cuts = 10
+  reaction%maximum_reaction_iterations = 20
   reaction%stop_on_rreact_failure = PETSC_TRUE
 
   nullify(reaction%species_idx)
