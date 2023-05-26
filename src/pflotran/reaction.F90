@@ -3845,7 +3845,7 @@ subroutine RReact2(guess,rt_auxvar,global_auxvar,material_auxvar, &
     call RTAuxVarCompute(rt_auxvar,global_auxvar,material_auxvar,reaction, &
                          option)
 
-    if (num_iterations > 20) then
+    if (num_iterations > reaction%maximum_reaction_iterations) then
       current_total(1:naqcomp) = rt_auxvar%total(:,1)
       if (nimmobile > 0) then
         current_total(immobile_start:immobile_end) = rt_auxvar%immobile(:)
