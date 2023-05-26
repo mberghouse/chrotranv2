@@ -349,6 +349,7 @@ module Reaction_Aux_module
     PetscReal :: max_dlnC
     PetscReal :: max_relative_change_tolerance
     PetscReal :: max_residual_tolerance
+    PetscReal :: max_rel_residual_tolerance
 
     PetscBool :: update_permeability
     PetscBool :: update_tortuosity
@@ -618,6 +619,7 @@ function ReactionCreate()
   reaction%max_dlnC = 5.d0
   reaction%max_relative_change_tolerance = 1.d-6
   reaction%max_residual_tolerance = 1.d-12
+  reaction%max_rel_residual_tolerance = 1.d-8
 
   reaction%update_permeability = PETSC_FALSE
   reaction%update_tortuosity = PETSC_FALSE

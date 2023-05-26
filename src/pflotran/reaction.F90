@@ -1019,6 +1019,10 @@ subroutine ReactionReadPass1(reaction,input,option)
         call InputReadDouble(input,option,reaction%max_residual_tolerance)
         call InputErrorMsg(input,option,'maximum residual tolerance', &
                            'CHEMISTRY')
+      case('MAX_RELATIVE_RESIDUAL_TOLERANCE')
+        call InputReadDouble(input,option,reaction%max_rel_residual_tolerance)
+        call InputErrorMsg(input,option,'maximum relative residual tolerance', &
+                           'CHEMISTRY')
       case('MINIMUM_POROSITY')
         call InputReadDouble(input,option,reaction%minimum_porosity)
         call InputErrorMsg(input,option,'minimim porosity','CHEMISTRY')
@@ -3580,6 +3584,7 @@ recursive subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
   PetscReal :: scale
   PetscReal :: last_5_norms(5)
   PetscReal :: last_5_maxchng(5,2)
+  PetscReal :: two_norm_r, two_norm_r0
 
   PetscReal :: final_time
   PetscReal :: cumulative_time
@@ -3659,12 +3664,6 @@ recursive subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
     call RTAuxVarCompute(rt_auxvar,global_auxvar,material_auxvar,reaction, &
                          option)
 
-print *, '--total: ', rt_auxvar%total(2,1), rt_auxvar%total(6,1), &
-                      rt_auxvar%total(4,1), rt_auxvar%total(3,1)
-print *, '  +free: ', rt_auxvar%pri_molal(2), rt_auxvar%pri_molal(6), &
-                      rt_auxvar%pri_molal(4), rt_auxvar%pri_molal(3)
-print *
-
     ! Accumulation
     ! residual is overwritten in RTAccumulation()
     call RTAccumulation(rt_auxvar,global_auxvar,material_auxvar,reaction, &
@@ -3686,9 +3685,12 @@ print *
                    material_auxvar,reaction,option)
 
     residual_store = residual
+    two_norm_r = sqrt(dot_product(residual_store,residual_store))
     last_5_norms(2:5) = last_5_norms(1:4)
-    last_5_norms(1) = sqrt(dot_product(residual_store,residual_store))
+    last_5_norms(1) = two_norm_r
+    if (num_iterations == 1) two_norm_r0 = two_norm_r
     if (maxval(abs(residual)) < reaction%max_residual_tolerance) exit
+    if ((two_norm_r/two_norm_r0) < reaction%max_rel_residual_tolerance) exit
 
     conc(1:naqcomp) = rt_auxvar%pri_molal(1:naqcomp)
     if (nimmobile > 0) then
