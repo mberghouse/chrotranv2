@@ -1412,7 +1412,8 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
   PetscReal :: sec_dencpr,k_eff,dkeff_dsatl,dkeff_dT
   PetscReal :: dummy_dist(-1:3) = (/0.d0,1.d0,0.d0,0.d0,1.d0/)
   PetscReal :: res_sec_heat
-
+  PetscReal :: res_sec_gen(realization%option%nflowaqcomp)
+  
   PetscReal, pointer :: r_p(:)
   PetscReal, pointer :: accum_p(:), accum_p2(:)
 
@@ -1561,11 +1562,12 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
                                  k_eff*1.d-6,&
                                  sec_dencpr,gen_auxvars(ZERO_INTEGER,ghosted_id)%temp, &
                                  option,res_sec_heat)
+      r_p(iend) = r_p(iend) - res_sec_heat*material_auxvars(ghosted_id)%volume
       call SecondaryGenResidual(general_sec_gen_vars(local_id),global_auxvars(ghosted_id),&
                                 gen_auxvars(ZERO_INTEGER,ghosted_id),&
-                                general_parameter,vol_frac_prim,material_auxvars(ghosted_id)&
-                                %porosity,option)
-      r_p(iend) = r_p(iend) - res_sec_heat*material_auxvars(ghosted_id)%volume
+                                general_parameter,vol_frac_prim,material_auxvars(ghosted_id)%porosity,&
+                                res_sec_gen,option)
+      r_p(2:iend-1) = r_p(2:iend) - res_sec_gen*material_auxvars(ghosted_id)%volume
 
     enddo
   endif

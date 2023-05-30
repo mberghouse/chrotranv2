@@ -2615,7 +2615,7 @@ end subroutine SecondaryHeatJacobian
 ! ************************************************************************** !
 
 subroutine SecondaryGenResidual(sec_gen_vars,global_auxvar,gen_auxvar,general_parameter,&
-                                prim_vol,porosity,option)
+                                prim_vol,porosity,res_gen,option)
   ! Calculates the source term contribution due to secondary
   ! continuum in the primary continuum residual
   !
@@ -2991,7 +2991,8 @@ subroutine SecondaryGenResidual(sec_gen_vars,global_auxvar,gen_auxvar,general_pa
       conc_current_M(i) = conc_upd(i,ngcells) + rhs(i+(ngcells-1)*ncomp)
   enddo
 
-  gen_auxvar%xmol(:,1) = conc_current_M
+  ! gen_auxvar%xmol(2:ncomp+1,1) = conc_current_M
+  ! gen_auxvar%xmol(1,1) = 1.d0 - sum(gen_auxvar%xmol(2:ncomp+1,1))
   ! do k = 1, nphase
   !   a_m(:,:,k) = pordiff(k)/dm_plus(ngcells)*area(ngcells)*inv_D_M ! in L/kg  For log formulation, L/mol
   !   dCsec_dCprim = dCsec_dCprim + a_m(:,:,k)*dconc_prim(:,:,k)
@@ -3028,10 +3029,10 @@ subroutine SecondaryGenResidual(sec_gen_vars,global_auxvar,gen_auxvar,general_pa
 
   sec_jac = 0.d0
   ! Calculate the coupling term
-  ! res_gen = res_gen + porosity * diffusion_coef(:)*den/dm_plus(ngcells)*area_fm* &
-  !                    (conc_current_M(:) - conc_primary_node(:))*prim_vol
+  res_gen = res_gen + porosity * diffusion_coef(:)*den/dm_plus(ngcells)*area_fm* &
+            (conc_current_M(:) - conc_primary_node(:))*prim_vol
   ! sec_jac = sec_jac + area_fm*porosity*diffusion_coef(:)*den/dm_plus(ngcells)* &
-  !              (dPsisec_dCprim(:,:) - dconc_prim(:,:))* prim_vol ! in kg water/s
+  !           (dPsisec_dCprim(:,:) - dconc_prim(:,:))* prim_vol ! in kg water/s
 
   ! Store the contribution to the primary jacobian term
   sec_gen_vars%sec_jac = sec_jac
