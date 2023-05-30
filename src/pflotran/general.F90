@@ -411,13 +411,14 @@ subroutine GeneralUpdateSolution(realization)
        gen_auxvars(ZERO_INTEGER,ghosted_id)%temp,gen_auxvars(ZERO_INTEGER,ghosted_id)%effective_porosity, &
        k_eff,dkeff_dsatl,dkeff_dT,option)
 
+      ! Compute temperatures/concentrations in the secondary continuum
       call SecHeatAuxVarCompute(general_sec_heat_vars(local_id), &
                                 !general_parameter%ckwet(patch%cct_id(ghosted_id)), &
                                 !patch%char_curves_thermal_array(patch%cct_id(ghosted_id))%ptr, &
                                 k_eff*1.d-6,&
                                 sec_dencpr,gen_auxvars(ZERO_INTEGER,ghosted_id)%temp, &
                                 option)
-      call SecondaryGenAuxVarCompute(general_sec_gen_vars(local_id), option)
+      ! call SecondaryGenAuxVarCompute(general_sec_gen_vars(local_id), option)
     enddo
 
   endif
@@ -1553,14 +1554,17 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
       call thermal_cc%thermal_conductivity_function%CalculateTCond(gen_auxvars(ZERO_INTEGER,ghosted_id)%sat(1), &
        gen_auxvars(ZERO_INTEGER,ghosted_id)%temp,gen_auxvars(ZERO_INTEGER,ghosted_id)%effective_porosity, &
        k_eff,dkeff_dsatl,dkeff_dT,option)
+      !compute the residual term contribution from the secondary continuum.
       call SecondaryHeatResidual(general_sec_heat_vars(local_id), &
                                  !general_parameter%ckwet(patch%cct_id(ghosted_id)), &
                                  !patch%char_curves_thermal_array(patch%cct_id(ghosted_id))%ptr, &
                                  k_eff*1.d-6,&
                                  sec_dencpr,gen_auxvars(ZERO_INTEGER,ghosted_id)%temp, &
                                  option,res_sec_heat)
-      call SecondaryGenResidual(general_sec_gen_vars(local_id),global_auxvars(ghosted_id), gen_auxvars(ZERO_INTEGER,ghosted_id),&
-                                general_parameter,vol_frac_prim,material_auxvars(ghosted_id)%porosity,option)
+      call SecondaryGenResidual(general_sec_gen_vars(local_id),global_auxvars(ghosted_id),&
+                                gen_auxvars(ZERO_INTEGER,ghosted_id),&
+                                general_parameter,vol_frac_prim,material_auxvars(ghosted_id)&
+                                %porosity,option)
       r_p(iend) = r_p(iend) - res_sec_heat*material_auxvars(ghosted_id)%volume
 
     enddo
@@ -2000,6 +2004,7 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
         call thermal_cc%thermal_conductivity_function%CalculateTCond(gen_auxvars(ZERO_INTEGER,ghosted_id)%sat(1), &
          gen_auxvars(ZERO_INTEGER,ghosted_id)%temp,gen_auxvars(ZERO_INTEGER,ghosted_id)%effective_porosity, &
          k_eff,dkeff_dsatl,dkeff_dT,option)
+        ! Compute temperature derivate of outermost node wrt primary node.
         call SecondaryHeatJacobian(sec_heat_vars(local_id), &
                                    !general_parameter%ckwet(patch%cct_id(ghosted_id)), &
                                    !patch%char_curves_thermal_array(patch%cct_id(ghosted_id))%ptr, &

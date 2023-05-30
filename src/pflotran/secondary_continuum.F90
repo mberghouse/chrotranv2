@@ -2251,39 +2251,39 @@ subroutine SecondaryGenAuxVarCompute(sec_gen_vars,option)
 
   ! Use the stored coefficient matrices from LU decomposition of the
   ! block triagonal sytem
-  coeff_left = sec_gen_vars%cxm
-  coeff_right = sec_gen_vars%cxp
-  coeff_diag = sec_gen_vars%cdl
-  rhs = sec_gen_vars%r
+  ! coeff_left = sec_gen_vars%cxm
+  ! coeff_right = sec_gen_vars%cxp
+  ! coeff_diag = sec_gen_vars%cdl
+  ! rhs = sec_gen_vars%r
 
-  select case (option%secondary_continuum_solver)
-    case(1)
-      call bl3dsolb(ngcells,ncomp,coeff_right,coeff_diag,coeff_left,pivot, &
-                    ONE_INTEGER,rhs)
-    case(2)
-      call solbtb(ncomp,ngcells,ncomp,coeff_diag,coeff_right,coeff_left, &
-                  pivot,rhs)
-    case(3)
-      do i = ngcells-1, 1, -1
-        rhs(i) = (rhs(i) - coeff_right(ncomp,ncomp,i)*rhs(i+1))/ &
-                             coeff_diag(ncomp,ncomp,i)
-      enddo
-    case default
-      option%io_buffer = 'SECONDARY_CONTINUUM_SOLVER can be only ' // &
-                         'HINDMARSH or KEARST. For single component'// &
-                         'chemistry THOMAS can be used.'
-      call PrintErrMsg(option)
-  end select
+  ! select case (option%secondary_continuum_solver)
+  !   case(1)
+  !     call bl3dsolb(ngcells,ncomp,coeff_right,coeff_diag,coeff_left,pivot, &
+  !                   ONE_INTEGER,rhs)
+  !   case(2)
+  !     call solbtb(ncomp,ngcells,ncomp,coeff_diag,coeff_right,coeff_left, &
+  !                 pivot,rhs)
+  !   case(3)
+  !     do i = ngcells-1, 1, -1
+  !       rhs(i) = (rhs(i) - coeff_right(ncomp,ncomp,i)*rhs(i+1))/ &
+  !                            coeff_diag(ncomp,ncomp,i)
+  !     enddo
+  !   case default
+  !     option%io_buffer = 'SECONDARY_CONTINUUM_SOLVER can be only ' // &
+  !                        'HINDMARSH or KEARST. For single component'// &
+  !                        'chemistry THOMAS can be used.'
+  !     call PrintErrMsg(option)
+  ! end select
 
-  do j = 1, ncomp
-    do i = 1, ngcells
-      n = j + (i - 1)*ncomp
-      conc_upd(j,i) = rhs(n) + conc_upd(j,i)
-      !if (conc_upd(j,i) < 0.d0) conc_upd(j,i) = 1.d-8
-    enddo
-  enddo
+  ! do j = 1, ncomp
+  !   do i = 1, ngcells
+  !     n = j + (i - 1)*ncomp
+  !     conc_upd(j,i) = rhs(n) + conc_upd(j,i)
+  !     !if (conc_upd(j,i) < 0.d0) conc_upd(j,i) = 1.d-8
+  !   enddo
+  ! enddo
 
-  sec_gen_vars%updated_mole_fracs = conc_upd
+  ! sec_gen_vars%updated_mole_fracs = conc_upd
 
 
 end subroutine SecondaryGenAuxVarCompute
@@ -2725,7 +2725,7 @@ subroutine SecondaryGenResidual(sec_gen_vars,global_auxvar,gen_auxvar,general_pa
   ncomp = option%nflowaqcomp
   nphase = 1
 
-  conc_primary_node(:) = gen_auxvar%xmol(:,1)
+  conc_primary_node(:) = gen_auxvar%xmol(2,1)
 
   diffusion_coef(1) = general_parameter%diffusion_coefficient(1)
   if (general_salt) then
@@ -2761,8 +2761,8 @@ subroutine SecondaryGenResidual(sec_gen_vars,global_auxvar,gen_auxvar,general_pa
 
   !dconc_prim = auxvar%aqueous%dtotal(:,:,:)
   pordt = porosity/option%flow_dt
-  pordiff = porosity*diffusion_coef * global_auxvar%sat
-  den = 1000.d0 ! Density in the matrix is constant - prevent mass balance issues
+  !pordiff = porosity*diffusion_coef * global_auxvar%sat
+  den = 1000.d0 / FMWH2O! Molar density in the matrix is constant - prevent mass balance issues
 
 !================ Calculate the secondary residual =============================
 
@@ -2859,6 +2859,31 @@ subroutine SecondaryGenResidual(sec_gen_vars,global_auxvar,gen_auxvar,general_pa
   rhs = -res
 
   ! First do an LU decomposition for calculating D_M matrix
+
+  i = 1
+  do j = 1, ncomp
+    do k = 1, ncomp
+      coeff_diag(j,k,i) = coeff_diag(j,k,i) + alpha_diag(j,k,i)
+      coeff_right(j,k,i) = coeff_right(j,k,i) + gamma_right(j,k,i)
+    enddo
+  enddo
+  do i = 2, ngcells-1
+    do j = 1, ncomp
+      do k = 1, ncomp
+        coeff_diag(j,k,i) = coeff_diag(j,k,i) + alpha_diag(j,k,i)
+        coeff_left(j,k,i) = coeff_left(j,k,i) + beta_left(j,k,i)
+        coeff_right(j,k,i) = coeff_right(j,k,i) + gamma_right(j,k,i)
+      enddo
+    enddo
+  enddo
+  i = ngcells
+  do j = 1, ncomp
+    do k = 1, ncomp
+      coeff_diag(j,k,i) = coeff_diag(j,k,i) + alpha_diag(j,k,i)
+      coeff_left(j,k,i) = coeff_left(j,k,i) + beta_left(j,k,i)
+    enddo
+  enddo
+
   coeff_diag_dm = coeff_diag
   coeff_left_dm = coeff_left
   coeff_right_dm = coeff_right
@@ -2966,14 +2991,7 @@ subroutine SecondaryGenResidual(sec_gen_vars,global_auxvar,gen_auxvar,general_pa
       conc_current_M(i) = conc_upd(i,ngcells) + rhs(i+(ngcells-1)*ncomp)
   enddo
 
-  ! Update the secondary continuum totals at the outer matrix node
-  ! call RTAuxVarCopy(rt_auxvar,sec_gen_vars%sec_rt_auxvar(ngcells), &
-  !                   option)
-  ! rt_auxvar%pri_molal = conc_current_M ! in mol/kg
-  ! call RTotalAqueous(rt_auxvar,global_auxvar,reaction,option)
-  ! conc_current_M(:,1) = rt_auxvar%total(:,1)
-
-  conc_current_M = gen_auxvar%xmol(:,1)
+  gen_auxvar%xmol(:,1) = conc_current_M
   ! do k = 1, nphase
   !   a_m(:,:,k) = pordiff(k)/dm_plus(ngcells)*area(ngcells)*inv_D_M ! in L/kg  For log formulation, L/mol
   !   dCsec_dCprim = dCsec_dCprim + a_m(:,:,k)*dconc_prim(:,:,k)
@@ -3010,8 +3028,8 @@ subroutine SecondaryGenResidual(sec_gen_vars,global_auxvar,gen_auxvar,general_pa
 
   sec_jac = 0.d0
   ! Calculate the coupling term
-  res_gen = res_gen + porosity * diffusion_coef(:)*den/dm_plus(ngcells)*area_fm* &
-                     (conc_current_M(:) - conc_primary_node(:))*prim_vol
+  ! res_gen = res_gen + porosity * diffusion_coef(:)*den/dm_plus(ngcells)*area_fm* &
+  !                    (conc_current_M(:) - conc_primary_node(:))*prim_vol
   ! sec_jac = sec_jac + area_fm*porosity*diffusion_coef(:)*den/dm_plus(ngcells)* &
   !              (dPsisec_dCprim(:,:) - dconc_prim(:,:))* prim_vol ! in kg water/s
 
@@ -3156,147 +3174,7 @@ subroutine SecondaryGenJacobian(sec_gen_vars,global_auxvar,gen_auxvar,general_pa
   call MaterialAuxVarInit(material_auxvar,option)
   material_auxvar%porosity = porosity
 !---------
-!============== Numerical jacobian for coupling term ===========================
 
-
-!   call RTAuxVarInit(rt_auxvar,reaction,option)
-!   conc_prim = auxvar%pri_molal
-!   conc_prim_pert = conc_prim
-
-!   do l = 1, ncomp
-
-!     conc_prim_pert = conc_prim
-!     pert = conc_prim(l)*perturbation_tolerance
-!     conc_prim_pert(l) = conc_prim_pert(l) + pert
-
-!     res = 0.d0
-!     rhs = 0.d0
-
-!     coeff_diag_pert = coeff_diag_copy
-!     coeff_left_pert = coeff_left_copy
-!     coeff_right_pert = coeff_right_copy
-
-!     call RTAuxVarCopy(rt_auxvar,auxvar,option)
-!     rt_auxvar%pri_molal = conc_prim_pert ! in mol/kg
-!     call RTotalAqueous(rt_auxvar,global_auxvar,reaction,option)
-!     conc_primary_node_pert = rt_auxvar%total(:,1)
-
-! !================ Calculate the secondary residual =============================
-
-!     do j = 1, ncomp
-
-!       ! Accumulation
-!       do i = 1, ngcells
-!         n = j + (i-1)*ncomp
-!         res(n) = pordt*(conc_upd(j,i,1) - conc_prev(j,i,1))*vol(i)
-!       enddo
-
-!       ! Flux terms
-!       do i = 2, ngcells - 1
-!         n = j + (i-1)*ncomp
-!         res(n) = res(n) - pordiff(1)*area(i)/(dm_minus(i+1) + dm_plus(i))* &
-!                           (conc_upd(j,i+1,1) - conc_upd(j,i,1))
-!         res(n) = res(n) + pordiff(1)*area(i-1)/(dm_minus(i) + dm_plus(i-1))* &
-!                           (conc_upd(j,i,1) - conc_upd(j,i-1,1))
-!       enddo
-
-
-!       ! Apply boundary conditions
-!       ! Inner boundary
-!       res(j) = res(j) - pordiff(1)*area(1)/(dm_minus(2) + dm_plus(1))* &
-!                         (conc_upd(j,2,1) - conc_upd(j,1,1))
-
-!       ! Outer boundary
-!       res(j+(ngcells-1)*ncomp) = res(j+(ngcells-1)*ncomp) - &
-!                                  pordiff(1)*area(ngcells)/dm_plus(ngcells)* &
-!                                  (conc_primary_node_pert(j) -  &
-!                                  conc_upd(j,ngcells,1))
-!       res(j+(ngcells-1)*ncomp) = res(j+(ngcells-1)*ncomp) + &
-!                                  pordiff(1)*area(ngcells-1)/(dm_minus(ngcells) &
-!                                  + dm_plus(ngcells-1))*(conc_upd(j,ngcells,1) - &
-!                                  conc_upd(j,ngcells-1,1))
-
-!     enddo
-
-! !============================== Forward solve ==================================
-
-!     rhs = -res
-
-!   select case (option%secondary_continuum_solver)
-!     case(1)
-!       call bl3dfac(ngcells,ncomp,coeff_right_pert,coeff_diag_pert, &
-!                     coeff_left_pert,pivot)
-!       call bl3dsolf(ngcells,ncomp,coeff_right_pert,coeff_diag_pert, &
-!                      coeff_left_pert,pivot,ONE_INTEGER,rhs)
-!     case(2)
-!       call decbt(ncomp,ngcells,ncomp,coeff_diag_pert,coeff_right_pert, &
-!                   coeff_left_pert,pivot,ier)
-!       if (ier /= 0) then
-!         print *,'error in matrix decbt: ier = ',ier
-!         stop
-!       endif
-!       call solbtf(ncomp,ngcells,ncomp,coeff_diag_pert,coeff_right_pert, &
-!                    coeff_left_pert,pivot,rhs)
-!     case(3)
-!       ! Thomas algorithm for tridiagonal system
-!       ! Forward elimination
-!       if (ncomp /= 1) then
-!         option%io_buffer = 'THOMAS algorithm can be used only with '// &
-!                            'single component chemistry'
-!         call PrintErrMsg(option)
-!       endif
-!       do i = 2, ngcells
-!         m = coeff_left_pert(ncomp,ncomp,i)/coeff_diag_pert(ncomp,ncomp,i-1)
-!         coeff_diag_pert(ncomp,ncomp,i) = coeff_diag_pert(ncomp,ncomp,i) - &
-!                                     m*coeff_right_pert(ncomp,ncomp,i-1)
-!         rhs(i) = rhs(i) - m*rhs(i-1)
-!       enddo
-!       rhs(ngcells) = rhs(ngcells)/coeff_diag(ncomp,ncomp,ngcells)
-!     case default
-!       option%io_buffer = 'SECONDARY_CONTINUUM_SOLVER can be only ' // &
-!                          'HINDMARSH or KEARST. For single component'// &
-!                          'chemistry THOMAS can be used.'
-!       call PrintErrMsg(option)
-!     end select
-
-!     ! Update the secondary concentrations
-!     do i = 1, ncomp
-!       if (reaction%use_log_formulation) then
-!         ! convert log concentration to concentration
-!         rhs(i+(ngcells-1)*ncomp) = dsign(1.d0,rhs(i+(ngcells-1)*ncomp))* &
-!           min(dabs(rhs(i+(ngcells-1)*ncomp)),reaction%max_dlnC)
-!         conc_current_M_pert(i) = conc_upd(i,ngcells)* &
-!                                    exp(rhs(i+(ngcells-1)*ncomp))
-!       else
-!         conc_current_M_pert(i) = conc_upd(i,ngcells) + &
-!                                    rhs(i+(ngcells-1)*ncomp)
-!       endif
-!     enddo
-
-!     ! Update the secondary continuum totals at the outer matrix node
-!     call RTAuxVarCopy(rt_auxvar,sec_transport_vars%sec_rt_auxvar(ngcells), &
-!                       option)
-!     rt_auxvar%pri_molal = conc_current_M_pert ! in mol/kg
-!     call RTotalAqueous(rt_auxvar,global_auxvar,reaction,option)
-!     conc_current_M_pert = rt_auxvar%total(:,1)
-
-!     ! Calculate the coupling term
-!     res_transport_pert = pordiff(1)/dm_plus(ngcells)*area_fm* &
-!                          (conc_current_M_pert - conc_primary_node_pert)* &
-!                          prim_vol ! in mol/s
-
-!     dconc_prim_num(:,l) = (conc_primary_node_pert(:) - &
-!                              conc_primary_node(:,1))/pert
-
-!     dPsisec_dCprim_num(:,l) = (conc_current_M_pert(:) - &
-!                                 conc_current_M(:,1))/pert
-
-!     sec_jac_num(:,l) = (res_transport_pert(:) - res_transport(:))/pert
-
-!   enddo
-
-!   call RTAuxVarStrip(rt_auxvar)
-!   sec_transport_vars%sec_jac = sec_jac_num
 
 end subroutine SecondaryGenJacobian
 

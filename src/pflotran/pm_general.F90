@@ -179,7 +179,7 @@ subroutine PMGeneralSetFlowMode(pm,option)
 
   if (option%nflowdof == 0 .or. option%nflowdof == 3) then
     option%nphase = 2
-    option%nflowaqcomp = 2
+    option%nflowaqcomp = 1
     option%nflowdof = 3
     option%nflowspec = 2
     general_max_states = 3

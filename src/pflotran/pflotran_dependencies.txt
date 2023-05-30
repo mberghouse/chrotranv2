@@ -3172,6 +3172,7 @@ secondary_continuum_aux.o : \
   option.o \
   pflotran_constants.o \
   reactive_transport_aux.o \
+  general_aux.o \
   utility.o
 secondary_continuum_np.o : \
   block_solve.o \
