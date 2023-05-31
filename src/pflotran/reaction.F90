@@ -3643,6 +3643,7 @@ subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
   num_timesteps = 0
   num_constant_timesteps_after_cut = 0
   num_cuts = 0
+  ierror = 0
   do
     if (cumulative_time >= target_time) then
       option%tran_dt = target_time
@@ -3783,6 +3784,7 @@ subroutine RReact2(guess,rt_auxvar,global_auxvar,material_auxvar, &
   num_iterations = 0
   last_5_norms = 0.d0
   last_5_maxchng = 0.d0
+  ierror = 0
 
   if (reaction%ncoll > 0) then
     option%io_buffer = 'Colloids not set up for operator split mode.'
