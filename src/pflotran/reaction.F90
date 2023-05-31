@@ -3541,6 +3541,61 @@ end subroutine RJumpStartKineticSorption
 
 ! ************************************************************************** !
 
+subroutine RReactNewtonStats(print_rank,iteration,header, &
+                             residual, &
+                             current_solution, &
+                             previous_solution, &
+                             current_total, &
+                             current_free, &
+                             maximum_absolute_change, &
+                             maximum_relative_change, &
+                             reaction,rt_auxvar, &
+                             natural_id,option)
+  !
+  ! Substeps the original reaction step until the full step is reached
+  !
+  ! Author: Glenn Hammond
+  ! Date: 05/25/23
+
+  use Option_module
+  use String_module
+
+  implicit none
+
+  PetscBool :: print_rank
+  PetscInt :: iteration
+  character(len=MAXSTRINGLENGTH) :: header
+  class(reaction_rt_type) :: reaction
+  PetscReal :: current_solution(reaction%ncomp)
+  PetscReal :: previous_solution(reaction%ncomp)
+  PetscReal :: current_total(reaction%ncomp)
+  PetscReal :: current_free(reaction%ncomp)
+  PetscReal :: residual(reaction%ncomp)
+  PetscReal :: maximum_absolute_change
+  PetscReal :: maximum_relative_change
+  type(reactive_transport_auxvar_type) :: rt_auxvar
+  PetscInt :: natural_id
+  type(option_type) :: option
+
+  if (.not.print_rank) return
+
+  print *
+  print *, '          Message: ', trim(header)
+  print *, '        iteration: ' // trim(StringWrite(iteration))
+  print *, '          Process: ' // trim(StringWrite(option%myrank))
+  print *, '             Cell: ' // trim(StringWrite(natural_id))
+  print *, '  latest solution: ' // trim(StringWrite(current_solution))
+  print *, 'previous solution: ' // trim(StringWrite(previous_solution))
+  print *, '    current total: ' // trim(StringWrite(current_total))
+  print *, ' current free ion: ' // trim(StringWrite(current_free))
+  print *, '         residual: ' // trim(StringWrite(residual))
+  print *, '   max abs change: ' // trim(StringWrite(maximum_absolute_change))
+  print *, '   max rel change: ' // trim(StringWrite(maximum_relative_change))
+
+end subroutine RReactNewtonStats
+
+! ************************************************************************** !
+
 subroutine RReactConvergenceStats(print_rank,step,header,guess, &
                                   initial_total,current_total, &
                                   residual_store,last_5_maxchng, &
@@ -3758,6 +3813,7 @@ subroutine RReact2(step,guess,rt_auxvar,global_auxvar,material_auxvar, &
   PetscReal :: residual_store(reaction%ncomp)
   PetscReal :: initial_total(reaction%ncomp)
   PetscReal :: current_total(reaction%ncomp)
+  PetscReal :: current_free(reaction%ncomp)
   PetscReal :: res(reaction%ncomp)
   PetscReal :: J(reaction%ncomp,reaction%ncomp)
   PetscReal :: one_over_dt
@@ -3969,6 +4025,28 @@ subroutine RReact2(step,guess,rt_auxvar,global_auxvar,material_auxvar, &
     last_5_maxchng(2:5,:) = last_5_maxchng(1:4,:)
     last_5_maxchng(1,1) = maximum_absolute_change
     last_5_maxchng(1,2) = maximum_relative_change
+
+    if (reaction%logging_verbosity > 29) then
+      string = 'Newton iteration'
+      current_total(1:naqcomp) = rt_auxvar%total(:,1)
+      if (nimmobile > 0) then
+        current_total(immobile_start:immobile_end) = rt_auxvar%immobile(:)
+      endif
+      current_free(1:naqcomp) = rt_auxvar%pri_molal(:)
+      if (nimmobile > 0) then
+        current_free(immobile_start:immobile_end) = rt_auxvar%immobile(:)
+      endif
+      call RReactNewtonStats(print_rank,num_iterations,string, &
+                             residual_store, &
+                             latest_solution, &
+                             latest_solution - prev_solution, &
+                             current_total, &
+                             current_free, &
+                             maximum_absolute_change, &
+                             maximum_relative_change, &
+                             reaction,rt_auxvar, &
+                             natural_id,option)
+    endif
 
     if (maximum_relative_change < reaction%max_relative_change_tolerance) exit
 
