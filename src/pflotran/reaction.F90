@@ -3603,7 +3603,7 @@ end subroutine RReactConvergenceStats
 ! ************************************************************************** !
 
 subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
-                  num_iterations_,reaction,natural_id,option,ierror)
+                  num_iterations,reaction,natural_id,option,ierror)
   !
   ! Substeps the original reaction step until the full step is reached
   !
@@ -3620,13 +3620,12 @@ subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
   type(reactive_transport_auxvar_type) :: rt_auxvar
   type(global_auxvar_type) :: global_auxvar
   class(material_auxvar_type) :: material_auxvar
-  PetscInt :: num_iterations_
+  PetscInt :: num_iterations
   PetscInt :: natural_id
   type(option_type) :: option
   PetscInt :: ierror
 
   character(len=MAXWORDLENGTH) :: info
-  PetscInt :: num_iterations
   PetscInt :: num_timesteps
   PetscInt :: num_inner_iterations
   PetscInt :: num_constant_timesteps_after_cut
@@ -3707,14 +3706,13 @@ subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
 
   ! reset time step back for subsequent steps
   option%tran_dt = target_time
-  num_iterations_ = num_iterations
 
 end subroutine RReact
 
 ! ************************************************************************** !
 
 subroutine RReact2(guess,rt_auxvar,global_auxvar,material_auxvar, &
-                   num_iterations_,reaction,natural_id,num_cuts, &
+                   num_iterations,reaction,natural_id,num_cuts, &
                    option,ierror)
   !
   ! Solves reaction portion of operator splitting using Newton-Raphson
@@ -3732,7 +3730,7 @@ subroutine RReact2(guess,rt_auxvar,global_auxvar,material_auxvar, &
   type(reactive_transport_auxvar_type) :: rt_auxvar
   type(global_auxvar_type) :: global_auxvar
   class(material_auxvar_type) :: material_auxvar
-  PetscInt :: num_iterations_
+  PetscInt :: num_iterations
   PetscInt :: natural_id
   PetscInt :: num_cuts
   type(option_type) :: option
@@ -3753,8 +3751,6 @@ subroutine RReact2(guess,rt_auxvar,global_auxvar,material_auxvar, &
   PetscReal :: maximum_absolute_change
   PetscReal :: accumulation_coef
   PetscReal :: fixed_accum(reaction%ncomp)
-  PetscInt :: num_iterations
-  PetscInt :: num_inner_iterations
   PetscInt :: ncomp
   PetscInt :: naqcomp
   PetscInt :: nimmobile
@@ -3850,9 +3846,13 @@ subroutine RReact2(guess,rt_auxvar,global_auxvar,material_auxvar, &
       if (nimmobile > 0) then
         current_total(immobile_start:immobile_end) = rt_auxvar%immobile(:)
       endif
-      if (reaction%logging_verbosity > 9 .or. &
+      if (reaction%logging_verbosity > 14 .or. &
           num_cuts >= reaction%maximum_reaction_cuts) then
-        string = 'Maximum iterations in RReact'
+        if (num_cuts >= reaction%maximum_reaction_cuts) then
+          string = 'Maximum number of reaction time step cuts'
+        else
+          string = 'Maximum iterations in RReact'
+        endif
         call RReactConvergenceStats(string,guess,initial_total, &
                                     current_total,residual_store, &
                                     last_5_maxchng,last_5_norms,reaction, &
@@ -3961,8 +3961,6 @@ subroutine RReact2(guess,rt_auxvar,global_auxvar,material_auxvar, &
 
   ! one last update
   call RTAuxVarCompute(rt_auxvar,global_auxvar,material_auxvar,reaction,option)
-
-  num_iterations_ = num_iterations
 
 end subroutine RReact2
 
