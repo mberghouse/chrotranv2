@@ -1031,6 +1031,9 @@ subroutine ReactionReadPass1(reaction,input,option)
       case('LOGGING_VERBOSITY')
         call InputReadInt(input,option,reaction%logging_verbosity)
         call InputErrorMsg(input,option,'logging verbosity','CHEMISTRY')
+      case('LOGGING_PROCESS_ID')
+        call InputReadInt(input,option,reaction%io_rank)
+        call InputErrorMsg(input,option,'logging process id','CHEMISTRY')
       case('MAXIMUM_REACTION_CUTS')
         call InputReadInt(input,option,reaction%maximum_reaction_cuts)
         call InputErrorMsg(input,option,'maximum_reaction_cuts','CHEMISTRY')
@@ -3538,7 +3541,7 @@ end subroutine RJumpStartKineticSorption
 
 ! ************************************************************************** !
 
-subroutine RReactConvergenceStats(header,guess, &
+subroutine RReactConvergenceStats(print_rank,step,header,guess, &
                                   initial_total,current_total, &
                                   residual_store,last_5_maxchng, &
                                   last_5_norms,reaction, &
@@ -3556,6 +3559,8 @@ subroutine RReactConvergenceStats(header,guess, &
 
   implicit none
 
+  PetscBool :: print_rank
+  PetscInt :: step
   character(len=MAXSTRINGLENGTH) :: header
   class(reaction_rt_type) :: reaction
   PetscReal :: guess(reaction%ncomp)
@@ -3571,10 +3576,13 @@ subroutine RReactConvergenceStats(header,guess, &
   PetscInt :: natural_id
   type(option_type) :: option
 
+  if (.not.print_rank) return
+
   print *
-  print *, trim(header)
-  print *, 'Process ' // trim(StringWrite(option%myrank)) // &
-           ' Cell ' // trim(StringWrite(natural_id))
+  print *, '         Sub-step: ', trim(StringWrite(step))
+  print *, '          Message: ', trim(header)
+  print *, '          Process: ' // trim(StringWrite(option%myrank)) // &
+           '             Cell: ' // trim(StringWrite(natural_id))
   print *, '       iterations: ' // trim(StringWrite(num_iterations))
   print *, '               dt: ' // trim(StringWrite(option%tran_dt))
   print *, '           volume: ' // trim(StringWrite(material_auxvar%volume))
@@ -3633,10 +3641,13 @@ subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
   PetscReal :: target_time
   PetscReal :: cumulative_time
   PetscReal :: current_total(reaction%ncomp)
+  PetscBool :: print_rank
 
   info = 'Process ' // trim(StringWrite(option%myrank)) // &
          ' Cell ' // trim(StringWrite(natural_id)) // ' :'
 
+  print_rank = Uninitialized(reaction%io_rank) .or. &
+               reaction%io_rank == option%myrank
   target_time = option%tran_dt
   cumulative_time = 0.d0
   num_iterations = 0
@@ -3649,21 +3660,24 @@ subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
       option%tran_dt = target_time
       exit
     endif
-    call RReact2(guess,rt_auxvar,global_auxvar,material_auxvar, &
+    call RReact2(num_timesteps+1,guess, &
+                 rt_auxvar,global_auxvar,material_auxvar, &
                  num_inner_iterations,reaction,natural_id,num_cuts, &
-                 option,ierror)
+                 option,print_rank,ierror)
     num_iterations = num_iterations + num_inner_iterations
     if (ierror /= 0) then
       num_cuts = num_cuts + 1
       if (num_cuts > reaction%maximum_reaction_cuts) then
-        print *, trim(info) // &
-          ' Too many reaction cuts (' // trim(StringWrite(num_cuts)) // &
-          ')'
+        if (print_rank) then
+          print *, trim(info) // &
+            ' Too many reaction cuts (' // trim(StringWrite(num_cuts)) // &
+            ')'
+        endif
         ierror = 1
         if (reaction%stop_on_rreact_failure) stop
         return
       endif
-      if (reaction%logging_verbosity > 9) then
+      if (reaction%logging_verbosity > 9 .and. print_rank) then
         print *, trim(info) // ' Cutting reaction dt (' // &
           trim(StringWrite(option%tran_dt)) // ' -> ' // &
           trim(StringWrite(0.5*option%tran_dt)) // &
@@ -3675,7 +3689,8 @@ subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
       cumulative_time = cumulative_time + option%tran_dt
       num_timesteps = num_timesteps + 1
       num_constant_timesteps_after_cut = num_constant_timesteps_after_cut + 1
-      if (reaction%logging_verbosity > 9 .and. num_timesteps > 1) then
+      if (reaction%logging_verbosity > 9 .and. num_timesteps > 1 .and. &
+          print_rank) then
         print *, trim(info) // &
           ' Step ' // trim(StringWrite(num_timesteps)) // &
           ' Converged at ' // &
@@ -3712,9 +3727,9 @@ end subroutine RReact
 
 ! ************************************************************************** !
 
-subroutine RReact2(guess,rt_auxvar,global_auxvar,material_auxvar, &
+subroutine RReact2(step,guess,rt_auxvar,global_auxvar,material_auxvar, &
                    num_iterations,reaction,natural_id,num_cuts, &
-                   option,ierror)
+                   option,print_rank,ierror)
   !
   ! Solves reaction portion of operator splitting using Newton-Raphson
   !
@@ -3726,6 +3741,7 @@ subroutine RReact2(guess,rt_auxvar,global_auxvar,material_auxvar, &
 
   implicit none
 
+  PetscInt :: step
   class(reaction_rt_type), pointer :: reaction
   PetscReal :: guess(reaction%ncomp)
   type(reactive_transport_auxvar_type) :: rt_auxvar
@@ -3735,6 +3751,7 @@ subroutine RReact2(guess,rt_auxvar,global_auxvar,material_auxvar, &
   PetscInt :: natural_id
   PetscInt :: num_cuts
   type(option_type) :: option
+  PetscBool :: print_rank
   PetscInt :: ierror
 
   PetscReal :: residual(reaction%ncomp)
@@ -3855,7 +3872,8 @@ subroutine RReact2(guess,rt_auxvar,global_auxvar,material_auxvar, &
         else
           string = 'Maximum iterations in RReact'
         endif
-        call RReactConvergenceStats(string,guess,initial_total, &
+        call RReactConvergenceStats(print_rank,step,string,guess, &
+                                    initial_total, &
                                     current_total,residual_store, &
                                     last_5_maxchng,last_5_norms,reaction, &
                                     rt_auxvar,global_auxvar,material_auxvar, &
@@ -3907,7 +3925,8 @@ subroutine RReact2(guess,rt_auxvar,global_auxvar,material_auxvar, &
 
     if (ierror /= 0) then
       string = 'Error in RSolve: stop'
-      call RReactConvergenceStats(string,guess,initial_total, &
+      call RReactConvergenceStats(print_rank,step,string,guess, &
+                                  initial_total, &
                                   current_total,residual_store, &
                                   last_5_maxchng,last_5_norms,reaction, &
                                   rt_auxvar,global_auxvar,material_auxvar, &
