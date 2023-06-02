@@ -25,6 +25,9 @@ subroutine MicrobialRead(microbial,input,option)
   ! Author: Glenn Hammond
   ! Date: 08/16/12
   !
+  ! Edited by: Peishi Jiang
+  ! Date: 06/01/13
+  !
   use Option_module
   use String_module
   use Input_Aux_module
@@ -151,6 +154,13 @@ subroutine MicrobialRead(microbial,input,option)
                   call InputErrorMsg(input,option,'scaling factor', &
                                      'CHEMISTRY,MICROBIAL_REACTION,&
                                      &INHIBITION,THRESHOLD_INHIBITION')
+                case('THRESHOLD_SMOOTHSTEP')
+                  inhibition%itype = INHIBITION_THRESHOLD_SMOOTHSTEP
+                  call InputReadDouble(input,option, &
+                                       inhibition%inhibition_constant_smoothstep)
+                  call InputErrorMsg(input,option,'the interval of the smoothstep function', &
+                                     'CHEMISTRY,MICROBIAL_REACTION,&
+                                     &INHIBITION,THRESHOLD_INHIBITION')
                 case default
                   call InputKeywordUnrecognized(input,word, &
                          'CHEMISTRY,MICROBIAL_REACTION,INHIBITION,TYPE',option)
@@ -251,7 +261,11 @@ subroutine RMicrobial(Res,Jac,compute_derivative,rt_auxvar, &
   ! Author: Glenn Hammond
   ! Date: 10/31/12
   !
+  ! Edited by: Peishi Jiang
+  ! Date: 06/01/13
+  !
 
+  use String_module
   use Option_module, only : option_type
   use Reactive_Transport_Aux_module, only : reactive_transport_auxvar_type
   use Global_Aux_module, only : global_auxvar_type
@@ -272,7 +286,7 @@ subroutine RMicrobial(Res,Jac,compute_derivative,rt_auxvar, &
 
   PetscInt, parameter :: iphase = 1
   PetscReal :: por_sat_vol
-  PetscInt :: irxn, i, ii, icomp, jcomp, ncomp
+  PetscInt :: irxn, i, j, ii, icomp, jcomp, ncomp
   PetscInt :: imonod, iinhibition, ibiomass
   PetscReal :: Im
   PetscReal :: rate_constant
@@ -284,6 +298,8 @@ subroutine RMicrobial(Res,Jac,compute_derivative,rt_auxvar, &
   PetscInt :: immobile_id
   PetscReal :: denominator, dR_dX, dX_dc, dR_dc, dR_dbiomass
   PetscReal :: tempreal
+  ! Below are some intermediate variables for calculating the smoothstep function for inhibition
+  PetscReal :: log_inhibition, interval, log_activity, lower, upper, z
   type(microbial_type), pointer :: microbial
   type(immobile_type), pointer :: immobile
 
@@ -293,6 +309,14 @@ subroutine RMicrobial(Res,Jac,compute_derivative,rt_auxvar, &
   ! units:
   ! Residual: mol/sec
   ! Jacobian: (mol/sec)*(kg water/mol) = kg water/sec
+
+  if (reaction%logging_verbosity > 40) then
+    do i = 1, reaction%ncomp
+      print *, "Jacobian: ",i,(j,Jac(i,j),j=1,reaction%ncomp)
+    enddo
+      print *, "Residual: ",(Res(j),j=1,reaction%ncomp)
+    print *, " "
+  endif
 
   do irxn = 1, microbial%nrxn
 
@@ -341,6 +365,28 @@ subroutine RMicrobial(Res,Jac,compute_derivative,rt_auxvar, &
                            atan((activity - &
                                  microbial%inhibition_C(iinhibition)) * &
                                 microbial%inhibition_C2(iinhibition)) / PI
+        case(INHIBITION_THRESHOLD_SMOOTHSTEP)
+          ! TODO: use the smoothstep function for inhibition
+          log_inhibition = LOG10(microbial%inhibition_C(iinhibition))
+          interval = microbial%inhibition_C_smoothstep(iinhibition)
+          log_activity = LOG10(activity)
+          lower = log_inhibition - interval / 2.d0
+          upper = log_inhibition + interval / 2.d0
+          z = (log_activity - lower) / interval
+          if (z < 0.) then
+            inhibition(ii) = 0.d0
+          else if (z > 1.) then
+            inhibition(ii) = 1.d0
+          else
+            inhibition(ii) = 3.d0 * z ** 2 - 2.d0 * z ** 3
+          endif
+
+          if (reaction%logging_verbosity > 40) then
+            print *, ' Get the inhibition value ' // &
+              trim(StringWrite(inhibition(ii))) // ' with z ' // &
+              trim(StringWrite(z)) // ' for concentration' // &
+              trim(StringWrite(activity))
+          endif
       end select
       Im = Im*inhibition(ii)
     enddo
@@ -408,7 +454,15 @@ subroutine RMicrobial(Res,Jac,compute_derivative,rt_auxvar, &
       act_coef = rt_auxvar%pri_act_coef(jcomp)
       activity = rt_auxvar%pri_molal(jcomp)*act_coef
 
-      dR_dX = Im / inhibition(ii)
+      if (inhibition(ii) == 0) then
+        ! This is used to avoid NaN when inhibition kicks in.
+        ! Note that when the inhibition is zero, we expect its gradient is also zero
+        ! So the following works.
+        dR_dX = 0.d0
+      else
+        dR_dX = Im / inhibition(ii)
+      endif
+      
 
       select case(microbial%inhibition_type(iinhibition))
         case(INHIBITION_MONOD)
@@ -426,6 +480,28 @@ subroutine RMicrobial(Res,Jac,compute_derivative,rt_auxvar, &
                      microbial%inhibition_C2(iinhibition)
           dX_dc = (microbial%inhibition_C2(iinhibition) * act_coef / &
                    (1.d0 + tempreal*tempreal)) / PI
+        case(INHIBITION_THRESHOLD_SMOOTHSTEP)
+          ! TODO 
+          log_inhibition = LOG10(microbial%inhibition_C(iinhibition))
+          interval = microbial%inhibition_C_smoothstep(iinhibition)
+          log_activity = LOG10(activity)
+          lower = log_inhibition - interval / 2.d0 
+          upper = log_inhibition + interval / 2.d0
+          z = (log_activity - lower) / interval
+          if (z < 0.) then
+            dX_dc = 0.d0
+          else if (z > 1.d0) then
+            dX_dc = 0.d0
+          else
+            dX_dc = (6.d0*z - 6.d0*z**2) / (interval*activity*LOG(10.d0))
+          endif
+
+          if (reaction%logging_verbosity > 40) then
+            print *, ' Get the gradient of the inhibition ' // &
+              trim(StringWrite(dX_dc)) // ' with z ' // &
+              trim(StringWrite(z)) // ' for concentration' // &
+              trim(StringWrite(activity))
+          endif
       end select
 
       dR_dc = -1.d0*dR_dX*dX_dc
@@ -453,7 +529,22 @@ subroutine RMicrobial(Res,Jac,compute_derivative,rt_auxvar, &
         yield*dR_dbiomass
     endif
 
+    ! if (reaction%logging_verbosity > 40) then
+    !   do i = 1, reaction%ncomp
+    !     print *, "Jacobian: ",i,(j,Jac(i,j),j=1,reaction%ncomp)
+    !   enddo
+    !   print *, " "
+    ! endif
+
   enddo
+
+  if (reaction%logging_verbosity > 40) then
+    do i = 1, reaction%ncomp
+      print *, "Jacobian: ",i,(j,Jac(i,j),j=1,reaction%ncomp)
+    enddo
+      print *, "Residual: ",(Res(j),j=1,reaction%ncomp)
+    print *, " "
+  endif
 
 end subroutine RMicrobial
 

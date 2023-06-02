@@ -3281,6 +3281,8 @@ subroutine BasisInit(reaction,option)
     microbial%inhibition_C = 0.d0
     allocate(microbial%inhibition_C2(inhibition_count))
     microbial%inhibition_C2 = 0.d0
+    allocate(microbial%inhibition_C_smoothstep(inhibition_count))
+    microbial%inhibition_C_smoothstep = 0.d0
 
     ! load the data into the compressed arrays
     irxn = 0
@@ -3397,6 +3399,8 @@ subroutine BasisInit(reaction,option)
           cur_inhibition%inhibition_constant
         microbial%inhibition_C2(inhibition_count) = &
           cur_inhibition%inhibition_constant2
+        microbial%inhibition_C_smoothstep(inhibition_count) = &
+          cur_inhibition%inhibition_constant_smoothstep
         cur_inhibition => cur_inhibition%next
       enddo
 

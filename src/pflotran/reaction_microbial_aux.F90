@@ -15,6 +15,7 @@ module Reaction_Microbial_Aux_module
   PetscInt, parameter, public :: INHIBITION_THERMODYNAMIC = 2
   PetscInt, parameter, public :: INHIBITION_MONOD = 3
   PetscInt, parameter, public :: INHIBITION_INVERSE_MONOD = 4
+  PetscInt, parameter, public :: INHIBITION_THRESHOLD_SMOOTHSTEP = 5
 
   type, public :: microbial_rxn_type
     PetscInt :: id
@@ -44,6 +45,7 @@ module Reaction_Microbial_Aux_module
     character(len=MAXWORDLENGTH) :: species_name
     PetscReal :: inhibition_constant
     PetscReal :: inhibition_constant2
+    PetscReal :: inhibition_constant_smoothstep
     type(inhibition_type), pointer :: next
   end type inhibition_type
 
@@ -75,6 +77,7 @@ module Reaction_Microbial_Aux_module
     PetscInt, pointer :: inhibition_specid(:)
     PetscReal, pointer :: inhibition_C(:)
     PetscReal, pointer :: inhibition_C2(:)
+    PetscReal, pointer :: inhibition_C_smoothstep(:)
 
   end type microbial_type
 
@@ -129,6 +132,7 @@ function MicrobialCreate()
   nullify(microbial%inhibition_specid)
   nullify(microbial%inhibition_C)
   nullify(microbial%inhibition_C2)
+  nullify(microbial%inhibition_C_smoothstep)
 
   MicrobialCreate => microbial
 
@@ -216,6 +220,7 @@ function MicrobialInhibitionCreate()
   inhibition%species_name = ''
   inhibition%inhibition_constant = UNINITIALIZED_DOUBLE
   inhibition%inhibition_constant2 = 0.d0
+  inhibition%inhibition_constant_smoothstep = 0.d0
   nullify(inhibition%next)
 
   MicrobialInhibitionCreate => inhibition
@@ -474,6 +479,7 @@ subroutine MicrobialDestroy(microbial)
   call DeallocateArray(microbial%inhibition_specid)
   call DeallocateArray(microbial%inhibition_C)
   call DeallocateArray(microbial%inhibition_C2)
+  call DeallocateArray(microbial%inhibition_C_smoothstep)
 
   deallocate(microbial)
   nullify(microbial)
