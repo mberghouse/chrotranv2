@@ -150,7 +150,14 @@ subroutine MicrobialRead(microbial,input,option)
                                        inhibition%inhibition_constant2)
                   call InputErrorMsg(input,option,'scaling factor', &
                                      'CHEMISTRY,MICROBIAL_REACTION,&
-                                     &INHIBITION,THRESHOLD_INHIBITION')
+                                     &INHIBITION,THRESHOLD')
+                case('SMOOTHSTEP')
+                  inhibition%itype = INHIBITION_SMOOTHSTEP
+                  call InputReadDouble(input,option, &
+                                       inhibition%inhibition_constant2)
+                  call InputErrorMsg(input,option,'transition interval', &
+                                     'CHEMISTRY,MICROBIAL_REACTION,&
+                                     &INHIBITION,SMOOTHSTEP')
                 case default
                   call InputKeywordUnrecognized(input,word, &
                          'CHEMISTRY,MICROBIAL_REACTION,INHIBITION,TYPE',option)
@@ -284,6 +291,8 @@ subroutine RMicrobial(Res,Jac,compute_derivative,rt_auxvar, &
   PetscInt :: immobile_id
   PetscReal :: denominator, dR_dX, dX_dc, dR_dc, dR_dbiomass
   PetscReal :: tempreal
+  PetscReal :: log10_activity, log10_inhibition_C
+  PetscReal :: log10_interval, z
   type(microbial_type), pointer :: microbial
   type(immobile_type), pointer :: immobile
 
@@ -341,6 +350,21 @@ subroutine RMicrobial(Res,Jac,compute_derivative,rt_auxvar, &
                            atan((activity - &
                                  microbial%inhibition_C(iinhibition)) * &
                                 microbial%inhibition_C2(iinhibition)) / PI
+        case(INHIBITION_SMOOTHSTEP)
+          ! contributed by Peishi Jiang
+          log10_activity = log10(activity)
+          log10_inhibition_C = log10(microbial%inhibition_C(iinhibition))
+          log10_interval = microbial%inhibition_C2(iinhibition)
+          tempreal = log10_inhibition_C - 0.5*log10_interval ! lower bound
+          z = (log10_activity - tempreal) / log10_interval
+          if (z < 0.d0) then
+            tempreal = 0.d0
+          else if (z > 1.d0) then
+            tempreal = 1.d0
+          else
+            tempreal = 3.d0*z**2 - 2.d0*z**3
+          endif
+          inhibition(ii) = tempreal
       end select
       Im = Im*inhibition(ii)
     enddo
@@ -408,7 +432,11 @@ subroutine RMicrobial(Res,Jac,compute_derivative,rt_auxvar, &
       act_coef = rt_auxvar%pri_act_coef(jcomp)
       activity = rt_auxvar%pri_molal(jcomp)*act_coef
 
-      dR_dX = Im / inhibition(ii)
+      if (dabs(inhibition(ii)) > 0.d0) then
+        dR_dX = Im / inhibition(ii)
+      else
+        dR_dX = 0.d0
+      endif
 
       select case(microbial%inhibition_type(iinhibition))
         case(INHIBITION_MONOD)
@@ -426,6 +454,22 @@ subroutine RMicrobial(Res,Jac,compute_derivative,rt_auxvar, &
                      microbial%inhibition_C2(iinhibition)
           dX_dc = (microbial%inhibition_C2(iinhibition) * act_coef / &
                    (1.d0 + tempreal*tempreal)) / PI
+        case(INHIBITION_SMOOTHSTEP)
+          ! contributed by Peishi Jiang
+          log10_activity = log10(activity)
+          log10_inhibition_C = log10(microbial%inhibition_C(iinhibition))
+          log10_interval = microbial%inhibition_C2(iinhibition)
+          tempreal = log10_inhibition_C - 0.5*log10_interval ! lower bound
+          z = (log10_activity - tempreal) / log10_interval
+          if (z < 0.d0) then
+            dX_dc = 0.d0
+          else if (z > 1.d0) then
+            dX_dc = 0.d0
+          else
+            dX_dc = (6.d0*z - 6.d0*z**2) / &
+                    (log10_interval * activity * LOG_TO_LN) * &
+                    act_coef
+          endif
       end select
 
       dR_dc = -1.d0*dR_dX*dX_dc

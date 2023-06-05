@@ -15,6 +15,7 @@ module Reaction_Microbial_Aux_module
   PetscInt, parameter, public :: INHIBITION_THERMODYNAMIC = 2
   PetscInt, parameter, public :: INHIBITION_MONOD = 3
   PetscInt, parameter, public :: INHIBITION_INVERSE_MONOD = 4
+  PetscInt, parameter, public :: INHIBITION_SMOOTHSTEP = 5
 
   type, public :: microbial_rxn_type
     PetscInt :: id
