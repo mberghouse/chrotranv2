@@ -258,7 +258,7 @@ subroutine MaterialAuxVarCopy(auxvar,auxvar2,option)
   auxvar2%tortuosity = auxvar%tortuosity
   auxvar2%soil_particle_density = auxvar%soil_particle_density
   auxvar2%heat_of_wetting = auxvar%heat_of_wetting
-  auxvar2%heat_of_wetting_exp = auxvar%heat_of_wetting
+  auxvar2%heat_of_wetting_exp = auxvar%heat_of_wetting_exp
   if (associated(auxvar%permeability)) then
     auxvar2%permeability = auxvar%permeability
   endif

@@ -962,7 +962,7 @@ subroutine MaterialPropertyRead(material_property,input,option)
       case('HEAT_OF_WETTING')
         call InputReadDouble(input,option,material_property%heat_of_wetting)
         call InputErrorMsg(input,option,'heat of wetting','MATERIAL_PROPERTY')
-        call InputReadAndConvertUnits(input,material_property%rock_density, &
+        call InputReadAndConvertUnits(input,material_property%heat_of_wetting, &
                           'kJ/kg','MATERIAL_PROPERTY,heat of wetting',option)
       case('HEAT_OF_WETTING_EXP')
         call InputReadDouble(input,option,material_property%heat_of_wetting_exp)
@@ -2420,7 +2420,7 @@ subroutine MaterialPropInputRecord(material_property_list)
       write(id,'(a)') adjustl(trim(word1)) // ' kJ/kg'
     endif
 
-    if (Initialized(cur_matprop%heat_of_wetting)) then
+    if (Initialized(cur_matprop%heat_of_wetting_exp)) then
       write(id,'(a29)',advance='no') 'heat of wetting exponential: '
       write(word1,*) cur_matprop%heat_of_wetting_exp
       write(id,'(a)') adjustl(trim(word1)) // ' '
