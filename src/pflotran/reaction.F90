@@ -3742,13 +3742,25 @@ subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
   PetscReal :: cumulative_time
   PetscReal :: current_total(reaction%ncomp)
   PetscBool :: print_rank
+  PetscBool :: truncate_pri_molal
+  PetscBool :: any_low_guess
 
   info = 'Process ' // trim(StringWrite(option%myrank)) // &
          ' Cell ' // trim(StringWrite(natural_id)) // ' :'
 
+  truncate_pri_molal = PETSC_TRUE
+  any_low_guess = any(abs(guess) < 1.d-40)
+
   print_rank = Uninitialized(reaction%io_rank) .or. &
                reaction%io_rank == option%myrank
-  
+
+  ! Let's hardwire some concentrations here to see whether the error is reproducible.
+  if (guess(2) < 1.d-20) then
+    rt_auxvar%total(:,1) = (/ 1.005316d-05, 1.192900d-10, 1.511521d-03, 7.321350d-06, & 
+                              1.005316d-10, 9.174267d-06, 2.783818d-05, 1.381533d-04, &
+                              6.222173d-06, 1.104066d-06, 2.728670d-06 /) 
+  endif
+
   ! Print the important inputs if needed
   if (reaction%logging_verbosity > 29 .and. print_rank) then
     call RReactInputStats(print_rank, guess, rt_auxvar, global_auxvar, &
@@ -3781,6 +3793,19 @@ subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
             ')'
         endif
         ierror = 1
+
+        ! Assign total to pri_mol if any concentration is below 1.d-40
+        ! when Newton Raphson fails
+        print *, truncate_pri_molal
+        print *, any_low_guess
+        if (truncate_pri_molal .and. any_low_guess) then
+          rt_auxvar%pri_molal(:) = rt_auxvar%total(:,1) / &
+                                   global_auxvar%den_kg(1)*1.d3
+          option%tran_dt = target_time
+          ierror = 0
+          return
+        endif
+
         if (reaction%stop_on_rreact_failure) stop
         return
       endif
