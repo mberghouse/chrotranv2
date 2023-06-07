@@ -20,7 +20,7 @@ module Inversion_ZFlow_class
 
     PetscReal :: beta                    ! regularization parameter
     PetscReal :: beta_red_factor         ! beta reduction factor
-    PetscReal :: minparam,maxparam       ! min/max paramter value
+    PetscReal :: minparam(9),maxparam(9) ! min/max paramter value
     PetscReal :: target_chi2             ! target CHI^2 norm
     PetscReal :: current_chi2
 
@@ -163,8 +163,34 @@ subroutine InversionZFlowInit(this,driver)
 
   this%beta = 100.d0
   this%beta_red_factor = 0.5d0
-  this%minparam = 1d-17
-  this%maxparam = 1d-07
+  ! Electrical conductivity bounds
+  this%minparam(1) = 1d-04
+  this%maxparam(1) = 1d01
+  ! Permeability bounds
+  this%minparam(2) = 1d-17
+  this%maxparam(2) = 1d-07
+  ! Porosity bounds
+  this%minparam(3) = 5d-02
+  this%maxparam(3) = 5d-01
+  ! VG_ALPHA bounds
+  this%minparam(4) = 1d-04
+  this%maxparam(4) = 1d-03
+  ! VG_SR bounds
+  this%minparam(5) = 0.1d0
+  this%maxparam(5) = 0.2d0
+  ! VG_M bounds
+  this%minparam(6) = 0.2d0
+  this%maxparam(6) = 1.0d0
+  ! ARCHIES_M bounds
+  this%minparam(7) = 1.5d0
+  this%maxparam(7) = 3.0d0
+  ! ARCHIES_N bounds
+  this%minparam(8) = 1.5d0
+  this%maxparam(8) = 3.0d0
+  ! ARCHIES_A bounds
+  this%minparam(9) = 0.5d0
+  this%maxparam(9) = 2.0d0
+
   this%target_chi2 = 1.d0
   this%min_phi_red = 0.2d0
 
@@ -491,13 +517,77 @@ subroutine InversionZFlowReadBlock(this,input,option)
     if (found) cycle
 
     select case(trim(keyword))
+      case('MIN_ELECTRICAL_CONDUCTIVITY')
+        call InputReadDouble(input,option,this%minparam(1))
+        call InputErrorMsg(input,option,'MIN_ELECTRICAL_CONDUCTIVITY', &
+                           error_string)
+      case('MAX_ELECTRICAL_CONDUCTIVITY')
+        call InputReadDouble(input,option,this%maxparam(1))
+        call InputErrorMsg(input,option,'MAX_ELECTRICAL_CONDUCTIVITY', &
+                           error_string)
       case('MIN_PERMEABILITY','MIN_PARAMETER')
-        call InputReadDouble(input,option,this%minparam)
+        call InputReadDouble(input,option,this%minparam(2))
         call InputErrorMsg(input,option,'MIN_PARAMETER', &
                            error_string)
       case('MAX_PERMEABILITY','MAX_PARAMETER')
-        call InputReadDouble(input,option,this%maxparam)
+        call InputReadDouble(input,option,this%maxparam(2))
         call InputErrorMsg(input,option,'MAX_PARAMETER', &
+                           error_string)
+      case('MIN_POROSITY')
+        call InputReadDouble(input,option,this%minparam(3))
+        call InputErrorMsg(input,option,'MIN_POROSITY', &
+                           error_string)
+      case('MAX_POROSITY')
+        call InputReadDouble(input,option,this%maxparam(3))
+        call InputErrorMsg(input,option,'MAX_POROSITY', &
+                           error_string)
+      case('MIN_VG_ALPHA')
+        call InputReadDouble(input,option,this%minparam(4))
+        call InputErrorMsg(input,option,'MIN_VG_ALPHA', &
+                           error_string)
+      case('MAX_VG_ALPHA')
+        call InputReadDouble(input,option,this%maxparam(4))
+        call InputErrorMsg(input,option,'MAX_VG_ALPHA', &
+                           error_string)
+      case('MIN_VG_SR')
+        call InputReadDouble(input,option,this%minparam(5))
+        call InputErrorMsg(input,option,'MIN_VG_SR', &
+                           error_string)
+      case('MAX_VG_SR')
+        call InputReadDouble(input,option,this%maxparam(5))
+        call InputErrorMsg(input,option,'MAX_VG_SR', &
+                           error_string)
+      case('MIN_VG_M')
+        call InputReadDouble(input,option,this%minparam(6))
+        call InputErrorMsg(input,option,'MIN_VG_M', &
+                           error_string)
+      case('MAX_VG_M')
+        call InputReadDouble(input,option,this%maxparam(6))
+        call InputErrorMsg(input,option,'MAX_VG_M', &
+                           error_string)
+      case('MIN_ARCHIES_M')
+        call InputReadDouble(input,option,this%minparam(7))
+        call InputErrorMsg(input,option,'MIN_ARCHIES_M', &
+                           error_string)
+      case('MAX_ARCHIES_M')
+        call InputReadDouble(input,option,this%maxparam(7))
+        call InputErrorMsg(input,option,'MAX_ARCHIES_M', &
+                           error_string)
+      case('MIN_ARCHIES_N')
+        call InputReadDouble(input,option,this%minparam(8))
+        call InputErrorMsg(input,option,'MIN_ARCHIES_N', &
+                           error_string)
+      case('MAX_ARCHIES_N')
+        call InputReadDouble(input,option,this%maxparam(8))
+        call InputErrorMsg(input,option,'MAX_ARCHIES_N', &
+                           error_string)
+      case('MIN_ARCHIES_A')
+        call InputReadDouble(input,option,this%minparam(9))
+        call InputErrorMsg(input,option,'MIN_ARCHIES_A', &
+                           error_string)
+      case('MAX_ARCHIES_A')
+        call InputReadDouble(input,option,this%maxparam(9))
+        call InputErrorMsg(input,option,'MAX_ARCHIES_A', &
                            error_string)
       case('MIN_CGLS_ITERATION')
         call InputReadInt(input,option,this%miniter)
@@ -1140,6 +1230,9 @@ subroutine InversionZFlowCalculateUpdate(this)
   use Discretization_module
   use Patch_module
   use Grid_module
+  use Variables_module, only : ELECTRICAL_CONDUCTIVITY, &
+                               PERMEABILITY, POROSITY, &
+                               VG_SR, VG_ALPHA, VG_M
 
   implicit none
 
@@ -1200,10 +1293,10 @@ subroutine InversionZFlowCalculateUpdate(this)
         if (patch%imat(ghosted_id) <= 0) cycle
       endif
       vec_ptr(iparameter) = exp(log(vec_ptr(iparameter)) + vec2_ptr(iparameter))
-      if (vec_ptr(iparameter) > this%maxparam) &
-        vec_ptr(iparameter) = this%maxparam
-      if (vec_ptr(iparameter) < this%minparam) &
-        vec_ptr(iparameter) = this%minparam
+      if (vec_ptr(iparameter) > this%maxparam(2)) &
+        vec_ptr(iparameter) = this%maxparam(2)
+      if (vec_ptr(iparameter) < this%minparam(2)) &
+        vec_ptr(iparameter) = this%minparam(2)
     enddo
     call VecRestoreArrayF90(work_dup,vec_ptr,ierr);CHKERRQ(ierr)
     call VecRestoreArrayF90(this%realization%field%work,vec2_ptr, &
@@ -1223,17 +1316,20 @@ subroutine InversionZFlowCalculateUpdate(this)
     do iparameter = 1, this%num_parameters_local
 #if 0
       vec_ptr(iparameter) = exp(log(vec_ptr(iparameter)) + vec2_ptr(iparameter))
-      if (vec_ptr(iparameter) > this%maxparam) &
-        vec_ptr(iparameter) = this%maxparam
-      if (vec_ptr(iparameter) < this%minparam) &
-        vec_ptr(iparameter) = this%minparam
+!      if (vec_ptr(iparameter) > this%maxparam(2)) &
+!        vec_ptr(iparameter) = this%maxparam(2)
+!      if (vec_ptr(iparameter) < this%minparam(2)) &
+!        vec_ptr(iparameter) = this%minparam(2)
+      call UpdateValueBound(iparameter,vec_ptr(iparameter))
 #else
       new_value = exp(log(vec_ptr(iparameter)) + vec2_ptr(iparameter))
-      if (new_value > this%maxparam) then
-        new_value = this%maxparam
-      else if (new_value < this%minparam) then
-        new_value = this%minparam
-      endif
+!      if (new_value > this%maxparam(2)) then
+!        new_value = this%maxparam(2)
+!      else if (new_value < this%minparam(2)) then
+!        new_value = this%minparam(2)
+!      endif
+      call UpdateValueBound(iparameter,new_value)
+      if (new_value.ne.new_value) stop 232
       vec2_ptr(iparameter) = new_value - vec_ptr(iparameter)
       vec_ptr(iparameter) = new_value
 #endif
@@ -1252,6 +1348,67 @@ subroutine InversionZFlowCalculateUpdate(this)
                                     INVAUX_SCATREVERSE)
     call InvSubsurfPrintCurParamUpdate(this)
   endif
+
+contains
+
+  subroutine UpdateValueBound(iparam,value)
+    ! Hard bound the update values within min and max
+    ! values
+    !
+    ! Author: Piyoosh Jaysaval
+    ! Date: 06/01/23
+
+    implicit none
+
+    PetscReal :: value
+    PetscInt :: iparam,iparam_type
+
+    iparam_type = &
+      this%inversion_aux%parameters(iparam+this%parameter_offset)%iparameter
+
+    select case(iparam_type)
+      case (ELECTRICAL_CONDUCTIVITY)
+        if (value > this%maxparam(1)) then
+          value = this%maxparam(1)
+        elseif (value < this%minparam(1)) then
+          value = this%minparam(1)
+        endif
+      case (PERMEABILITY)
+        if (value > this%maxparam(2)) then
+          value = this%maxparam(2)
+        elseif (value < this%minparam(2)) then
+          value = this%minparam(2)
+        endif
+      case (POROSITY)
+        if (value > this%maxparam(3)) then
+          value = this%maxparam(3)
+        elseif (value < this%minparam(3)) then
+          value = this%minparam(3)
+        endif
+      case (VG_ALPHA)
+        if (value > this%maxparam(4)) then
+          value = this%maxparam(4)
+        elseif (value < this%minparam(4)) then
+          value = this%minparam(4)
+        endif
+      case (VG_SR)
+        if (value > this%maxparam(5)) then
+          value = this%maxparam(5)
+        elseif (value < this%minparam(5)) then
+          value = this%minparam(5)
+        endif
+      case (VG_M)
+        if (value > this%maxparam(6)) then
+          value = this%maxparam(6)
+        elseif (value < this%minparam(6)) then
+          value = this%minparam(6)
+        endif
+      case default
+        call this%driver%PrintErrMsg('Unrecognized parameter type in &
+                              &InversionZFlowCalculateUpdate.')
+    end select    
+
+  end subroutine UpdateValueBound
 
 end subroutine InversionZFlowCalculateUpdate
 
