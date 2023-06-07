@@ -3968,8 +3968,67 @@ subroutine RReact2(step,guess,rt_auxvar,global_auxvar,material_auxvar, &
     last_5_norms(2:5) = last_5_norms(1:4)
     last_5_norms(1) = two_norm_r
     if (num_iterations == 1) two_norm_r0 = two_norm_r
-    if (maxval(abs(residual)) < reaction%max_residual_tolerance) exit
-    if ((two_norm_r/two_norm_r0) < reaction%max_rel_residual_tolerance) exit
+    ! if (maxval(abs(residual)) < reaction%max_residual_tolerance) exit
+    ! if ((two_norm_r/two_norm_r0) < reaction%max_rel_residual_tolerance) exit
+    if ( (maxval(abs(residual)) < reaction%max_residual_tolerance) .or. &
+         ((two_norm_r/two_norm_r0) < reaction%max_rel_residual_tolerance) &
+    ) then
+      ! Print the information for high verbosity
+      ! when the solution converges before the Newton iteration (i.e., RSolve) is needed.
+      if (reaction%logging_verbosity > 29) then
+        prev_solution(1:naqcomp) = rt_auxvar%pri_molal(1:naqcomp)
+        if (nimmobile > 0) then
+          prev_solution(immobile_start:immobile_end) = rt_auxvar%immobile(:)
+        endif
+
+        if (reaction%use_log_formulation) then
+          update = dsign(1.d0,update)*min(dabs(update),reaction%max_dlnC)
+          latest_solution = prev_solution*exp(-update)
+        else ! linear upage
+          ! ensure non-negative concentration
+          min_ratio = 1.d20 ! large number
+          do icomp = 1, ncomp
+            if (prev_solution(icomp) <= update(icomp)) then
+              ratio = abs(prev_solution(icomp)/update(icomp))
+              if (ratio < min_ratio) min_ratio = ratio
+            endif
+          enddo
+          if (min_ratio < 1.d0) then
+            ! scale by 0.99 to make the update slightly smaller than the min_ratio
+            update = update*min_ratio*0.99d0
+          endif
+          latest_solution = prev_solution - update
+        endif
+    
+        maximum_absolute_change = maxval(abs(latest_solution-prev_solution))
+        maximum_relative_change = maxval(abs((latest_solution-prev_solution)/ &
+                                            prev_solution))
+        last_5_maxchng(2:5,:) = last_5_maxchng(1:4,:)
+        last_5_maxchng(1,1) = maximum_absolute_change
+        last_5_maxchng(1,2) = maximum_relative_change
+
+        string = 'Converged before Newton iteration'
+        current_total(1:naqcomp) = rt_auxvar%total(:,1)
+        if (nimmobile > 0) then
+          current_total(immobile_start:immobile_end) = rt_auxvar%immobile(:)
+        endif
+        current_free(1:naqcomp) = rt_auxvar%pri_molal(:)
+        if (nimmobile > 0) then
+          current_free(immobile_start:immobile_end) = rt_auxvar%immobile(:)
+        endif
+        call RReactNewtonStats(print_rank,num_iterations,string, &
+                              residual_store, &
+                              latest_solution, &
+                              latest_solution - prev_solution, &
+                              current_total, &
+                              current_free, &
+                              maximum_absolute_change, &
+                              maximum_relative_change, &
+                              reaction,rt_auxvar, &
+                              natural_id,option)
+      endif
+      exit
+    endif
 
     conc(1:naqcomp) = rt_auxvar%pri_molal(1:naqcomp)
     if (nimmobile > 0) then
