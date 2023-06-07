@@ -120,11 +120,15 @@ module NW_Transport_Aux_module
     PetscReal, pointer :: diffusion_coefficient(:,:) !TODO(jenn): move to nwt_params_type
     PetscReal, pointer :: diffusion_activation_energy(:,:) !TODO(jenn): move to nwt_params_type
     character(len=MAXWORDLENGTH), pointer :: species_names(:)
+    PetscReal, pointer :: species_solubility(:)
+    PetscReal, pointer :: species_ele_kd(:)
+    PetscReal, pointer :: species_mnrl_mol_den(:)
     type(species_type), pointer :: species_list
     PetscBool, pointer :: species_print(:)
     type(radioactive_decay_rxn_type), pointer :: rad_decay_rxn_list
     type(nwt_params_type), pointer :: params !TODO(jenn): move to nw_transport_type
     type(nwt_print_type), pointer :: print_what
+    PetscReal :: UNSPECIFIED_MMD
     PetscBool :: reaction_nw_on
     PetscBool :: truncate_output
     PetscBool :: screening_run
@@ -269,12 +273,16 @@ function NWTReactionCreate()
   nullify(reaction_nw%diffusion_coefficient)
   nullify(reaction_nw%diffusion_activation_energy)
   nullify(reaction_nw%species_names)
+  nullify(reaction_nw%species_solubility)
+  nullify(reaction_nw%species_ele_kd)
+  nullify(reaction_nw%species_mnrl_mol_den)
   nullify(reaction_nw%species_list)
   nullify(reaction_nw%species_print)
   nullify(reaction_nw%rad_decay_rxn_list)
   reaction_nw%reaction_nw_on = PETSC_TRUE
   reaction_nw%truncate_output = PETSC_FALSE
   reaction_nw%screening_run = PETSC_FALSE
+  reaction_nw%UNSPECIFIED_MMD = 100.d0  ! mnrl_molar_density placeholder
 
   nullify(reaction_nw%params)
   allocate(reaction_nw%params)
@@ -356,7 +364,7 @@ subroutine NWTRead(reaction_nw,input,option)
   character(len=MAXSTRINGLENGTH) :: error_string_base, error_string
   PetscInt :: num_materials
   PetscInt :: k, j
-  type(species_type), pointer :: new_species, prev_species
+  type(species_type), pointer :: new_species, prev_species, cur_species
   character(len=MAXWORDLENGTH), pointer :: temp_species_names(:)
   character(len=MAXWORDLENGTH), pointer :: temp_species_parents(:)
   character(len=MAXWORDLENGTH) :: bh_materials(50)
@@ -443,12 +451,6 @@ subroutine NWTRead(reaction_nw,input,option)
         endif
         if (Uninitialized(new_species%solubility_limit)) then
           option%io_buffer = 'SOLUBILITY not provided in ' // &
-                             trim(error_string) // ' block for SPECIES ' // &
-                             trim(new_species%name) // '.'
-          call PrintErrMsg(option)
-        endif
-        if (Uninitialized(new_species%mnrl_molar_density)) then
-          option%io_buffer = 'PRECIPITATE_MOLAR_DENSITY not provided in ' // &
                              trim(error_string) // ' block for SPECIES ' // &
                              trim(new_species%name) // '.'
           call PrintErrMsg(option)
@@ -636,8 +638,21 @@ subroutine NWTRead(reaction_nw,input,option)
                         reaction_nw%rad_decay_rxn_list,temp_species_names, &
                         temp_species_parents,option)
 
-   deallocate(temp_species_names)
-   deallocate(temp_species_parents)
+  allocate(reaction_nw%species_solubility(k))   ! [mol/m^3-liq]
+  allocate(reaction_nw%species_ele_kd(k))       ! [m^3-water/m^3-bulk]
+  allocate(reaction_nw%species_mnrl_mol_den(k)) ! [mol/m^3-mnrl]
+
+  cur_species => reaction_nw%species_list
+  do
+    if (.not.associated(cur_species)) exit
+    reaction_nw%species_solubility(cur_species%id) = cur_species%solubility_limit
+    reaction_nw%species_mnrl_mol_den(cur_species%id) = cur_species%mnrl_molar_density
+    reaction_nw%species_ele_kd(cur_species%id) = cur_species%ele_kd
+    cur_species => cur_species%next
+  enddo
+
+  deallocate(temp_species_names)
+  deallocate(temp_species_parents)
 
 end subroutine NWTRead
 
@@ -901,7 +916,7 @@ function NWTSpeciesCreate()
   species%id = 0
   species%name = ''
   species%molar_weight = UNINITIALIZED_DOUBLE
-  species%mnrl_molar_density = UNINITIALIZED_DOUBLE
+  species%mnrl_molar_density = 100.d0
   species%solubility_limit = UNINITIALIZED_DOUBLE
   species%ele_kd = UNINITIALIZED_DOUBLE
   species%radioactive = PETSC_FALSE
@@ -1342,6 +1357,9 @@ subroutine NWTReactionDestroy(reaction_nw,option)
   call DeallocateArray(reaction_nw%diffusion_coefficient)
   call DeallocateArray(reaction_nw%diffusion_activation_energy)
   call DeallocateArray(reaction_nw%species_names)
+  call DeallocateArray(reaction_nw%species_solubility)
+  call DeallocateArray(reaction_nw%species_ele_kd)
+  call DeallocateArray(reaction_nw%species_mnrl_mol_den)
   call DeallocateArray(reaction_nw%species_print)
 
   nullify(reaction_nw%params)
