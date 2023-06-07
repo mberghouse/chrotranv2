@@ -1,0 +1,211 @@
+#Description: 1D spontaneous imbibition with thermal effects
+
+SIMULATION
+  SIMULATION_TYPE SUBSURFACE
+  PROCESS_MODELS
+    SUBSURFACE_FLOW flow
+      MODE GENERAL
+      OPTIONS
+        THERMAL_IMBIBITION
+        NO_STATE_TRANSITION_OUTPUT
+      /
+    /
+  /
+END
+
+SUBSURFACE
+#THERMAL_IMBIBITION
+#=========================== numerical methods ================================
+NUMERICAL_METHODS FLOW
+
+  TIMESTEPPER
+    SATURATION_CHANGE_GOVERNOR 1.d0
+    CONCENTRATION_CHANGE_GOVERNOR 0.5d0
+  /
+
+  NEWTON_SOLVER
+    MAXIMUM_NUMBER_OF_ITERATIONS 15
+    RTOL 1.d-8
+    ATOL 1.d-8
+    STOL 1.d-30
+  /
+
+  LINEAR_SOLVER
+  /
+
+END
+
+#=========================== regression =======================================
+REGRESSION
+  CELL_IDS
+    1
+    5
+    10
+  /
+  VARIABLES
+     LIQUID_SATURATION
+     TEMPERATURE
+  /
+END
+
+#=========================== flow mode ========================================
+
+#=========================== debug settings ===================================
+
+#=========================== time stepper options =============================
+
+#=========================== discretization ===================================
+GRID
+  TYPE STRUCTURED
+  NXYZ 1 1 10
+  BOUNDS
+    0.d0 0.d0 0.d0
+    1.d-1 1.d-1 5.d-1
+  /
+/
+
+#=========================== solver options ===================================
+
+#=========================== fluid properties =================================
+FLUID_PROPERTY
+  DIFFUSION_COEFFICIENT 1.d-9
+/
+
+#=========================== material properties ==============================
+MATERIAL_PROPERTY  mat1
+  ID 1
+  CHARACTERISTIC_CURVES cc1
+  POROSITY 0.28
+  TORTUOSITY 0.5
+  ROCK_DENSITY 1500.d0 kg/m^3
+  THERMAL_CONDUCTIVITY_DRY 1.0 W/m-C 
+  THERMAL_CONDUCTIVITY_WET 1.0 W/m-C 
+  HEAT_CAPACITY 1000.d0 J/kg-C 
+  HEAT_OF_WETTING 3.d3 J/kg
+  HEAT_OF_WETTING_EXP 2.5d0
+  PERMEABILITY
+    PERM_ISO 1.d-12
+  /
+/
+
+#=========================== saturation functions =============================
+CHARACTERISTIC_CURVES cc1
+  SATURATION_FUNCTION VAN_GENUCHTEN
+    LOOP_INVARIANT
+    UNSATURATED_EXTENSION ECPC
+    LIQUID_RESIDUAL_SATURATION 1.d-1
+    ALPHA 1.d-4
+    M 0.5d0
+    MAX_CAPILLARY_PRESSURE 1.d6
+  /
+  PERMEABILITY_FUNCTION MUALEM
+    PHASE LIQUID
+    LIQUID_RESIDUAL_SATURATION 1.d-1
+    M 0.5d0
+  /
+  PERMEABILITY_FUNCTION MUALEM_VG_GAS
+    PHASE GAS
+    LIQUID_RESIDUAL_SATURATION 1.d-1
+    GAS_RESIDUAL_SATURATION 1.d-40
+    M 0.5d0
+  /
+/
+
+#=========================== output options ===================================
+#OUTPUT
+  #TIMES s 200.0 400.0
+  #FORMAT TECPLOT POINT
+#/
+
+#=========================== times ============================================
+TIME
+  FINAL_TIME 500.d0 s
+  INITIAL_TIMESTEP_SIZE 1.d0 s
+  MAXIMUM_TIMESTEP_SIZE 0.001d0 d
+/
+
+#=========================== regions ==========================================
+REGION all
+  COORDINATES
+    0.d0 0.d0 0.d0
+    1.d-1 1.d-1 5.d-1
+  /
+/
+
+REGION top
+  FACE TOP
+  COORDINATES
+    0.d0 0.d0 5.d-1
+    1.d-1 1.d-1 5.d-1
+  /
+/
+
+REGION bottom
+  FACE BOTTOM
+  COORDINATES
+    0.d0 0.d0 0.d0
+    1.d-1 1.d-1 0.d0
+  /
+/  
+
+#=========================== flow conditions ==================================
+FLOW_CONDITION initial_sat
+  TYPE
+    TEMPERATURE DIRICHLET
+    LIQUID_SATURATION DIRICHLET
+    GAS_PRESSURE DIRICHLET
+  /
+  TEMPERATURE 25.d0
+  LIQUID_SATURATION 1.d-2
+  GAS_PRESSURE 101325.0
+END
+
+FLOW_CONDITION res_pressure
+  TYPE
+    LIQUID_PRESSURE HYDROSTATIC
+    MOLE_FRACTION DIRICHLET
+    TEMPERATURE DIRICHLET
+  /
+  DATUM 0.d0 0.d0 5.d-3
+  LIQUID_PRESSURE 101325.d0
+  MOLE_FRACTION 1.d-20
+  TEMPERATURE 25.d0
+END
+
+FLOW_CONDITION top_pressure_seepage
+  TYPE
+    GAS_PRESSURE DIRICHLET_SEEPAGE
+    RELATIVE_HUMIDITY DIRICHLET
+    TEMPERATURE DIRICHLET
+    
+  /
+  GAS_PRESSURE 83500.0 Pa
+  RELATIVE_HUMIDITY 99.99
+  TEMPERATURE 25.d0
+  
+END
+
+#=========================== condition couplers ===============================
+INITIAL_CONDITION
+  FLOW_CONDITION initial_sat
+  REGION all
+/
+
+BOUNDARY_CONDITION inlet
+  FLOW_CONDITION top_pressure_seepage
+  REGION top
+/
+
+BOUNDARY_CONDITION outlet
+  FLOW_CONDITION res_pressure
+  REGION bottom
+/
+
+#=========================== stratigraphy couplers ============================
+STRATA
+  MATERIAL mat1
+  REGION all
+/
+
+
+END_SUBSURFACE

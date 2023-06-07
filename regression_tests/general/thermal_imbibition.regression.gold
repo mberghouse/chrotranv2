@@ -1,0 +1,22 @@
+-- SATURATION: Liquid Saturation --
+      Max:   1.0000000000000E+00
+      Min:   9.9934238818188E-03
+     Mean:   6.2926153626914E-01
+        1:   1.0000000000000E+00
+        5:   9.7121577502275E-01
+       10:   9.9934238818188E-03
+-- GENERIC: Temperature --
+      Max:   2.5419470993567E+01
+      Min:   2.4993879441625E+01
+     Mean:   2.5182274569469E+01
+        1:   2.5022903117626E+01
+        5:   2.5401773625264E+01
+       10:   2.4993879441625E+01
+-- SOLUTION: Flow --
+   Time (seconds):   6.5093754999452E-02
+   Time Steps:           34
+   Newton Iterations:          138
+   Linear Solver Iterations:          138
+   Time Step Cuts:            0
+   Solution 2-Norm:   2.7724273322284E+05
+   Residual 2-Norm:   1.6298073711618E-09
