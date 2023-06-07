@@ -3665,6 +3665,51 @@ end subroutine RReactConvergenceStats
 
 ! ************************************************************************** !
 
+subroutine RReactInputStats(print_rank, guess, rt_auxvar, global_auxvar, material_auxvar, &
+                            reaction) 
+  !
+  ! Print the RReact input information
+  !
+ ! Author: Peishi Jiang
+  ! Date: 07/06/23
+
+  use Option_module
+  use String_module
+
+  implicit none
+
+  PetscBool :: print_rank
+  class(reaction_rt_type), pointer :: reaction
+  PetscReal :: guess(reaction%ncomp)
+  type(reactive_transport_auxvar_type) :: rt_auxvar
+  type(global_auxvar_type) :: global_auxvar
+  class(material_auxvar_type) :: material_auxvar
+
+  if (.not.print_rank) return
+
+  print *
+  print *, '          RReact inputs --- '
+  ! print *, '          Number of mobile components: ', trim(header)
+  ! print *, '          Number of immobile components: ', trim(header)
+  ! guess
+  print *, '          Guess: ', trim(StringWrite(guess))
+  ! rt_auxvar
+  print *, '          primary species molality: ', trim(StringWrite(rt_auxvar%pri_molal))
+  print *, '          total component concentration: ', trim(StringWrite(rt_auxvar%total(:,1)))
+  ! global_auxvar
+  print *, '          temperature: ', trim(StringWrite(global_auxvar%temp))
+  print *, '          pressure: ', trim(StringWrite(global_auxvar%pres))
+  print *, '          liquid saturation: ', trim(StringWrite(global_auxvar%sat(1)))
+  print *, '          liquid density: ', trim(StringWrite(global_auxvar%den_kg(1)))
+  ! material_auxvar
+  print *, '          volume: ', trim(StringWrite(material_auxvar%volume))
+  print *, '          porosity: ', trim(StringWrite(material_auxvar%porosity))
+  print *, '          tortuosity: ', trim(StringWrite(material_auxvar%tortuosity))
+
+end subroutine RReactInputStats
+
+! ************************************************************************** !
+
 subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
                   num_iterations,reaction,natural_id,option,ierror)
   !
@@ -3703,6 +3748,13 @@ subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
 
   print_rank = Uninitialized(reaction%io_rank) .or. &
                reaction%io_rank == option%myrank
+  
+  ! Print the important inputs if needed
+  if (reaction%logging_verbosity > 29 .and. print_rank) then
+    call RReactInputStats(print_rank, guess, rt_auxvar, global_auxvar, &
+                          material_auxvar, reaction)
+  endif
+
   target_time = option%tran_dt
   cumulative_time = 0.d0
   num_iterations = 0
