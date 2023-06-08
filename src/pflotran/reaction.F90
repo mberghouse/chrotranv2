@@ -3773,6 +3773,12 @@ subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
   print_rank = Uninitialized(reaction%io_rank) .or. &
                reaction%io_rank == option%myrank
 
+  guess = [1.005317d-05,6.805656d-56,1.511447d-03,7.320106d-06, &
+           1.005317d-10,9.170734d-06,2.781859d-05,1.381400d-04, &
+           6.223637d-06,1.103404d-06,2.727873d-06]
+  rt_auxvar%total(:,1) = [1.005316d-05,1.192900d-10,1.511521d-03, &
+           7.321350d-06,1.005316d-10,9.174267d-06,2.783818d-05, &
+           1.381533d-04,6.222173d-06,1.104066d-06,2.728670d-06]
   if (reaction%use_total_as_guess) then
     guess(:) = rt_auxvar%total(:,1)
   endif
