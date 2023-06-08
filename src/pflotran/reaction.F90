@@ -3629,8 +3629,8 @@ subroutine RReactNewtonStats(print_rank,iteration,header, &
   print *, '        iteration: ' // trim(StringWrite(iteration))
   print *, '          Process: ' // trim(StringWrite(option%myrank))
   print *, '             Cell: ' // trim(StringWrite(natural_id))
-  print *, '  latest solution: ' // trim(StringWrite(current_solution))
   print *, 'previous solution: ' // trim(StringWrite(previous_solution))
+  print *, ' current solution: ' // trim(StringWrite(current_solution))
   print *, '  solution update: ' // trim(StringWrite(current_solution - &
                                                      previous_solution))
   print *, '    current total: ' // trim(StringWrite(current_total))
