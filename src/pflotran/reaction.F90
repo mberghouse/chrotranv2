@@ -984,6 +984,9 @@ subroutine ReactionReadPass1(reaction,input,option)
       case('MAX_DLNC')
         call InputReadDouble(input,option,reaction%max_dlnC)
         call InputErrorMsg(input,option,trim(word),'CHEMISTRY')
+      case('MAX_DLNC_RREACT')
+        call InputReadDouble(input,option,reaction%max_dlnC_rreact)
+        call InputErrorMsg(input,option,trim(word),'CHEMISTRY')
       case('EXPLICIT_ADVECTION')
         option%itranmode = EXPLICIT_ADVECTION
         call InputReadCard(input,option,word)
@@ -1042,6 +1045,8 @@ subroutine ReactionReadPass1(reaction,input,option)
         call InputErrorMsg(input,option,'maximum_reaction_cuts','CHEMISTRY')
       case('DONT_STOP_ON_RREACT_FAILURE')
         reaction%stop_on_rreact_failure = PETSC_FALSE
+      case('USE_TOTAL_CONCENTRATION_AS_GUESS')
+        reaction%use_total_as_guess = PETSC_TRUE
       case default
         call InputKeywordUnrecognized(input,word,'CHEMISTRY',option)
     end select
@@ -3542,7 +3547,7 @@ end subroutine RJumpStartKineticSorption
 ! ************************************************************************** !
 
 subroutine RReactInputStats(print_rank,guess,rt_auxvar,global_auxvar, &
-                            material_auxvar,reaction) 
+                            material_auxvar,reaction)
   !
   ! Print the RReact input information
   !
@@ -3586,8 +3591,8 @@ end subroutine RReactInputStats
 
 ! ************************************************************************** !
 
-subroutine RReactNewtonStats(print_rank,iteration,header, &
-                             residual, &
+subroutine RReactNewtonStats(print_rank,substep,iteration,num_cuts,header, &
+                             residual,rel_residual, &
                              current_solution, &
                              previous_solution, &
                              current_total, &
@@ -3608,7 +3613,9 @@ subroutine RReactNewtonStats(print_rank,iteration,header, &
   implicit none
 
   PetscBool :: print_rank
+  PetscInt :: substep
   PetscInt :: iteration
+  PetscInt :: num_cuts
   character(len=MAXSTRINGLENGTH) :: header
   class(reaction_rt_type) :: reaction
   PetscReal :: current_solution(reaction%ncomp)
@@ -3616,6 +3623,7 @@ subroutine RReactNewtonStats(print_rank,iteration,header, &
   PetscReal :: current_total(reaction%ncomp)
   PetscReal :: current_free(reaction%ncomp)
   PetscReal :: residual(reaction%ncomp)
+  PetscReal :: rel_residual
   PetscReal :: maximum_absolute_change
   PetscReal :: maximum_relative_change
   type(reactive_transport_auxvar_type) :: rt_auxvar
@@ -3626,9 +3634,11 @@ subroutine RReactNewtonStats(print_rank,iteration,header, &
 
   print *
   print *, '          Message: ', trim(header)
-  print *, '        iteration: ' // trim(StringWrite(iteration))
   print *, '          Process: ' // trim(StringWrite(option%myrank))
   print *, '             Cell: ' // trim(StringWrite(natural_id))
+  print *, '         sub-step: ' // trim(StringWrite(substep))
+  print *, '        iteration: ' // trim(StringWrite(iteration))
+  print *, '   number of cuts: ' // trim(StringWrite(num_cuts))
   print *, 'previous solution: ' // trim(StringWrite(previous_solution))
   print *, ' current solution: ' // trim(StringWrite(current_solution))
   print *, '  solution update: ' // trim(StringWrite(current_solution - &
@@ -3636,14 +3646,26 @@ subroutine RReactNewtonStats(print_rank,iteration,header, &
   print *, '    current total: ' // trim(StringWrite(current_total))
   print *, ' current free ion: ' // trim(StringWrite(current_free))
   print *, '         residual: ' // trim(StringWrite(residual))
-  print *, '   max abs change: ' // trim(StringWrite(maximum_absolute_change))
-  print *, '   max rel change: ' // trim(StringWrite(maximum_relative_change))
+  print *, '   max abs change: ' // &
+          trim(StringWrite(maximum_absolute_change))
+  print *, '   max rel change: ' // &
+          trim(StringWrite(maximum_relative_change)) &
+          // '  (tol = ' // &
+          trim(StringWrite(reaction%max_relative_change_tolerance)) // ')'
+  print *, ' max abs residual: ' // &
+          trim(StringWrite(maxval(abs(residual)))) &
+          // '  (tol = ' // &
+          trim(StringWrite(reaction%max_residual_tolerance)) // ')'
+  print *, ' max rel residual: ' // &
+          trim(StringWrite(rel_residual)) &
+          // '  (tol = ' // &
+          trim(StringWrite(reaction%max_rel_residual_tolerance)) // ')'
 
 end subroutine RReactNewtonStats
 
 ! ************************************************************************** !
 
-subroutine RReactConvergenceStats(print_rank,step,header,guess, &
+subroutine RReactConvergenceStats(print_rank,substep,header,guess, &
                                   initial_total,current_total, &
                                   residual_store,last_5_maxchng, &
                                   last_5_norms,reaction, &
@@ -3662,7 +3684,7 @@ subroutine RReactConvergenceStats(print_rank,step,header,guess, &
   implicit none
 
   PetscBool :: print_rank
-  PetscInt :: step
+  PetscInt :: substep
   character(len=MAXSTRINGLENGTH) :: header
   class(reaction_rt_type) :: reaction
   PetscReal :: guess(reaction%ncomp)
@@ -3681,7 +3703,7 @@ subroutine RReactConvergenceStats(print_rank,step,header,guess, &
   if (.not.print_rank) return
 
   print *
-  print *, '         Sub-step: ', trim(StringWrite(step))
+  print *, '         Sub-step: ', trim(StringWrite(substep))
   print *, '          Message: ', trim(header)
   print *, '          Process: ' // trim(StringWrite(option%myrank)) // &
            '             Cell: ' // trim(StringWrite(natural_id))
@@ -3751,6 +3773,10 @@ subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
   print_rank = Uninitialized(reaction%io_rank) .or. &
                reaction%io_rank == option%myrank
 
+  if (reaction%use_total_as_guess) then
+    guess(:) = rt_auxvar%total(:,1)
+  endif
+
   ! Print the important inputs if needed
   if (reaction%logging_verbosity > 29 .and. print_rank) then
     call RReactInputStats(print_rank, guess, rt_auxvar, global_auxvar, &
@@ -3801,7 +3827,7 @@ subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
       if (reaction%logging_verbosity > 9 .and. num_timesteps > 1 .and. &
           print_rank) then
         print *, trim(info) // &
-          ' Step ' // trim(StringWrite(num_timesteps)) // &
+          ' Sub-step ' // trim(StringWrite(num_timesteps)) // &
           ' Converged at ' // &
           trim(StringWrite(option%time+cumulative_time)) // &
           ' with a dt of ' // trim(StringWrite(option%tran_dt)) // ' sec'
@@ -3836,7 +3862,7 @@ end subroutine RReact
 
 ! ************************************************************************** !
 
-subroutine RReact2(step,guess,rt_auxvar,global_auxvar,material_auxvar, &
+subroutine RReact2(substep,guess,rt_auxvar,global_auxvar,material_auxvar, &
                    num_iterations,reaction,natural_id,num_cuts, &
                    option,print_rank,ierror)
   !
@@ -3850,7 +3876,7 @@ subroutine RReact2(step,guess,rt_auxvar,global_auxvar,material_auxvar, &
 
   implicit none
 
-  PetscInt :: step
+  PetscInt :: substep
   class(reaction_rt_type), pointer :: reaction
   PetscReal :: guess(reaction%ncomp)
   type(reactive_transport_auxvar_type) :: rt_auxvar
@@ -3889,6 +3915,7 @@ subroutine RReact2(step,guess,rt_auxvar,global_auxvar,material_auxvar, &
   PetscReal :: last_5_norms(5)
   PetscReal :: last_5_maxchng(5,2)
   PetscReal :: two_norm_r, two_norm_r0
+  PetscReal :: rel_residual
 
   PetscReal :: final_time
   PetscReal :: cumulative_time
@@ -3982,7 +4009,7 @@ subroutine RReact2(step,guess,rt_auxvar,global_auxvar,material_auxvar, &
         else
           string = 'Maximum iterations in RReact'
         endif
-        call RReactConvergenceStats(print_rank,step,string,guess, &
+        call RReactConvergenceStats(print_rank,substep,string,guess, &
                                     initial_total, &
                                     current_total,residual_store, &
                                     last_5_maxchng,last_5_norms,reaction, &
@@ -4022,8 +4049,9 @@ subroutine RReact2(step,guess,rt_auxvar,global_auxvar,material_auxvar, &
     last_5_norms(2:5) = last_5_norms(1:4)
     last_5_norms(1) = two_norm_r
     if (num_iterations == 1) two_norm_r0 = two_norm_r
+    rel_residual = two_norm_r/two_norm_r0
     if (maxval(abs(residual)) < reaction%max_residual_tolerance) exit
-    if ((two_norm_r/two_norm_r0) < reaction%max_rel_residual_tolerance) exit
+    if (rel_residual < reaction%max_rel_residual_tolerance) exit
 
     conc(1:naqcomp) = rt_auxvar%pri_molal(1:naqcomp)
     if (nimmobile > 0) then
@@ -4035,7 +4063,7 @@ subroutine RReact2(step,guess,rt_auxvar,global_auxvar,material_auxvar, &
 
     if (ierror /= 0) then
       string = 'Error in RSolve: stop'
-      call RReactConvergenceStats(print_rank,step,string,guess, &
+      call RReactConvergenceStats(print_rank,substep,string,guess, &
                                   initial_total, &
                                   current_total,residual_store, &
                                   last_5_maxchng,last_5_norms,reaction, &
@@ -4055,7 +4083,7 @@ subroutine RReact2(step,guess,rt_auxvar,global_auxvar,material_auxvar, &
     endif
 
     if (reaction%use_log_formulation) then
-      update = dsign(1.d0,update)*min(dabs(update),reaction%max_dlnC)
+      update = dsign(1.d0,update)*min(dabs(update),reaction%max_dlnC_rreact)
       latest_solution = prev_solution*exp(-update)
     else ! linear upage
       ! ensure non-negative concentration
@@ -4090,8 +4118,9 @@ subroutine RReact2(step,guess,rt_auxvar,global_auxvar,material_auxvar, &
       if (nimmobile > 0) then
         current_free(immobile_start:immobile_end) = rt_auxvar%immobile(:)
       endif
-      call RReactNewtonStats(print_rank,num_iterations,string, &
-                             residual_store, &
+      call RReactNewtonStats(print_rank,substep,num_iterations,num_cuts, &
+                             string, &
+                             residual_store,rel_residual, &
                              latest_solution, &
                              prev_solution, &
                              current_total, &

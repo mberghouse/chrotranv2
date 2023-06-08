@@ -187,6 +187,7 @@ module Reaction_Aux_module
     PetscInt :: maximum_reaction_iterations
     PetscInt :: io_rank
     PetscBool :: stop_on_rreact_failure
+    PetscBool :: use_total_as_guess
     PetscReal, pointer :: dbase_temperatures(:)
     type(species_idx_type), pointer :: species_idx
 
@@ -349,6 +350,7 @@ module Reaction_Aux_module
     PetscReal, pointer :: sec_cont_eqkdfreundlichn(:)
 
     PetscReal :: max_dlnC
+    PetscReal :: max_dlnC_rreact
     PetscReal :: max_relative_change_tolerance
     PetscReal :: max_residual_tolerance
     PetscReal :: max_rel_residual_tolerance
@@ -490,6 +492,7 @@ function ReactionCreate()
   reaction%maximum_reaction_iterations = 20
   reaction%io_rank = UNINITIALIZED_INTEGER
   reaction%stop_on_rreact_failure = PETSC_TRUE
+  reaction%use_total_as_guess = PETSC_FALSE
 
   nullify(reaction%species_idx)
 
@@ -621,6 +624,7 @@ function ReactionCreate()
   nullify(reaction%sec_cont_eqkdfreundlichn)
 
   reaction%max_dlnC = 5.d0
+  reaction%max_dlnC_rreact = 5.d0
   reaction%max_relative_change_tolerance = 1.d-6
   reaction%max_residual_tolerance = 1.d-12
   reaction%max_rel_residual_tolerance = 1.d-8
