@@ -3667,7 +3667,7 @@ end subroutine RReactNewtonStats
 
 subroutine RReactConvergenceStats(print_rank,substep,header,guess, &
                                   initial_total,current_total, &
-                                  residual_store,last_5_maxchng, &
+                                  residual_store,J_store,last_5_maxchng, &
                                   last_5_norms,reaction, &
                                   rt_auxvar,global_auxvar, &
                                   material_auxvar,num_iterations, &
@@ -3691,6 +3691,7 @@ subroutine RReactConvergenceStats(print_rank,substep,header,guess, &
   PetscReal :: initial_total(reaction%ncomp)
   PetscReal :: current_total(reaction%ncomp)
   PetscReal :: residual_store(reaction%ncomp)
+  PetscReal :: J_store(reaction%ncomp,reaction%ncomp)
   PetscReal :: last_5_maxchng(5,2)
   PetscReal :: last_5_norms(5)
   type(reactive_transport_auxvar_type) :: rt_auxvar
@@ -3699,6 +3700,8 @@ subroutine RReactConvergenceStats(print_rank,substep,header,guess, &
   PetscInt :: num_iterations
   PetscInt :: natural_id
   type(option_type) :: option
+
+  PetscInt :: i
 
   if (.not.print_rank) return
 
@@ -3729,6 +3732,12 @@ subroutine RReactConvergenceStats(print_rank,substep,header,guess, &
   print *, '                     Last 5 norms: ' // &
     trim(StringWrite(last_5_norms(1:min(num_iterations, &
                                     size(last_5_norms)))))
+  if (maxval(abs(J_store)) > 0.d0) then
+    print *, 'Jacobian'
+    do i = 1, size(J_store,1)
+      print *, trim(StringWrite(J_store(:,i)))
+    enddo
+  endif
 
 end subroutine RReactConvergenceStats
 
@@ -3896,6 +3905,7 @@ subroutine RReact2(substep,guess,rt_auxvar,global_auxvar,material_auxvar, &
   PetscReal :: current_free(reaction%ncomp)
   PetscReal :: res(reaction%ncomp)
   PetscReal :: J(reaction%ncomp,reaction%ncomp)
+  PetscReal :: J_store(reaction%ncomp,reaction%ncomp)
   PetscReal :: one_over_dt
   PetscReal :: prev_solution(reaction%ncomp)
   PetscReal :: latest_solution(reaction%ncomp)
@@ -4009,9 +4019,10 @@ subroutine RReact2(substep,guess,rt_auxvar,global_auxvar,material_auxvar, &
         else
           string = 'Maximum iterations in RReact'
         endif
+        J_store = 0.d0
         call RReactConvergenceStats(print_rank,substep,string,guess, &
                                     initial_total, &
-                                    current_total,residual_store, &
+                                    current_total,residual_store,J_store, &
                                     last_5_maxchng,last_5_norms,reaction, &
                                     rt_auxvar,global_auxvar,material_auxvar, &
                                     num_iterations,natural_id,option)
@@ -4058,6 +4069,7 @@ subroutine RReact2(substep,guess,rt_auxvar,global_auxvar,material_auxvar, &
       conc(immobile_start:immobile_end) = rt_auxvar%immobile(:)
     endif
 
+    J_store = J
     call RSolve(residual,J,conc,update,ncomp,reaction%use_log_formulation, &
                 PETSC_FALSE,ierror)
 
@@ -4065,7 +4077,7 @@ subroutine RReact2(substep,guess,rt_auxvar,global_auxvar,material_auxvar, &
       string = 'Error in RSolve: stop'
       call RReactConvergenceStats(print_rank,substep,string,guess, &
                                   initial_total, &
-                                  current_total,residual_store, &
+                                  current_total,residual_store,J_store, &
                                   last_5_maxchng,last_5_norms,reaction, &
                                   rt_auxvar,global_auxvar,material_auxvar, &
                                   num_iterations,natural_id,option)
