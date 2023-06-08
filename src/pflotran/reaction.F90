@@ -3568,19 +3568,19 @@ subroutine RReactInputStats(print_rank,guess,rt_auxvar,global_auxvar, &
   ! print *, '          Number of mobile components: ', trim(header)
   ! print *, '          Number of immobile components: ', trim(header)
   ! guess
-  print *, '          Guess: ', trim(StringWrite(guess))
+  print *, '                Guess: ', trim(StringWrite(guess))
   ! rt_auxvar
-  print *, '          primary species molality: ', trim(StringWrite(rt_auxvar%pri_molal))
-  print *, '          total component concentration: ', trim(StringWrite(rt_auxvar%total(:,1)))
+  print *, 'primary species molal: ', trim(StringWrite(rt_auxvar%pri_molal))
+  print *, '     total comp. conc: ', trim(StringWrite(rt_auxvar%total(:,1)))
   ! global_auxvar
   print *, '          temperature: ', trim(StringWrite(global_auxvar%temp))
-  print *, '          pressure: ', trim(StringWrite(global_auxvar%pres))
-  print *, '          liquid saturation: ', trim(StringWrite(global_auxvar%sat(1)))
-  print *, '          liquid density: ', trim(StringWrite(global_auxvar%den_kg(1)))
+  print *, '             pressure: ', trim(StringWrite(global_auxvar%pres))
+  print *, '    liquid saturation: ', trim(StringWrite(global_auxvar%sat(1)))
+  print *, '       liquid density: ', trim(StringWrite(global_auxvar%den_kg(1)))
   ! material_auxvar
-  print *, '          volume: ', trim(StringWrite(material_auxvar%volume))
-  print *, '          porosity: ', trim(StringWrite(material_auxvar%porosity))
-  print *, '          tortuosity: ', trim(StringWrite(material_auxvar%tortuosity))
+  print *, '               volume: ', trim(StringWrite(material_auxvar%volume))
+  print *, '             porosity: ', trim(StringWrite(material_auxvar%porosity))
+  print *, '           tortuosity: ', trim(StringWrite(material_auxvar%tortuosity))
 
 end subroutine RReactInputStats
 
@@ -3631,6 +3631,8 @@ subroutine RReactNewtonStats(print_rank,iteration,header, &
   print *, '             Cell: ' // trim(StringWrite(natural_id))
   print *, '  latest solution: ' // trim(StringWrite(current_solution))
   print *, 'previous solution: ' // trim(StringWrite(previous_solution))
+  print *, '  solution update: ' // trim(StringWrite(current_solution - &
+                                                     previous_solution))
   print *, '    current total: ' // trim(StringWrite(current_total))
   print *, ' current free ion: ' // trim(StringWrite(current_free))
   print *, '         residual: ' // trim(StringWrite(residual))
@@ -4091,7 +4093,7 @@ subroutine RReact2(step,guess,rt_auxvar,global_auxvar,material_auxvar, &
       call RReactNewtonStats(print_rank,num_iterations,string, &
                              residual_store, &
                              latest_solution, &
-                             latest_solution - prev_solution, &
+                             prev_solution, &
                              current_total, &
                              current_free, &
                              maximum_absolute_change, &
