@@ -187,6 +187,7 @@ module Reaction_Aux_module
     PetscInt :: maximum_reaction_iterations
     PetscInt :: io_rank
     PetscBool :: stop_on_rreact_failure
+    PetscBool :: truncate_low_primolal_on_nonconvergence
     PetscReal, pointer :: dbase_temperatures(:)
     type(species_idx_type), pointer :: species_idx
 
@@ -490,6 +491,7 @@ function ReactionCreate()
   reaction%maximum_reaction_iterations = 20
   reaction%io_rank = UNINITIALIZED_INTEGER
   reaction%stop_on_rreact_failure = PETSC_TRUE
+  reaction%truncate_low_primolal_on_nonconvergence = PETSC_FALSE
 
   nullify(reaction%species_idx)
 

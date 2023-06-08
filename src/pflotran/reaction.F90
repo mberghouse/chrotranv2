@@ -1042,6 +1042,8 @@ subroutine ReactionReadPass1(reaction,input,option)
         call InputErrorMsg(input,option,'maximum_reaction_cuts','CHEMISTRY')
       case('DONT_STOP_ON_RREACT_FAILURE')
         reaction%stop_on_rreact_failure = PETSC_FALSE
+      case('TRUNCATE_CONC_ON_NONCONVERGENCE')
+        reaction%truncate_low_primolal_on_nonconvergence = PETSC_TRUE
       case default
         call InputKeywordUnrecognized(input,word,'CHEMISTRY',option)
     end select
@@ -3742,13 +3744,13 @@ subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
   PetscReal :: cumulative_time
   PetscReal :: current_total(reaction%ncomp)
   PetscBool :: print_rank
-  PetscBool :: truncate_pri_molal
+  ! PetscBool :: truncate_pri_molal
   PetscBool :: any_low_guess
 
   info = 'Process ' // trim(StringWrite(option%myrank)) // &
          ' Cell ' // trim(StringWrite(natural_id)) // ' :'
 
-  truncate_pri_molal = PETSC_TRUE
+  ! truncate_pri_molal = PETSC_TRUE
   any_low_guess = any(abs(guess) < 1.d-40)
 
   print_rank = Uninitialized(reaction%io_rank) .or. &
@@ -3796,9 +3798,7 @@ subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
 
         ! Assign total to pri_mol if any concentration is below 1.d-40
         ! when Newton Raphson fails
-        print *, truncate_pri_molal
-        print *, any_low_guess
-        if (truncate_pri_molal .and. any_low_guess) then
+        if (reaction%truncate_low_primolal_on_nonconvergence .and. any_low_guess) then
           rt_auxvar%pri_molal(:) = rt_auxvar%total(:,1) / &
                                    global_auxvar%den_kg(1)*1.d3
           option%tran_dt = target_time
