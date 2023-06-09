@@ -21,6 +21,7 @@ module Connection_module
                                        !   -1 = fraction upwind
                                        !   0 = magnitude of distance
                                        !   1-3 = components of unit vector
+                                       !   4 = aux real
     PetscReal, pointer :: intercp(:,:) ! x,y,z location of intercept between the line connecting
                                        ! upwind and downwind cells with the face shared by the cells
     PetscReal, pointer :: area(:)      ! list of areas of faces normal to distance vectors
@@ -90,7 +91,7 @@ function ConnectionCreate(num_connections,connection_itype)
     case(INTERNAL_CONNECTION_TYPE)
       allocate(connection%id_up(num_connections))
       allocate(connection%id_dn(num_connections))
-      allocate(connection%dist(-1:3,num_connections))
+      allocate(connection%dist(-1:4,num_connections))
       allocate(connection%intercp(1:3,num_connections))
       allocate(connection%area(num_connections))
       allocate(connection%face_id(num_connections))
@@ -102,7 +103,7 @@ function ConnectionCreate(num_connections,connection_itype)
       connection%area = 0.d0
     case(BOUNDARY_CONNECTION_TYPE)
       allocate(connection%id_dn(num_connections))
-      allocate(connection%dist(-1:3,num_connections))
+      allocate(connection%dist(-1:4,num_connections))
       allocate(connection%intercp(1:3,num_connections))
       allocate(connection%area(num_connections))
       allocate(connection%face_id(num_connections))

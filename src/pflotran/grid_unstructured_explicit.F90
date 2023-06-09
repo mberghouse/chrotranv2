@@ -82,7 +82,7 @@ subroutine UGridExplicitRead(unstructured_grid,filename,option)
 ! id_up_2 id_dn_2 x_2 y_2 z_2 area_2
 ! ...
 ! ...
-! id_up_M id_dn_M x_M y_M z_M area_M
+! id_up_M id_dn_M x_M y_M z_M area_M aux_M
 ! -----------------------------------------------------------------
 
   call OptionSetBlocking(option,PETSC_FALSE)
@@ -251,6 +251,10 @@ subroutine UGridExplicitRead(unstructured_grid,filename,option)
   explicit_grid%connections = 0
   allocate(explicit_grid%face_areas(num_connections_local))
   explicit_grid%face_areas = 0
+  if (explicit_grid%read_aux) then
+    allocate(explicit_grid%face_aux(num_connections_local))
+    explicit_grid%face_aux = 0
+  endif
   allocate(explicit_grid%face_centroids(num_connections_local))
   do iconn = 1, num_connections_local
     explicit_grid%face_centroids(iconn)%x = 0.d0
@@ -262,7 +266,7 @@ subroutine UGridExplicitRead(unstructured_grid,filename,option)
   ! to other ranks
   call OptionSetBlocking(option,PETSC_FALSE)
   if (OptionIsIORank(option)) then
-    allocate(temp_real_array(6,num_connections_local_save+1))
+    allocate(temp_real_array(7,num_connections_local_save+1))
     ! read for other processors
     do irank = 0, option%comm%size-1
       temp_real_array = UNINITIALIZED_DOUBLE
@@ -285,6 +289,10 @@ subroutine UGridExplicitRead(unstructured_grid,filename,option)
         call InputErrorMsg(input,option,'face z coordinate',hint)
         call InputReadDouble(input,option,temp_real_array(6,iconn))
         call InputErrorMsg(input,option,'face area',hint)
+        if (explicit_grid%read_aux) then
+          call InputReadDouble(input,option,temp_real_array(7,iconn))
+          call InputErrorMsg(input,option,'face aux',hint)
+        endif
       enddo
 
       ! if the cells reside on io_rank
@@ -301,6 +309,9 @@ subroutine UGridExplicitRead(unstructured_grid,filename,option)
           explicit_grid%face_centroids(iconn)%y = temp_real_array(4,iconn)
           explicit_grid%face_centroids(iconn)%z = temp_real_array(5,iconn)
           explicit_grid%face_areas(iconn) = temp_real_array(6,iconn)
+          if (explicit_grid%read_aux) then
+            explicit_grid%face_aux(iconn) = temp_real_array(7,iconn)
+          endif
         enddo
       else
         ! otherwise communicate to other ranks
@@ -311,7 +322,7 @@ subroutine UGridExplicitRead(unstructured_grid,filename,option)
                  trim(adjustl(word))
         print *, trim(string)
 #endif
-        int_mpi = num_to_read*6
+        int_mpi = num_to_read*7
         call MPI_Send(temp_real_array,int_mpi,MPI_DOUBLE_PRECISION,irank, &
                       num_to_read,option%mycomm,ierr);CHKERRQ(ierr)
       endif
@@ -325,8 +336,8 @@ subroutine UGridExplicitRead(unstructured_grid,filename,option)
               trim(adjustl(word))
     print *, trim(string)
 #endif
-    allocate(temp_real_array(6,num_connections_local))
-    int_mpi = num_connections_local*6
+    allocate(temp_real_array(7,num_connections_local))
+    int_mpi = num_connections_local*7
     call MPI_Recv(temp_real_array,int_mpi,MPI_DOUBLE_PRECISION, &
                   option%comm%io_rank,MPI_ANY_TAG,option%mycomm,status_mpi, &
                   ierr);CHKERRQ(ierr)
@@ -337,6 +348,9 @@ subroutine UGridExplicitRead(unstructured_grid,filename,option)
       explicit_grid%face_centroids(iconn)%y = temp_real_array(4,iconn)
       explicit_grid%face_centroids(iconn)%z = temp_real_array(5,iconn)
       explicit_grid%face_areas(iconn) = temp_real_array(6,iconn)
+      if (explicit_grid%read_aux) then
+        explicit_grid%face_aux(iconn) = temp_real_array(7,iconn)
+      endif
     enddo
 
   endif
@@ -887,7 +901,8 @@ subroutine UGridExplicitDecompose(ugrid,option)
 #include "petsc/finclude/petscdm.h"
   use petscdm
   use Option_module
-  use Utility_module, only: ReallocateArray, SearchOrderedArray
+  use Utility_module, only: ReallocateArray, SearchOrderedArray, &
+                            DeallocateArray
   use String_module
 
   implicit none
@@ -1298,7 +1313,7 @@ subroutine UGridExplicitDecompose(ugrid,option)
   call VecDestroy(cells_old,ierr);CHKERRQ(ierr)
 
   ! set up connections
-  connection_stride = 8
+  connection_stride = 9
   ! create strided vector with the old connection distribution
   call VecCreate(option%mycomm,connections_old,ierr);CHKERRQ(ierr)
   call VecSetSizes(connections_old, &
@@ -1315,8 +1330,13 @@ subroutine UGridExplicitDecompose(ugrid,option)
     vec_ptr(offset+4) = explicit_grid%face_centroids(iconn)%y
     vec_ptr(offset+5) = explicit_grid%face_centroids(iconn)%z
     vec_ptr(offset+6) = explicit_grid%face_areas(iconn)
-    vec_ptr(offset+7) = 1.d0 ! flag for local connections
-    vec_ptr(offset+8) = -888.d0
+    if (explicit_grid%read_aux) then
+      vec_ptr(offset+7) = explicit_grid%face_aux(iconn)
+    else
+      vec_ptr(offset+7) = -222.d0
+    endif
+    vec_ptr(offset+8) = 1.d0 ! flag for local connections
+    vec_ptr(offset+9) = -888.d0
   enddo
   call VecRestoreArrayF90(connections_old,vec_ptr,ierr);CHKERRQ(ierr)
 
@@ -1498,7 +1518,7 @@ subroutine UGridExplicitDecompose(ugrid,option)
     ! all values should be negative at this point, unless uninitialized
     if (maxval(int_array2d(:,iconn)) >= 999) then
       ! connection is between two ghosted cells
-      vec_ptr(offset+7) = 0.d0
+      vec_ptr(offset+8) = 0.d0
       cycle
     endif
     id_up = int(vec_ptr(offset+1)) ! this is the natural id
@@ -1542,7 +1562,7 @@ subroutine UGridExplicitDecompose(ugrid,option)
     endif
     if (id_up > ugrid%nlmax .and. id_dn > ugrid%nlmax) then
       ! connection is between two ghosted cells
-      vec_ptr(offset+7) = 0.d0
+      vec_ptr(offset+8) = 0.d0
     endif
   enddo
   call VecRestoreArrayF90(connections_local,vec_ptr,ierr);CHKERRQ(ierr)
@@ -1599,22 +1619,27 @@ subroutine UGridExplicitDecompose(ugrid,option)
 #endif
 
   ! deallocate/allocate connection info locally
-  deallocate(explicit_grid%connections)
-  deallocate(explicit_grid%face_areas)
+  call DeallocateArray(explicit_grid%connections)
+  call DeallocateArray(explicit_grid%face_areas)
+  call DeallocateArray(explicit_grid%face_aux)
   deallocate(explicit_grid%face_centroids)
 
   count = 0
   call VecGetArrayF90(connections_local,vec_ptr,ierr);CHKERRQ(ierr)
   do iconn = 1, num_connections_local
     offset = connection_stride*(iconn-1)
-    if (vec_ptr(offset+7) > 0.1d0) count = count + 1
+    if (vec_ptr(offset+8) > 0.1d0) count = count + 1
   enddo
   call VecRestoreArrayF90(connections_local,vec_ptr,ierr);CHKERRQ(ierr)
 
   allocate(explicit_grid%connections(2,count))
   explicit_grid%connections = 0
   allocate(explicit_grid%face_areas(count))
-  explicit_grid%face_areas = 0
+  explicit_grid%face_areas = 0.d0
+  if (explicit_grid%read_aux) then
+    allocate(explicit_grid%face_aux(count))
+    explicit_grid%face_aux = 0.d0
+  endif
   allocate(explicit_grid%face_centroids(count))
   do iconn = 1, count
     explicit_grid%face_centroids(iconn)%x = 0.d0
@@ -1625,7 +1650,7 @@ subroutine UGridExplicitDecompose(ugrid,option)
   count = 0
   do iconn = 1, num_connections_local
     offset = connection_stride*(iconn-1)
-    if (vec_ptr(offset+7) > 0.1d0) then
+    if (vec_ptr(offset+8) > 0.1d0) then
       count = count + 1
       explicit_grid%connections(1,count) = int(vec_ptr(offset+1))
       explicit_grid%connections(2,count) = int(vec_ptr(offset+2))
@@ -1633,6 +1658,9 @@ subroutine UGridExplicitDecompose(ugrid,option)
       explicit_grid%face_centroids(count)%y = vec_ptr(offset+4)
       explicit_grid%face_centroids(count)%z = vec_ptr(offset+5)
       explicit_grid%face_areas(count) = vec_ptr(offset+6)
+      if (explicit_grid%read_aux) then
+        explicit_grid%face_aux(count) = vec_ptr(offset+7)
+      endif
     endif
   enddo
   call VecRestoreArrayF90(connections_local,vec_ptr,ierr);CHKERRQ(ierr)
@@ -1753,6 +1781,9 @@ function UGridExplicitSetInternConnect(explicit_grid,upwind_fraction_method, &
                             upwind_fraction_method, &
                             connections%dist(:,iconn),error,option)
     connections%area(iconn) = explicit_grid%face_areas(iconn)
+    if (explicit_grid%read_aux) then
+      connections%dist(4,iconn) = explicit_grid%face_aux(iconn)
+    endif
   enddo
   if (error) then
     option%io_buffer = 'Errors in UGridExplicitSetInternConnect(). &

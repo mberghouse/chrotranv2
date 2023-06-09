@@ -170,7 +170,7 @@ subroutine RichardsFluxDerivative(rich_auxvar_up,global_auxvar_up, &
   type(global_auxvar_type) :: global_auxvar_up, global_auxvar_dn
   type(material_auxvar_type) :: material_auxvar_up, material_auxvar_dn
   type(option_type) :: option
-  PetscReal :: v_darcy, area, dist(-1:3)
+  PetscReal :: v_darcy, area, dist(-1:4)
   class(characteristic_curves_type) :: characteristic_curves_up
   class(characteristic_curves_type) :: characteristic_curves_dn
   PetscReal :: Jup(option%nflowdof,option%nflowdof)
@@ -358,7 +358,7 @@ subroutine RichardsFlux(rich_auxvar_up,global_auxvar_up, &
   type(global_auxvar_type) :: global_auxvar_up, global_auxvar_dn
   type(material_auxvar_type) :: material_auxvar_up, material_auxvar_dn
   type(option_type) :: option
-  PetscReal :: v_darcy, area, dist(-1:3)
+  PetscReal :: v_darcy, area, dist(-1:4)
   PetscReal :: Res(1:option%nflowdof)
 
   PetscReal :: dist_gravity  ! distance along gravity vector
@@ -453,7 +453,7 @@ subroutine RichardsBCFluxDerivative(ibndtype,auxvars, &
   ! dist(0) = magnitude
   ! dist(1:3) = unit vector
   ! dist(0)*dist(1:3) = vector
-  PetscReal :: dist(-1:3)
+  PetscReal :: dist(-1:4)
   class(characteristic_curves_type) :: characteristic_curves_dn
   PetscReal :: Jdn(option%nflowdof,option%nflowdof)
 
@@ -705,7 +705,7 @@ subroutine RichardsBCFlux(ibndtype,auxvars, &
   ! dist(0) = magnitude
   ! dist(1:3) = unit vector
   ! dist(0)*dist(1:3) = vector
-  PetscReal :: dist(-1:3)
+  PetscReal :: dist(-1:4)
   PetscReal :: Res(1:option%nflowdof)
 
   PetscReal :: dist_gravity  ! distance along gravity vector

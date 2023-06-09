@@ -144,10 +144,12 @@ subroutine DiscretizationReadRequiredCards(discretization,input,option)
   PetscInt :: structured_grid_itype
   PetscInt :: unstructured_grid_itype
   PetscInt :: nx, ny, nz
+  PetscBool :: read_aux
 
   nx = 0
   ny = 0
   nz = 0
+  read_aux = PETSC_FALSE
 
 ! we initialize the word to blanks to avoid error reported by valgrind
   word = ''
@@ -228,6 +230,8 @@ subroutine DiscretizationReadRequiredCards(discretization,input,option)
         call InputReadDouble(input,option, &
                              discretization%origin_global(Z_DIRECTION))
         call InputErrorMsg(input,option,'Z direction','Origin')
+      case('READ_AUXILIARY_CONNECTION_DATA')
+        read_aux = PETSC_TRUE
       case('FILE','GRAVITY','INVERT_Z','MAX_CELLS_SHARING_A_VERTEX',&
            'STENCIL_WIDTH','STENCIL_TYPE','FLUX_METHOD','DOMAIN_FILENAME', &
            'UPWIND_FRACTION_METHOD','PERM_TENSOR_TO_SCALAR_MODEL', &
@@ -265,6 +269,7 @@ subroutine DiscretizationReadRequiredCards(discretization,input,option)
           grid%unstructured_grid => un_str_grid
         case(EXPLICIT_UNSTRUCTURED_GRID)
           un_str_grid%explicit_grid => UGridExplicitCreate()
+          un_str_grid%explicit_grid%read_aux = read_aux
           if (index(discretization%filename,'.h5') > 0) then
             call UGridExplicitReadHDF5(un_str_grid, &
                                        discretization%filename,option)
@@ -357,7 +362,7 @@ subroutine DiscretizationRead(discretization,input,option)
     call StringToUpper(word)
 
     select case(trim(word))
-      case('TYPE','NXYZ','ORIGIN','FILE')
+      case('TYPE','NXYZ','ORIGIN','FILE','READ_AUXILIARY_CONNECTION_DATA')
       case('DXYZ')
         dxyz_read = PETSC_TRUE
         select case(discretization%itype)

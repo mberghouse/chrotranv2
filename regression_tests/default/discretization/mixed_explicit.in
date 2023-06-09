@@ -45,8 +45,9 @@ END
 
 #=========================== discretization ===================================
 GRID
-  TYPE UNSTRUCTURED_explicit ./mixed.uge
+  TYPE UNSTRUCTURED_explicit ./mixed_aux.uge
   UPWIND_FRACTION_METHOD FACE_CENTER_PROJECTION
+#  READ_AUXILIARY_CONNECTION_DATA
 END
 
 #=========================== solver options ===================================
