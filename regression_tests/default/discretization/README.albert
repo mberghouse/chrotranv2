@@ -1,0 +1,22 @@
+1. Add permeabilities at cell faces (connections) to the list of connections 
+   in the .uge file. E.g., 
+                                      h
+  CELLS 15                            e
+  1 4.0625 4.0625 4.0625 5.20833      r
+  ...                                 e
+  15 1.25 3.75 0.3125 2.60417         |
+  CONNECTIONS 24                      V
+  1 2 4.16667 4.16667 3.3333 6.25     5.5000000000000008E-013  <- here
+  1 3 3.75 3.75 3.75 8.8388           9.2241978564318157E-013
+  ...
+  14 15 0.41667 3.75 0.41667 2.2097   6.6666666666666689E-013
+
+2. Add the card READ_AUXILIARY_CONNECTION_DATA to the GRID block. E.g.,
+
+  GRID
+    TYPE UNSTRUCTURED_explicit ./grid_albert.uge
+    READ_AUXILIARY_CONNECTION_DATA    <- here
+  END
+
+3. Ensure that permeabilities are still defined for each material as these
+   permeabilities are used for the boundary connections.

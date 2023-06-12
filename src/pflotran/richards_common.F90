@@ -218,10 +218,13 @@ subroutine RichardsFluxDerivative(rich_auxvar_up,global_auxvar_up, &
 
   call ConnectionCalculateDistances(dist,option%gravity,dd_up,dd_dn, &
                                     dist_gravity,upweight)
-  call PermeabilityTensorToScalar(material_auxvar_up,dist,perm_up)
-  call PermeabilityTensorToScalar(material_auxvar_dn,dist,perm_dn)
-
-  Dq = (perm_up * perm_dn)/(dd_up*perm_dn + dd_dn*perm_up)
+  if (option%flow%perm_at_face) then
+    Dq = dist(4)/dist(0)
+  else
+    call PermeabilityTensorToScalar(material_auxvar_up,dist,perm_up)
+    call PermeabilityTensorToScalar(material_auxvar_dn,dist,perm_dn)
+    Dq = (perm_up * perm_dn)/(dd_up*perm_dn + dd_dn*perm_up)
+  endif
 
 ! Flow term
   if (rich_auxvar_up%kvr > eps .or. &
@@ -373,10 +376,13 @@ subroutine RichardsFlux(rich_auxvar_up,global_auxvar_up, &
 
   call ConnectionCalculateDistances(dist,option%gravity,dd_up,dd_dn, &
                                     dist_gravity,upweight)
-  call PermeabilityTensorToScalar(material_auxvar_up,dist,perm_up)
-  call PermeabilityTensorToScalar(material_auxvar_dn,dist,perm_dn)
-
-  Dq = (perm_up * perm_dn)/(dd_up*perm_dn + dd_dn*perm_up)
+  if (option%flow%perm_at_face) then
+    Dq = dist(4)/dist(0)
+  else
+    call PermeabilityTensorToScalar(material_auxvar_up,dist,perm_up)
+    call PermeabilityTensorToScalar(material_auxvar_dn,dist,perm_dn)
+    Dq = (perm_up * perm_dn)/(dd_up*perm_dn + dd_dn*perm_up)
+  endif
 
 ! Flow term
   if (rich_auxvar_up%kvr > eps .or. &

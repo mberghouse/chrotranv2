@@ -34,6 +34,7 @@ module Option_Flow_module
 
     PetscBool :: full_perm_tensor
     PetscBool :: steady_state
+    PetscBool :: perm_at_face 
 
     ! If true, permeability changes due to pressure
     PetscBool :: update_flow_perm
@@ -166,6 +167,7 @@ subroutine OptionFlowInitRealization(option)
   option%minimum_hydrostatic_pressure = -MAX_DOUBLE
   option%th_freezing = PETSC_FALSE
   option%steady_state = PETSC_FALSE
+  option%perm_at_face = PETSC_FALSE
 
   option%store_darcy_vel = PETSC_FALSE
   option%scale_all_pressure = PETSC_FALSE

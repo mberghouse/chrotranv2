@@ -270,6 +270,7 @@ subroutine DiscretizationReadRequiredCards(discretization,input,option)
         case(EXPLICIT_UNSTRUCTURED_GRID)
           un_str_grid%explicit_grid => UGridExplicitCreate()
           un_str_grid%explicit_grid%read_aux = read_aux
+          option%flow%perm_at_face = read_aux
           if (index(discretization%filename,'.h5') > 0) then
             call UGridExplicitReadHDF5(un_str_grid, &
                                        discretization%filename,option)
