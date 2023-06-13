@@ -21,6 +21,10 @@ module Reaction_Sandbox_Cyber_class
   PetscInt, parameter :: NO2_MASS_STORAGE_INDEX = 5
   PetscInt, parameter :: CO2_MASS_STORAGE_INDEX = 6
 
+  PetscInt, parameter :: INHIBIT_FUNC_ARCTAN1 = 7
+  PetscInt, parameter :: INHIBIT_FUNC_ARCTAN2 = 8
+  PetscInt, parameter :: INHIBIT_FUNC_SMOOTHSTEP = 9
+
   type, public, &
     extends(reaction_sandbox_base_type) :: reaction_sandbox_cyber_type
     PetscInt :: nh4_id
@@ -73,6 +77,8 @@ module Reaction_Sandbox_Cyber_class
     PetscReal :: inhibit_by_nh4
     PetscReal :: inhibition_threshold_f
     PetscReal :: inhibit_by_reactants
+    PetscInt :: inhibit_func
+    PetscReal :: inhibit_func_constant
     PetscInt, pointer :: nrow(:)
     PetscInt, pointer :: ncol(:)
     PetscInt, pointer :: irow(:,:)
@@ -155,6 +161,8 @@ function CyberCreate()
   CyberCreate%inhibit_by_nh4 = UNINITIALIZED_DOUBLE
   CyberCreate%inhibition_threshold_f = UNINITIALIZED_DOUBLE
   CyberCreate%inhibit_by_reactants = UNINITIALIZED_DOUBLE
+  CyberCreate%inhibit_func = INHIBIT_FUNC_ARCTAN1
+  CyberCreate%inhibit_func_constant = UNINITIALIZED_DOUBLE
   nullify(CyberCreate%nrow)
   nullify(CyberCreate%ncol)
   nullify(CyberCreate%irow)
@@ -292,6 +300,16 @@ subroutine CyberRead(this,input,option)
       case('INHIBIT_BY_REACTANTS')
         call InputReadDouble(input,option,this%inhibit_by_reactants)
         call InputErrorMsg(input,option,'reactant inhibition concentration', &
+                           trim(error_string)//','//trim(word))
+      case('INHIBIT_FUNC_ARCTAN')
+        this%inhibit_func = INHIBIT_FUNC_ARCTAN2
+        call InputReadDouble(input,option,this%inhibit_func_constant)
+        call InputErrorMsg(input,option,'reactant inhibition function arctan', &
+                           trim(error_string)//','//trim(word))
+      case('INHIBIT_FUNC_SMOOTHSTEP')
+        this%inhibit_func = INHIBIT_FUNC_SMOOTHSTEP
+        call InputReadDouble(input,option,this%inhibit_func_constant)
+        call InputErrorMsg(input,option,'reactant inhibition function smoothstep', &
                            trim(error_string)//','//trim(word))
       case default
         call InputKeywordUnrecognized(input,word,error_string,option)
@@ -684,14 +702,54 @@ subroutine CyberReact(this,Residual,Jacobian,compute_derivative, &
 
   ! do not worry about molarity to molality or activity coefficients
   if (Initialized(this%inhibit_by_reactants)) then
-    call ReactionThresholdInhibition(Cdoc,this%inhibit_by_reactants, &
-                                     doc_inhibition, drate_ddoc_inhib)
-    call ReactionThresholdInhibition(Co2,this%inhibit_by_reactants, &
-                                     o2_inhibition, drate_do2_inhib)
-    call ReactionThresholdInhibition(Cno3,this%inhibit_by_reactants, &
-                                     no3_inhibition, drate_dno3_inhib)
-    call ReactionThresholdInhibition(Cno2,this%inhibit_by_reactants, &
-                                     no2_inhibition, drate_dno2_inhib)
+    if (this%inhibit_func .eq. INHIBIT_FUNC_ARCTAN1) then
+      call ReactionThresholdInhibition(Cdoc,this%inhibit_by_reactants, &
+                                      doc_inhibition, drate_ddoc_inhib)
+      call ReactionThresholdInhibition(Co2,this%inhibit_by_reactants, &
+                                      o2_inhibition, drate_do2_inhib)
+      call ReactionThresholdInhibition(Cno3,this%inhibit_by_reactants, &
+                                      no3_inhibition, drate_dno3_inhib)
+      call ReactionThresholdInhibition(Cno2,this%inhibit_by_reactants, &
+                                      no2_inhibition, drate_dno2_inhib)
+    else if (this%inhibit_func .eq. INHIBIT_FUNC_ARCTAN2) then
+      call ReactionThresholdInhibition2(Cdoc,this%inhibit_by_reactants, &
+                                        this%inhibit_func_constant, &
+                                      doc_inhibition, drate_ddoc_inhib)
+      call ReactionThresholdInhibition2(Co2,this%inhibit_by_reactants, &
+                                        this%inhibit_func_constant, &
+                                      o2_inhibition, drate_do2_inhib)
+      call ReactionThresholdInhibition2(Cno3,this%inhibit_by_reactants, &
+                                        this%inhibit_func_constant, &
+                                      no3_inhibition, drate_dno3_inhib)
+      call ReactionThresholdInhibition2(Cno2,this%inhibit_by_reactants, &
+                                        this%inhibit_func_constant, &
+                                      no2_inhibition, drate_dno2_inhib)
+    else if (this%inhibit_func .eq. INHIBIT_FUNC_SMOOTHSTEP) then
+      call ReactionThresholdInhibitionSmoothstep(Cdoc,this%inhibit_by_reactants, &
+                                        this%inhibit_func_constant, &
+                                      doc_inhibition, drate_ddoc_inhib)
+      call ReactionThresholdInhibitionSmoothstep(Co2,this%inhibit_by_reactants, &
+                                        this%inhibit_func_constant, &
+                                      o2_inhibition, drate_do2_inhib)
+      call ReactionThresholdInhibitionSmoothstep(Cno3,this%inhibit_by_reactants, &
+                                        this%inhibit_func_constant, &
+                                      no3_inhibition, drate_dno3_inhib)
+      call ReactionThresholdInhibitionSmoothstep(Cno2,this%inhibit_by_reactants, &
+                                        this%inhibit_func_constant, &
+                                      no2_inhibition, drate_dno2_inhib)
+    endif
+    drate_ddoc_inhib = drate_ddoc_inhib * &
+                           rt_auxvar%pri_act_coef(this%doc_id) * &
+                           molality_to_molarity
+    drate_do2_inhib = drate_do2_inhib * &
+                           rt_auxvar%pri_act_coef(this%o2_id) * &
+                           molality_to_molarity
+    drate_dno3_inhib = drate_dno3_inhib * &
+                           rt_auxvar%pri_act_coef(this%no3_id) * &
+                           molality_to_molarity
+    drate_dno2_inhib = drate_dno2_inhib * &
+                           rt_auxvar%pri_act_coef(this%no2_id) * &
+                           molality_to_molarity
   else
     doc_inhibition = 1.d0; drate_ddoc_inhib = 0.d0
     o2_inhibition = 1.d0;  drate_do2_inhib = 0.d0
@@ -702,22 +760,37 @@ subroutine CyberReact(this,Residual,Jacobian,compute_derivative, &
   nh4_inhibition = 1.d0
   dnh4_inhibition_dnh4 = 0.d0
   if (Initialized(this%inhibit_by_nh4)) then
-#if 1
-    tempreal = (Cnh4 - this%inhibit_by_nh4)*this%inhibition_threshold_f
-    nh4_inhibition = 0.5d0 + atan(tempreal)/PI
-    ! derivative of atan(X) = 1 / (1 + X^2) dX
-    dnh4_inhibition_dnh4 = this%inhibition_threshold_f * &
-                           rt_auxvar%pri_act_coef(this%nh4_id) * &
-                           molality_to_molarity / &
-                           (1.d0 + tempreal*tempreal) / PI
-#else
-    call ReactionThresholdInhibition(Cnh4,this%inhibit_by_nh4, &
-                                     nh4_inhibition, &
-                                     dnh4_inhibition_dnh4)
+! #if 1
+!     tempreal = (Cnh4 - this%inhibit_by_nh4)*this%inhibition_threshold_f
+!     nh4_inhibition = 0.5d0 + atan(tempreal)/PI
+!     ! derivative of atan(X) = 1 / (1 + X^2) dX
+!     dnh4_inhibition_dnh4 = this%inhibition_threshold_f * &
+!                            rt_auxvar%pri_act_coef(this%nh4_id) * &
+!                            molality_to_molarity / &
+!                            (1.d0 + tempreal*tempreal) / PI
+! #else
+!     call ReactionThresholdInhibition(Cnh4,this%inhibit_by_nh4, &
+!                                      nh4_inhibition, &
+!                                      dnh4_inhibition_dnh4)
+!     dnh4_inhibition_dnh4 = dnh4_inhibition_dnh4 * &
+!                            rt_auxvar%pri_act_coef(this%nh4_id) * &
+!                            molality_to_molarity
+! #endif
+    if (this%inhibit_func .eq. INHIBIT_FUNC_ARCTAN1) then
+      call ReactionThresholdInhibition(Cnh4,this%inhibit_by_reactants, &
+                                       nh4_inhibition, dnh4_inhibition_dnh4)
+    else if (this%inhibit_func .eq. INHIBIT_FUNC_ARCTAN2) then
+      call ReactionThresholdInhibition2(Cnh4,this%inhibit_by_reactants, &
+                                        this%inhibit_func_constant, &
+                                        nh4_inhibition, dnh4_inhibition_dnh4)
+    else if (this%inhibit_func .eq. INHIBIT_FUNC_SMOOTHSTEP) then
+      call ReactionThresholdInhibitionSmoothstep(Cnh4,this%inhibit_by_reactants, &
+                                                 this%inhibit_func_constant, &
+                                                 nh4_inhibition, dnh4_inhibition_dnh4)
+    endif
     dnh4_inhibition_dnh4 = dnh4_inhibition_dnh4 * &
                            rt_auxvar%pri_act_coef(this%nh4_id) * &
                            molality_to_molarity
-#endif
   endif
 
   k1_scaled = this%k1 * temperature_scaling_factor

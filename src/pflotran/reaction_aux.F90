@@ -428,7 +428,9 @@ module Reaction_Aux_module
             ReactionInputRecord, &
             ReactionDestroy, &
             LogKeh, &
-            ReactionThresholdInhibition
+            ReactionThresholdInhibition, &
+            ReactionThresholdInhibition2, &
+            ReactionThresholdInhibitionSmoothstep
 
 contains
 
@@ -1895,6 +1897,83 @@ subroutine ReactionThresholdInhibition(concentration,threshold_concentration, &
   derivative = threshold_f / (1.d0+tempreal*tempreal) / PI
 
 end subroutine ReactionThresholdInhibition
+
+ ! ************************************************************************** !
+
+subroutine ReactionThresholdInhibition2(concentration,threshold_concentration, &
+                                        threshold_constant,inhibition_factor,derivative)
+  !
+  ! Calculates threshold inhibition for a reactant
+  !
+  ! Author: Peishi Jiang
+  ! Date: 06/12/23
+  !
+
+  implicit none
+
+  PetscReal :: concentration
+  PetscReal :: threshold_concentration
+  PetscReal :: threshold_constant
+  PetscReal :: inhibition_factor
+  PetscReal :: derivative
+
+  PetscReal :: tempreal
+
+  tempreal = (concentration-threshold_concentration)*threshold_constant
+  inhibition_factor = 0.5d0 + atan(tempreal)/PI
+  ! derivative of atan(X) = 1 / (1 + X^2) dX
+  derivative = threshold_constant / (1.d0+tempreal*tempreal) / PI
+
+end subroutine ReactionThresholdInhibition2
+
+! ************************************************************************** !
+
+subroutine ReactionThresholdInhibitionSmoothstep(concentration,threshold_concentration, &
+                                        interval,inhibition_factor,derivative)
+  !
+  ! Calculates threshold inhibition for a reactant
+  !
+  ! Author: Peishi Jiang
+  ! Date: 06/12/23
+  !
+
+  implicit none
+
+  PetscReal :: concentration
+  PetscReal :: threshold_concentration
+  PetscReal :: interval
+  PetscReal :: inhibition_factor
+  PetscReal :: derivative
+
+  PetscReal :: log_inhibition
+  PetscReal :: log_concentration
+  PetscReal :: upper, lower, z
+
+  log_inhibition = LOG10(threshold_concentration)
+  log_concentration = LOG10(concentration)
+  lower = log_inhibition - interval / 2.d0
+  upper = log_inhibition + interval / 2.d0
+  z = (log_concentration - lower) / interval
+
+  ! inhibition
+  if (z < 0.) then
+    inhibition_factor = 0.d0
+  else if (z > 1.) then
+    inhibition_factor = 1.d0
+  else
+    inhibition_factor = 3.d0 * z ** 2 - 2.d0 * z ** 3
+  endif
+
+  ! derivative
+  if (z < 0.) then
+    derivative = 0.d0
+  else if (z > 1.d0) then
+    derivative = 0.d0
+  else
+    derivative = (6.d0*z - 6.d0*z**2) / (interval*concentration*LOG(10.d0))
+  endif
+
+end subroutine ReactionThresholdInhibitionSmoothstep
 
 ! ************************************************************************** !
 
