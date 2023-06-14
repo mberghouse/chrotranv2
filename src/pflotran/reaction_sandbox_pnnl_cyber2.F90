@@ -912,49 +912,74 @@ subroutine CyberReact(this,Residual,Jacobian,compute_derivative, &
                   (r1docmonod/Cdoc - r1docmonod/r1docmonod_denom) * &
                   r1no3monod * &
                   rt_auxvar%pri_act_coef(this%doc_id)*molality_to_molarity * &
-                  doc_inhibition * no3_inhibition + &
-                  r1kin/doc_inhibition*drate_ddoc_inhib
+                  doc_inhibition * no3_inhibition
+    if (dabs(doc_inhibition) > 0.d0) then
+      dr1kin_ddoc = dr1kin_ddoc + r1kin/doc_inhibition*drate_ddoc_inhib
+    endif
     dr1kin_dno3 = k1_scaled * &
                   r1docmonod * &
                   (r1no3monod/Cno3 - r1no3monod/r1no3monod_denom) * &
                   rt_auxvar%pri_act_coef(this%no3_id)*molality_to_molarity * &
-                  doc_inhibition * no3_inhibition + &
-                  r1kin/no3_inhibition*drate_dno3_inhib
+                  doc_inhibition * no3_inhibition
+    if (dabs(no3_inhibition) > 0.d0) then
+      dr1kin_dno3 = dr1kin_dno3 + r1kin/no3_inhibition*drate_dno3_inhib
+    endif
     dr2kin_ddoc = k2_scaled * &
                   (r2docmonod/Cdoc - r2docmonod/r2docmonod_denom) * &
                   r2no2monod * &
                   rt_auxvar%pri_act_coef(this%doc_id)*molality_to_molarity * &
-                  doc_inhibition * no2_inhibition + &
-                  r2kin/doc_inhibition*drate_ddoc_inhib
+                  doc_inhibition * no2_inhibition
+    if (dabs(doc_inhibition) > 0.d0) then
+      dr2kin_ddoc = dr2kin_ddoc + r2kin/doc_inhibition*drate_ddoc_inhib
+    endif
     dr2kin_dno2 = k2_scaled * &
                   r2docmonod * &
                   (r2no2monod/Cno2 - r2no2monod/r2no2monod_denom) * &
                   rt_auxvar%pri_act_coef(this%no2_id)*molality_to_molarity * &
-                  doc_inhibition * no2_inhibition + &
-                  r1kin/no2_inhibition*drate_dno2_inhib
+                  doc_inhibition * no2_inhibition
+    if (dabs(no2_inhibition) > 0.d0) then
+      dr2kin_dno2 = dr2kin_dno2 + r1kin/no2_inhibition*drate_dno2_inhib
+    endif
     dr3kin_ddoc = k3_scaled * &
                   (r3docmonod/Cdoc - r3docmonod/r3docmonod_denom) * &
                   r3o2monod * &
                   rt_auxvar%pri_act_coef(this%doc_id)*molality_to_molarity * &
-                  doc_inhibition * o2_inhibition + &
-                  r3kin/doc_inhibition*drate_ddoc_inhib
+                  doc_inhibition * o2_inhibition
+    if (dabs(doc_inhibition) > 0.d0) then
+      dr3kin_ddoc = dr3kin_ddoc + r3kin/doc_inhibition*drate_ddoc_inhib
+    endif
     dr3kin_do2 = k3_scaled * &
                   r3docmonod * &
                   (r3o2monod/Co2 - r3o2monod/r3o2monod_denom) * &
                   rt_auxvar%pri_act_coef(this%o2_id)*molality_to_molarity * &
-                  doc_inhibition * o2_inhibition + &
-                  r1kin/o2_inhibition*drate_do2_inhib
+                  doc_inhibition * o2_inhibition
+    if (dabs(o2_inhibition) > 0.d0) then
+      dr3kin_do2 = dr3kin_do2 + r1kin/o2_inhibition*drate_do2_inhib
+    endif
 
-    du_denom_dr = -1.d0/sumkinsq
-    du1_dr1kin = 1.d0/sumkin + r1kin*du_denom_dr
-    du1_dr2kin = r1kin*du_denom_dr
-    du1_dr3kin = r1kin*du_denom_dr
-    du2_dr1kin = r2kin*du_denom_dr
-    du2_dr2kin = 1.d0/sumkin + r2kin*du_denom_dr
-    du2_dr3kin = r2kin*du_denom_dr
-    du3_dr1kin = r3kin*du_denom_dr
-    du3_dr2kin = r3kin*du_denom_dr
-    du3_dr3kin = 1.d0/sumkin + r3kin*du_denom_dr
+    if (dabs(sumkin) > 0.d0) then
+      du_denom_dr = -1.d0/sumkinsq
+      du1_dr1kin = 1.d0/sumkin + r1kin*du_denom_dr
+      du1_dr2kin = r1kin*du_denom_dr
+      du1_dr3kin = r1kin*du_denom_dr
+      du2_dr1kin = r2kin*du_denom_dr
+      du2_dr2kin = 1.d0/sumkin + r2kin*du_denom_dr
+      du2_dr3kin = r2kin*du_denom_dr
+      du3_dr1kin = r3kin*du_denom_dr
+      du3_dr2kin = r3kin*du_denom_dr
+      du3_dr3kin = 1.d0/sumkin + r3kin*du_denom_dr
+    else
+      du_denom_dr = 0.d0
+      du1_dr1kin = 0.d0
+      du1_dr2kin = 0.d0
+      du1_dr3kin = 0.d0
+      du2_dr1kin = 0.d0
+      du2_dr2kin = 0.d0
+      du2_dr3kin = 0.d0
+      du3_dr1kin = 0.d0
+      du3_dr2kin = 0.d0
+      du3_dr3kin = 0.d0
+    endif
 
     du1_ddoc = du1_dr1kin * dr1kin_ddoc + du1_dr2kin * dr2kin_ddoc + &
                du1_dr3kin * dr3kin_ddoc
