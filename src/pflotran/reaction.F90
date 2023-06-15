@@ -3767,6 +3767,7 @@ subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
   PetscInt :: ierror
 
   character(len=MAXWORDLENGTH) :: info
+  PetscInt :: i
   PetscInt :: num_timesteps
   PetscInt :: num_inner_iterations
   PetscInt :: num_constant_timesteps_after_cut
@@ -3775,6 +3776,7 @@ subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
   PetscReal :: cumulative_time
   PetscReal :: current_total(reaction%ncomp)
   PetscBool :: print_rank
+  PetscBool :: value_is_initially_zero(reaction%ncomp)
 
   info = 'Process ' // trim(StringWrite(option%myrank)) // &
          ' Cell ' // trim(StringWrite(natural_id)) // ' :'
@@ -3782,7 +3784,19 @@ subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
   print_rank = Uninitialized(reaction%io_rank) .or. &
                reaction%io_rank == option%myrank
 
-  rt_auxvar%total(:,1) = max(rt_auxvar%total(:,1),1.d-40)
+  value_is_initially_zero = PETSC_FALSE
+  do i = 1, reaction%naqcomp
+    if (rt_auxvar%total(i,1) <= 1.d-40) then
+      value_is_initially_zero(i) = PETSC_TRUE
+      rt_auxvar%total(i,1) = 1.d-40
+    endif
+  enddo
+  do i = 1, reaction%immobile%nimmobile
+    if (rt_auxvar%immobile(i) <= 1.d-40) then
+      value_is_initially_zero(reaction%offset_immobile+i) = PETSC_TRUE
+      rt_auxvar%immobile(i) = 1.d-40
+    endif
+  enddo
   if (reaction%use_total_as_guess) then
     guess(:) = rt_auxvar%total(:,1)
   endif
@@ -3862,6 +3876,17 @@ subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
         option%tran_dt = min(2.d0*option%tran_dt, &
                              target_time-cumulative_time)
       endif
+    endif
+  enddo
+
+  do i = 1, reaction%naqcomp
+    if (value_is_initially_zero(i)) then
+      rt_auxvar%total(i,1) = 0.d0
+    endif
+  enddo
+  do i = 1, reaction%immobile%nimmobile
+    if (value_is_initially_zero(reaction%offset_immobile+i)) then
+      rt_auxvar%immobile(i) = 0.d0
     endif
   enddo
 
