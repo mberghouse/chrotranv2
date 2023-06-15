@@ -3776,7 +3776,8 @@ subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
   PetscReal :: cumulative_time
   PetscReal :: current_total(reaction%ncomp)
   PetscBool :: print_rank
-  PetscBool :: value_is_initially_zero(reaction%ncomp)
+  PetscBool :: value_is_initially_small(reaction%ncomp)
+  PetscReal :: initial_small_value(reaction%ncomp)
 
   info = 'Process ' // trim(StringWrite(option%myrank)) // &
          ' Cell ' // trim(StringWrite(natural_id)) // ' :'
@@ -3784,16 +3785,19 @@ subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
   print_rank = Uninitialized(reaction%io_rank) .or. &
                reaction%io_rank == option%myrank
 
-  value_is_initially_zero = PETSC_FALSE
+  value_is_initially_small = PETSC_FALSE
+  initial_small_value = UNINITIALIZED_DOUBLE
   do i = 1, reaction%naqcomp
     if (rt_auxvar%total(i,1) <= 1.d-40) then
-      value_is_initially_zero(i) = PETSC_TRUE
+      value_is_initially_small(i) = PETSC_TRUE
+      initial_small_value(i) = rt_auxvar%total(i,1)
       rt_auxvar%total(i,1) = 1.d-40
     endif
   enddo
   do i = 1, reaction%immobile%nimmobile
     if (rt_auxvar%immobile(i) <= 1.d-40) then
-      value_is_initially_zero(reaction%offset_immobile+i) = PETSC_TRUE
+      value_is_initially_small(reaction%offset_immobile+i) = PETSC_TRUE
+      initial_small_value(reaction%offset_immobile+i) = rt_auxvar%immobile(i)
       rt_auxvar%immobile(i) = 1.d-40
     endif
   enddo
@@ -3880,13 +3884,13 @@ subroutine RReact(guess,rt_auxvar,global_auxvar,material_auxvar, &
   enddo
 
   do i = 1, reaction%naqcomp
-    if (value_is_initially_zero(i)) then
-      rt_auxvar%total(i,1) = 0.d0
+    if (value_is_initially_small(i)) then
+      rt_auxvar%total(i,1) = initial_small_value(i)
     endif
   enddo
   do i = 1, reaction%immobile%nimmobile
-    if (value_is_initially_zero(reaction%offset_immobile+i)) then
-      rt_auxvar%immobile(i) = 0.d0
+    if (value_is_initially_small(reaction%offset_immobile+i)) then
+      rt_auxvar%immobile(i) = initial_small_value(reaction%offset_immobile+i)
     endif
   enddo
 
