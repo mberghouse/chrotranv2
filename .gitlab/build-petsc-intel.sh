@@ -1,8 +1,5 @@
 #!/bin/sh
 
-# configure intel onapi
-export PATH = /opt/intel/oneapi/mpi/2021.9.0/bin:/opt/intel/oneapi/compiler/2023.1.0/linux/bin/intel64:/opt/intel/oneapi/compiler/2023.1.0/linux/bin:$PATH
-
 # build mpich
 tar -xzvf mpich-4.1.tar.gz
 MPICH_DIR=/scratch/mpich-4.1

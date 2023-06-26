@@ -10,22 +10,14 @@ RUN apt install -y wget
 RUN apt install -y vim
 
 # intel compilers
-RUN apt install -y gpg-agent
-RUN wget -qO - https://repositories.intel.com/graphics/intel-graphics.key | apt-key add -
-RUN apt-add-repository 'deb [arch=amd64] https://repositories.intel.com/graphics/ubuntu focal main'
-RUN apt update -qq
-RUN apt install intel-opencl-icd intel-level-zero-gpu level-zero intel-media-va-driver-non-free libmfx1
-RUN wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
-RUN apt-key add GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
-RUN rm GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
-RUN echo "deb https://apt.repos.intel.com/oneapi all main" | tee /etc/apt/sources.list.d/oneAPI.list
-RUN apt update -qq
-RUN apt install -y \
-    intel-oneapi-compiler-dpcpp-cpp-and-cpp-classic-common-2023.1.0 \
-    intel-oneapi-compiler-fortran-2023.1.0 \
-    intel-oneapi-mpi-devel-2021.9.0
-
+RUN wget https://registrationcenter-download.intel.com/akdlm/IRC_NAS/7deeaac4-f605-4bcf-a81b-ea7531577c61/l_BaseKit_p_2023.1.0.46401.sh
+RUN sh ./l_BaseKit_p_2023.1.0.46401.sh -a --silent --eula accept --components intel.oneapi.lin.dpcpp-cpp-compiler intel.oneapi.lin.dpl
+RUN wget https://registrationcenter-download.intel.com/akdlm/IRC_NAS/1ff1b38a-8218-4c53-9956-f0b264de35a4/l_HPCKit_p_2023.1.0.46346.sh
+RUN sh ./l_HPCKit_p_2023.1.0.46346.sh -a --silent --eula accept --components intel.oneapi.lin.ifort-compiler \
+                                                                             intel.oneapi.lin.mpi.devel \ 
+                                                                             intel.oneapi.lin.dpcpp-cpp-compiler-pro
 RUN source /opt/intel/oneapi/setvars.sh
+RUN export PATH = /opt/intel/oneapi/mpi/2021.9.0/bin:/opt/intel/oneapi/compiler/2023.1.0/linux/bin/intel64:/opt/intel/oneapi/compiler/2023.1.0/linux/bin:$PATH
 RUN ifort --version \
     icc --version \
     icpc --version
