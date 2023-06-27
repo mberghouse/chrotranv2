@@ -15,7 +15,7 @@ MPICH_INSTALL_DIR=$MPICH_DIR/install
 cd $MPICH_DIR
 
 # from petsc 3.18 --download-mpich=yes configure  for mpich 4.0.2
-./configure --prefix=$MPICH_INSTALL_DIR MAKE=/usr/bin/gmake --libdir=$MPICH_INSTALL_DIR/lib CC=icc CFLAGS="-g -O0 -fPIC" AR=/usr/bin/ar ARFLAGS=cr CXX=icpc CXXFLAGS="-g -O0" FFLAGS="-g -O0 -Wno-unused-function" FC=ifort F77=ifort FCFLAGS="-g -O0 -Wno-unused-function" --disable-shared --with-pm=hydra --disable-java --with-hwloc=embedded --enable-fast=no --enable-error-messages=all --with-device=ch3:sock --enable-g=meminit
+./configure --prefix=$MPICH_INSTALL_DIR MAKE=/usr/bin/gmake --libdir=$MPICH_INSTALL_DIR/lib CC=icc CFLAGS="-g -O0 -fPIC -diag-disable=10441" AR=/usr/bin/ar ARFLAGS=cr CXX=icpc CXXFLAGS="-g -O0 -diag-disable=10441" FFLAGS="-g -O0" FC=ifort F77=ifort FCFLAGS="-g -O0" --disable-shared --with-pm=hydra --disable-java --with-hwloc=embedded --enable-fast=no --enable-error-messages=all --with-device=ch3:sock --enable-g=meminit
 make all; make install
 
 # then clone and build petsc
@@ -26,6 +26,6 @@ git checkout $PETSC_VERSION
 --with-cc=mpiicc \
 --with-cxx=mpiicpc \
 --with-fc=mpiifort \
---COPTFLAGS='-g -O0' --CXXOPTFLAGS='-g -O0' --FOPTFLAGS='-g -O0 -Wno-unused-function' --with-clanguage=c --with-debug=1 --with-shared-libraries=0 --download-hdf5 --download-metis --download-parmetis --download-fblaslapack --download-hypre --download-hdf5-fortran-bindings=yes
+--COPTFLAGS='-g -O0 -diag-disable=10441' --CXXOPTFLAGS='-g -O0 -diag-disable=10441' --FOPTFLAGS='-g -O0' --with-clanguage=c --with-debug=1 --with-shared-libraries=0 --download-hdf5 --download-metis --download-parmetis --download-fblaslapack --download-hypre --download-hdf5-fortran-bindings=yes
 make
 rm -Rf petsc-arch-intel/externalpackages
