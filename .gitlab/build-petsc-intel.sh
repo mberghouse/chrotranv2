@@ -3,6 +3,7 @@
 # configure intel
 source /opt/intel/oneapi/setvars.sh
 export PATH=/opt/intel/oneapi/mpi/2021.9.0/bin:/opt/intel/oneapi/compiler/2023.1.0/linux/bin/intel64:/opt/intel/oneapi/compiler/2023.1.0/linux/bin:$PATH
+export LD_LIBRARY_PATH=/opt/intel/oneapi/compiler/2023.1.0/linux/compiler/lib/intel64_lin
 ifort --version
 icc --version
 icpc --version
@@ -21,10 +22,10 @@ make all; make install
 git clone https://gitlab.com/petsc/petsc.git $PETSC_DIR
 cd $PETSC_DIR
 git checkout $PETSC_VERSION
-./configure PETSC_ARCH=petsc-arch \
+./configure PETSC_ARCH=petsc-arch-intel \
 --with-cc=mpiicc \
 --with-cxx=mpiicpc \
 --with-fc=mpiifort \
 --COPTFLAGS='-g -O0' --CXXOPTFLAGS='-g -O0' --FOPTFLAGS='-g -O0 -Wno-unused-function' --with-clanguage=c --with-debug=1 --with-shared-libraries=0 --download-hdf5 --download-metis --download-parmetis --download-fblaslapack --download-hypre --download-hdf5-fortran-bindings=yes
 make
-rm -Rf petsc-arch/externalpackages
+rm -Rf petsc-arch-intel/externalpackages
