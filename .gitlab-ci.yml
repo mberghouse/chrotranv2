@@ -68,8 +68,8 @@ petsc-intel:
     # copy log files from image by launching container, copying
     # and destorying the container
     - id=$(docker create $IMAGE)
-    - docker cp $id:/scratch/petsc-intel/petsc-arch-intel/lib/petsc-intel/conf/configure.log .
-    - docker cp $id:/scratch/petsc-intel/petsc-arch-intel/lib/petsc-intel/conf/make.log .
+    - docker cp $id:/scratch/petsc-intel/petsc-arch-intel/lib/petsc/conf/configure.log .
+    - docker cp $id:/scratch/petsc-intel/petsc-arch-intel/lib/petsc/conf/make.log .
     - docker rm -v $id
   artifacts:
     paths:
