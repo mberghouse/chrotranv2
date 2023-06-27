@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# configure intel paths
+# configure intel oneapi paths
 source /opt/intel/oneapi/setvars.sh
 export PATH=/opt/intel/oneapi/mpi/2021.9.0/bin:/opt/intel/oneapi/compiler/2023.1.0/linux/bin/intel64:/opt/intel/oneapi/compiler/2023.1.0/linux/bin:$PATH
 export LD_LIBRARY_PATH=/opt/intel/oneapi/compiler/2023.1.0/linux/compiler/lib/intel64_lin
