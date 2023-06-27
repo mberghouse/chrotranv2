@@ -15,7 +15,7 @@ MPICH_INSTALL_DIR=$MPICH_DIR/install
 cd $MPICH_DIR
 
 # from petsc 3.18 --download-mpich=yes configure  for mpich 4.0.2
-./configure --prefix=$MPICH_INSTALL_DIR MAKE=/usr/bin/gmake --libdir=$MPICH_INSTALL_DIR/lib CC=icc CFLAGS="-g -O0 -fPIC -diag-disable=10441" AR=/usr/bin/ar ARFLAGS=cr CXX=icpc CXXFLAGS="-g -O0 -diag-disable=10441" FFLAGS="-g -O0" FC=ifort F77=ifort FCFLAGS="-g -O0" --disable-shared --with-pm=hydra --disable-java --with-hwloc=embedded --enable-fast=no --enable-error-messages=all --with-device=ch3:sock --enable-g=meminit
+./configure --prefix=$MPICH_INSTALL_DIR MAKE=/usr/bin/gmake --libdir=$MPICH_INSTALL_DIR/lib CC=icc CFLAGS="-g -O0 -fPIC -diag-disable=10441" AR=/usr/bin/ar ARFLAGS=cr CXX=icpc CXXFLAGS="-g -O0 -diag-disable=10441" FFLAGS="-g -O0" FC=ifort F77=ifort FCFLAGS="-g -O0" --disable-shared --with-pm=hydra --with-hwloc=embedded --enable-fast=no --enable-error-messages=all --with-device=ch3:sock --enable-g=meminit
 make all; make install
 
 # then clone and build petsc
