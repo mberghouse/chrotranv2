@@ -18,14 +18,16 @@ cd $MPICH_DIR
 ./configure --prefix=$MPICH_INSTALL_DIR MAKE=/usr/bin/gmake --libdir=$MPICH_INSTALL_DIR/lib CC=icc CFLAGS="-g -O0 -fPIC -diag-disable=10441" AR=/usr/bin/ar ARFLAGS=cr CXX=icpc CXXFLAGS="-g -O0 -diag-disable=10441" FFLAGS="-g -O0" FC=ifort F77=ifort FCFLAGS="-g -O0" --disable-shared --with-pm=hydra --with-hwloc=embedded --enable-fast=no --enable-error-messages=all --with-device=ch3:sock --enable-g=meminit
 make all; make install
 
+ls $MPICH_INSTALL_DIR/bin/
+
 # then clone and build petsc
 git clone https://gitlab.com/petsc/petsc.git $PETSC_DIR
 cd $PETSC_DIR
 git checkout $PETSC_VERSION
 ./configure PETSC_ARCH=petsc-arch-intel \
---with-cc=mpiicc \
---with-cxx=mpiicpc \
---with-fc=mpiifort \
+--with-cc=$MPICH_INSTALL_DIR/bin/mpicc \
+--with-cxx=$MPICH_INSTALL_DIR/bin/mpicxx \
+--with-fc=$MPICH_INSTALL_DIR/bin/mpif90 \
 --COPTFLAGS='-g -O0 -diag-disable=10441' --CXXOPTFLAGS='-g -O0 -diag-disable=10441' --FOPTFLAGS='-g -O0' --with-clanguage=c --with-debug=1 --with-shared-libraries=0 --download-hdf5 --download-metis --download-parmetis --download-fblaslapack --download-hypre --download-hdf5-fortran-bindings=yes
 make
 rm -Rf petsc-arch-intel/externalpackages
