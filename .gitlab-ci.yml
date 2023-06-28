@@ -117,6 +117,14 @@ pflotran-intel:
       --cache-from $IMAGE
       --tag $NEW_IMAGE
       . || true
+    - id=$(docker create $NEW_IMAGE)
+    - docker cp $id:/tmp/test-pflotran .
+    - docker rm -v $id
+    - exit $(grep -c 'failed' ./test-pflotran/status)
+  artifacts:
+    when: always
+    paths:
+      - test-pflotran
 
 pflotran-interface:
   stage: pflotran-interface

@@ -6,3 +6,4 @@ WORKDIR /scratch
 COPY . .
 RUN ./.gitlab/info.sh
 RUN ./.gitlab/build-pflotran-intel.sh
+RUN ./.gitlab/test-pflotran.sh
