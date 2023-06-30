@@ -8,7 +8,7 @@ make clean
 
 # gnu_code_coverage=1 gnu_runtime_checks=1 catch_warnings_as_errors=1
 # intel versions
-make -j4  pflotran
+make -j4 pflotran
 
 # Make sure pflotran is built properly
 pflotran -help intro

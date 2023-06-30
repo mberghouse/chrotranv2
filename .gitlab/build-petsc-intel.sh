@@ -15,7 +15,7 @@ cd $MPICH_DIR
 make all; make install
 
 # clone and build petsc
-#git clone https://gitlab.com/petsc/petsc.git $PETSC_DIR
+git clone https://gitlab.com/petsc/petsc.git $PETSC_DIR
 cd $PETSC_DIR
 git checkout $PETSC_VERSION
 ./configure PETSC_ARCH=petsc-arch-intel \

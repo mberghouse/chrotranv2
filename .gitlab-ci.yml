@@ -1,6 +1,5 @@
 stages:
   - petsc
-  - petsc-intel
   - pflotran
   - pflotran-interface
   - final-status
@@ -51,7 +50,7 @@ petsc:
       - "*.log"
 
 petsc-intel:
-  stage: petsc-intel
+  stage: petsc
   script:
     - BUILD_STATUS=running BUILD_KEY=push ./.gitlab/build_status
     - docker --version
@@ -120,6 +119,7 @@ pflotran-intel:
       --cache-from $IMAGE
       --tag $NEW_IMAGE
       . || true
+    # TODO: grep error code
 
 pflotran-interface:
   stage: pflotran-interface
