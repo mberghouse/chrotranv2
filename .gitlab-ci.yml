@@ -54,9 +54,11 @@ petsc-intel:
   script:
     - BUILD_STATUS=running BUILD_KEY=push ./.gitlab/build_status
     - docker --version
+    - docker system df
     - export PETSC_VERSION=$(cat ./.gitlab/petsc-git-version.txt)
     - export IMAGE=$CI_REGISTRY_IMAGE:$PETSC_VERSION
     - docker pull $IMAGE || true
+    - docker system prune
     - >
       docker build 
       -f ./.gitlab/dockerfile-petsc-intel 
