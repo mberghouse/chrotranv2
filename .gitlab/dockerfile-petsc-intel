@@ -10,6 +10,8 @@ RUN apt install -y wget
 RUN apt install -y vim
 
 # intel compilers
+RUN wget https://registrationcenter-download.intel.com/akdlm/IRC_NAS/7deeaac4-f605-4bcf-a81b-ea7531577c61/l_BaseKit_p_2023.1.0.46401.sh
+RUN sh ./l_BaseKit_p_2023.1.0.46401.sh -a --silent --eula accept --components intel.oneapi.lin.dpcpp-cpp-compiler
 RUN wget https://registrationcenter-download.intel.com/akdlm/IRC_NAS/1ff1b38a-8218-4c53-9956-f0b264de35a4/l_HPCKit_p_2023.1.0.46346.sh
 RUN sh ./l_HPCKit_p_2023.1.0.46346.sh -a --silent --eula accept --components intel.oneapi.lin.ifort-compiler:intel.oneapi.lin.mpi.devel:intel.oneapi.lin.dpcpp-cpp-compiler-pro
 
