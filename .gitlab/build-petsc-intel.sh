@@ -28,6 +28,7 @@ $MPICH_INSTALL_DIR/bin/mpif90 --version
 --with-cc=$MPICH_INSTALL_DIR/bin/mpicc \
 --with-cxx=$MPICH_INSTALL_DIR/bin/mpicxx \
 --with-fc=$MPICH_INSTALL_DIR/bin/mpif90 \
---COPTFLAGS='-g -O0' --CXXOPTFLAGS='-g -O0' --FOPTFLAGS='-g -O0' --with-clanguage=c --with-debug=1 --with-shared-libraries=0 --download-hdf5 --download-metis --download-parmetis --download-fblaslapack --download-hypre --download-hdf5-fortran-bindings=yesmake
+--COPTFLAGS='-g -O0' --CXXOPTFLAGS='-g -O0' --FOPTFLAGS='-g -O0' --with-clanguage=c --with-debug=1 --with-shared-libraries=0 --download-hdf5 --download-metis --download-parmetis --download-fblaslapack --download-hypre --download-hdf5-fortran-bindings=yes
+make
 make check
 rm -Rf petsc-arch-intel/externalpackages
