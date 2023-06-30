@@ -6,4 +6,6 @@ WORKDIR /scratch
 COPY . .
 RUN ./.gitlab/info.sh
 RUN ./.gitlab/build-pflotran-intel.sh
+
+# Make sure pflotran is properly built
 RUN pflotran -help intro
