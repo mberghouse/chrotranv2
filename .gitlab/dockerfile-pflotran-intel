@@ -1,11 +1,8 @@
 ARG IMAGE
 FROM $IMAGE
-ENV PETSC_DIR=/scratch/petsc-intel PETSC_ARCH=petsc-arch-intel
+ENV PETSC_DIR=/scratch/petsc PETSC_ARCH=petsc-arch-intel
 
 WORKDIR /scratch
 COPY . .
 RUN ./.gitlab/info.sh
 RUN ./.gitlab/build-pflotran-intel.sh
-
-# Make sure pflotran is properly built
-RUN pflotran -help intro

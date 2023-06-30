@@ -2,11 +2,8 @@
 
 # configure intel oneapi paths
 source /opt/intel/oneapi/setvars.sh
-export PATH=/opt/intel/oneapi/mpi/2021.9.0/bin:/opt/intel/oneapi/compiler/2023.1.0/linux/bin/intel64:/opt/intel/oneapi/compiler/2023.1.0/linux/bin:$PATH
+export PATH=/opt/intel/oneapi/compiler/2023.1.0/linux/bin/intel64:/opt/intel/oneapi/compiler/2023.1.0/linux/bin:$PATH
 export LD_LIBRARY_PATH=/opt/intel/oneapi/compiler/2023.1.0/linux/compiler/lib/intel64_lin
-ifort --version
-icc --version
-icpc --version
 
 # build mpich
 tar -xzvf mpich-4.1.tar.gz
@@ -21,9 +18,6 @@ make all; make install
 git clone https://gitlab.com/petsc/petsc.git $PETSC_DIR
 cd $PETSC_DIR
 git checkout $PETSC_VERSION
-$MPICH_INSTALL_DIR/bin/mpicc --version
-$MPICH_INSTALL_DIR/bin/mpicxx --version
-$MPICH_INSTALL_DIR/bin/mpif90 --version
 ./configure PETSC_ARCH=petsc-arch-intel \
 --with-cc=$MPICH_INSTALL_DIR/bin/mpicc \
 --with-cxx=$MPICH_INSTALL_DIR/bin/mpicxx \
