@@ -28,7 +28,6 @@ $MPICH_INSTALL_DIR/bin/mpif90 --version
 --with-cc=$MPICH_INSTALL_DIR/bin/mpicc \
 --with-cxx=$MPICH_INSTALL_DIR/bin/mpicxx \
 --with-fc=$MPICH_INSTALL_DIR/bin/mpif90 \
---COPTFLAGS='-g -O0 -diag-disable=10441' --CXXOPTFLAGS='-g -O0 -diag-disable=10441' --FOPTFLAGS='-g -O0' --with-clanguage=c --with-shared-libraries=0 --with-debugging=1 --download-hdf5=yes --with-valgrind=1 --download-parmetis=yes --download-metis=yes --download-hypre=yes --download-mpich=yes --with-c2html=0 --with-blas-lapack-dir=/opt/intel/oneapi/mkl/2023.1.0 FFLAGS='-diag-disable 5462'
-make
+--COPTFLAGS='-g -O0' --CXXOPTFLAGS='-g -O0' --FOPTFLAGS='-g -O0' --with-clanguage=c --with-debug=1 --with-shared-libraries=0 --download-hdf5 --download-metis --download-parmetis --download-fblaslapack --download-hypre --download-hdf5-fortran-bindings=yesmake
 make check
 rm -Rf petsc-arch-intel/externalpackages
