@@ -119,7 +119,10 @@ pflotran-intel:
       --cache-from $IMAGE
       --tag $NEW_IMAGE
       . || true
-    # TODO: grep error code
+    - id=$(docker create $NEW_IMAGE)
+    - docker cp $id:/tmp/test-pflotran-intel .
+    - docker rm -v $id
+    - exit $(grep -c 'failed' ./test-pflotran-intel/status)
 
 pflotran-interface:
   stage: pflotran-interface
