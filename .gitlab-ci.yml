@@ -29,7 +29,7 @@ petsc:
     - BUILD_STATUS=running BUILD_KEY=push ./.gitlab/build_status
     - docker --version
     - export PETSC_VERSION=$(cat ./.gitlab/petsc-git-version.txt)
-    - export IMAGE=$CI_REGISTRY_IMAGE:$PETSC_VERSION
+    - export IMAGE=$CI_REGISTRY_IMAGE:$(PETSC_VERSION)_gnu
     - docker pull $IMAGE || true
     - >
       docker build 
@@ -55,9 +55,9 @@ petsc-intel:
     - BUILD_STATUS=running BUILD_KEY=push ./.gitlab/build_status
     - docker --version
     - export PETSC_VERSION=$(cat ./.gitlab/petsc-git-version.txt)
-    - export IMAGE=$CI_REGISTRY_IMAGE:$PETSC_VERSION
+    - export IMAGE=$CI_REGISTRY_IMAGE:$(PETSC_VERSION)_intel
     - docker pull $IMAGE || true
-    - docker system df -v
+    - docker system prune -a --volumes -f
     - >
       docker build 
       -f ./.gitlab/dockerfile-petsc-intel 
@@ -69,8 +69,8 @@ petsc-intel:
     # copy log files from image by launching container, copying
     # and destorying the container
     - id=$(docker create $IMAGE)
-    - docker cp $id:/scratch/petsc-intel/petsc-arch-intel/lib/petsc/conf/configure.log .
-    - docker cp $id:/scratch/petsc-intel/petsc-arch-intel/lib/petsc/conf/make.log .
+    - docker cp $id:/scratch/petsc/petsc-arch/lib/petsc/conf/configure.log .
+    - docker cp $id:/scratch/petsc/petsc-arch/lib/petsc/conf/make.log .
     - docker rm -v $id
   artifacts:
     paths:
@@ -81,7 +81,7 @@ pflotran:
   script:
     - BUILD_STATUS=running BUILD_KEY=push ./.gitlab/build_status
     - export PETSC_VERSION=$(cat ./.gitlab/petsc-git-version.txt)
-    - export IMAGE=$CI_REGISTRY_IMAGE:$PETSC_VERSION
+    - export IMAGE=$CI_REGISTRY_IMAGE:$(PETSC_VERSION)_gnu
     - export NEW_IMAGE=$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
     - docker pull $IMAGE || true
     - >
@@ -108,10 +108,9 @@ pflotran-intel:
   script:
     - BUILD_STATUS=running BUILD_KEY=push ./.gitlab/build_status
     - export PETSC_VERSION=$(cat ./.gitlab/petsc-git-version.txt)
-    - export IMAGE=$CI_REGISTRY_IMAGE:$PETSC_VERSION
+    - export IMAGE=$CI_REGISTRY_IMAGE:$(PETSC_VERSION)_intel
     - export NEW_IMAGE=$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
     - docker pull $IMAGE || true
-    - docker system df -v
     - >
       docker build 
       -f ./.gitlab/dockerfile-pflotran-intel
@@ -119,16 +118,23 @@ pflotran-intel:
       --cache-from $IMAGE
       --tag $NEW_IMAGE
       . || true
+    # DO NOT PUSH THE NEW IMAGE
+    # copy regression results from image by launching container, copying
+    # and destorying the container
     - id=$(docker create $NEW_IMAGE)
-    - docker cp $id:/tmp/test-pflotran-intel .
+    - docker cp $id:/tmp/test-pflotran-build .
     - docker rm -v $id
-    - exit $(grep -c 'failed' ./test-pflotran-intel/status)
+    - exit $(grep -c 'failed' ./test-pflotran-build/status)
+  artifacts:
+    when: always
+    paths:
+      - test-pflotran-build
 
 pflotran-interface:
   stage: pflotran-interface
   script:
     - export PETSC_VERSION=$(cat ./.gitlab/petsc-git-version.txt)
-    - export IMAGE=$CI_REGISTRY_IMAGE:$PETSC_VERSION
+    - export IMAGE=$CI_REGISTRY_IMAGE:$(PETSC_VERSION)_gnu
     - export NEW_IMAGE=$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
     - docker pull $IMAGE || true
     - >

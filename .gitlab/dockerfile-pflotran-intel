@@ -1,6 +1,6 @@
 ARG IMAGE
 FROM $IMAGE
-ENV PETSC_DIR=/scratch/petsc-intel PETSC_ARCH=petsc-arch-intel
+ENV PETSC_DIR=/scratch/petsc PETSC_ARCH=petsc-arch
 
 WORKDIR /scratch
 COPY . .
