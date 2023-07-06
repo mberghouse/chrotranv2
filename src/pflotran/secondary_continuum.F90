@@ -2536,7 +2536,7 @@ end subroutine SecondaryHeatResidual
 
 ! ************************************************************************** !
 
-subroutine SecondaryGenResidual(sec_gen_vars, &
+subroutine SecondaryGenResidual(sec_gen_vars, material_auxvar, &
                                 salt_diffusion_coeff,salt_x_primary_node, &
                                 option,res_gen)
 
@@ -2553,7 +2553,7 @@ subroutine SecondaryGenResidual(sec_gen_vars, &
 
   type(sec_gen_type) :: sec_gen_vars
   type(option_type) :: option
-  type(material_auxvar_type), allocatable :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   
   PetscReal :: salt_diffusion_coeff(2),salt_x_primary_node
   PetscReal :: res_gen
@@ -2723,7 +2723,8 @@ end subroutine SecondaryHeatJacobian
 
 ! ************************************************************************** !
 
-subroutine SecondaryGenJacobian(sec_gen_vars,salt_diffusion_coeff, &
+subroutine SecondaryGenJacobian(sec_gen_vars,material_auxvar, &
+                                salt_diffusion_coeff, &
                                 option,jac_gen)
   !
   ! Calculates the source term jacobian contribution
@@ -2742,7 +2743,7 @@ subroutine SecondaryGenJacobian(sec_gen_vars,salt_diffusion_coeff, &
 
   type(sec_gen_type) :: sec_gen_vars
   type(option_type) :: option
-  type(material_auxvar_type), allocatable :: material_auxvar
+  type(material_auxvar_type) :: material_auxvar
   PetscReal :: coeff_left(sec_gen_vars%ncells)
   PetscReal :: coeff_diag(sec_gen_vars%ncells)
   PetscReal :: coeff_right(sec_gen_vars%ncells)

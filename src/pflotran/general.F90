@@ -1501,9 +1501,10 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
       sec_diffusion_coefficient = patch%material_property_array(patch%imat(ghosted_id))% &
                                   ptr%multicontinuum%diff_coeff
       call SecondaryGenResidual(general_sec_gen_vars(local_id), &
-                                 sec_diffusion_coefficient,&
-                                 gen_auxvars(ZERO_INTEGER,ghosted_id)%xmol(1,3), &
-                                 option,res_sec_gen)
+                                material_auxvars(local_id),&
+                                sec_diffusion_coefficient,&
+                                gen_auxvars(ZERO_INTEGER,ghosted_id)%xmol(1,3), &
+                                option,res_sec_gen)
       r_p(iend-1) = r_p(iend-1) - res_sec_gen*material_auxvars(ghosted_id)%volume
 
     enddo
@@ -1933,8 +1934,9 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
         sec_diffusion_coefficient = patch%material_property_array(patch%imat(ghosted_id))% &
                                     ptr%multicontinuum%diff_coeff
         call SecondaryGenJacobian(sec_gen_vars(local_id), &
-                                   sec_diffusion_coefficient,&
-                                   option,jac_sec_gen)
+                                  material_auxvars(local_id), &
+                                  sec_diffusion_coefficient, &
+                                  option,jac_sec_gen)
         Jup(option%nflowdof,GENERAL_SALT_EQUATION_INDEX) = &
                                  Jup(option%nflowdof,GENERAL_SALT_EQUATION_INDEX) - &
                                  jac_sec_gen*material_auxvars(ghosted_id)%volume

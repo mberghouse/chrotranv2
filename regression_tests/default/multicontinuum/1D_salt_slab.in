@@ -53,7 +53,7 @@ END
 GRID
 TYPE STRUCTURED
 ORIGIN 0.d0 0.d0 0.d0
-NXYZ 10 1 1
+NXYZ 1 1 1
 BOUNDS
   0.d0 0.d0 0.d0
   1.d0 1.d0 1.d0
@@ -74,7 +74,7 @@ MAXIMUM_TIMESTEP_SIZE 0.1d0 y
 OUTPUT
   TIMES y 0.005 0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 0.5 1.d0
   #PERIODIC_OBSERVATION TIMESTEP 1
-  SCREEN PERIODIC 10
+  #SCREEN PERIODIC 10
   #PRINT_COLUMN_IDS
   #FORMAT TECPLOT POINT
   FORMAT HDF5
@@ -107,7 +107,7 @@ MATERIAL_PROPERTY rock1
     LIQUID_DIFFUSION_COEFFICIENT 1.6d-10  #effective diffusion coefficient, includes tortuosity
     #TEMPERATURE 50.d0
     POROSITY 0.01 #diffusion coefficient and porosity are multiplied, no tortuosity in eqn
-    SALT_MOLE_FRACTION 1.D-1
+    SALT_MOLE_FRACTION 1.D-6
    /
 END
 
@@ -196,15 +196,15 @@ INITIAL_CONDITION
   REGION all
 END
 
-BOUNDARY_CONDITION
-  FLOW_CONDITION initial
-  REGION west
-END
+# BOUNDARY_CONDITION
+#   FLOW_CONDITION initial
+#   REGION west
+# END
 
-BOUNDARY_CONDITION
-  FLOW_CONDITION initial
-  REGION east
-END
+# BOUNDARY_CONDITION
+#   FLOW_CONDITION initial
+#   REGION east
+# END
 
 
 #=========================== stratigraphy couplers ============================
