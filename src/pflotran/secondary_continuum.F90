@@ -24,11 +24,15 @@ module Secondary_Continuum_module
             SecondaryContinuumSetProperties, &
             SecondaryRTAuxVarInit, &
             SecondaryHeatAuxVarInit, &
+            SecondaryGenAuxVarInit, &
             SecondaryRTResJacMulti, &
             SecondaryRTAuxVarComputeMulti, &
             SecHeatAuxVarCompute, &
+            SecGenAuxVarCompute, &
             SecondaryHeatResidual, &
+            SecondaryGenResidual, &
             SecondaryHeatJacobian, &
+            SecondaryGenJacobian, &
             SecondaryRTUpdateIterate, &
             SecondaryRTUpdateEquilState, &
             SecondaryRTUpdateKineticState, &
@@ -717,6 +721,80 @@ subroutine SecondaryHeatAuxVarInit(multicontinuum, &
 
 end subroutine SecondaryHeatAuxVarInit
 
+! ************************************************************************** !
+
+subroutine SecondaryGenAuxVarInit(multicontinuum, &
+                                  epsilon,half_matrix_width, &
+                                  sec_gen_vars, initial_condition,option)
+
+  ! Initializes all the general mode secondary continuum
+  ! transport variables
+  !
+  ! Author: David Fukuyama
+  ! Date: 07/05/23
+  
+  use Material_module
+  use Coupler_module
+  use Option_module
+
+  implicit none
+
+  type(sec_gen_type) :: sec_gen_vars
+  type(multicontinuum_property_type) :: multicontinuum
+  type(coupler_type), pointer :: initial_condition
+  type(option_type), pointer :: option
+
+  
+  PetscReal :: epsilon
+  PetscReal :: half_matrix_width
+  PetscReal :: area_per_vol
+  
+  call SecondaryContinuumSetProperties( &
+       sec_gen_vars%sec_continuum, &
+       multicontinuum%name, &
+       half_matrix_width, &
+       multicontinuum%matrix_block_size, &
+       multicontinuum%fracture_spacing, &
+       multicontinuum%radius, &
+       multicontinuum%porosity, &
+       option)
+
+  sec_gen_vars%ncells = multicontinuum%ncells
+  sec_gen_vars%half_aperture = multicontinuum%half_aperture
+  sec_gen_vars%epsilon = epsilon
+  sec_gen_vars%log_spacing = multicontinuum%log_spacing
+  sec_gen_vars%outer_spacing = multicontinuum%outer_spacing
+
+  allocate(sec_gen_vars%area(sec_gen_vars%ncells))
+  allocate(sec_gen_vars%vol(sec_gen_vars%ncells))
+  allocate(sec_gen_vars%dm_minus(sec_gen_vars%ncells))
+  allocate(sec_gen_vars%dm_plus(sec_gen_vars%ncells))
+  allocate(sec_gen_vars%sec_continuum%distance(sec_gen_vars%ncells))
+
+  call SecondaryContinuumType(sec_gen_vars%sec_continuum, &
+                              sec_gen_vars%ncells, &
+                              sec_gen_vars%area, &
+                              sec_gen_vars%vol, &
+                              sec_gen_vars%dm_minus, &
+                              sec_gen_vars%dm_plus, &
+                              sec_gen_vars%half_aperture, &
+                              sec_gen_vars%epsilon, &
+                              sec_gen_vars%log_spacing, &
+                              sec_gen_vars%outer_spacing, &
+                              area_per_vol, option)
+
+  sec_gen_vars%interfacial_area = area_per_vol * &
+       (1.d0 - sec_gen_vars%epsilon) * multicontinuum%area_scaling
+
+  allocate(sec_gen_vars%sec_salt_mole_frac(sec_gen_vars%ncells))
+
+  if (option%flow%set_secondary_init_salt_mole_frac) then
+     sec_gen_vars%sec_salt_mole_frac = multicontinuum%init_salt_mole_frac
+  else
+     !sec_gen_vars%sec_salt_mole_frac = initial_condition%flow_condition%salt_mole_fraction%dataset%rarray(1)
+  endif
+end subroutine SecondaryGenAuxVarInit
+  
 ! ************************************************************************** !
 
 subroutine SecondaryRTResJacMulti(sec_transport_vars,auxvar, &
@@ -2129,6 +2207,98 @@ end subroutine SecHeatAuxVarCompute
 
 ! ************************************************************************** !
 
+subroutine SecGenAuxVarCompute(sec_gen_vars, &
+                               salt_diffusion_coeff, &
+                               salt_x_primary_node,option)
+  !
+  ! Computes secondary auxiliary variables for each
+  ! grid cell for general mode solute transport
+  !
+  ! Author: David Fukuyama
+  ! Date: 07/05/23
+  !
+
+  use Option_module
+
+  implicit none
+
+  type(sec_gen_type) :: sec_gen_vars
+  type(option_type) :: option
+  PetscReal :: coeff_left(sec_gen_vars%ncells)
+  PetscReal :: coeff_diag(sec_gen_vars%ncells)
+  PetscReal :: coeff_right(sec_gen_vars%ncells)
+  PetscReal :: rhs(sec_gen_vars%ncells)
+  PetscReal :: sec_salt_mole_frac(sec_gen_vars%ncells)
+  PetscReal :: area(sec_gen_vars%ncells)
+  PetscReal :: vol(sec_gen_vars%ncells)
+  PetscReal :: dm_plus(sec_gen_vars%ncells)
+  PetscReal :: dm_minus(sec_gen_vars%ncells)
+  PetscInt :: i, ngcells
+  PetscReal :: area_fm
+  PetscReal :: alpha, salt_diffusion_coeff(2)
+  PetscReal :: salt_x_primary_node
+  PetscReal :: m
+
+  ngcells = sec_gen_vars%ncells
+  area = sec_gen_vars%area
+  vol = sec_gen_vars%vol
+  dm_plus = sec_gen_vars%dm_plus
+  dm_minus = sec_gen_vars%dm_minus
+  area_fm = sec_gen_vars%interfacial_area
+
+  coeff_left = 0.d0
+  coeff_diag = 0.d0
+  coeff_right = 0.d0
+  rhs = 0.d0
+  sec_salt_mole_frac = 0.d0
+
+  alpha = option%flow_dt*salt_diffusion_coeff(1)
+
+  ! Setting the coefficients
+  do i = 2, ngcells-1
+    coeff_left(i) = -alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i))
+    coeff_diag(i) = alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i)) + &
+                    alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i)) + 1.d0
+    coeff_right(i) = -alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i))
+  enddo
+
+  coeff_diag(1) = alpha*area(1)/((dm_minus(2) + dm_plus(1))*vol(1)) + 1.d0
+  coeff_right(1) = -alpha*area(1)/((dm_minus(2) + dm_plus(1))*vol(1))
+
+  coeff_left(ngcells) = -alpha*area(ngcells-1)/ &
+                       ((dm_minus(ngcells) + dm_plus(ngcells-1))*vol(ngcells))
+  coeff_diag(ngcells) = alpha*area(ngcells-1)/ &
+                       ((dm_minus(ngcells) + dm_plus(ngcells-1))*vol(ngcells)) &
+                       + alpha*area(ngcells)/(dm_plus(ngcells)*vol(ngcells)) &
+                       + 1.d0
+
+
+  rhs = sec_gen_vars%sec_salt_mole_frac  ! secondary continuum values from previous time step
+  rhs(ngcells) = rhs(ngcells) + &
+                 alpha*area(ngcells)/(dm_plus(ngcells)*vol(ngcells))* &
+                 salt_x_primary_node
+
+  ! Thomas algorithm for tridiagonal system
+  ! Forward elimination
+  do i = 2, ngcells
+    m = coeff_left(i)/coeff_diag(i-1)
+    coeff_diag(i) = coeff_diag(i) - m*coeff_right(i-1)
+    rhs(i) = rhs(i) - m*rhs(i-1)
+  enddo
+
+  ! Back substitution
+  ! Calculate salt mole fraction in the secondary continuum
+  sec_salt_mole_frac(ngcells) = rhs(ngcells)/coeff_diag(ngcells)
+  do i = ngcells-1, 1, -1
+    sec_salt_mole_frac(i) = (rhs(i) - coeff_right(i)*sec_salt_mole_frac(i+1))/coeff_diag(i)
+  enddo
+
+  sec_gen_vars%sec_salt_mole_frac = sec_salt_mole_frac
+
+end subroutine SecGenAuxVarCompute
+
+! ************************************************************************** !
+
 subroutine SecondaryRTGetVariable(realization, vec, ivar, isubvar, mc_layer)
 
   ! Extracts a secondary continuum variable for a layer of secondary
@@ -2366,6 +2536,106 @@ end subroutine SecondaryHeatResidual
 
 ! ************************************************************************** !
 
+subroutine SecondaryGenResidual(sec_gen_vars, &
+                                salt_diffusion_coeff,salt_x_primary_node, &
+                                option,res_gen)
+
+  ! Calculates the source term contribution due to secondary
+  ! continuum in the primary continuum residual
+  !
+  ! Author: David Fukuyama
+  ! Date: 07/05/23
+  
+  use Option_module
+  use Material_Aux_module
+
+  implicit none
+
+  type(sec_gen_type) :: sec_gen_vars
+  type(option_type) :: option
+  type(material_auxvar_type), allocatable :: material_auxvar
+  
+  PetscReal :: salt_diffusion_coeff(2),salt_x_primary_node
+  PetscReal :: res_gen
+
+  PetscReal :: coeff_left(sec_gen_vars%ncells)
+  PetscReal :: coeff_diag(sec_gen_vars%ncells)
+  PetscReal :: coeff_right(sec_gen_vars%ncells)
+  PetscReal :: rhs(sec_gen_vars%ncells)
+  PetscReal :: area(sec_gen_vars%ncells)
+  PetscReal :: vol(sec_gen_vars%ncells)
+  PetscReal :: dm_plus(sec_gen_vars%ncells)
+  PetscReal :: dm_minus(sec_gen_vars%ncells)
+  PetscInt :: i, ngcells
+  PetscReal :: area_fm
+  PetscReal :: alpha
+  PetscReal :: m
+  PetscReal :: salt_mole_frac_current_N
+  PetscReal :: porosity
+
+  ngcells = sec_gen_vars%ncells
+  area = sec_gen_vars%area
+  vol = sec_gen_vars%vol
+  dm_plus = sec_gen_vars%dm_plus
+  dm_minus = sec_gen_vars%dm_minus
+  area_fm = sec_gen_vars%interfacial_area
+  porosity = material_auxvar%porosity
+  
+  coeff_left = 0.d0
+  coeff_diag = 0.d0
+  coeff_right = 0.d0
+  rhs = 0.d0
+
+  alpha = option%flow_dt*salt_diffusion_coeff(1)
+
+
+! Setting the coefficients
+  do i = 2, ngcells-1
+    coeff_left(i) = -alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i))
+    coeff_diag(i) = alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i)) + &
+                    alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i)) + 1.d0
+    coeff_right(i) = -alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i))
+  enddo
+
+  coeff_diag(1) = alpha*area(1)/((dm_minus(2) + dm_plus(1))*vol(1)) + 1.d0
+  coeff_right(1) = -alpha*area(1)/((dm_minus(2) + dm_plus(1))*vol(1))
+
+  coeff_left(ngcells) = -alpha*area(ngcells-1)/ &
+                       ((dm_minus(ngcells) + dm_plus(ngcells-1))*vol(ngcells))
+  coeff_diag(ngcells) = alpha*area(ngcells-1)/ &
+                       ((dm_minus(ngcells) + dm_plus(ngcells-1))*vol(ngcells)) &
+                       + alpha*area(ngcells)/(dm_plus(ngcells)*vol(ngcells)) &
+                       + 1.d0
+
+  ! secondary continuum values from previous time step
+  rhs = sec_gen_vars%sec_salt_mole_frac
+  rhs(ngcells) = rhs(ngcells) + &
+                 alpha*area(ngcells)/(dm_plus(ngcells)*vol(ngcells))* &
+                 salt_x_primary_node
+
+  ! Thomas algorithm for tridiagonal system
+  ! Forward elimination
+  do i = 2, ngcells
+    m = coeff_left(i)/coeff_diag(i-1)
+    coeff_diag(i) = coeff_diag(i) - m*coeff_right(i-1)
+    rhs(i) = rhs(i) - m*rhs(i-1)
+  enddo
+
+  ! Back substitution
+  ! We only need the salt mole fraction at the outer-most node (closest to
+  ! primary node)
+  salt_mole_frac_current_N = rhs(ngcells)/coeff_diag(ngcells)
+
+  ! Calculate the coupling term
+  ! Area * D * rho * saturation * phi * (Xn-Xm)/dm
+  res_gen = area_fm*salt_diffusion_coeff(1) * 1000 * 1.d0 * porosity * &
+            (salt_mole_frac_current_N - salt_x_primary_node)/ &
+             dm_plus(ngcells)
+
+end subroutine SecondaryGenResidual
+
+! ************************************************************************** !
+
 subroutine SecondaryHeatJacobian(sec_heat_vars,therm_conductivity, &
                                  dencpr,option,jac_heat)
   !
@@ -2450,6 +2720,98 @@ subroutine SecondaryHeatJacobian(sec_heat_vars,therm_conductivity, &
 
 
 end subroutine SecondaryHeatJacobian
+
+! ************************************************************************** !
+
+subroutine SecondaryGenJacobian(sec_gen_vars,salt_diffusion_coeff, &
+                                option,jac_gen)
+  !
+  ! Calculates the source term jacobian contribution
+  ! due to secondary continuum in the primary continuum residual
+  !
+  ! Author: David Fukuyama
+  ! Date: 07/05/23
+  !
+
+  use Option_module
+  use Global_Aux_module
+  use Secondary_Continuum_Aux_module
+  use Material_Aux_module
+
+  implicit none  
+
+  type(sec_gen_type) :: sec_gen_vars
+  type(option_type) :: option
+  type(material_auxvar_type), allocatable :: material_auxvar
+  PetscReal :: coeff_left(sec_gen_vars%ncells)
+  PetscReal :: coeff_diag(sec_gen_vars%ncells)
+  PetscReal :: coeff_right(sec_gen_vars%ncells)
+  PetscReal :: rhs(sec_gen_vars%ncells)
+  PetscReal :: area(sec_gen_vars%ncells)
+  PetscReal :: vol(sec_gen_vars%ncells)
+  PetscReal :: dm_plus(sec_gen_vars%ncells)
+  PetscReal :: dm_minus(sec_gen_vars%ncells)
+  PetscInt :: i, ngcells
+  PetscReal :: area_fm
+  PetscReal :: alpha, salt_diffusion_coeff(2)
+  PetscReal :: m
+  PetscReal :: Dsalt_x_N_Dsalt_x_prim
+  PetscReal :: jac_gen
+  PetscReal :: porosity
+
+  ngcells = sec_gen_vars%ncells
+  area = sec_gen_vars%area
+  vol = sec_gen_vars%vol
+  dm_plus = sec_gen_vars%dm_plus
+  area_fm = sec_gen_vars%interfacial_area
+  dm_minus = sec_gen_vars%dm_minus
+  porosity = material_auxvar%porosity
+
+  coeff_left = 0.d0
+  coeff_diag = 0.d0
+  coeff_right = 0.d0
+  rhs = 0.d0
+
+  alpha = option%flow_dt*salt_diffusion_coeff(1)
+
+! Setting the coefficients
+  do i = 2, ngcells-1
+    coeff_left(i) = -alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i))
+    coeff_diag(i) = alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i)) + &
+                    alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i)) + 1.d0
+    coeff_right(i) = -alpha*area(i)/((dm_minus(i+1) + dm_plus(i))*vol(i))
+  enddo
+
+  coeff_diag(1) = alpha*area(1)/((dm_minus(2) + dm_plus(1))*vol(1)) + 1.d0
+  coeff_right(1) = -alpha*area(1)/((dm_minus(2) + dm_plus(1))*vol(1))
+
+  coeff_left(ngcells) = -alpha*area(ngcells-1)/ &
+                       ((dm_minus(ngcells) + dm_plus(ngcells-1))*vol(ngcells))
+  coeff_diag(ngcells) = alpha*area(ngcells-1)/ &
+                       ((dm_minus(ngcells) + dm_plus(ngcells-1))*vol(ngcells)) &
+                       + alpha*area(ngcells)/(dm_plus(ngcells)*vol(ngcells)) &
+                       + 1.d0
+
+  ! Thomas algorithm for tridiagonal system
+  ! Forward elimination
+  do i = 2, ngcells
+    m = coeff_left(i)/coeff_diag(i-1)
+    coeff_diag(i) = coeff_diag(i) - m*coeff_right(i-1)
+    ! We do not have to calculate rhs terms
+  enddo
+
+  ! We need the salt mole fraction (salt_x) derivative at the outer-most node (closest
+  ! to primary node)
+  Dsalt_x_N_Dsalt_x_prim = 1.d0/coeff_diag(ngcells)*alpha*area(ngcells)/ &
+                       (dm_plus(ngcells)*vol(ngcells))
+
+  ! Calculate the jacobian term
+  jac_gen = area_fm * 1.d0 * 1000 * porosity * salt_diffusion_coeff(1) * &
+            (Dsalt_x_N_Dsalt_x_prim - 1.d0)/ &
+             dm_plus(ngcells)
+
+
+end subroutine SecondaryGenJacobian
 
 end module Secondary_Continuum_module
 

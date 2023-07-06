@@ -42,6 +42,7 @@ module Auxiliary_module
     type(material_transform_type), pointer :: MTransform
     type(ert_type), pointer :: ERT
     type(sc_heat_type), pointer :: SC_heat
+    type(sc_gen_type), pointer :: SC_gen
     type(sc_rt_type), pointer :: SC_RT
     type(inlinesurface_type), pointer :: InlineSurface
     type(inversion_aux_type), pointer :: inversion_aux
@@ -82,6 +83,7 @@ subroutine AuxInit(aux)
   nullify(aux%Material)
   nullify(aux%MTransform)
   nullify(aux%SC_heat)
+  nullify(aux%SC_gen)
   nullify(aux%SC_RT)
   nullify(aux%InlineSurface)
   nullify(aux%inversion_aux)
@@ -117,6 +119,7 @@ subroutine AuxDestroy(aux)
   call MaterialTransformDestroy(aux%MTransform)
   call ERTAuxDestroy(aux%ERT)
   call SecondaryAuxHeatDestroy(aux%SC_heat)
+  call SecondaryAuxGenDestroy(aux%SC_gen)
   call SecondaryAuxRTDestroy(aux%SC_RT)
   call InlineSurfaceAuxDestroy(aux%InlineSurface)
   ! DO NOT destroy aux%inversion_forward_aux; it is destroyed elsewhere
@@ -135,6 +138,7 @@ subroutine AuxDestroy(aux)
   nullify(aux%MTransform)
   nullify(aux%ERT)
   nullify(aux%SC_Heat)
+  nullify(aux%SC_Gen)
   nullify(aux%SC_RT)
   nullify(aux%InlineSurface)
   nullify(aux%inversion_aux)

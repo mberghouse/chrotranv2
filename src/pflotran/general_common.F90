@@ -49,7 +49,7 @@ contains
 
 subroutine GeneralAccumulation(gen_auxvar,global_auxvar,material_auxvar, &
                                soil_heat_capacity,option,Res,Jac, &
-                               analytical_derivatives,debug_cell)
+                               analytical_derivatives,debug_cell,vol_frac_prim)
   !
   ! Computes the non-fixed portion of the accumulation
   ! term for the residual
@@ -78,6 +78,7 @@ subroutine GeneralAccumulation(gen_auxvar,global_auxvar,material_auxvar, &
 
   PetscReal :: porosity
   PetscReal :: volume_over_dt
+  PetscReal :: vol_frac_prim
 
   wat_comp_id = option%water_id
   air_comp_id = option%air_id
@@ -117,7 +118,7 @@ subroutine GeneralAccumulation(gen_auxvar,global_auxvar,material_auxvar, &
   ! Res[kmol/sec] = Res[kmol/m^3 void] * por[m^3 void/m^3 bulk] *
   !                 vol[m^3 bulk] / dt[sec]
   Res(1:option%nflowspec) = Res(1:option%nflowspec) * &
-                            porosity * volume_over_dt
+                            porosity * volume_over_dt * vol_frac_prim !DF: concentration in the primary continuum
   if (general_soluble_matrix) then
     ! Res[kmol/sec] = Res[kmol/sec] + (1-por)[m^3 solid/m^3 bulk] * den[kmol/m^3]
     !                 * vol[m^3 bulk] / dt[sec]
@@ -4480,7 +4481,7 @@ end subroutine GeneralAuxVarComputeAndSrcSink
 ! ************************************************************************** !
 
 subroutine GeneralAccumDerivative(gen_auxvar,global_auxvar,material_auxvar, &
-                                  soil_heat_capacity,option,J)
+                                  soil_heat_capacity,option,J,vol_frac_prim)
   !
   ! Computes derivatives of the accumulation
   ! term for the Jacobian
@@ -4505,13 +4506,14 @@ subroutine GeneralAccumDerivative(gen_auxvar,global_auxvar,material_auxvar, &
   PetscReal :: jac(option%nflowdof,option%nflowdof)
   PetscReal :: jac_pert(option%nflowdof,option%nflowdof)
   PetscInt :: idof, irow
-
+  PetscReal :: vol_frac_prim
+  
 !geh:print *, 'GeneralAccumDerivative'
 
   call GeneralAccumulation(gen_auxvar(ZERO_INTEGER),global_auxvar, &
                            material_auxvar,soil_heat_capacity,option, &
                            res,jac,general_analytical_derivatives, &
-                           PETSC_FALSE)
+                           PETSC_FALSE,vol_frac_prim)
 
   if (general_analytical_derivatives) then
     J = jac
@@ -4519,7 +4521,7 @@ subroutine GeneralAccumDerivative(gen_auxvar,global_auxvar,material_auxvar, &
     do idof = 1, option%nflowdof
       call GeneralAccumulation(gen_auxvar(idof),global_auxvar, &
                                material_auxvar,soil_heat_capacity,option, &
-                               res_pert,jac_pert,PETSC_FALSE,PETSC_FALSE)
+                               res_pert,jac_pert,PETSC_FALSE,PETSC_FALSE,vol_frac_prim)
 
       do irow = 1, option%nflowdof
         J(irow,idof) = (res_pert(irow)-res(irow))/gen_auxvar(idof)%pert

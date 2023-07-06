@@ -49,6 +49,9 @@ module Option_Flow_module
     PetscBool :: th_freezing
     ! If true, then secondary init temp is different from prim. init temp
     PetscBool :: set_secondary_init_temp
+    ! If true, then secondary init salt mole fraction is differeent from
+    ! primary salt mole fraction
+    PetscBool :: set_secondary_init_salt_mole_frac
 
     PetscReal :: minimum_hydrostatic_pressure
 
@@ -156,6 +159,7 @@ subroutine OptionFlowInitRealization(option)
   option%store_state_variables_in_global = PETSC_FALSE
 
   option%set_secondary_init_temp = PETSC_FALSE
+  option%set_secondary_init_salt_mole_frac = PETSC_FALSE
   option%update_flow_perm = PETSC_FALSE
   option%rel_perm_aveg = UPWIND
   option%pct_updated = PETSC_FALSE

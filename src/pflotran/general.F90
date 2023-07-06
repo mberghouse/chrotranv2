@@ -49,7 +49,9 @@ subroutine GeneralSetup(realization)
   use Material_Aux_module
   use Output_Aux_module
   use Matrix_Zeroing_module
-
+  use Secondary_Continuum_Aux_module
+  use Secondary_Continuum_module
+  
   implicit none
 
   class(realization_subsurface_type) :: realization
@@ -61,7 +63,7 @@ subroutine GeneralSetup(realization)
   type(material_parameter_type), pointer :: material_parameter
 
   PetscInt :: ghosted_id, iconn, sum_connection, local_id
-  PetscInt :: i, idof, ndof
+  PetscInt :: i, idof, ndof, ipara
   PetscBool :: error_found
   PetscInt :: flag(10)
   PetscErrorCode :: ierr
@@ -71,12 +73,16 @@ subroutine GeneralSetup(realization)
   type(general_auxvar_type), pointer :: gen_auxvars_ss(:,:)
   type(material_auxvar_type), pointer :: material_auxvars(:)
   type(fluid_property_type), pointer :: cur_fluid_property
-
+  type(sec_gen_type), pointer :: general_sec_gen_vars(:)
+  type(coupler_type), pointer :: initial_condition
+  
   option => realization%option
   patch => realization%patch
   grid => patch%grid
 
   patch%aux%General => GeneralAuxCreate(option)
+
+  patch%aux%SC_gen => SecondaryAuxGenCreate(option)
 
   general_analytical_derivatives = .not.option%flow%numerical_derivatives
 
@@ -159,6 +165,32 @@ subroutine GeneralSetup(realization)
   enddo
   patch%aux%General%auxvars => gen_auxvars
   patch%aux%General%num_aux = grid%ngmax
+
+! Create secondary continuum variables
+  if (option%use_sc) then
+    initial_condition => patch%initial_condition_list%first
+    allocate(general_sec_gen_vars(grid%nlmax))
+    do local_id = 1, grid%nlmax
+      ghosted_id = grid%nL2G(local_id)
+      if (patch%imat(ghosted_id) <= 0) cycle
+      call SecondaryGenAuxVarInit( &
+           patch%material_property_array(patch%imat(ghosted_id))%ptr%multicontinuum, &
+           patch%aux%Material%auxvars(ghosted_id)%soil_properties(epsilon_index), &
+           patch%aux%Material%auxvars(ghosted_id)%soil_properties(half_matrix_width_index), &
+           general_sec_gen_vars(local_id), initial_condition, option)
+           
+    enddo      
+
+    patch%aux%SC_gen%sec_gen_vars => general_sec_gen_vars
+    do i = 1, size(patch%material_property_array)
+      if (.not. patch%material_property_array(1)%ptr%multicontinuum%ncells &
+           == patch%material_property_array(i)%ptr%multicontinuum%ncells) then
+        option%io_buffer = &
+          'NUMBER OF SECONDARY CELLS MUST BE EQUAL ACROSS MATERIALS'
+        call PrintErrMsg(option)
+      endif
+    enddo
+  endif !end secondary continuum
 
   ! count the number of boundary connections and allocate
   ! auxvar data structures for them
@@ -292,7 +324,12 @@ subroutine GeneralUpdateSolution(realization)
   use Discretization_module
   use Option_module
   use Grid_module
-
+  use Secondary_Continuum_Aux_module
+  use Secondary_Continuum_module
+  use Material_Aux_module
+  use Characteristic_Curves_Thermal_module
+  use Utility_module, only: Equal
+  
   implicit none
 
   class(realization_subsurface_type) :: realization
@@ -302,20 +339,49 @@ subroutine GeneralUpdateSolution(realization)
   type(grid_type), pointer :: grid
   type(field_type), pointer :: field
   type(general_auxvar_type), pointer :: gen_auxvars(:,:)
+  type(general_parameter_type), pointer :: general_parameter
   type(global_auxvar_type), pointer :: global_auxvars(:)
-  PetscInt :: ghosted_id
+  type(sec_gen_type), pointer :: general_sec_gen_vars(:)
+  PetscInt :: ghosted_id, istart, iend, local_id
+  PetscReal :: sec_diffusion_coefficient(2)
 
   option => realization%option
   field => realization%field
   patch => realization%patch
   grid => patch%grid
   gen_auxvars => patch%aux%General%auxvars
+  general_parameter => patch%aux%General%general_parameter
   global_auxvars => patch%aux%Global%auxvars
+
+  if (option%use_sc) then
+    general_sec_gen_vars => patch%aux%SC_gen%sec_gen_vars
+  endif
 
   if (realization%option%compute_mass_balance_new) then
     call GeneralUpdateMassBalance(realization)
   endif
 
+  if (option%use_sc) then
+  ! Secondary continuum contribution
+  ! only one secondary continuum for now for each primary continuum node
+    do local_id = 1, grid%nlmax  ! For each local node do...
+      ghosted_id = grid%nL2G(local_id)
+      if (associated(patch%imat)) then
+        if (patch%imat(ghosted_id) <= 0) cycle
+      endif
+      if (Equal((patch%aux%Material%auxvars(ghosted_id)% &
+          soil_properties(epsilon_index)),1.d0)) cycle
+      iend = local_id*option%nflowdof
+      istart = iend-option%nflowdof+1
+
+      sec_diffusion_coefficient = patch%material_property_array(patch%imat(ghosted_id))% &
+                                  ptr%multicontinuum%diff_coeff
+      call SecGenAuxVarCompute(general_sec_gen_vars(local_id), &
+                                sec_diffusion_coefficient,&
+                                gen_auxvars(ZERO_INTEGER,ghosted_id)%xmol(1,3), &
+                                option)
+    enddo
+  endif
   ! update stored state
   do ghosted_id = 1, grid%ngmax
     gen_auxvars(ZERO_INTEGER,ghosted_id)%istate_store(PREV_TS) = &
@@ -1132,7 +1198,9 @@ subroutine GeneralUpdateFixedAccum(realization)
   use Field_module
   use Grid_module
   use Material_Aux_module
-
+  use Secondary_Continuum_Aux_module
+  use Secondary_Continuum_module
+  
   implicit none
 
   class(realization_subsurface_type) :: realization
@@ -1145,9 +1213,11 @@ subroutine GeneralUpdateFixedAccum(realization)
   type(global_auxvar_type), pointer :: global_auxvars(:)
   type(material_auxvar_type), pointer :: material_auxvars(:)
   type(material_parameter_type), pointer :: material_parameter
-
+  type(sec_gen_type), pointer :: general_sec_gen_vars(:)
+  
   PetscInt :: ghosted_id, local_id, local_start, local_end, natural_id
   PetscInt :: imat
+  PetscReal :: vol_frac_prim
   PetscReal, pointer :: xx_p(:)
   PetscReal, pointer :: accum_p(:)
   PetscReal :: Jac_dummy(realization%option%nflowdof, &
@@ -1164,7 +1234,8 @@ subroutine GeneralUpdateFixedAccum(realization)
   global_auxvars => patch%aux%Global%auxvars
   material_auxvars => patch%aux%Material%auxvars
   material_parameter => patch%aux%Material%material_parameter
-
+  general_sec_gen_vars => patch%aux%SC_gen%sec_gen_vars
+  
   call VecGetArrayReadF90(field%flow_xx,xx_p,ierr);CHKERRQ(ierr)
   call VecGetArrayF90(field%flow_accum,accum_p,ierr);CHKERRQ(ierr)
 
@@ -1179,6 +1250,11 @@ subroutine GeneralUpdateFixedAccum(realization)
     ! GENERAL_UPDATE_FOR_FIXED_ACCUM indicates call from non-perturbation
     option%iflag = GENERAL_UPDATE_FOR_FIXED_ACCUM
 
+    if (option%use_sc) then
+      vol_frac_prim = material_auxvars(ghosted_id)%soil_properties(epsilon_index)
+    else
+      vol_frac_prim = 1.d0
+    endif
     if (.not. general_salt) then
       call GeneralAuxVarCompute(xx_p(local_start:local_end), &
                                 gen_auxvars(ZERO_INTEGER,ghosted_id), &
@@ -1204,7 +1280,7 @@ subroutine GeneralUpdateFixedAccum(realization)
                              material_parameter%soil_heat_capacity(imat), &
                              option,accum_p(local_start:local_end), &
                              Jac_dummy,PETSC_FALSE, &
-                             local_id == general_debug_cell_id)
+                             local_id == general_debug_cell_id,vol_frac_prim)
   enddo
 
 
@@ -1236,6 +1312,10 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
   use Material_Aux_module
   use Upwind_Direction_module
 
+  use Secondary_Continuum_Aux_module
+  use Secondary_Continuum_module
+  use Utility_module, only : Equal
+
 !#define DEBUG_WITH_TECPLOT
 #ifdef DEBUG_WITH_TECPLOT
   use Output_Tecplot_module
@@ -1262,6 +1342,7 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
   type(general_parameter_type), pointer :: general_parameter
   type(general_auxvar_type), pointer :: gen_auxvars(:,:), gen_auxvars_bc(:), &
                                         gen_auxvars_ss(:,:)
+  type(sec_gen_type), pointer :: general_sec_gen_vars(:)
   type(global_auxvar_type), pointer :: global_auxvars(:)
   type(global_auxvar_type), pointer :: global_auxvars_bc(:)
   type(global_auxvar_type), pointer :: global_auxvars_ss(:)
@@ -1278,7 +1359,12 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
   PetscInt :: local_id_up, local_id_dn, ghosted_id_up, ghosted_id_dn
   PetscInt :: i, imat, imat_up, imat_dn
   PetscInt :: flow_src_sink_type
+  PetscInt :: istart, iend
 
+  PetscReal :: vol_frac_prim
+  PetscReal :: res_sec_gen
+  PetscReal :: sec_diffusion_coefficient(2)
+  
   PetscReal, pointer :: r_p(:)
   PetscReal, pointer :: accum_p(:), accum_p2(:)
 
@@ -1307,6 +1393,7 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
   global_auxvars_bc => patch%aux%Global%auxvars_bc
   global_auxvars_ss => patch%aux%Global%auxvars_ss
   material_auxvars => patch%aux%Material%auxvars
+  general_sec_gen_vars => patch%aux%SC_gen%sec_gen_vars
 
   ! bragflo uses the following logic, update when
   !   it == 1, before entering iteration loop
@@ -1381,18 +1468,46 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
     if (imat <= 0) cycle
     local_end = local_id * option%nflowdof
     local_start = local_end - option%nflowdof + 1
+    if (option%use_sc) then
+      vol_frac_prim = material_auxvars(ghosted_id)%soil_properties(epsilon_index)
+    else
+      vol_frac_prim = 1.d0
+    endif
     call GeneralAccumulation(gen_auxvars(ZERO_INTEGER,ghosted_id), &
                              global_auxvars(ghosted_id), &
                              material_auxvars(ghosted_id), &
                              material_parameter%soil_heat_capacity(imat), &
                              option,Res,Jac_dummy, &
                              general_analytical_derivatives, &
-                             local_id == general_debug_cell_id)
+                             local_id == general_debug_cell_id,vol_frac_prim)
     r_p(local_start:local_end) =  r_p(local_start:local_end) + Res(:)
     accum_p2(local_start:local_end) = Res(:)
   enddo
   call VecRestoreArrayF90(field%flow_accum2, accum_p2, ierr);CHKERRQ(ierr)
+  
+  ! Secondary Continuum Salt Flux Terms -----------------
+  if (option%use_sc) then
+  ! Secondary continuum contribution
+  ! only one secondary continuum for now for each primary continuum node
+    do local_id = 1, grid%nlmax  ! For each local node do...
+      ghosted_id = grid%nL2G(local_id)
+      if (associated(patch%imat)) then
+        if (patch%imat(ghosted_id) <= 0) cycle
+      endif
+      if (Equal((material_auxvars(ghosted_id)% &
+          soil_properties(epsilon_index)),1.d0)) cycle
+      iend = local_id*option%nflowdof
+      istart = iend-option%nflowdof+1
+      sec_diffusion_coefficient = patch%material_property_array(patch%imat(ghosted_id))% &
+                                  ptr%multicontinuum%diff_coeff
+      call SecondaryGenResidual(general_sec_gen_vars(local_id), &
+                                 sec_diffusion_coefficient,&
+                                 gen_auxvars(ZERO_INTEGER,ghosted_id)%xmol(1,3), &
+                                 option,res_sec_gen)
+      r_p(iend-1) = r_p(iend-1) - res_sec_gen*material_auxvars(ghosted_id)%volume
 
+    enddo
+  endif
   ! Interior Flux Terms -----------------------------------
   connection_set_list => grid%internal_connection_set_list
   cur_connection_set => connection_set_list%first
@@ -1681,7 +1796,10 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
   use Debug_module
   use Material_Aux_module
   use Upwind_Direction_module
-
+  use Secondary_Continuum_Aux_module
+  use Secondary_Continuum_module
+  use Utility_module, only: Equal
+  
   implicit none
 
   SNES :: snes
@@ -1701,6 +1819,10 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
   PetscInt :: local_id_up, local_id_dn
   PetscInt :: ghosted_id_up, ghosted_id_dn
   Vec, parameter :: null_vec = tVec(0)
+
+  PetscReal :: vol_frac_prim
+  PetscReal :: jac_sec_gen
+  PetscReal :: sec_diffusion_coefficient(2)
 
   PetscReal :: Jup(realization%option%nflowdof,realization%option%nflowdof), &
                Jdn(realization%option%nflowdof,realization%option%nflowdof)
@@ -1724,6 +1846,8 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
                                        global_auxvars_ss(:)
   type(material_auxvar_type), pointer :: material_auxvars(:)
 
+  type(sec_gen_type), pointer :: sec_gen_vars(:)
+
   character(len=MAXSTRINGLENGTH) :: string
 
   patch => realization%patch
@@ -1739,7 +1863,8 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
   global_auxvars_bc => patch%aux%Global%auxvars_bc
   global_auxvars_ss => patch%aux%Global%auxvars_ss
   material_auxvars => patch%aux%Material%auxvars
-
+  sec_gen_vars => patch%aux%SC_gen%sec_gen_vars
+  
   call SNESGetIterationNumber(snes,general_newton_iteration_number, &
                               ierr);CHKERRQ(ierr)
   general_newton_iteration_number = general_newton_iteration_number + 1
@@ -1791,12 +1916,30 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
     !geh - Ignore inactive cells with inactive materials
     imat = patch%imat(ghosted_id)
     if (imat <= 0) cycle
+    if (option%use_sc) then
+      vol_frac_prim = sec_gen_vars(local_id)%epsilon
+    else
+      vol_frac_prim = 1.d0
+    endif
     call GeneralAccumDerivative(gen_auxvars(:,ghosted_id), &
                               global_auxvars(ghosted_id), &
                               material_auxvars(ghosted_id), &
                               material_parameter%soil_heat_capacity(imat), &
                               option, &
-                              Jup)
+                              Jup,vol_frac_prim)
+    if (option%use_sc) then
+      if (.not.Equal((material_auxvars(ghosted_id)% &
+          soil_properties(epsilon_index)),1.d0)) then
+        sec_diffusion_coefficient = patch%material_property_array(patch%imat(ghosted_id))% &
+                                    ptr%multicontinuum%diff_coeff
+        call SecondaryGenJacobian(sec_gen_vars(local_id), &
+                                   sec_diffusion_coefficient,&
+                                   option,jac_sec_gen)
+        Jup(option%nflowdof,GENERAL_SALT_EQUATION_INDEX) = &
+                                 Jup(option%nflowdof,GENERAL_SALT_EQUATION_INDEX) - &
+                                 jac_sec_gen*material_auxvars(ghosted_id)%volume
+      endif
+    endif
     call MatSetValuesBlockedLocal(A,1,ghosted_id-1,1,ghosted_id-1,Jup, &
                                   ADD_VALUES,ierr);CHKERRQ(ierr)
   enddo
