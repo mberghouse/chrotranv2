@@ -11,7 +11,11 @@ module Factory_Forward_module
 
   public :: FactoryForwardInitialize, &
             FactoryForwardPrerequisite, &
-            FactoryForwardFinalize
+            FactoryForwardFinalize, &
+            FactoryForwardReadCommandLine, &
+            FactoryForwardReadSimProcessModels, &
+            FactoryForwardSetupPMCHierarchy, &
+            FactoryForwardReadRestart
 
 contains
 
@@ -25,6 +29,7 @@ recursive subroutine FactoryForwardInitialize(simulation,input_filename,option)
 !
   use Driver_class
   use Option_module
+  use Print_module
   use Logging_module
   use Input_Aux_module
   use String_module
@@ -52,9 +57,9 @@ recursive subroutine FactoryForwardInitialize(simulation,input_filename,option)
   call PetscLogEventBegin(logging%event_init,ierr);CHKERRQ(ierr)
 
   filename = trim(option%global_prefix) // trim(option%group_prefix) // '.out'
-  if (OptionIsIORank(option) .and. OptionPrintToFile(option)) then
+  if (OptionPrintToFile(option)) then
+    if (option%fid_out <= 0) option%fid_out = FORWARD_OUT_UNIT
     open(option%fid_out, file=filename, action="write", status="unknown")
-    option%print_file_flag = driver%PrintToFile()
   endif
 
   call OptionPrintPFLOTRANHeader(option)
@@ -641,6 +646,7 @@ recursive subroutine FactoryForwardPrerequisite(outer_simulation)
 
   option => OptionCreate(outer_option)
   call OptionSetDriver(option,driver)
+  call OptionSetComm(option,driver%comm)
   simulation => SimSubsurfCreate(driver,option)
   if (associated(inversion_option)) then
     option%group_prefix = inversion_option%iteration_prefix

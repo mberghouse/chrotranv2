@@ -20,7 +20,6 @@ module Inversion_ZFlow_class
 
     PetscReal :: beta                    ! regularization parameter
     PetscReal :: beta_red_factor         ! beta reduction factor
-    PetscReal :: minparam,maxparam       ! min/max paramter value
     PetscReal :: target_chi2             ! target CHI^2 norm
     PetscReal :: current_chi2
 
@@ -82,6 +81,7 @@ module Inversion_ZFlow_class
 
     ! arrays from the linked list
     character(len=MAXWORDLENGTH), pointer :: material_name(:)
+    character(len=MAXWORDLENGTH), pointer :: parameter_type(:)
     PetscInt, pointer :: material_id(:)
     PetscInt, pointer :: structure_metric(:)
     PetscInt, pointer :: wf_type(:)
@@ -99,6 +99,7 @@ module Inversion_ZFlow_class
     PetscInt :: structure_metric
     PetscInt :: weighing_function
     PetscInt :: num_block_link
+    character(len=MAXWORDLENGTH) :: parameter_type
     character(len=MAXWORDLENGTH), pointer :: block_link(:)
 
     PetscReal :: aniso_weight(3)
@@ -163,8 +164,6 @@ subroutine InversionZFlowInit(this,driver)
 
   this%beta = 100.d0
   this%beta_red_factor = 0.5d0
-  this%minparam = 1d-17
-  this%maxparam = 1d-07
   this%target_chi2 = 1.d0
   this%min_phi_red = 0.2d0
 
@@ -224,6 +223,7 @@ function ConstrainedBlockCreate()
   nullify(constrained_block%constrained_block_list)
 
   nullify(constrained_block%material_name)
+  nullify(constrained_block%parameter_type)
   nullify(constrained_block%material_id)
   nullify(constrained_block%structure_metric)
   nullify(constrained_block%wf_type)
@@ -263,6 +263,7 @@ function ConstrainedBlockParCreate()
   constrained_block%num_block_link = 0
   nullify(constrained_block%block_link)
 
+  constrained_block%parameter_type = "PERMEABILITY"
   constrained_block%aniso_weight = 1.d0
   constrained_block%relative_weight = 1.d0
   constrained_block%weighing_function_mean = 10.d0
@@ -373,6 +374,8 @@ subroutine InversionZFlowConstrainedArraysFromList(this)
   if (nconblock > 0) then
     allocate(constrained_block%material_name(nconblock))
     constrained_block%material_name = ''
+    allocate(constrained_block%parameter_type(nconblock))
+    constrained_block%parameter_type = ''
     allocate(constrained_block%material_id(nconblock))
     constrained_block%material_id = 0
     allocate(constrained_block%structure_metric(nconblock))
@@ -408,6 +411,8 @@ subroutine InversionZFlowConstrainedArraysFromList(this)
         call PrintErrMsg(option)
       endif
 
+      constrained_block%parameter_type(iconblock) = cur_constrained_block% &
+                                                      parameter_type
       constrained_block%material_id(iconblock) = material_property%internal_id
       constrained_block%structure_metric(iconblock) = &
                         cur_constrained_block%structure_metric
@@ -491,14 +496,6 @@ subroutine InversionZFlowReadBlock(this,input,option)
     if (found) cycle
 
     select case(trim(keyword))
-      case('MIN_PERMEABILITY','MIN_PARAMETER')
-        call InputReadDouble(input,option,this%minparam)
-        call InputErrorMsg(input,option,'MIN_PARAMETER', &
-                           error_string)
-      case('MAX_PERMEABILITY','MAX_PARAMETER')
-        call InputReadDouble(input,option,this%maxparam)
-        call InputErrorMsg(input,option,'MAX_PARAMETER', &
-                           error_string)
       case('MIN_CGLS_ITERATION')
         call InputReadInt(input,option,this%miniter)
         call InputErrorMsg(input,option,'MIN_CGLS_ITERATION',error_string)
@@ -646,6 +643,11 @@ subroutine ConstrainedBlockParRead(constrained_block,input,option)
     call InputErrorMsg(input,option,'keyword',error_string)
     call StringToUpper(word)
     select case(trim(word))
+      case('PARAMETER_TYPE')
+        call InputReadWord(input,option,constrained_block%parameter_type, &
+                           PETSC_TRUE)
+        call InputErrorMsg(input,option,'PARAMETER_TYPE',error_string)
+        call StringtoUpper(constrained_block%parameter_type)
       case('STRUCTURE_METRIC')
         call InputReadInt(input,option,constrained_block%structure_metric)
         call InputErrorMsg(input,option,'STRUCTURE_METRIC',error_string)
@@ -748,7 +750,10 @@ subroutine InvZFlowSetupForwardRunLinkage(this)
   use Inversion_Parameter_module
   use Option_module
   use Variables_module, only : PERMEABILITY,POROSITY,ELECTRICAL_CONDUCTIVITY, &
-                               VG_ALPHA,VG_SR,VG_M
+                               VG_ALPHA,VG_SR,VG_M, &
+                               ARCHIE_CEMENTATION_EXPONENT, &
+                               ARCHIE_SATURATION_EXPONENT, &
+                               ARCHIE_TORTUOSITY_CONSTANT
 
   implicit none
 
@@ -762,31 +767,17 @@ subroutine InvZFlowSetupForwardRunLinkage(this)
 
   call InvSubsurfSetupForwardRunLinkage(this)
 
-  call VecDuplicate(this%inversion_aux%dist_parameter_vec,this%dist_parameter_tmp_vec, &
-                    ierr);CHKERRQ(ierr)
-
   ! check to ensure that quantity of interest exists
   exists = PETSC_FALSE
   iqoi = InversionParameterIntToQOIArray(this%inversion_aux%parameters(1))
   select case(iqoi(1))
-    case(PERMEABILITY)
+    case(PERMEABILITY,POROSITY,VG_ALPHA,VG_SR,VG_M)
       if (this%realization%option%iflowmode /= NULL_MODE) exists = PETSC_TRUE
-      word = 'PERMEABILITY'
-    case(POROSITY)
-      if (this%realization%option%iflowmode /= NULL_MODE) exists = PETSC_TRUE
-      word = 'POROSITY'
-    case(ELECTRICAL_CONDUCTIVITY)
+      word = InversionParamGetNameFromItype(iqoi(1),this%driver)
+    case(ELECTRICAL_CONDUCTIVITY,ARCHIE_CEMENTATION_EXPONENT, &
+         ARCHIE_SATURATION_EXPONENT,ARCHIE_TORTUOSITY_CONSTANT)
       if (this%realization%option%igeopmode /= NULL_MODE) exists = PETSC_TRUE
-      word = 'ELECTRICAL_CONDUCTIVITY'
-    case(VG_ALPHA)
-      if (this%realization%option%iflowmode /= NULL_MODE) exists = PETSC_TRUE
-      word = 'VG_ALPHA'
-    case(VG_SR)
-      if (this%realization%option%iflowmode /= NULL_MODE) exists = PETSC_TRUE
-      word = 'VG_SR'
-    case(VG_M)
-      if (this%realization%option%iflowmode /= NULL_MODE) exists = PETSC_TRUE
-      word = 'VG_M'
+      word = InversionParamGetNameFromItype(iqoi(1),this%driver)
     case default
       word = 'unknown_parameter'
   end select
@@ -795,6 +786,12 @@ subroutine InvZFlowSetupForwardRunLinkage(this)
       &' cannot be performed with the specified process models.'
     call PrintErrMsg(this%realization%option)
   endif
+
+  if (.not.associated(this%inversion_option%invcomm)) return
+
+  call VecDuplicate(this%inversion_aux%dist_parameter_vec, &
+                    this%dist_parameter_tmp_vec, &
+                    ierr);CHKERRQ(ierr)
 
   call InversionZFlowConstrainedArraysFromList(this)
 
@@ -846,10 +843,20 @@ subroutine InversionZFlowCheckConvergence(this)
 
   class(inversion_zflow_type) :: this
 
+  PetscErrorCode :: ierr
+
   this%converged = PETSC_FALSE
-  call this%EvaluateCostFunction()
-  if ((this%current_chi2 <= this%target_chi2) .or. &
-      (this%iteration > this%maximum_iteration)) this%converged = PETSC_TRUE
+  if (associated(this%inversion_option%invcomm)) then
+    call this%EvaluateCostFunction()
+    if ((this%current_chi2 <= this%target_chi2) .or. &
+        (this%iteration > this%maximum_iteration)) this%converged = PETSC_TRUE
+  endif
+  ! need to broadcast in the case of parallel perturbation
+!print *, this%driver%comm%rank, ' Bcast6 all'
+!call MPI_Barrier(this%driver%comm%communicator,ierr);CHKERRQ(ierr)
+  call MPI_Bcast(this%converged,ONE_INTEGER_MPI, &
+                 MPI_LOGICAL,this%driver%comm%io_rank, &
+                 this%driver%comm%communicator,ierr);CHKERRQ(ierr)
 
 end subroutine InversionZFlowCheckConvergence
 
@@ -867,7 +874,6 @@ subroutine InvZFlowEvaluateCostFunction(this)
   use Patch_module
   use Material_Aux_module
   use String_module
-  use Variables_module, only : PERMEABILITY,POROSITY,ELECTRICAL_CONDUCTIVITY
 
   implicit none
 
@@ -939,7 +945,7 @@ subroutine InvZFlowEvaluateCostFunction(this)
         case default
       end select
 
-      iparameter = this%inversion_aux%parameters(1)%iparameter
+      iparameter = rblock(iconst,4)
 
       call InvAuxGetParamValueByCell(this%inversion_aux,param_ce, &
                                      iparameter, &
@@ -989,7 +995,8 @@ subroutine InvZFlowEvaluateCostFunction(this)
 
     this%phi_model = this%beta * dot_product(model_vector,model_vector)
     call MPI_Allreduce(MPI_IN_PLACE,this%phi_model,ONE_INTEGER_MPI, &
-                       MPI_DOUBLE_PRECISION,MPI_SUM,option%mycomm, &
+                       MPI_DOUBLE_PRECISION,MPI_SUM, &
+                       this%inversion_option%invcomm%communicator, &
                        ierr);CHKERRQ(ierr)
     deallocate(model_vector)
 
@@ -1022,7 +1029,7 @@ subroutine InvZFlowEvaluateCostFunction(this)
         case default
       end select
 
-      iparameter = this%inversion_aux%parameters(1)%iparameter
+      iparameter = rblock(iconst,4)
 
       call InvAuxGetSetParamValueByMat(this%inversion_aux,param_ce, &
                                        iparameter, &
@@ -1098,6 +1105,7 @@ subroutine InvZFlowUpdateRegularizParams(this)
   class(inversion_zflow_type) :: this
 
   if (this%iteration == this%start_iteration) return
+  if (.not.associated(this%inversion_option%invcomm)) return
 
   if ( (this%phi_total_0 - this%phi_total)/this%phi_total_0 <= &
                                                       this%min_phi_red ) then
@@ -1125,6 +1133,7 @@ subroutine InversionZFlowCalculateUpdate(this)
   use Discretization_module
   use Patch_module
   use Grid_module
+  use Inversion_Parameter_module
 
   implicit none
 
@@ -1143,6 +1152,8 @@ subroutine InversionZFlowCalculateUpdate(this)
 
   patch => this%realization%patch
   grid => patch%grid
+
+  if (.not.associated(this%inversion_option%invcomm)) return
 
   ! simply setting a local pointer for clarity
   dist_del_param_vec = this%dist_parameter_tmp_vec
@@ -1182,11 +1193,10 @@ subroutine InversionZFlowCalculateUpdate(this)
         ghosted_id = grid%nL2G(iparameter)
         if (patch%imat(ghosted_id) <= 0) cycle
       endif
-      vec_ptr(iparameter) = exp(log(vec_ptr(iparameter)) + vec2_ptr(iparameter))
-      if (vec_ptr(iparameter) > this%maxparam) &
-        vec_ptr(iparameter) = this%maxparam
-      if (vec_ptr(iparameter) < this%minparam) &
-        vec_ptr(iparameter) = this%minparam
+      new_value = exp(log(vec_ptr(iparameter)) + vec2_ptr(iparameter))
+      call InversionParameterBoundParameter(this%inversion_aux%parameters(1), &
+                                            new_value)
+      vec_ptr(iparameter) = new_value
     enddo
     call VecRestoreArrayF90(work_dup,vec_ptr,ierr);CHKERRQ(ierr)
     call VecRestoreArrayF90(this%realization%field%work,vec2_ptr, &
@@ -1204,22 +1214,13 @@ subroutine InversionZFlowCalculateUpdate(this)
                         vec_ptr,ierr);CHKERRQ(ierr)
     call VecGetArrayF90(dist_del_param_vec,vec2_ptr,ierr);CHKERRQ(ierr)
     do iparameter = 1, this%num_parameters_local
-#if 0
-      vec_ptr(iparameter) = exp(log(vec_ptr(iparameter)) + vec2_ptr(iparameter))
-      if (vec_ptr(iparameter) > this%maxparam) &
-        vec_ptr(iparameter) = this%maxparam
-      if (vec_ptr(iparameter) < this%minparam) &
-        vec_ptr(iparameter) = this%minparam
-#else
       new_value = exp(log(vec_ptr(iparameter)) + vec2_ptr(iparameter))
-      if (new_value > this%maxparam) then
-        new_value = this%maxparam
-      else if (new_value < this%minparam) then
-        new_value = this%minparam
-      endif
+      call InversionParameterBoundParameter(this%inversion_aux% &
+                                              parameters(iparameter+ &
+                                                    this%parameter_offset), &
+                                            new_value)
       vec2_ptr(iparameter) = new_value - vec_ptr(iparameter)
       vec_ptr(iparameter) = new_value
-#endif
     enddo
     call VecRestoreArrayF90(this%inversion_aux%dist_parameter_vec,vec_ptr, &
                             ierr);CHKERRQ(ierr)
@@ -1303,7 +1304,8 @@ subroutine InversionZFlowCGLSSolve(this)
 
   gamma = dot_product(this%s,this%s)
   call MPI_Allreduce(MPI_IN_PLACE,gamma,ONE_INTEGER_MPI,MPI_DOUBLE_PRECISION, &
-                     MPI_SUM,option%mycomm,ierr);CHKERRQ(ierr)
+                     MPI_SUM,this%inversion_option%invcomm%communicator, &
+                     ierr);CHKERRQ(ierr)
 
   norms0 = sqrt(gamma)
   xmax = 0.d0
@@ -1325,7 +1327,8 @@ subroutine InversionZFlowCGLSSolve(this)
 
     if (this%inversion_aux%qoi_is_full_vector) &
       call MPI_Allreduce(MPI_IN_PLACE,delta2,ONE_INTEGER_MPI, &
-                         MPI_DOUBLE_PRECISION,MPI_SUM,option%mycomm, &
+                         MPI_DOUBLE_PRECISION,MPI_SUM, &
+                         this%inversion_option%invcomm%communicator, &
                          ierr);CHKERRQ(ierr)
     delta = delta1 + delta2
 
@@ -1343,7 +1346,8 @@ subroutine InversionZFlowCGLSSolve(this)
     gamma1 = gamma
     gamma = dot_product(this%s,this%s)
     call MPI_Allreduce(MPI_IN_PLACE,gamma,ONE_INTEGER_MPI, &
-                       MPI_DOUBLE_PRECISION,MPI_SUM,option%mycomm, &
+                       MPI_DOUBLE_PRECISION,MPI_SUM, &
+                       this%inversion_option%invcomm%communicator, &
                        ierr);CHKERRQ(ierr)
 
     norms = sqrt(gamma)
@@ -1352,7 +1356,8 @@ subroutine InversionZFlowCGLSSolve(this)
 
     normx = dot_product(this%del_param,this%del_param)
     call MPI_Allreduce(MPI_IN_PLACE,normx,ONE_INTEGER_MPI, &
-                       MPI_DOUBLE_PRECISION,MPI_SUM,option%mycomm, &
+                       MPI_DOUBLE_PRECISION,MPI_SUM, &
+                       this%inversion_option%invcomm%communicator, &
                        ierr);CHKERRQ(ierr)
     normx = sqrt(normx)
     if (xmax < normx) xmax = normx
@@ -1398,7 +1403,6 @@ subroutine InversionZFlowCGLSRhs(this)
   use Material_Aux_module
   use Option_module
   use String_module
-  use Variables_module, only : PERMEABILITY,POROSITY,ELECTRICAL_CONDUCTIVITY
 
   implicit none
 
@@ -1459,7 +1463,7 @@ subroutine InversionZFlowCGLSRhs(this)
         case default
       end select
 
-      iparameter = this%inversion_aux%parameters(1)%iparameter
+      iparameter = rblock(iconst,4)
 
       call InvAuxGetParamValueByCell(this%inversion_aux,param_ce, &
                                      iparameter, &
@@ -1533,8 +1537,7 @@ subroutine InversionZFlowCGLSRhs(this)
         case default
       end select
 
-      iparameter = this%inversion_aux%parameters(1)%iparameter
-
+      iparameter = rblock(iconst,4)
       call InvAuxGetSetParamValueByMat(this%inversion_aux,param_ce, &
                                        iparameter, &
                                        imat_id,INVAUX_GET_MATERIAL_VALUE)
@@ -1600,7 +1603,6 @@ subroutine InversionZFlowBuildWm(this)
   use Material_Aux_module
   use Option_module
   use String_module
-  use Variables_module, only : PERMEABILITY,POROSITY,ELECTRICAL_CONDUCTIVITY
 
   implicit none
 
@@ -1667,7 +1669,7 @@ contains
         case default
       end select
 
-      iparameter = this%inversion_aux%parameters(1)%iparameter
+      iparameter = rblock(iconst,4)
 
       call InvAuxGetParamValueByCell(this%inversion_aux,param_ce, &
                                      iparameter, &
@@ -1699,7 +1701,7 @@ contains
         case default
       end select
 
-      iparameter = this%inversion_aux%parameters(1)%iparameter
+      iparameter = rblock(iconst,4)
 
       call InvAuxGetSetParamValueByMat(this%inversion_aux,param_ce, &
                                        iparameter, &
@@ -1819,7 +1821,11 @@ subroutine InversionZFlowAllocateWm(this)
 
   use Patch_module
   use Grid_module
+  use Inversion_Parameter_module
   use Option_module
+  use Variables_module, only : ELECTRICAL_CONDUCTIVITY, &
+                               PERMEABILITY, POROSITY, &
+                               VG_SR, VG_ALPHA, VG_M
 
   implicit none
 
@@ -1883,10 +1889,11 @@ subroutine InversionZFlowAllocateWm(this)
 
     this%num_constraints_local = num_constraints
     call MPI_Allreduce(num_constraints,this%num_constraints_total, &
-                       ONE_INTEGER_MPI,MPIU_INTEGER,MPI_SUM,option%mycomm, &
+                       ONE_INTEGER_MPI,MPIU_INTEGER,MPI_SUM, &
+                       this%inversion_option%invcomm%communicator, &
                        ierr);CHKERRQ(ierr)
     allocate(this%Wm(num_constraints))
-    allocate(this%rblock(num_constraints,THREE_INTEGER))
+    allocate(this%rblock(num_constraints,FOUR_INTEGER))
     this%Wm = 0.d0
     this%rblock = 0
 
@@ -1904,6 +1911,10 @@ subroutine InversionZFlowAllocateWm(this)
               num_constraints = num_constraints + 1
               this%rblock(num_constraints,1) = ghosted_id
               this%rblock(num_constraints,3) = iconblock
+              this%rblock(num_constraints,4) = &
+                InversionParamGetItypeFromName(constrained_block% &
+                                                 parameter_type(iconblock), &
+                                               this%driver)
             else
               num_neighbor = grid%cell_neighbors_local_ghosted(0,local_id)
               do inbr=1,num_neighbor
@@ -1918,6 +1929,10 @@ subroutine InversionZFlowAllocateWm(this)
                       this%rblock(num_constraints,1) = ghosted_id
                       this%rblock(num_constraints,2) = ghosted_id_nbr
                       this%rblock(num_constraints,3) = iconblock
+                      this%rblock(num_constraints,4) = &
+                        InversionParamGetItypeFromName(constrained_block% &
+                                                 parameter_type(iconblock), &
+                                               this%driver)
                     endif
                   enddo
                 else
@@ -1927,6 +1942,10 @@ subroutine InversionZFlowAllocateWm(this)
                     this%rblock(num_constraints,1) = ghosted_id
                     this%rblock(num_constraints,2) = ghosted_id_nbr
                     this%rblock(num_constraints,3) = iconblock
+                    this%rblock(num_constraints,4) = &
+                      InversionParamGetItypeFromName(constrained_block% &
+                                                 parameter_type(iconblock), &
+                                               this%driver)
                   endif
                 endif
               enddo
@@ -1955,7 +1974,7 @@ subroutine InversionZFlowAllocateWm(this)
     this%num_constraints_local = num_constraints
     this%num_constraints_total = this%num_constraints_local ! both are same
     allocate(this%Wm(num_constraints))
-    allocate(this%rblock(num_constraints,THREE_INTEGER))
+    allocate(this%rblock(num_constraints,FOUR_INTEGER))
     this%Wm = 0.d0
     this%rblock = 0
 
@@ -1970,6 +1989,10 @@ subroutine InversionZFlowAllocateWm(this)
           num_constraints = num_constraints + 1
           this%rblock(num_constraints,1) = imat_id
           this%rblock(num_constraints,3) = iconblock
+          this%rblock(num_constraints,4) = &
+            InversionParamGetItypeFromName(constrained_block% &
+                                             parameter_type(iconblock), &
+                                           this%driver)
         else
           do ilink=1,constrained_block%block_link(iconblock,1)
             imat_id_nb = constrained_block%block_link(iconblock,1+ilink)
@@ -1977,6 +2000,10 @@ subroutine InversionZFlowAllocateWm(this)
             this%rblock(num_constraints,1) = imat_id
             this%rblock(num_constraints,2) = imat_id_nb
             this%rblock(num_constraints,3) = iconblock
+            this%rblock(num_constraints,4) = &
+              InversionParamGetItypeFromName(constrained_block% &
+                                               parameter_type(iconblock), &
+                                             this%driver)
           enddo
         endif
       endif
@@ -2318,10 +2345,12 @@ subroutine InvZFlowWriteIterationInfo(this)
 
   class(inversion_zflow_type) :: this
 
-  if (this%info_format == 1) then
-    call InvZFlowWriteIterationInfo2(this)
-  else
-    call InvZFlowWriteIterationInfo1(this)
+  if (associated(this%inversion_option%invcomm)) then
+    if (this%info_format == 1) then
+      call InvZFlowWriteIterationInfo2(this)
+    else
+      call InvZFlowWriteIterationInfo1(this)
+    endif
   endif
 
 end subroutine InvZFlowWriteIterationInfo
@@ -2335,7 +2364,7 @@ subroutine InvZFlowWriteIterationInfo1(this)
   ! Author: Piyoosh Jaysaval
   ! Date: 10/20/21
   !
-
+  use Print_module
   use String_module
 
   implicit none
@@ -2346,7 +2375,7 @@ subroutine InvZFlowWriteIterationInfo1(this)
   PetscInt, parameter :: zeronum = 0
 
   call InvSubsurfWriteIterationInfo(this)
-  if (this%driver%PrintToScreen()) then
+  if (PrintToScreen(this%driver%print_flags,this%inversion_option%invcomm)) then
     write(*,*)
     write(*,98)
     if (this%string_color) then
@@ -2400,7 +2429,7 @@ subroutine InvZFlowWriteIterationInfo1(this)
     write(*,98)
   endif
 
-  if (this%driver%PrintToFile()) then
+  if (PrintToFile(this%driver%print_flags,this%inversion_option%invcomm)) then
     fid = this%driver%fid_out
     write(fid,*)
     write(fid,98)
@@ -2565,6 +2594,8 @@ subroutine InversionZFlowScaleSensitivity(this)
   PetscReal, pointer :: wdvec_ptr(:)
   PetscErrorCode :: ierr
 
+  if (.not.associated(this%inversion_option%invcomm)) return
+
   num_measurement = size(this%inversion_aux%measurements)
   call VecDuplicate(this%inversion_aux%measurement_vec,wd_vec, &
                     ierr);CHKERRQ(ierr)
@@ -2611,11 +2642,11 @@ subroutine InversionZFlowCheckpoint(this)
   integer(HID_T) :: file_id
   integer(HID_T) :: grp_id
   character(len=MAXSTRINGLENGTH) :: string
-  integer :: hdf5_err
   PetscReal, pointer :: vec_ptr(:)
   PetscErrorCode :: ierr
 
   if (len_trim(this%checkpoint_filename) == 0) return
+  if (.not.associated(this%inversion_option%invcomm)) return
 
   call this%driver%PrintMsg('Checkpointing inversion iteration ' // &
                             trim(StringWrite(this%iteration)) // '.')
@@ -2624,7 +2655,7 @@ subroutine InversionZFlowCheckpoint(this)
   call HDF5AttributeWrite(file_id,H5T_NATIVE_INTEGER,'Last Iteration', &
                           this%iteration,this%driver)
   string = 'Iteration ' // trim(StringWrite(this%iteration))
-  call h5gcreate_f(file_id,string,grp_id,hdf5_err,OBJECT_NAMELEN_DEFAULT_F)
+  call HDF5GroupCreate(file_id,string,grp_id,this%driver)
   call HDF5AttributeWrite(grp_id,H5T_NATIVE_DOUBLE,'Phi Total', &
                           this%phi_total,this%driver)
   call HDF5AttributeWrite(grp_id,H5T_NATIVE_DOUBLE,'Phi Data', &
@@ -2641,8 +2672,8 @@ subroutine InversionZFlowCheckpoint(this)
   call HDF5DatasetWrite(grp_id,'Measurement Values',vec_ptr,this%driver)
   call VecRestoreArrayReadF90(this%inversion_aux%measurement_vec,vec_ptr, &
                               ierr);CHKERRQ(ierr)
-  call h5gclose_f(grp_id,hdf5_err)
-  call HDF5FileClose(file_id)
+  call HDF5GroupClose(grp_id,this%driver)
+  call HDF5FileClose(file_id,this%driver)
 
 end subroutine InversionZFlowCheckpoint
 
@@ -2666,7 +2697,6 @@ subroutine InversionZFlowRestartReadData(this)
   integer(HID_T) :: file_id
   integer(HID_T) :: grp_id
   character(len=MAXSTRINGLENGTH) :: string
-  integer :: hdf5_err
   PetscReal, pointer :: vec_ptr(:)
   PetscErrorCode :: ierr
 
@@ -2685,7 +2715,7 @@ subroutine InversionZFlowRestartReadData(this)
                          this%phi_data_0,this%driver)
   call HDF5AttributeRead(grp_id,H5T_NATIVE_DOUBLE,'Phi Model', &
                          this%phi_model_0,this%driver)
-  call h5gclose_f(grp_id,hdf5_err)
+  call HDF5GroupClose(grp_id,this%driver)
   string = 'Iteration ' // trim(StringWrite(this%restart_iteration))
   call HDF5GroupOpen(file_id,string,grp_id,this%driver)
   call HDF5AttributeRead(grp_id,H5T_NATIVE_DOUBLE,'Phi Total', &
@@ -2699,8 +2729,8 @@ subroutine InversionZFlowRestartReadData(this)
   call HDF5DatasetRead(grp_id,'Parameter Values',vec_ptr,this%driver)
   call VecRestoreArrayReadF90(this%inversion_aux%parameter_vec,vec_ptr, &
                               ierr);CHKERRQ(ierr)
-  call h5gclose_f(grp_id,hdf5_err)
-  call HDF5FileClose(file_id)
+  call HDF5GroupClose(grp_id,this%driver)
+  call HDF5FileClose(file_id,this%driver)
 
   call InvAuxCopyParamToFromParamVec(this%inversion_aux, &
                                      INVAUX_PARAMETER_VALUE, &
@@ -2804,6 +2834,7 @@ subroutine ConstrainedBlockDestroy(constrained_block)
   nullify(constrained_block%constrained_block_list)
 
   call DeallocateArray(constrained_block%material_name)
+  call DeallocateArray(constrained_block%parameter_type)
   call DeallocateArray(constrained_block%material_id)
   call DeallocateArray(constrained_block%structure_metric)
   call DeallocateArray(constrained_block%wf_type)

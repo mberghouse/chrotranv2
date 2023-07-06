@@ -734,12 +734,12 @@ subroutine FactorySubsurfReadRequiredCards(simulation,input)
             call PrintMsg(option)
           endif
 
-          if (option%comm%mycommsize /= grid%structured_grid%npx * &
+          if (option%comm%size /= grid%structured_grid%npx * &
                                  grid%structured_grid%npy * &
                                  grid%structured_grid%npz) then
             write(option%io_buffer,*) 'Incorrect number of processors &
               &specified: ',grid%structured_grid%npx*grid%structured_grid%npy* &
-              grid%structured_grid%npz,' commsize = ',option%comm%mycommsize
+              grid%structured_grid%npz,' commsize = ',option%comm%size
             call PrintErrMsg(option)
           endif
         endif
@@ -805,6 +805,7 @@ subroutine FactorySubsurfReadInput(simulation,input)
   use Dataset_module
   use Dataset_Common_HDF5_class
   use Fluid_module
+  use Realization_Common_module
   use Realization_Subsurface_class
   use Realization_Base_class
   use Region_module
@@ -852,6 +853,7 @@ subroutine FactorySubsurfReadInput(simulation,input)
   use PM_Well_class
   use PM_Hydrate_class
   use PM_Base_class
+  use Print_module
   use Timestepper_Base_class
   use Timestepper_KSP_class
   use Timestepper_SNES_class
@@ -895,7 +897,6 @@ subroutine FactorySubsurfReadInput(simulation,input)
   type(tran_condition_type), pointer :: tran_condition
   type(geop_condition_type), pointer :: geop_condition
   class(tran_constraint_base_type), pointer :: tran_constraint
-  class(tran_constraint_rt_type), pointer :: sec_tran_constraint
   type(coupler_type), pointer :: coupler
   type(strata_type), pointer :: strata
   type(observation_type), pointer :: observation
@@ -1204,7 +1205,7 @@ subroutine FactorySubsurfReadInput(simulation,input)
         call InputReadWord(input,option,coupler%name,PETSC_TRUE)
         call InputDefaultMsg(input,option,'Boundary Condition name')
         call CouplerRead(coupler,input,option)
-        call RealizationAddCoupler(realization,coupler)
+        call RealizationAddCoupler(realization%patch,coupler)
         nullify(coupler)
 
 !....................
@@ -1213,7 +1214,7 @@ subroutine FactorySubsurfReadInput(simulation,input)
         call InputReadWord(input,option,coupler%name,PETSC_TRUE)
         call InputDefaultMsg(input,option,'Initial Condition name')
         call CouplerRead(coupler,input,option)
-        call RealizationAddCoupler(realization,coupler)
+        call RealizationAddCoupler(realization%patch,coupler)
         nullify(coupler)
 
 !....................
@@ -1222,7 +1223,7 @@ subroutine FactorySubsurfReadInput(simulation,input)
         call InputReadWord(input,option,coupler%name,PETSC_TRUE)
         call InputDefaultMsg(input,option,'Source Sink name')
         call CouplerRead(coupler,input,option)
-        call RealizationAddCoupler(realization,coupler)
+        call RealizationAddCoupler(realization%patch,coupler)
         nullify(coupler)
 
 !....................
@@ -1252,7 +1253,7 @@ subroutine FactorySubsurfReadInput(simulation,input)
       case ('STRATIGRAPHY','STRATA')
         strata => StrataCreate()
         call StrataRead(strata,input,option)
-        call RealizationAddStrata(realization,strata)
+        call RealizationAddStrata(realization%patch,strata)
         nullify(strata)
 
 !.....................
@@ -1374,23 +1375,12 @@ subroutine FactorySubsurfReadInput(simulation,input)
 !....................
 
       case('SECONDARY_CONSTRAINT')
-        if (.not.option%use_sc) then
-          option%io_buffer = 'SECONDARY_CONSTRAINT can only be used with &
-                             &MULTIPLE_CONTINUUM keyword.'
-          call PrintErrMsg(option)
-        endif
-        if (.not.associated(reaction)) then
-          option%io_buffer = 'SECONDARY_CONSTRAINT not supported without &
-                             &CHEMISTRY.'
-          call PrintErrMsg(option)
-        endif
-        sec_tran_constraint => TranConstraintRTCreate(option)
-        call InputReadWord(input,option,sec_tran_constraint%name,PETSC_TRUE)
-        call InputErrorMsg(input,option,'secondary constraint','name')
-        call PrintMsg(option,sec_tran_constraint%name)
-        call TranConstraintRTRead(sec_tran_constraint,reaction,input,option)
-        realization%sec_transport_constraint => sec_tran_constraint
-        nullify(sec_tran_constraint)
+        option%io_buffer = 'SECONDARY_CONSTRAINT has been moved to the &
+                            &TRANSPORT_CONDITION block. If a SECONDARY_CONSTRAINT &
+                            &is not specified the secondary initial conditions &
+                            &are copied from the primary.'
+        call PrintErrMsg(option)
+
 
 !......................
 
@@ -1679,17 +1669,13 @@ subroutine FactorySubsurfReadInput(simulation,input)
       case ('WALLCLOCK_STOP')
         option%wallclock_stop_flag = PETSC_TRUE
         call InputReadDouble(input,option,option%wallclock_stop_time)
-        call InputErrorMsg(input,option,'stop time','WALLCLOCK_STOP')
-
-        call InputReadWord(input,option,word,PETSC_TRUE)
-        if (input%ierr /= 0) word = 'h'
-        call InputDefaultMsg(input,option,'WALLCLOCK_STOP time units')
+        call InputErrorMsg(input,option,'stop time',card)
         internal_units = 'sec'
-        units_conversion = UnitsConvertToInternal(word,internal_units,option)
-        ! convert from hrs to seconds and add to start_time
+        call InputReadAndConvertUnits(input,option%wallclock_stop_time, &
+                                      internal_units,card,option)
+        ! append to start time
         option%wallclock_stop_time = option%comm%start_time + &
-                                     option%wallclock_stop_time* &
-                                     units_conversion
+                                     option%wallclock_stop_time
 
 !....................
       case ('OUTPUT')
@@ -1733,7 +1719,8 @@ subroutine FactorySubsurfReadInput(simulation,input)
               output_option%tunit = trim(word)
               internal_units = 'sec'
               output_option%tconv = &
-                UnitsConvertToInternal(word,internal_units,option)
+                UnitsConvertToInternal(word,internal_units, &
+                                       'OUTPUT,TIME_UNITS',option)
             case('VARIABLES')
               call OutputVariableRead(input,option, &
                                       output_option%output_variable_list)
@@ -1805,60 +1792,60 @@ subroutine FactorySubsurfReadInput(simulation,input)
             case('PRINT_COLUMN_IDS')
               output_option%print_column_ids = PETSC_TRUE
 
-           case ('PRINT_PRIMAL_GRID')
-             output_option%print_explicit_primal_grid = PETSC_TRUE
+            case ('PRINT_PRIMAL_GRID')
+              output_option%print_explicit_primal_grid = PETSC_TRUE
 
-           !out_mesh_type defaults for primal_explicit grid is vetex_centered
-           case ('EXPLICIT_GRID_PRIMAL_GRID_TYPE')
-             if (associated(grid%unstructured_grid)) then
-               if (associated(grid%unstructured_grid%explicit_grid)) then
-                 call InputReadCard(input,option,word)
-                 call InputErrorMsg(input,option,word, &
-                       'EXPLICIT_GRID_PRIMAL_GRID_TYPE')
-                 call PrintMsg(option,word)
-                 call StringToUpper(word)
-                   select case (trim(word))
-                     case ('VERTEX_CENTERED')
-                       grid%unstructured_grid%explicit_grid% &
-                          output_mesh_type = VERTEX_CENTERED_OUTPUT_MESH
-                     case ('CELL_CENTERED')
-                       grid%unstructured_grid%explicit_grid% &
-                          output_mesh_type = CELL_CENTERED_OUTPUT_MESH
-                       call OptionSetBlocking(option,PETSC_FALSE)
-                       if (OptionIsIORank(option)) then
-                         if (grid%unstructured_grid% &
-                               explicit_grid%num_elems /= &
-                             grid%unstructured_grid% &
-                               explicit_grid%num_cells_global) then
-                           option%io_buffer = &
-                             'EXPLICIT_GRID_PRIMAL_GRID_TYPE &
-                             &if CELL_CENTERED option, the number of cells &
-                             &of the grid to print and those &
-                             &of the computational grid must be equal.'
-                           call PrintErrMsg(option)
-                         end if
-                       end if
-                       call OptionSetBlocking(option,PETSC_TRUE)
-                       call OptionCheckNonBlockingError(option)
-                     case default
-                       option%io_buffer ='EXPLICIT_GRID_PRIMAL_GRID_TYPE &
-                                  &only VERTEX_CENTERED and CELL_CENTERED &
-                                  &are supported.'
-                       call PrintErrMsg(option)
-                   end select
-               endif
-             endif
+            !out_mesh_type defaults for primal_explicit grid is vetex_centered
+            case ('EXPLICIT_GRID_PRIMAL_GRID_TYPE')
+              if (associated(grid%unstructured_grid)) then
+                if (associated(grid%unstructured_grid%explicit_grid)) then
+                  call InputReadCard(input,option,word)
+                  call InputErrorMsg(input,option,word, &
+                        'EXPLICIT_GRID_PRIMAL_GRID_TYPE')
+                  call PrintMsg(option,word)
+                  call StringToUpper(word)
+                    select case (trim(word))
+                      case ('VERTEX_CENTERED')
+                        grid%unstructured_grid%explicit_grid% &
+                           output_mesh_type = VERTEX_CENTERED_OUTPUT_MESH
+                      case ('CELL_CENTERED')
+                        grid%unstructured_grid%explicit_grid% &
+                           output_mesh_type = CELL_CENTERED_OUTPUT_MESH
+                        call OptionSetBlocking(option,PETSC_FALSE)
+                        if (OptionIsIORank(option)) then
+                          if (grid%unstructured_grid% &
+                                explicit_grid%num_elems /= &
+                              grid%unstructured_grid% &
+                                explicit_grid%num_cells_global) then
+                            option%io_buffer = &
+                              'EXPLICIT_GRID_PRIMAL_GRID_TYPE &
+                              &if CELL_CENTERED option, the number of cells &
+                              &of the grid to print and those &
+                              &of the computational grid must be equal.'
+                            call PrintErrMsg(option)
+                          end if
+                        end if
+                        call OptionSetBlocking(option,PETSC_TRUE)
+                        call OptionCheckNonBlockingError(option)
+                      case default
+                        option%io_buffer ='EXPLICIT_GRID_PRIMAL_GRID_TYPE &
+                                   &only VERTEX_CENTERED and CELL_CENTERED &
+                                   &are supported.'
+                        call PrintErrMsg(option)
+                    end select
+                endif
+              endif
 
-           case ('PRINT_DUAL_GRID')
-             output_option%print_explicit_dual_grid = PETSC_TRUE
+            case ('PRINT_DUAL_GRID')
+              output_option%print_explicit_dual_grid = PETSC_TRUE
 
             case('TIMES')
               call InputReadWord(input,option,word,PETSC_TRUE)
               call InputErrorMsg(input,option,'units','OUTPUT,TIMES')
               internal_units = 'sec'
-              units_conversion = &
-                UnitsConvertToInternal(word,internal_units,option)
               string = 'OUTPUT,TIMES'
+              units_conversion = &
+                UnitsConvertToInternal(word,internal_units,string,option)
               nullify(temp_real_array)
               call UtilityReadArray(temp_real_array,NEG_ONE_INTEGER, &
                                     string,input,option)
@@ -1876,7 +1863,8 @@ subroutine FactorySubsurfReadInput(simulation,input)
               call StringToUpper(word)
               select case(trim(word))
                 case('OFF')
-                  option%driver%print_to_file = PETSC_FALSE
+                  call PrintSetPrintToFileFlag(option%print_flags, &
+                                               PETSC_FALSE)
                 case('PERIODIC')
                   call InputReadInt(input,option,output_option%output_file_imod)
                   call InputErrorMsg(input,option,'timestep increment', &
@@ -1891,7 +1879,8 @@ subroutine FactorySubsurfReadInput(simulation,input)
               call StringToUpper(word)
               select case(trim(word))
                 case('OFF')
-                  option%driver%print_to_screen = PETSC_FALSE
+                  call PrintSetPrintToScreenFlag(option%print_flags, &
+                                                 PETSC_FALSE)
                 case('PERIODIC')
                   call InputReadInt(input,option,output_option%screen_imod)
                   call InputErrorMsg(input,option,'timestep increment', &
@@ -1907,44 +1896,35 @@ subroutine FactorySubsurfReadInput(simulation,input)
               call StringToUpper(word)
               select case(trim(word))
                 case('TIME')
-                  internal_units = 'sec'
+                  string = 'OUTPUT,PERIODIC,TIME'
                   call InputReadDouble(input,option,temp_real)
-                  call InputErrorMsg(input,option,'time increment', &
-                                     'OUTPUT,PERIODIC,TIME')
-                  call InputReadWord(input,option,word,PETSC_TRUE)
-                  call InputErrorMsg(input,option,'time increment units', &
-                                     'OUTPUT,PERIODIC,TIME')
-                  units_conversion = UnitsConvertToInternal(word, &
-                                     internal_units,option)
-                  output_option%periodic_snap_output_time_incr = temp_real* &
-                                                            units_conversion
+                  call InputErrorMsg(input,option,'time increment',string)
+                  internal_units = 'sec'
+                  call InputReadAndConvertUnits(input,temp_real, &
+                                                internal_units,string,option)
+                  output_option%periodic_snap_output_time_incr = temp_real
                   call InputReadCard(input,option,word)
                   if (input%ierr == 0) then
                     if (StringCompareIgnoreCase(word,'between')) then
                       call InputReadDouble(input,option,temp_real)
-                      call InputErrorMsg(input,option,'start time', &
-                                         'OUTPUT,PERIODIC,TIME')
-                      call InputReadWord(input,option,word,PETSC_TRUE)
-                      call InputErrorMsg(input,option,'start time units', &
-                                         'OUTPUT,PERIODIC,TIME')
-                      units_conversion = UnitsConvertToInternal(word, &
-                                         internal_units,option)
-                      temp_real = temp_real * units_conversion
+                      call InputErrorMsg(input,option,'start time',string)
+                      internal_units = 'sec'
+                      call InputReadAndConvertUnits(input,temp_real, &
+                                                internal_units, &
+                                                trim(string)//',START TIME', &
+                                                option)
                       call InputReadCard(input,option,word)
                       if (.not.StringCompareIgnoreCase(word,'and')) then
                         input%ierr = 1
                       endif
-                      call InputErrorMsg(input,option,'and', &
-                                          'OUTPUT,PERIODIC,TIME"')
+                      call InputErrorMsg(input,option,'AND',string)
                       call InputReadDouble(input,option,temp_real2)
-                      call InputErrorMsg(input,option,'end time', &
-                                         'OUTPUT,PERIODIC,TIME')
-                      call InputReadWord(input,option,word,PETSC_TRUE)
-                      call InputErrorMsg(input,option,'end time units', &
-                                         'OUTPUT,PERIODIC,TIME')
-                      units_conversion = UnitsConvertToInternal(word, &
-                                         internal_units,option)
-                      temp_real2 = temp_real2 * units_conversion
+                      call InputErrorMsg(input,option,'end time',string)
+                      internal_units = 'sec'
+                      call InputReadAndConvertUnits(input,temp_real2, &
+                                                internal_units, &
+                                                trim(string)//',END TIME', &
+                                                option)
                       do
                         waypoint => WaypointCreate()
                         waypoint%time = temp_real
@@ -1957,7 +1937,7 @@ subroutine FactorySubsurfReadInput(simulation,input)
                       output_option%periodic_snap_output_time_incr = 0.d0
                     else
                       input%ierr = 1
-                      call InputErrorMsg(input,option,'between', &
+                      call InputErrorMsg(input,option,'BETWEEN', &
                                           'OUTPUT,PERIODIC,TIME')
                     endif
                   endif
@@ -1977,8 +1957,10 @@ subroutine FactorySubsurfReadInput(simulation,input)
                    'OUTPUT,OBSERVATION_TIMES')
               internal_units = 'sec'
               units_conversion = &
-                UnitsConvertToInternal(word,internal_units,option)
-              string = 'OBSERVATION_TIMES,TIMES'
+                UnitsConvertToInternal(word,internal_units, &
+                                       'OUTPUT,OBSERVATION_TIMES,TIME_UNITS', &
+                                       option)
+              string = 'OUTPUT,OBSERVATION_TIMES,TIMES'
               nullify(temp_real_array)
               call UtilityReadArray(temp_real_array,NEG_ONE_INTEGER, &
                                     string,input,option)
@@ -1996,22 +1978,18 @@ subroutine FactorySubsurfReadInput(simulation,input)
             case('PERIODIC_OBSERVATION')
               output_option%print_observation = PETSC_TRUE
               call InputReadCard(input,option,word)
-              call InputErrorMsg(input,option,'time increment', &
-                'OUTPUT, PERIODIC_OBSERVATION')
+              call InputErrorMsg(input,option,'periodic increment type', &
+                'OUTPUT,PERIODIC_OBSERVATION')
               call StringToUpper(word)
               select case(trim(word))
                 case('TIME')
+                  string = 'OUTPUT,PERIODIC_OBSERVATION,TIME'
                   call InputReadDouble(input,option,temp_real)
-                  call InputErrorMsg(input,option,'time increment', &
-                                     'OUTPUT,PERIODIC_OBSERVATION,TIME')
-                  call InputReadWord(input,option,word,PETSC_TRUE)
-                  call InputErrorMsg(input,option,'time increment units', &
-                                     'OUTPUT,PERIODIC_OBSERVATION,TIME')
+                  call InputErrorMsg(input,option,'time increment',string)
                   internal_units = 'sec'
-                  units_conversion = UnitsConvertToInternal(word, &
-                                     internal_units,option)
-                  output_option%periodic_obs_output_time_incr = temp_real* &
-                                                               units_conversion
+                  call InputReadAndConvertUnits(input,temp_real, &
+                                                internal_units,string,option)
+                  output_option%periodic_obs_output_time_incr = temp_real
                 case('TIMESTEP')
                   call InputReadInt(input,option, &
                                     output_option%periodic_obs_output_ts_imod)
@@ -2076,7 +2054,7 @@ subroutine FactorySubsurfReadInput(simulation,input)
                                'OUTPUT,FORMAT,TECPLOT',option)
                   end select
                   if (output_option%tecplot_format == TECPLOT_POINT_FORMAT &
-                      .and. option%comm%mycommsize > 1) then
+                      .and. option%comm%size > 1) then
                     output_option%tecplot_format = TECPLOT_BLOCK_FORMAT
                   endif
                   if (grid%itype == IMPLICIT_UNSTRUCTURED_GRID) then
@@ -2228,7 +2206,8 @@ subroutine FactorySubsurfReadInput(simulation,input)
               call InputReadWord(input,option,word,PETSC_TRUE)
               call InputErrorMsg(input,option,'Screen Units','TIME')
               internal_units = 'sec'
-              temp_real2 = UnitsConvertToInternal(word,internal_units,option)
+              temp_real2 = UnitsConvertToInternal(word,internal_units, &
+                                                  'TIME,SCREEN_UNITS',option)
               output_option%tunit = trim(word)
               output_option%tconv = temp_real2
             case('STEADY_STATE')
@@ -2236,12 +2215,15 @@ subroutine FactorySubsurfReadInput(simulation,input)
                 &TIME card. Please enter under process model OPTIONS.'
               call PrintErrMsg(option)
             case('FINAL_TIME')
+              ! cannot use InputReadAndConvertUnits here because we need to
+              ! store the units if output_option%tunit is not set
               call InputReadDouble(input,option,temp_real)
-              call InputErrorMsg(input,option,'Final Time','TIME')
+              call InputErrorMsg(input,option,'Final Time',card)
               call InputReadWord(input,option,word,PETSC_TRUE)
-              call InputErrorMsg(input,option,'Final Time Units','TIME')
+              call InputErrorMsg(input,option,'Final Time Units',card)
               internal_units = 'sec'
-              temp_real2 = UnitsConvertToInternal(word,internal_units,option)
+              temp_real2 = UnitsConvertToInternal(word,internal_units, &
+                                                  'TIME,FINAL_TIME',option)
               if (len_trim(output_option%tunit) == 0) then
                 output_option%tunit = trim(word)
                 output_option%tconv = temp_real2
@@ -2253,50 +2235,44 @@ subroutine FactorySubsurfReadInput(simulation,input)
               ! do not place final time in waypoint_list_time_card
               call WaypointInsertInList(waypoint,waypoint_list)
             case('INITIAL_TIMESTEP_SIZE')
-              call InputReadDouble(input,option,temp_real)
-              call InputErrorMsg(input,option,'Initial Timestep Size','TIME')
-              call InputReadWord(input,option,word,PETSC_TRUE)
-              call InputErrorMsg(input,option,'Initial Timestep Size Time &
-                                              &Units','TIME')
+              call InputReadDouble(input,option,dt_init)
+              call InputErrorMsg(input,option,'INITIAL_TIMESTEP_SIZE',card)
               internal_units = 'sec'
-              dt_init = temp_real*UnitsConvertToInternal(word, &
-                                                         internal_units,option)
+              call InputReadAndConvertUnits(input,dt_init,internal_units, &
+                                            'TIME,INITIAL_TIMESTEP_SIZE', &
+                                            option)
             case('MINIMUM_TIMESTEP_SIZE')
-              call InputReadDouble(input,option,temp_real)
-              call InputErrorMsg(input,option,'Minimum Timestep Size','TIME')
-              call InputReadWord(input,option,word,PETSC_TRUE)
-              call InputErrorMsg(input,option,'Minimum Timestep Size Time &
-                                              &Units','TIME')
+              call InputReadDouble(input,option,dt_min)
+              call InputErrorMsg(input,option,'MINIMUM_TIMESTEP_SIZE',card)
               internal_units = 'sec'
-              dt_min = temp_real*UnitsConvertToInternal(word, &
-                                                        internal_units,option)
+              call InputReadAndConvertUnits(input,dt_min,internal_units, &
+                                            'TIME,MINIMUM_TIMESTEP_SIZE', &
+                                            option)
             case('MAXIMUM_TIMESTEP_SIZE')
               call InputReadDouble(input,option,temp_real)
-              call InputErrorMsg(input,option,'Maximum Timestep Size','TIME')
-              call InputReadWord(input,option,word,PETSC_TRUE)
-              call InputErrorMsg(input,option,'Maximum Timestep Size Time &
-                                              &Units','TIME')
-              waypoint => WaypointCreate()
+              call InputErrorMsg(input,option,'Minimum Timestep Size',card)
               internal_units = 'sec'
-              waypoint%dt_max = temp_real*UnitsConvertToInternal(word, &
-                                          internal_units,option)
+              call InputReadAndConvertUnits(input,temp_real,internal_units, &
+                                            'TIME,MAXIMUM_TIMESTEP_SIZE', &
+                                            option)
+              waypoint => WaypointCreate()
+              waypoint%dt_max = temp_real
               call InputReadCard(input,option,word)
               if (input%ierr == 0) then
                 call StringToUpper(word)
                 if (StringCompare(word,'AT',TWO_INTEGER)) then
-                  call InputReadDouble(input,option,temp_real)
-                  call InputErrorMsg(input,option,'Maximum Timestep Size &
-                                                  &Update Time','TIME')
-                  call InputReadWord(input,option,word,PETSC_TRUE)
-                  call InputErrorMsg(input,option,'Maximum Timestep Size &
-                                                  &Update Time Units','TIME')
+                  call InputReadDouble(input,option,waypoint%time)
+                  call InputErrorMsg(input,option,'MAXIMUM_TIMESTEP_SIZE &
+                                                  &Update Time',card)
                   internal_units = 'sec'
-                  waypoint%time = temp_real*UnitsConvertToInternal(word, &
-                                            internal_units,option)
+                  call InputReadAndConvertUnits(input,waypoint%time, &
+                                                internal_units, &
+                                                'TIME,MAXIMUM_TIMESTEP_SIZE,&
+                                                &Update Time',option)
                 else
                   option%io_buffer = 'Keyword under "MAXIMUM_TIMESTEP_SIZE" &
                                      &after maximum timestep size should &
-                                     &be "at".'
+                                     &be "AT".'
                   call PrintErrMsg(option)
                 endif
               else
@@ -2485,6 +2461,8 @@ subroutine FactorySubsurfReadInput(simulation,input)
   enddo
   call InputPopBlock(input,option) ! SUBSURFACE
 
+  call PrintInitFlags(option%print_flags,option%driver%print_flags)
+
   if (associated(simulation%flow_process_model_coupler)) then
     select case(option%iflowmode)
       case(MPH_MODE,G_MODE,TH_MODE,WF_MODE,RICHARDS_TS_MODE,TH_TS_MODE, &
@@ -2504,8 +2482,8 @@ subroutine FactorySubsurfReadInput(simulation,input)
                              &the current transport mode.'
           call PrintErrMsg(option)
         endif
-  end select
-endif
+    end select
+  endif
 
   ! must come after setup of timestepper steady above. otherwise, the
   ! destruction of the waypoint lists will fail with to pointer to the

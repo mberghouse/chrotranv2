@@ -796,13 +796,11 @@ subroutine DatabaseRead(reaction,option)
   enddo
 
   if (flag) call PrintErrMsg(option,'Species not found in database.')
-  if (.not.option%use_isothermal) then
-    !geh: only stop if running with temperature dependent log Ks.
-    if (logK_error_flag) then
-      option%io_buffer = 'Non-isothermal reactions not possible due to &
-        &missing logKs in database.'
-      call PrintErrMsg(option)
-    endif
+  if (logK_error_flag) then
+    option%io_buffer = 'Reactions not at reference temperature 25C or &
+      &non-isothermal reactions are not possible due to &
+      &missing logKs in database.'
+    call PrintErrMsg(option)
   endif
 
   call InputDestroy(input)
@@ -1118,14 +1116,52 @@ subroutine BasisInit(reaction,option)
   enddo
 
   if (icount /= ncomp_secondary) then
+    call PrintMsgNoAdvance(option,new_line('a') // 'Species read from the &
+      &reaction database with reactions associated with them in the &
+      &database:')
+    cur_pri_aq_spec => reaction%primary_species_list
+    do
+      if (.not.associated(cur_pri_aq_spec)) exit
+      if (associated(cur_pri_aq_spec%dbaserxn)) then
+        call PrintMsgNoAdvance(option,' ' // trim(cur_pri_aq_spec%name))
+      endif
+      cur_pri_aq_spec => cur_pri_aq_spec%next
+    enddo
+    cur_sec_aq_spec => reaction%secondary_species_list
+    do
+      if (.not.associated(cur_sec_aq_spec)) exit
+      if (associated(cur_sec_aq_spec%dbaserxn)) then
+        call PrintMsgNoAdvance(option,' ' // trim(cur_sec_aq_spec%name))
+      endif
+      cur_sec_aq_spec => cur_sec_aq_spec%next
+    enddo
+    cur_gas_spec => reaction%gas%list
+    do
+      if (.not.associated(cur_gas_spec)) exit
+      if (associated(cur_gas_spec%dbaserxn)) then
+        call PrintMsgNoAdvance(option,' ' // trim(cur_gas_spec%name))
+      endif
+      cur_gas_spec => cur_gas_spec%next
+    enddo
+    call PrintMsg(option,'')
+    option%io_buffer = 'The number of species read from the reaction &
+      &database with associated reactions in the database (' // &
+      StringWrite(icount) // ') does not match the number of secondary &
+      &aqueous species and gases in the problem (' // &
+      StringWrite(ncomp_secondary) // ').'
     if (icount < ncomp_secondary) then
-      option%io_buffer = 'Too few reactions read from database for &
-        &number of secondary species defined.'
+      option%io_buffer = trim(option%io_buffer) // ' Since the number of &
+        &species with associated reactions is lower, it is likely that &
+        &there is a missing secondary aqueous species or gas.'
     else
-      option%io_buffer = 'Too many reactions read from database for &
-        &number of secondary species defined.  Perhaps &
-        &DECOUPLED_EQUILIBRIUM_REACTIONS need to be defined?'
+      option%io_buffer = trim(option%io_buffer) // ' Since the number of &
+        &species with associated reactions is larger, it is likely that &
+        &there is a species from the database with a reaction associated &
+        &and no corresponding secondary aqueous or gas species. In that &
+        &case, a DECOUPLED_EQUILIBRIUM_REACTIONS block is likely needed.'
     endif
+    option%io_buffer = trim(option%io_buffer) // &
+      ' One or more of the species above is the problem.'
     call PrintErrMsg(option)
   endif
 
@@ -2738,10 +2774,9 @@ subroutine BasisInit(reaction,option)
             call PrintErrMsg(option)
           endif
         case(NULL_SURFACE)
-          write(word,*) cur_srfcplx_rxn%id
           option%io_buffer = 'No mineral name specified &
-            &for equilibrium surface complexation reaction:' // &
-            trim(adjustl(word))
+            &for equilibrium surface complexation reaction: ' // &
+            StringWrite(cur_srfcplx_rxn%id)
           call PrintWrnMsg(option)
       end select
       surface_complexation%srfcplxrxn_site_density(irxn) = &
@@ -3668,7 +3703,6 @@ subroutine BasisInit(reaction,option)
 90 format(80('-'))
 100 format(/,2x,i4,2x,a)
 110 format(100(/,14x,3(a20,2x)))
-120 format(/,a)
 
   if (OptionPrintToFile(option)) then
     write(option%fid_out,90)
@@ -3695,14 +3729,13 @@ subroutine BasisInit(reaction,option)
     write(option%fid_out,110) (mineral%kinmnrl_names(i),i=1,mineral%nkinmnrl)
 
     if (surface_complexation%nsrfcplxrxn > 0) then
-      write(word,*) surface_complexation%nsrfcplxrxn
-      write(option%fid_out,120) trim(adjustl(word)) // &
-        ' Surface Complexation Reactions'
+      write(option%fid_out,100) surface_complexation%nsrfcplxrxn, &
+        'Surface Complexation Reaction Sites' 
       write(option%fid_out,110) &
         (surface_complexation%srfcplxrxn_site_names(i), &
          i=1,surface_complexation%nsrfcplxrxn)
-      write(word,*) surface_complexation%nsrfcplx
-      write(option%fid_out,120) trim(adjustl(word)) // ' Surface Complexes'
+      write(option%fid_out,100) surface_complexation%nsrfcplx, &
+        'Surface Complexes'
       write(option%fid_out,110) (surface_complexation%srfcplx_names(i), &
         i=1,surface_complexation%nsrfcplx)
     endif
@@ -4367,9 +4400,9 @@ subroutine BasisPrint(reaction,title,option)
 
       endif
 #ifdef WRITE_LATEX
-      write(word,130) '', cur_aq_spec%dbaserxn%logK(2)
       write(fid,*) trim(reactant_string) // ' $~\rightleftharpoons~$ ' // &
-        trim(product_string) // ' & ' // trim(adjustl(word)) // ' \\'
+        trim(product_string) // ' & ' // &
+        StringWrite(cur_aq_spec%dbaserxn%logK(2)) // ' \\'
 #endif
       write(option%fid_out,*)
       cur_aq_spec => cur_aq_spec%next

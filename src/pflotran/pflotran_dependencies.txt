@@ -25,6 +25,7 @@ characteristic_curves.o : \
   characteristic_curves_base.o \
   characteristic_curves_common.o \
   characteristic_curves_loop_invariant.o \
+  characteristic_curves_spline.o \
   characteristic_curves_wipp.o \
   characteristic_curves_wipp_invariant.o \
   dataset_ascii.o \
@@ -47,6 +48,11 @@ characteristic_curves_loop_invariant.o : \
   characteristic_curves_base.o \
   characteristic_curves_common.o \
   option.o
+characteristic_curves_spline.o : \
+  characteristic_curves_base.o \
+  option.o \
+  pflotran_constants.o \
+  slatec_pchip.o
 characteristic_curves_thermal.o : \
   input_aux.o \
   option.o \
@@ -170,6 +176,7 @@ condition_control.o : \
   reactive_transport_aux.o \
   realization_subsurface.o \
   region.o \
+  secondary_continuum_aux.o \
   transport_constraint_base.o \
   transport_constraint_nwt.o \
   transport_constraint_rt.o \
@@ -312,9 +319,11 @@ dm_kludge.o : \
   pflotran_constants.o
 driver.o : \
   communicator_aux.o \
-  pflotran_constants.o
+  pflotran_constants.o \
+  print.o
 eos.o : \
   co2_span_wagner.o \
+  communicator_aux.o \
   eos_database.o \
   eos_gas.o \
   eos_water.o \
@@ -387,6 +396,7 @@ factory_forward.o : \
   pm_base.o \
   pm_geomechanics_force.o \
   pmc_base.o \
+  print.o \
   realization_subsurface.o \
   simulation_base.o \
   simulation_geomechanics.o \
@@ -449,6 +459,7 @@ factory_pflotran.o : \
   logging.o \
   option.o \
   pflotran_constants.o \
+  print.o \
   simulation_base.o \
   simulation_geomechanics.o \
   simulation_inverse.o \
@@ -503,6 +514,7 @@ factory_subsurface.o : \
   reaction_database.o \
   reactive_transport.o \
   realization_base.o \
+  realization_common.o \
   realization_subsurface.o \
   regression.o \
   simulation_subsurface.o \
@@ -612,11 +624,13 @@ factory_subsurface_read.o : \
   pmc_geophysics.o \
   pmc_subsurface.o \
   pmc_subsurface_osrt.o \
+  print.o \
   reaction.o \
   reaction_aux.o \
   reaction_mineral.o \
   reaction_solid_solution.o \
   realization_base.o \
+  realization_common.o \
   realization_subsurface.o \
   region.o \
   regression.o \
@@ -1003,11 +1017,13 @@ hdf5.o : \
   string.o \
   utility.o
 hdf5_aux.o : \
+  communicator_aux.o \
   driver.o \
   input_aux.o \
   logging.o \
   option.o \
   pflotran_constants.o \
+  print.o \
   string.o
 hydrate.o : \
   connection.o \
@@ -1101,6 +1117,7 @@ init_common.o : \
   utility.o \
   waypoint.o
 init_subsurface.o : \
+  dataset.o \
   dataset_base.o \
   dataset_common_hdf5.o \
   dataset_gridded_hdf5.o \
@@ -1196,6 +1213,7 @@ integral_flux.o : \
   utility.o
 inversion_aux.o : \
   characteristic_curves.o \
+  communicator_aux.o \
   driver.o \
   inversion_coupled_aux.o \
   inversion_measurement_aux.o \
@@ -1264,6 +1282,7 @@ inversion_parameter.o : \
   units.o \
   variables.o
 inversion_subsurface.o : \
+  communicator_aux.o \
   connection.o \
   coupler.o \
   debug.o \
@@ -1297,6 +1316,7 @@ inversion_subsurface.o : \
   solver.o \
   string.o \
   timer.o \
+  timestepper_base.o \
   units.o \
   utility.o \
   variables.o \
@@ -1326,6 +1346,7 @@ inversion_zflow.o : \
   option.o \
   patch.o \
   pflotran_constants.o \
+  print.o \
   realization_base.o \
   string.o \
   timer.o \
@@ -1363,6 +1384,7 @@ material_aux.o : \
   utility.o \
   variables.o
 material_transform.o : \
+  global_aux.o \
   input_aux.o \
   material_aux.o \
   option.o \
@@ -1406,6 +1428,7 @@ mphase.o : \
   realization_subsurface.o \
   secondary_continuum.o \
   secondary_continuum_aux.o \
+  utility.o \
   variables.o
 mphase_aux.o : \
   co2_span_wagner.o \
@@ -1445,6 +1468,7 @@ nw_transport.o : \
   output_aux.o \
   patch.o \
   pflotran_constants.o \
+  pm_well.o \
   realization_subsurface.o \
   string.o \
   transport_constraint_nwt.o \
@@ -1483,7 +1507,9 @@ option.o : \
   option_geophysics.o \
   option_inversion.o \
   option_transport.o \
-  pflotran_constants.o
+  pflotran_constants.o \
+  print.o \
+  string.o
 option_checkpoint.o : \
   pflotran_constants.o
 option_flow.o : \
@@ -1491,6 +1517,7 @@ option_flow.o : \
 option_geophysics.o : \
   pflotran_constants.o
 option_inversion.o : \
+  communicator_aux.o \
   pflotran_constants.o
 option_transport.o : \
   pflotran_constants.o
@@ -1517,6 +1544,7 @@ output.o : \
   output_vtk.o \
   patch.o \
   pflotran_constants.o \
+  print.o \
   realization_base.o \
   realization_subsurface.o \
   region.o \
@@ -1925,6 +1953,7 @@ pm_inversion.o : \
 pm_material_transform.o : \
   discretization.o \
   field.o \
+  global.o \
   global_aux.o \
   grid.o \
   hdf5.o \
@@ -1982,6 +2011,7 @@ pm_nwt.o : \
   patch.o \
   pflotran_constants.o \
   pm_base.o \
+  pm_well.o \
   realization_base.o \
   realization_subsurface.o \
   region.o \
@@ -2269,10 +2299,13 @@ pm_well.o : \
   transport_constraint_base.o \
   transport_constraint_nwt.o \
   utility.o \
+  variables.o \
   wipp_flow_aux.o
 pm_wipp_flow.o : \
   checkpoint.o \
+  connection.o \
   convergence.o \
+  coupler.o \
   dataset.o \
   dataset_base.o \
   dataset_common_hdf5.o \
@@ -2291,6 +2324,7 @@ pm_wipp_flow.o : \
   pflotran_constants.o \
   pm_base.o \
   pm_subsurface_flow.o \
+  pm_well.o \
   pm_wipp_srcsink.o \
   realization_base.o \
   realization_subsurface.o \
@@ -2360,6 +2394,7 @@ pmc_base.o : \
   pflotran_constants.o \
   pm_base.o \
   pm_base_pointer.o \
+  print.o \
   simulation_aux.o \
   solver.o \
   string.o \
@@ -2507,6 +2542,10 @@ preconditioner_cpr.o : \
   option.o \
   pflotran_constants.o \
   string.o
+print.o : \
+  communicator_aux.o \
+  pflotran_constants.o \
+  string.o
 reaction.o : \
   co2_span_wagner.o \
   co2eos.o \
@@ -2558,7 +2597,8 @@ reaction_aux.o : \
   reaction_surf_complex_aux.o \
   string.o \
   utility.o
-reaction_base.o :
+reaction_base.o : \
+  utility.o
 reaction_clm.o : \
   global_aux.o \
   input_aux.o \
@@ -2711,6 +2751,7 @@ reaction_sandbox.o : \
   reaction_sandbox_gas.o \
   reaction_sandbox_pnnl_cyber.o \
   reaction_sandbox_pnnl_lambda.o \
+  reaction_sandbox_radon.o \
   reaction_sandbox_simple.o \
   reaction_sandbox_ufd_wp.o \
   reactive_transport_aux.o \
@@ -2854,11 +2895,24 @@ reaction_sandbox_pnnl_lambda.o : \
   option.o \
   pflotran_constants.o \
   reaction_aux.o \
+  reaction_mineral_aux.o \
   reaction_sandbox_base.o \
   reactive_transport_aux.o \
   string.o \
   units.o \
   utility.o
+reaction_sandbox_radon.o : \
+  global_aux.o \
+  input_aux.o \
+  material_aux.o \
+  option.o \
+  pflotran_constants.o \
+  reaction_aux.o \
+  reaction_mineral_aux.o \
+  reaction_sandbox_base.o \
+  reactive_transport_aux.o \
+  string.o \
+  units.o
 reaction_sandbox_simple.o : \
   global_aux.o \
   material_aux.o \
@@ -2949,7 +3003,8 @@ reactive_transport.o : \
   string.o \
   transport.o \
   transport_constraint_rt.o \
-  transport_np.o
+  transport_np.o \
+  utility.o
 reactive_transport_aux.o : \
   matrix_block_aux.o \
   matrix_zeroing.o \
@@ -2974,6 +3029,15 @@ realization_base.o : \
   reaction_aux.o \
   reaction_base.o \
   waypoint.o
+realization_common.o : \
+  coupler.o \
+  grid.o \
+  option.o \
+  patch.o \
+  pflotran_constants.o \
+  region.o \
+  strata.o \
+  string.o
 realization_subsurface.o : \
   characteristic_curves.o \
   characteristic_curves_thermal.o \
@@ -2990,6 +3054,7 @@ realization_subsurface.o : \
   dm_kludge.o \
   field.o \
   fluid.o \
+  global_aux.o \
   grid.o \
   grid_structured.o \
   grid_unstructured.o \
@@ -3106,14 +3171,11 @@ saturation_function.o : \
 secondary_continuum.o : \
   block_solve.o \
   block_tridiag.o \
-  condition.o \
   coupler.o \
-  eos_water.o \
   global_aux.o \
   grid.o \
   material.o \
   material_aux.o \
-  mphase_aux.o \
   option.o \
   patch.o \
   pflotran_constants.o \
@@ -3124,8 +3186,6 @@ secondary_continuum.o : \
   realization_subsurface.o \
   secondary_continuum_aux.o \
   string.o \
-  transport_constraint.o \
-  transport_constraint_rt.o \
   utility.o \
   variables.o
 secondary_continuum_aux.o : \
@@ -3244,6 +3304,7 @@ simulation_subsurface.o : \
   timestepper_base.o \
   waypoint.o \
   wipp.o
+slatec_pchip.o :
 solver.o : \
   input_aux.o \
   option.o \
@@ -3556,6 +3617,7 @@ wipp_flow.o : \
   output_aux.o \
   patch.o \
   pflotran_constants.o \
+  pm_well.o \
   pm_wipp_srcsink.o \
   realization_subsurface.o \
   srcsink_sandbox.o \

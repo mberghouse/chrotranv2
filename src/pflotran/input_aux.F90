@@ -149,7 +149,8 @@ module Input_Aux_module
             InputPushBlock, &
             InputPopBlock, &
             InputKeywordDeprecated, &
-            InputCheckKeywordBlockCount
+            InputCheckKeywordBlockCount, &
+            InputCountWordsInBuffer
 
 contains
 
@@ -726,12 +727,12 @@ subroutine InputReadPflotranString(input, option)
       call InputReadPflotranStringSlave(input, option)
     endif
     flag = input%ierr
-    call MPI_Bcast(flag,ONE_INTEGER_MPI,MPIU_INTEGER,option%driver%io_rank, &
+    call MPI_Bcast(flag,ONE_INTEGER_MPI,MPIU_INTEGER,option%comm%io_rank, &
                    option%mycomm,ierr);CHKERRQ(ierr)
     input%ierr = flag
     if (.not.InputError(input)) then
       call MPI_Bcast(input%buf,MAXSTRINGLENGTH,MPI_CHARACTER, &
-                     option%driver%io_rank,option%mycomm,ierr);CHKERRQ(ierr)
+                     option%comm%io_rank,option%mycomm,ierr);CHKERRQ(ierr)
     endif
   else
     call InputReadPflotranStringSlave(input, option)
@@ -2784,7 +2785,8 @@ subroutine InputReadAndConvertUnits(input,double_value,internal_units, &
     endif
     internal_units_word = trim(internal_units)
     double_value = double_value * &
-                   UnitsConvertToInternal(units,internal_units_word,option)
+                   UnitsConvertToInternal(units,internal_units_word, &
+                                          keyword_string,option)
   else
     string = trim(keyword_string) // ' units'
     call InputDefaultMsg(input,option,string)
@@ -2829,7 +2831,8 @@ function UnitReadAndConversionFactor(input,internal_units, &
     endif
     internal_units_word = trim(internal_units)
     UnitReadAndConversionFactor =  &
-                   UnitsConvertToInternal(units,internal_units_word,option)
+                   UnitsConvertToInternal(units,internal_units_word, &
+                                          keyword_string,option)
   else
     input%err_buf = keyword_string
     call InputCheckMandatoryUnits(input,option)
@@ -2966,6 +2969,35 @@ subroutine InputCheckKeywordBlockCount(option)
   endif
 
 end subroutine InputCheckKeywordBlockCount
+
+! ************************************************************************** !
+
+function InputCountWordsInBuffer(input,option)
+  !
+  ! Returns the number of words in the input buffer (e.g., for counting the
+  ! number of integers on a line in the input file).
+  !
+  ! Author: Glenn Hammond
+  ! Date: 05/19/23
+  !
+  use Option_module
+
+  implicit none
+
+  type(input_type), pointer :: input
+  type(option_type) :: option
+
+  PetscInt :: InputCountWordsInBuffer
+  character(len=MAXWORDLENGTH) :: word
+
+  InputCountWordsInBuffer = 0
+  do
+    call InputReadWord(input,option,word,PETSC_TRUE) 
+    if (InputError(input)) exit
+    InputCountWordsInBuffer = InputCountWordsInBuffer + 1
+  enddo
+
+end function InputCountWordsInBuffer
 
 ! ************************************************************************** !
 

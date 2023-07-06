@@ -981,10 +981,11 @@ subroutine PMZFlowCheckConvergence(this,snes,it,xnorm,unorm, &
   this%convergence_reals(MAX_RES_SOL_EQ) = max_abs_res_sol_
 
   if (this%convergence_verbosity >= 10) then
-    print *, option%myrank, this%convergence_flags(MAX_CHANGE_LIQ_PRES_NI), &
-                            this%convergence_reals(MAX_CHANGE_LIQ_PRES_NI), &
-                            this%convergence_flags(MAX_RES_LIQ_EQ), &
-                            this%convergence_reals(MAX_RES_LIQ_EQ)
+    print *, option%myrank, &
+      this%convergence_flags(MAX_RES_LIQ_EQ), &
+      this%convergence_reals(MAX_RES_LIQ_EQ), &
+      this%convergence_flags(MAX_CHANGE_LIQ_PRES_NI), &
+      this%convergence_reals(MAX_CHANGE_LIQ_PRES_NI)
   endif
 
   int_mpi = size(this%convergence_flags)
@@ -1009,7 +1010,7 @@ subroutine PMZFlowCheckConvergence(this,snes,it,xnorm,unorm, &
 
   if (this%convergence_verbosity > 0 .and. &
       OptionPrintToScreen(option)) then
-    if (option%comm%mycommsize > 1) then
+    if (option%comm%size > 1) then
       write(*,'(4x,"Rsn: ",a10,2es10.2)') reason_string, &
         this%convergence_reals(MAX_RES_LIQ_EQ), &
         this%convergence_reals(MAX_CHANGE_LIQ_PRES_NI)

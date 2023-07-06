@@ -36,7 +36,6 @@ private
     type(tran_constraint_list_type), pointer :: transport_constraints
     type(geop_condition_list_type), pointer :: geophysics_conditions
 
-    class(tran_constraint_base_type), pointer :: sec_transport_constraint
     type(material_property_type), pointer :: material_properties
     type(fluid_property_type), pointer :: fluid_properties
     type(fluid_property_type), pointer :: fluid_property_array(:)
@@ -69,9 +68,6 @@ private
             RealizationProcessDatasets, &
             RealizationAddWaypointsToList, &
             RealizationCreateDiscretization, &
-            RealizationLocalizeRegions, &
-            RealizationAddCoupler, &
-            RealizationAddStrata, &
             RealizUpdateUniformVelocity, &
             RealizationRevertFlowParameters, &
             RealizStoreRestartFlowParams, &
@@ -95,7 +91,8 @@ private
             RealizUnInitializedVarsTran, &
             RealizationLimitDTByCFL, &
             RealizationReadGeopSurveyFile, &
-            RealizationCheckConsistency
+            RealizationCheckConsistency, &
+            RealizationPrintStateAtCells
 
   !TODO(intel)
   ! public from Realization_Base_class
@@ -166,7 +163,6 @@ function RealizationCreate2(option)
   nullify(realization%material_transform)
   nullify(realization%datasets)
   nullify(realization%uniform_velocity_dataset)
-  nullify(realization%sec_transport_constraint)
   nullify(realization%reaction)
   nullify(realization%reaction_nw)
   nullify(realization%survey)
@@ -499,68 +495,6 @@ end subroutine RealizationCreateDiscretization
 
 ! ************************************************************************** !
 
-subroutine RealizationLocalizeRegions(realization)
-  !
-  ! Localizes regions within each patch
-  !
-  ! Author: Glenn Hammond
-  ! Date: 02/22/08
-  !
-
-  use Option_module
-  use String_module
-  use Grid_module
-
-  implicit none
-
-  class(realization_subsurface_type) :: realization
-
-  type (region_type), pointer :: cur_region, cur_region2
-  type(option_type), pointer :: option
-  type(region_type), pointer :: region
-
-  option => realization%option
-
-  ! check to ensure that region names are not duplicated
-  cur_region => realization%region_list%first
-  do
-    if (.not.associated(cur_region)) exit
-    cur_region2 => cur_region%next
-    do
-      if (.not.associated(cur_region2)) exit
-      if (StringCompare(cur_region%name,cur_region2%name,MAXWORDLENGTH)) then
-        option%io_buffer = 'Duplicate region names: ' // trim(cur_region%name)
-        call PrintErrMsg(option)
-      endif
-      cur_region2 => cur_region2%next
-    enddo
-    cur_region => cur_region%next
-  enddo
-
-  call PatchLocalizeRegions(realization%patch,realization%region_list, &
-                            realization%option)
-  ! destroy realization's copy of region list as it can be confused with the
-  ! localized patch regions later in teh simulation.
-  call RegionDestroyList(realization%region_list)
-
-  ! compute regional connections for inline surface flow
-  if (option%flow%inline_surface_flow) then
-     region => RegionGetPtrFromList(option%flow%inline_surface_region_name, &
-          realization%patch%region_list)
-     if (.not.associated(region)) then
-        option%io_buffer = 'realization_subsurface.F90:RealizationLocalize&
-             &Regions() --> Could not find a required region named "' // &
-             trim(option%flow%inline_surface_region_name) // &
-             '" from the list of regions.'
-        call PrintErrMsg(option)
-     endif
-     call GridRestrictRegionalConnect(realization%patch%grid,region)
-   endif
-
-end subroutine RealizationLocalizeRegions
-
-! ************************************************************************** !
-
 subroutine RealizationPassPtrsToPatches(realization)
   !
   ! Sets patch%field => realization%field
@@ -582,72 +516,6 @@ subroutine RealizationPassPtrsToPatches(realization)
   realization%patch%reaction_base => realization%reaction_base
 
 end subroutine RealizationPassPtrsToPatches
-
-! ************************************************************************** !
-
-subroutine RealizationAddCoupler(realization,coupler)
-  !
-  ! Adds a copy of a coupler to a list
-  !
-  ! Author: Glenn Hammond
-  ! Date: 02/22/08
-  !
-
-  use Coupler_module
-
-  implicit none
-
-  class(realization_subsurface_type) :: realization
-  type(coupler_type), pointer :: coupler
-
-  type(patch_type), pointer :: patch
-
-  type(coupler_type), pointer :: new_coupler
-
-  patch => realization%patch
-
-  ! only add to flow list for now, since they will be split out later
-  new_coupler => CouplerCreate(coupler)
-  select case(coupler%itype)
-    case(BOUNDARY_COUPLER_TYPE)
-      call CouplerAddToList(new_coupler,patch%boundary_condition_list)
-    case(INITIAL_COUPLER_TYPE)
-      call CouplerAddToList(new_coupler,patch%initial_condition_list)
-    case(SRC_SINK_COUPLER_TYPE)
-      call CouplerAddToList(new_coupler,patch%source_sink_list)
-  end select
-  nullify(new_coupler)
-
-  call CouplerDestroy(coupler)
-
-end subroutine RealizationAddCoupler
-
-! ************************************************************************** !
-
-subroutine RealizationAddStrata(realization,strata)
-  !
-  ! Adds a copy of a strata to a list
-  !
-  ! Author: Glenn Hammond
-  ! Date: 02/22/08
-  !
-
-  use Strata_module
-
-  implicit none
-
-  class(realization_subsurface_type) :: realization
-  type(strata_type), pointer :: strata
-
-  type(strata_type), pointer :: new_strata
-
-  new_strata => StrataCreate(strata)
-  call StrataAddToList(new_strata,realization%patch%strata_list)
-  nullify(new_strata)
-
-  call StrataDestroy(strata)
-
-end subroutine RealizationAddStrata
 
 
 ! ************************************************************************** !
@@ -1356,14 +1224,6 @@ subroutine RealProcessTranConditions(realization)
     cur_constraint => cur_constraint%next
   enddo
 
-  if (option%use_sc) then
-    select type(constraint=>realization%sec_transport_constraint)
-      class is (tran_constraint_rt_type)
-        call ReactionProcessConstraint(realization%reaction, &
-                                       constraint,realization%option)
-    end select
-  endif
-
   ! tie constraints to couplers, if not already associated
   cur_condition => realization%transport_conditions%first
   do
@@ -1396,6 +1256,34 @@ subroutine RealProcessTranConditions(realization)
       endif
       cur_constraint_coupler => cur_constraint_coupler%next
     enddo
+    if (option%use_sc) then
+      cur_constraint_coupler => cur_condition%sec_constraint_coupler
+      do
+        if (.not.associated(cur_constraint_coupler)) exit
+        ! if constraint exists, it was coupled during the embedded read.
+        if (.not.associated(cur_constraint_coupler%constraint)) then
+          cur_constraint => realization%transport_constraints%first
+          do
+            if (.not.associated(cur_constraint)) exit
+            if (StringCompare(cur_constraint%name, &
+                              cur_constraint_coupler%constraint_name, &
+                              MAXWORDLENGTH)) then
+              cur_constraint_coupler%constraint => cur_constraint
+              exit
+            endif
+            cur_constraint => cur_constraint%next
+          enddo
+          if (.not.associated(cur_constraint_coupler%constraint)) then
+            option%io_buffer = 'Secondary constraint "' // &
+                     trim(cur_constraint_coupler%constraint_name) // &
+                     '" not found in input file constraints.'
+            call PrintErrMsg(realization%option)
+          endif
+        endif
+        cur_constraint_coupler => cur_constraint_coupler%next
+      enddo
+    endif 
+         
 !TODO(geh) remove this?
     if (associated(cur_condition%constraint_coupler_list%next)) then
       ! there are more than one
@@ -1535,6 +1423,7 @@ subroutine RealizationPrintCoupler(coupler,reaction,option)
   type(tran_condition_type), pointer :: tran_condition
   type(region_type), pointer :: region
   class(tran_constraint_coupler_base_type), pointer :: constraint_coupler
+  class(tran_constraint_coupler_rt_type), pointer :: constraint_rt_coupler
 
 98 format(40('=+'))
 99 format(80('-'))
@@ -1578,13 +1467,100 @@ subroutine RealizationPrintCoupler(coupler,reaction,option)
       trim(tran_condition%name)
     select type(c=>constraint_coupler)
       class is (tran_constraint_coupler_rt_type)
-        call ReactionPrintConstraint(c,reaction,option)
+        ! the following three lines are a work around for an intel compiler bug
+        ! claiming that c is not a pointer, though it points to a pointer
+        !call ReactionPrintConstraint(c%global_auxvar,c%rt_auxvar,c, &
+        constraint_rt_coupler => c 
+        call ReactionPrintConstraint(c%global_auxvar,c%rt_auxvar, &
+                                     constraint_rt_coupler,reaction,option)
         write(option%fid_out,'(/)')
         write(option%fid_out,99)
     end select
   endif
 
 end subroutine RealizationPrintCoupler
+
+! ************************************************************************** !
+
+subroutine RealizationPrintStateAtCells(realization)
+  !
+  ! loops over cells and prints their reactive transport states
+  !
+  ! Author: Glenn Hammond
+  ! Date: 04/21/23
+
+  use String_module
+
+  implicit none
+
+  class(realization_subsurface_type) :: realization
+
+  PetscInt :: i
+  PetscInt :: icell
+
+  if (.not.associated(realization%reaction%print_cells)) return
+
+  if (realization%option%comm%size > 1) then
+    call PrintErrMsg(realization%option,'Printing of cell states for &
+           &reactive transport not supported in parallel.')
+  endif
+  i = maxval(realization%reaction%print_cells)
+  if (i > realization%discretization%grid%nmax) then
+    realization%option%io_buffer = 'A cell id (' // &
+      StringWrite(i) // ') specified under CHEMISTRY,&
+      &OUTPUT,PRINT_CELLS is larger than the maximum cell id (' // &
+      StringWrite(realization%discretization%grid%nmax) // ').'
+    call PrintErrMsg(realization%option)
+  endif
+
+  write(realization%option%fid_out,'(/,40("+="),//,&
+        &"  States at select cells")')
+  do i = 1, size(realization%reaction%print_cells)
+    icell = realization%reaction%print_cells(i)
+    write(realization%option%fid_out,'(/,80("-"),//,"  State at cell ",a,/)') &
+      StringWrite(icell)
+    call RealizationPrintStateAtCell( &
+           realization%patch%aux%Global%auxvars(icell), &
+           realization%patch%aux%RT%auxvars(icell), &
+           realization%reaction,realization%option)
+  enddo
+  if (i > 1) write(realization%option%fid_out,'(/,40("+="),/)')
+
+end subroutine RealizationPrintStateAtCells
+
+! ************************************************************************** !
+
+subroutine RealizationPrintStateAtCell(global_auxvar,rt_auxvar, &
+                                       reaction,option)
+  !
+  ! Prints reactive transport state variabiables for a given grid cell
+  !
+  ! Author: Glenn Hammond
+  ! Date: 04/21/23
+  !
+  use Global_Aux_module
+  use Option_module
+  use Reaction_module
+  use Reaction_Aux_module
+  use Reactive_Transport_Aux_module
+  use Transport_Constraint_RT_module
+
+  implicit none
+
+  type(global_auxvar_type) :: global_auxvar
+  type(reactive_transport_auxvar_type) :: rt_auxvar
+  class(reaction_rt_type) :: reaction
+  type(option_type) :: option
+
+  class(tran_constraint_coupler_rt_type), pointer :: null_constraint_coupler
+
+  nullify(null_constraint_coupler)
+
+  call ReactionPrintConstraint(global_auxvar,rt_auxvar, &
+                               null_constraint_coupler, &
+                               reaction,option)
+
+end subroutine RealizationPrintStateAtCell
 
 ! ************************************************************************** !
 
@@ -1878,7 +1854,8 @@ subroutine RealizationAddWaypointsToList(realization,waypoint_list)
   cur_flow_condition => realization%flow_conditions%first
   do
     if (.not.associated(cur_flow_condition)) exit
-    if (cur_flow_condition%sync_time_with_update) then
+    if (FlowConditionHasRateOrFlux(cur_flow_condition) .or. &
+        cur_flow_condition%sync_time_with_update) then
       do isub_condition = 1, cur_flow_condition%num_sub_conditions
         sub_condition => cur_flow_condition%sub_condition_ptr(isub_condition)%ptr
         !TODO(geh): check if this updated more than simply the flow_dataset (i.e. datum and gradient)
@@ -1886,7 +1863,7 @@ subroutine RealizationAddWaypointsToList(realization,waypoint_list)
         call TimeStorageGetTimes(sub_condition%dataset%time_storage, option, &
                                 final_time, times)
         if (associated(times)) then
-          if (size(times) > 1000) then
+          if (size(times) > 20000) then
             option%io_buffer = 'For flow condition "' // &
               trim(cur_flow_condition%name) // &
               '" dataset "' // trim(sub_condition%name) // &
@@ -2521,7 +2498,7 @@ subroutine RealizationPrintGridStatistics(realization)
                      MPIU_INTEGER,MPI_SUM,option%mycomm,ierr);CHKERRQ(ierr)
 
   ! why I cannot use *100, I do not know....geh
-  inactive_percentages = dble(temp_int_out)/dble(option%comm%mycommsize)*10.d0
+  inactive_percentages = dble(temp_int_out)/dble(option%comm%size)*10.d0
   inactive_percentages = inactive_percentages+1.d-8
 
   r1 = 0.d0
@@ -2566,7 +2543,7 @@ subroutine RealizationPrintGridStatistics(realization)
               & "                                        Check : ",1f7.2,/)') &
            global_total_count, &
            global_active_count, &
-           option%comm%mycommsize, &
+           option%comm%size, &
            i1,i2,i3, &
            int(total_max+1.d-4), &
            int(total_min+1.d-4), &
@@ -2617,7 +2594,7 @@ subroutine RealizationPrintGridStatistics(realization)
                & "                                        Check : ",1f7.2,/)') &
            global_total_count, &
            global_active_count, &
-           option%comm%mycommsize, &
+           option%comm%size, &
            i1,i2,i3, &
            int(total_max+1.d-4), &
            int(total_min+1.d-4), &
@@ -3041,8 +3018,6 @@ subroutine RealizationStrip(this)
   ! nullify since they are pointers to reaction_base in realization_base
   nullify(this%reaction)
   nullify(this%reaction_nw)
-
-  call TranConstraintDestroy(this%sec_transport_constraint)
 
   if (associated(this%survey)) then
     call SurveyDestroy(this%survey)

@@ -252,6 +252,7 @@ subroutine PMAuxiliarySetFunctionPointer(this,string)
     case('SALINITY')
       this%Evaluate => PMAuxiliarySalinity
       this%header = 'AUXILIARY SALINITY'
+      this%name = 'auxiliary salinity'
     case default
       this%option%io_buffer = 'Function pointer "' // trim(string) // '" not &
         &found among available functions in PMAuxiliarySetFunctionPointer.'
@@ -299,10 +300,13 @@ recursive subroutine PMAuxiliaryInitializeRun(this)
         this%realization%patch%boundary_condition_list%first
       do
         if (.not.associated(boundary_condition)) exit
-        if (FlowConditionIsHydrostatic(boundary_condition%flow_condition)) then
-          this%option%io_buffer = 'Hydrostatic flow conditions are currently &
-            &not supported by the SALINITY process model.'
-          call PrintErrMsg(this%option)
+        if (associated(boundary_condition%flow_condition)) then
+          if (FlowConditionIsHydrostatic(boundary_condition% &
+                                           flow_condition)) then
+            this%option%io_buffer = 'Hydrostatic flow conditions are &
+              &currently not supported by the SALINITY process model.'
+            call PrintErrMsg(this%option)
+          endif
         endif
         boundary_condition => boundary_condition%next
       enddo
@@ -441,7 +445,7 @@ subroutine PMAuxiliarySalinity(this,time,ierr)
                                              !   g/L => kg/m^3
       enddo
 
-      ! Save NaCl from pervious timestep
+      ! Save NaCl from previous timestep
       global_auxvars(ghosted_id)%m_nacl(TWO_INTEGER) = &
         global_auxvars(ghosted_id)%m_nacl(ONE_INTEGER)
 

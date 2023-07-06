@@ -146,7 +146,7 @@ subroutine InversionERTInit(this,driver)
   ! override default set in InversionSubsurfaceInit
   allocate(this%inversion_aux%parameters(1))
   call InversionParameterInit(this%inversion_aux%parameters(1))
-  this%inversion_aux%parameters(1)%iparameter = ELECTRICAL_CONDUCTIVITY
+  this%inversion_aux%parameters(1)%itype = ELECTRICAL_CONDUCTIVITY
 
   ! Default inversion parameters
   this%miniter = 10
@@ -714,7 +714,7 @@ subroutine InvERTSetupForwardRunLinkage(this)
   if (this%quantity_of_interest == PETSC_NULL_VEC) then
     ! theck to ensure that quantity of interest exists
     exists = PETSC_FALSE
-    select case(this%inversion_aux%parameters(1)%iparameter)
+    select case(this%inversion_aux%parameters(1)%itype)
       case(ELECTRICAL_CONDUCTIVITY)
         if (this%realization%option%igeopmode /= NULL_MODE) exists = PETSC_TRUE
         word = 'ELECTRICAL_CONDUCTIVITY'
@@ -837,12 +837,19 @@ subroutine InversionERTCheckConvergence(this)
 
   type(survey_type), pointer :: survey
 
+  PetscErrorCode :: ierr
+
   survey => this%realization%survey
 
   this%converged = PETSC_FALSE
-  call this%EvaluateCostFunction()
-  if ((this%current_chi2 <= this%target_chi2) .or. &
-      (this%iteration > this%maximum_iteration)) this%converged = PETSC_TRUE
+  if (associated(this%inversion_option%invcomm)) then
+    call this%EvaluateCostFunction()
+    if ((this%current_chi2 <= this%target_chi2) .or. &
+        (this%iteration > this%maximum_iteration)) this%converged = PETSC_TRUE
+  endif
+  call MPI_Bcast(this%converged,ONE_INTEGER_MPI, &
+                 MPI_LOGICAL,this%driver%comm%io_rank, &
+                 this%driver%comm%communicator,ierr);CHKERRQ(ierr)
 
 end subroutine InversionERTCheckConvergence
 

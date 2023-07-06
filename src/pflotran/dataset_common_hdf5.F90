@@ -267,7 +267,7 @@ subroutine DatasetCommonHDF5ReadTimes(filename,dataset_name,time_storage, &
   PetscMPIInt :: int_mpi
   PetscInt :: temp_int, num_times_read_by_iorank
   PetscMPIInt :: hdf5_err, h5fopen_err
-  PetscBool :: attribute_exists, group_exists
+  PetscBool :: time_attribute_exists, time_group_exists
   PetscErrorCode :: ierr
 
   call PetscLogEventBegin(logging%event_read_array_hdf5,ierr);CHKERRQ(ierr)
@@ -278,28 +278,22 @@ subroutine DatasetCommonHDF5ReadTimes(filename,dataset_name,time_storage, &
 #endif
 
   h5fopen_err = 0
+  option%io_buffer = 'Reading times for hdf5 dataset "' // &
+    trim(dataset_name) // '", if they exist.'
+  call PrintMsg(option)
   if (OptionIsIORank(option)) then
     option%io_buffer = 'Opening hdf5 file: ' // trim(filename)
     call PrintMsg(option)
-
-    ! set read file access property
-    call h5pcreate_f(H5P_FILE_ACCESS_F,prop_id,hdf5_err)
-    !geh: DO NOT call h5pset_fapl_mpio_f here since the attribute is only being
-    !     read by the io_rank process.
-!#ifndef SERIAL_HDF5
-!    call h5pset_fapl_mpio_f(prop_id,option%mycomm,MPI_INFO_NULL,hdf5_err)
-!#endif
-    call HDF5FileOpenReadOnly(filename,file_id,prop_id,'',option)
-    h5fopen_err = hdf5_err
-    call h5pclose_f(prop_id,hdf5_err)
-
+    ! PETSC_FALSE is because this is not collective
+    call HDF5FileOpenReadOnly(filename,file_id,PETSC_FALSE,'', &
+                              option,h5fopen_err)
     if (h5fopen_err == 0) then
       option%io_buffer = 'Opening hdf5 group: ' // trim(dataset_name)
       call PrintMsg(option)
       call HDF5GroupOpen(file_id,dataset_name,grp_id,option%driver)
       attribute_name = "Time Units"
-      call H5aexists_f(grp_id,attribute_name,attribute_exists,hdf5_err)
-      if (attribute_exists) then
+      call H5aexists_f(grp_id,attribute_name,time_attribute_exists,hdf5_err)
+      if (time_attribute_exists) then
         attribute_dim = 1
         call h5tcopy_f(H5T_NATIVE_CHARACTER,atype_id,hdf5_err)
         size_t_int = MAXWORDLENGTH
@@ -308,34 +302,44 @@ subroutine DatasetCommonHDF5ReadTimes(filename,dataset_name,time_storage, &
         call h5aread_f(attribute_id,atype_id,time_units,attribute_dim,hdf5_err)
         call h5aclose_f(attribute_id,hdf5_err)
       else
-        option%io_buffer = 'Time Units assumed to be seconds.'
-        call PrintWrnMsg(option)
         time_units = 's'
       endif
 
       ! Check whether a time array actually exists
       string = 'Times'
-      call h5lexists_f(grp_id,string,group_exists,hdf5_err)
+      call h5lexists_f(grp_id,string,time_group_exists,hdf5_err)
 
-      if (group_exists) then
+      if (time_group_exists) then
+        if (.not.time_attribute_exists) then
+          option%io_buffer = 'Time Units assumed to be seconds.'
+          call PrintWrnMsg(option)
+        endif
         !geh: Should check to see if "Times" dataset exists.
         option%io_buffer = 'Opening data set: ' // trim(string)
         call PrintMsg(option)
-        call h5dopen_f(grp_id,string,dataset_id,hdf5_err)
+        call HDF5DatasetOpen(grp_id,string,dataset_id,option)
         call h5dget_space_f(dataset_id,file_space_id,hdf5_err)
         call h5sget_simple_extent_npoints_f(file_space_id,num_times,hdf5_err)
         num_times_read_by_iorank = int(num_times)
       else
         num_times_read_by_iorank = -1
+        option%io_buffer = 'No times to read.'
+        call PrintMsg(option)
+        option%io_buffer = 'Closing hdf5 group: ' // trim(dataset_name)
+        call PrintMsg(option)
+        call HDF5GroupClose(grp_id,option)
+        option%io_buffer = 'Closing hdf5 file: ' // trim(filename)
+        call PrintMsg(option)
+        call HDF5FileClose(file_id,option)
       endif
-    endif ! h5fopen_err == 0
+    endif
   endif
 
   ! Need to catch errors in opening the file.  Since the file is only opened
   ! by the I/O rank, need to broadcast the error flag.
   temp_int = h5fopen_err
   int_mpi = 1
-  call MPI_Bcast(temp_int,int_mpi,MPI_INTEGER,option%driver%io_rank, &
+  call MPI_Bcast(temp_int,int_mpi,MPI_INTEGER,option%comm%io_rank, &
                  option%mycomm,ierr);CHKERRQ(ierr)
   if (temp_int < 0) then ! actually h5fopen_err
     option%io_buffer = 'Error opening file: ' // trim(filename)
@@ -344,7 +348,7 @@ subroutine DatasetCommonHDF5ReadTimes(filename,dataset_name,time_storage, &
 
   int_mpi = 1
   call MPI_Bcast(num_times_read_by_iorank,int_mpi,MPI_INTEGER, &
-                 option%driver%io_rank,option%mycomm,ierr);CHKERRQ(ierr)
+                 option%comm%io_rank,option%mycomm,ierr);CHKERRQ(ierr)
   num_times = num_times_read_by_iorank
 
   if (num_times == -1) then
@@ -358,6 +362,8 @@ subroutine DatasetCommonHDF5ReadTimes(filename,dataset_name,time_storage, &
   time_storage%times = 0.d0
 
   if (OptionIsIORank(option)) then
+    option%io_buffer = 'Reading times.'
+    call PrintMsg(option)
     array_rank_mpi = 1
     length(1) = num_times
     call h5pcreate_f(H5P_DATASET_XFER_F,prop_id,hdf5_err)
@@ -372,21 +378,22 @@ subroutine DatasetCommonHDF5ReadTimes(filename,dataset_name,time_storage, &
     call h5pclose_f(prop_id,hdf5_err)
     if (memory_space_id > -1) call h5sclose_f(memory_space_id,hdf5_err)
     call h5sclose_f(file_space_id,hdf5_err)
-    call h5dclose_f(dataset_id,hdf5_err)
-    option%io_buffer = 'Closing group: ' // trim(dataset_name)
+    call HDF5DatasetClose(dataset_id,option)
+    option%io_buffer = 'Closing hdf5 group: ' // trim(dataset_name)
     call PrintMsg(option)
-    call h5gclose_f(grp_id,hdf5_err)
+    call HDF5GroupClose(grp_id,option)
     option%io_buffer = 'Closing hdf5 file: ' // trim(filename)
     call PrintMsg(option)
-    call h5fclose_f(file_id,hdf5_err)
+    call HDF5FileClose(file_id,option)
     internal_units = 'sec'
     time_storage%times = time_storage%times * &
-      UnitsConvertToInternal(time_units,internal_units,option)
+      UnitsConvertToInternal(time_units,internal_units, &
+                             trim(dataset_name)//'Time Units',option)
   endif
 
   int_mpi = int(num_times)
   call MPI_Bcast(time_storage%times,int_mpi,MPI_DOUBLE_PRECISION, &
-                 option%driver%io_rank,option%mycomm,ierr);CHKERRQ(ierr)
+                 option%comm%io_rank,option%mycomm,ierr);CHKERRQ(ierr)
 
 #ifdef TIME_READING_TIMES
   call MPI_Barrier(option%mycomm,ierr);CHKERRQ(ierr)

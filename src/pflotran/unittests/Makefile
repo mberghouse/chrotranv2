@@ -27,6 +27,8 @@ PFLOTRAN_OBJS = \
 	$(EXE_DIR)/characteristic_curves_wipp.o \
 	$(EXE_DIR)/characteristic_curves_wipp_invariant.o \
 	$(EXE_DIR)/characteristic_curves_thermal.o \
+	$(EXE_DIR)/characteristic_curves_spline.o \
+	$(EXE_DIR)/slatec_pchip.o \
 	$(EXE_DIR)/dataset_ascii.o \
 	$(EXE_DIR)/dataset_base.o \
 	$(EXE_DIR)/time_storage.o \
@@ -45,6 +47,7 @@ PFLOTRAN_OBJS = \
 	$(EXE_DIR)/option_transport.o \
 	$(EXE_DIR)/option_geophysics.o \
 	$(EXE_DIR)/pflotran_constants.o \
+	$(EXE_DIR)/print.o \
 	$(EXE_DIR)/saturation_function.o \
 	$(EXE_DIR)/string.o \
 	$(EXE_DIR)/units.o \

@@ -155,6 +155,7 @@ subroutine RegressionSetup(regression,realization)
   ! Date: 04/14/21
   !
   use Option_module
+  use Output_module
   use Realization_Subsurface_class
 
   implicit none
@@ -162,7 +163,11 @@ subroutine RegressionSetup(regression,realization)
   type(regression_type), pointer :: regression
   class(realization_subsurface_type) :: realization
 
+  if (.not.associated(regression)) return
+
   call RegressionCreateMapping(regression,realization)
+  call OutputListEnsureVariablesExist(regression%variable_list, &
+                                      realization%option)
 
 end subroutine RegressionSetup
 
@@ -321,8 +326,7 @@ subroutine RegressionCreateMapping(regression,realization)
                    ierr);CHKERRQ(ierr)
     if (OptionIsIORank(option)) then
       call VecSetSizes(regression%cells_per_process_vec, &
-                       regression%num_cells_per_process*option%comm% &
-                         mycommsize, &
+                       regression%num_cells_per_process*option%comm%size, &
                        PETSC_DECIDE,ierr);CHKERRQ(ierr)
     else
       call VecSetSizes(regression%cells_per_process_vec,ZERO_INTEGER, &
@@ -347,7 +351,7 @@ subroutine RegressionCreateMapping(regression,realization)
 
     ! create temporary scatter to transfer values to io_rank
     if (OptionIsIORank(option)) then
-      count = option%comm%mycommsize*regression%num_cells_per_process
+      count = option%comm%size*regression%num_cells_per_process
       ! determine how many of the natural cell ids are local
       allocate(int_array(count))
       do i = 1, count
@@ -377,7 +381,7 @@ subroutine RegressionCreateMapping(regression,realization)
 
     ! transfer cell ids into array for creating new scatter
     if (OptionIsIORank(option)) then
-      count = option%comm%mycommsize*regression%num_cells_per_process
+      count = option%comm%size*regression%num_cells_per_process
       call VecGetArrayF90(regression%cells_per_process_vec,vec_ptr, &
                           ierr);CHKERRQ(ierr)
       do i = 1, count
@@ -418,7 +422,7 @@ subroutine RegressionCreateMapping(regression,realization)
     ! fill in natural ids of these cells on the io_rank
     if (OptionIsIORank(option)) then
       allocate(regression%cells_per_process_natural_ids( &
-               regression%num_cells_per_process*option%comm%mycommsize))
+               regression%num_cells_per_process*option%comm%size))
     endif
 
     call VecGetArrayF90(realization%field%work,vec_ptr,ierr);CHKERRQ(ierr)
@@ -595,12 +599,12 @@ subroutine RegressionOutput(regression,realization,flow_timestepper, &
         call VecGetArrayF90(regression%cells_per_process_vec,vec_ptr, &
                             ierr);CHKERRQ(ierr)
         if (cur_variable%iformat == 0) then
-          do i = 1, regression%num_cells_per_process*option%comm%mycommsize
+          do i = 1, regression%num_cells_per_process*option%comm%size
             write(OUTPUT_UNIT,100) &
               regression%cells_per_process_natural_ids(i),vec_ptr(i)
           enddo
         else
-          do i = 1, regression%num_cells_per_process*option%comm%mycommsize
+          do i = 1, regression%num_cells_per_process*option%comm%size
             write(OUTPUT_UNIT,101) &
               regression%cells_per_process_natural_ids(i),int(vec_ptr(i))
           enddo
@@ -735,7 +739,7 @@ subroutine RegressionOutput(regression,realization,flow_timestepper, &
             call VecGetArrayF90(x_vel_process,vec_ptr,ierr);CHKERRQ(ierr)
             call VecGetArrayF90(y_vel_process,y_ptr,ierr);CHKERRQ(ierr)
             call VecGetArrayF90(z_vel_process,z_ptr,ierr);CHKERRQ(ierr)
-            do i = 1, regression%num_cells_per_process*option%comm%mycommsize
+            do i = 1, regression%num_cells_per_process*option%comm%size
               write(OUTPUT_UNIT,104) &
                 regression%cells_per_process_natural_ids(i),vec_ptr(i), &
                   y_ptr(i),z_ptr(i)
@@ -775,9 +779,8 @@ subroutine RegressionOutput(regression,realization,flow_timestepper, &
                      ierr);CHKERRQ(ierr)
         if (OptionIsIORank(option)) then
           write(OUTPUT_UNIT,'(''-- SOLUTION: Flow --'')')
-!geh: no need to store time and it clutters the 'diff' of regression files
-!geh          write(OUTPUT_UNIT,'(''   Time (seconds): '',es21.13)') &
-!geh          flow_stepper%cumulative_solver_time
+          write(OUTPUT_UNIT,'(''   Time (seconds): '',es21.13)') &
+          flow_stepper%cumulative_solver_time
           write(OUTPUT_UNIT,'(''   Time Steps: '',i12)') flow_stepper%steps
           write(OUTPUT_UNIT,'(''   Newton Iterations: '',i12)') &
           flow_stepper%cumulative_newton_iterations
@@ -795,8 +798,8 @@ subroutine RegressionOutput(regression,realization,flow_timestepper, &
                      ierr);CHKERRQ(ierr)
         if (OptionIsIORank(option)) then
           write(OUTPUT_UNIT,'(''-- SOLUTION: Flow --'')')
-!geh          write(OUTPUT_UNIT,'(''   Time (seconds): '',es21.13)') &
-!geh          flow_stepper%cumulative_solver_time
+          write(OUTPUT_UNIT,'(''   Time (seconds): '',es21.13)') &
+          flow_stepper%cumulative_solver_time
           write(OUTPUT_UNIT,'(''   Time Steps: '',i12)') flow_stepper%steps
           write(OUTPUT_UNIT,'(''   Newton Iterations: '',i12)') &
           flow_stepper%cumulative_newton_iterations
@@ -812,8 +815,8 @@ subroutine RegressionOutput(regression,realization,flow_timestepper, &
                      ierr);CHKERRQ(ierr)
         if (OptionIsIORank(option)) then
           write(OUTPUT_UNIT,'(''-- SOLUTION: Flow --'')')
-!geh          write(OUTPUT_UNIT,'(''   Time (seconds): '',es21.13)') &
-!geh          flow_stepper%cumulative_solver_time
+          write(OUTPUT_UNIT,'(''   Time (seconds): '',es21.13)') &
+          flow_stepper%cumulative_solver_time
           write(OUTPUT_UNIT,'(''   Time Steps: '',i12)') flow_stepper%steps
           write(OUTPUT_UNIT,'(''   Linear Solver Iterations: '',i12)') &
           flow_stepper%cumulative_linear_iterations
@@ -837,8 +840,8 @@ subroutine RegressionOutput(regression,realization,flow_timestepper, &
                      ierr);CHKERRQ(ierr)
         if (OptionIsIORank(option)) then
           write(OUTPUT_UNIT,'(''-- SOLUTION: Transport --'')')
-!geh          write(OUTPUT_UNIT,'(''   Time (seconds): '',es21.13)') &
-!geh            tran_stepper%cumulative_solver_time
+          write(OUTPUT_UNIT,'(''   Time (seconds): '',es21.13)') &
+            tran_stepper%cumulative_solver_time
           write(OUTPUT_UNIT,'(''   Time Steps: '',i12)') tran_stepper%steps
           write(OUTPUT_UNIT,'(''   Newton Iterations: '',i12)') &
             tran_stepper%cumulative_newton_iterations
@@ -854,8 +857,8 @@ subroutine RegressionOutput(regression,realization,flow_timestepper, &
                      ierr);CHKERRQ(ierr)
         if (OptionIsIORank(option)) then
           write(OUTPUT_UNIT,'(''-- SOLUTION: Transport --'')')
-!geh          write(OUTPUT_UNIT,'(''   Time (seconds): '',es21.13)') &
-!geh            tran_stepper%cumulative_solver_time
+          write(OUTPUT_UNIT,'(''   Time (seconds): '',es21.13)') &
+            tran_stepper%cumulative_solver_time
           write(OUTPUT_UNIT,'(''   Time Steps: '',i12)') tran_stepper%steps
           write(OUTPUT_UNIT,'(''   Linear Solver Iterations: '',i12)') &
             tran_stepper%cumulative_linear_iterations

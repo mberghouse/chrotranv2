@@ -462,10 +462,11 @@ recursive subroutine PMSubsurfaceFlowInitializeRun(this)
 
   ! update material properties that are a function of mineral vol fracs
   if (associated(this%realization%reaction)) then
-    if (this%realization%reaction%update_porosity .or. &
+    if ((this%realization%reaction%update_porosity .or. &
         this%realization%reaction%update_tortuosity .or. &
         this%realization%reaction%update_permeability .or. &
-        this%realization%reaction%update_mineral_surface_area) then
+        this%realization%reaction%update_mineral_surface_area) .and. &
+        .not.this%option%restart_flag) then
       call RealizationUpdatePropertiesTS(this%realization)
     endif
   endif
@@ -676,7 +677,8 @@ subroutine PMSubsurfaceFlowInitializeTimestepB(this)
 
   class(pm_subsurface_flow_type) :: this
 
-  if (this%option%ntrandof > 0) then ! store initial saturations for transport
+  if (this%option%flow%store_state_variables_in_global) then
+    ! store initial saturations for transport
     call GlobalUpdateAuxVars(this%realization,TIME_T,this%option%time)
     if (this%store_porosity_for_transport) then
       ! store time t properties for transport
@@ -945,7 +947,7 @@ subroutine PMSubsurfaceFlowFinalizeTimestep(this)
 
   class(pm_subsurface_flow_type) :: this
 
-  if (this%option%ntrandof > 0) then
+  if (this%option%flow%store_state_variables_in_global) then
     ! store final saturations, etc. for transport
     call GlobalUpdateAuxVars(this%realization,TIME_TpDT,this%option%time)
     if (this%store_porosity_for_transport) then

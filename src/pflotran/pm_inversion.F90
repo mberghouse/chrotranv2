@@ -123,9 +123,11 @@ subroutine PMInversionSetFunctionPointer(this,string)
     case('INVERSION_MEASUREMENT')
       this%Evaluate => PMInversionInversionMeasurement
       this%header = 'INVERSION MEASUREMENT'
+      this%name = 'Inversion Measurement'
     case('INVERSION_ADJOINT')
       this%Evaluate => PMInversionInversionAdjoint
       this%header = 'INVERSION ADJOINT'
+      this%name = 'Inversion Adjoint'
     case default
       this%option%io_buffer = 'Function pointer "' // trim(string) // '" not &
         &found among available functions in PMInversionSetFunctionPointer.'
@@ -277,8 +279,7 @@ subroutine PMInversionInversionMeasurement(this,time,ierr)
                   isubvar = UNINITIALIZED_INTEGER
                   select case(measurements(imeasurement)%iobs_var)
                     case(OBS_LIQUID_PRESSURE)
-                      select case(inversion_aux%parameters(1)% &
-                                    iparameter)
+                      select case(inversion_aux%parameters(1)%itype)
                         case(POROSITY)
 !                          isubvar = ZFLOW_LIQ_PRES_WRT_POROS
                       end select

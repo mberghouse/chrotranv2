@@ -175,6 +175,9 @@ subroutine ConvergenceTest(snes_,i_iteration,xnorm,unorm,fnorm,reason, &
                             0,ierr);CHKERRQ(ierr)
 
   if (option%convergence /= CONVERGENCE_CONVERGED .and. reason == -9) then
+    write(out_string,'(i3," 2r:",es9.2," 2x:",es9.2," 2u:",es9.2, &
+          & " -diverged")') i_iteration, fnorm, xnorm, unorm
+    call PrintMsg(option,out_string)
     return
   endif
 
@@ -274,7 +277,7 @@ subroutine ConvergenceTest(snes_,i_iteration,xnorm,unorm,fnorm,reason, &
         reason = 0
     endif
 
-    if (option%print_screen_flag .and. solver%print_convergence) then
+    if (solver%print_convergence) then
       i = int(reason)
       select case(i)
         case(-20)
@@ -377,7 +380,7 @@ subroutine ConvergenceTest(snes_,i_iteration,xnorm,unorm,fnorm,reason, &
       reason = 0
     endif
 
-    if (option%print_screen_flag .and. solver%print_convergence) then
+    if (solver%print_convergence) then
       i = int(reason)
       select case(i)
         case(-19)
@@ -509,7 +512,7 @@ subroutine ConvergenceTest(snes_,i_iteration,xnorm,unorm,fnorm,reason, &
 !      imin_residual(i) = imin_residual(i)/ndof
     enddo
 
-    if (option%print_screen_flag) then
+    if (OptionPrintToScreen(option)) then
       select case(reason)
         case (10)
           string = "CONVERGED_USER_NORM_INF_REL"
