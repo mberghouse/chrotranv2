@@ -368,6 +368,8 @@ subroutine PMGeneralReadSimOptionsBlock(this,input)
         general_immiscible = PETSC_TRUE
       case('ISOTHERMAL')
         general_isothermal = PETSC_TRUE
+      case('MULTIPLE_CONTINUUM')
+        option%use_sc = PETSC_TRUE       
       case('NON_DARCY_FLOW')
         general_non_darcy_flow = PETSC_TRUE
       case('NON_DARCY_FLOW_A')
