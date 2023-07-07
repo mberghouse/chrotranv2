@@ -63,7 +63,7 @@ subroutine GeneralSetup(realization)
   type(material_parameter_type), pointer :: material_parameter
 
   PetscInt :: ghosted_id, iconn, sum_connection, local_id
-  PetscInt :: i, idof, ndof, ipara
+  PetscInt :: i, idof, ndof
   PetscBool :: error_found
   PetscInt :: flag(10)
   PetscErrorCode :: ierr
