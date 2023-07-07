@@ -7045,7 +7045,7 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
          SECONDARY_TEMPERATURE,LIQUID_DENSITY_MOL,DERIVATIVE, &
          LIQUID_HEAD,VAPOR_PRESSURE,SATURATION_PRESSURE,MAXIMUM_PRESSURE, &
          LIQUID_MASS_FRACTION,GAS_MASS_FRACTION,SOLUTE_CONCENTRATION, &
-         PRECIPITATE_SATURATION)
+         PRECIPITATE_SATURATION,SEC_SALT_MOLE_FRAC)
 
       if (associated(patch%aux%TH)) then
         select case(ivar)
@@ -7369,6 +7369,9 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
           case(HYDRATE_SATURATION)
             value = patch%aux%General%auxvars(ZERO_INTEGER,ghosted_id)% &
                       sat(option%hydrate_phase)
+          case(SEC_SALT_MOLE_FRAC)
+            local_id = grid%nG2L(ghosted_id)
+            value = patch%aux%SC_gen%sec_gen_vars(local_id)%sec_salt_mole_frac(isubvar)
           case default
             call PatchUnsupportedVariable('GENERAL',ivar,option)
         end select

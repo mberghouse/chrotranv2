@@ -69,6 +69,7 @@ module Variables_module
   PetscInt, parameter, public :: SECONDARY_TEMPERATURE =   59
   PetscInt, parameter, public :: SECONDARY_CONCENTRATION = 60
   PetscInt, parameter, public :: SEC_MIN_VOLFRAC =         61
+  PetscInt, parameter, public :: SEC_SALT_MOLE_FRAC= 62
 
   PetscInt, parameter, public :: SURFACE_LIQUID_HEAD        = 62
   PetscInt, parameter, public :: SURFACE_LIQUID_TEMPERATURE = 63

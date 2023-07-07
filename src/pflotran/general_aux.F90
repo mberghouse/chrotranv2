@@ -1766,7 +1766,7 @@ subroutine GeneralAuxVarCompute4(x,gen_auxvar,global_auxvar,material_auxvar, &
       gen_auxvar%pres(lid) = x(GENERAL_LIQUID_PRESSURE_DOF)
       gen_auxvar%xmol(acid,lid) = x(GENERAL_LIQUID_STATE_X_MOLE_DOF)
       gen_auxvar%temp = x(GENERAL_ENERGY_DOF)
-      gen_auxvar%xmol(sid,lid) = x(GENERAL_LIQUID_STATE_S_MOLE_DOF)
+      gen_auxvar%xmol(sid,lid) = max(0.d0,x(GENERAL_LIQUID_STATE_S_MOLE_DOF))
 
       call GeneralAuxNaClSolubility(gen_auxvar%temp,NaClSolubility,solubility_function)
 

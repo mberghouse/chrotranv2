@@ -2536,7 +2536,7 @@ end subroutine SecondaryHeatResidual
 
 ! ************************************************************************** !
 
-subroutine SecondaryGenResidual(sec_gen_vars, material_auxvar, &
+subroutine SecondaryGenResidual(sec_gen_vars, sec_porosity, &
                                 salt_diffusion_coeff,salt_x_primary_node, &
                                 option,res_gen)
 
@@ -2547,13 +2547,11 @@ subroutine SecondaryGenResidual(sec_gen_vars, material_auxvar, &
   ! Date: 07/05/23
   
   use Option_module
-  use Material_Aux_module
 
   implicit none
 
   type(sec_gen_type) :: sec_gen_vars
   type(option_type) :: option
-  type(material_auxvar_type) :: material_auxvar
   
   PetscReal :: salt_diffusion_coeff(2),salt_x_primary_node
   PetscReal :: res_gen
@@ -2571,7 +2569,7 @@ subroutine SecondaryGenResidual(sec_gen_vars, material_auxvar, &
   PetscReal :: alpha
   PetscReal :: m
   PetscReal :: salt_mole_frac_current_N
-  PetscReal :: porosity
+  PetscReal :: sec_porosity
 
   ngcells = sec_gen_vars%ncells
   area = sec_gen_vars%area
@@ -2579,7 +2577,6 @@ subroutine SecondaryGenResidual(sec_gen_vars, material_auxvar, &
   dm_plus = sec_gen_vars%dm_plus
   dm_minus = sec_gen_vars%dm_minus
   area_fm = sec_gen_vars%interfacial_area
-  porosity = material_auxvar%porosity
   
   coeff_left = 0.d0
   coeff_diag = 0.d0
@@ -2628,7 +2625,7 @@ subroutine SecondaryGenResidual(sec_gen_vars, material_auxvar, &
 
   ! Calculate the coupling term
   ! Area * D * rho * saturation * phi * (Xn-Xm)/dm
-  res_gen = area_fm*salt_diffusion_coeff(1) * 1000 * 1.d0 * porosity * &
+  res_gen = area_fm * 55.5 * salt_diffusion_coeff(1) * 1.d0 * sec_porosity * &
             (salt_mole_frac_current_N - salt_x_primary_node)/ &
              dm_plus(ngcells)
 
@@ -2723,7 +2720,7 @@ end subroutine SecondaryHeatJacobian
 
 ! ************************************************************************** !
 
-subroutine SecondaryGenJacobian(sec_gen_vars,material_auxvar, &
+subroutine SecondaryGenJacobian(sec_gen_vars,sec_porosity, &
                                 salt_diffusion_coeff, &
                                 option,jac_gen)
   !
@@ -2737,13 +2734,11 @@ subroutine SecondaryGenJacobian(sec_gen_vars,material_auxvar, &
   use Option_module
   use Global_Aux_module
   use Secondary_Continuum_Aux_module
-  use Material_Aux_module
 
   implicit none  
 
   type(sec_gen_type) :: sec_gen_vars
   type(option_type) :: option
-  type(material_auxvar_type) :: material_auxvar
   PetscReal :: coeff_left(sec_gen_vars%ncells)
   PetscReal :: coeff_diag(sec_gen_vars%ncells)
   PetscReal :: coeff_right(sec_gen_vars%ncells)
@@ -2758,7 +2753,7 @@ subroutine SecondaryGenJacobian(sec_gen_vars,material_auxvar, &
   PetscReal :: m
   PetscReal :: Dsalt_x_N_Dsalt_x_prim
   PetscReal :: jac_gen
-  PetscReal :: porosity
+  PetscReal :: sec_porosity
 
   ngcells = sec_gen_vars%ncells
   area = sec_gen_vars%area
@@ -2766,7 +2761,6 @@ subroutine SecondaryGenJacobian(sec_gen_vars,material_auxvar, &
   dm_plus = sec_gen_vars%dm_plus
   area_fm = sec_gen_vars%interfacial_area
   dm_minus = sec_gen_vars%dm_minus
-  porosity = material_auxvar%porosity
 
   coeff_left = 0.d0
   coeff_diag = 0.d0
@@ -2807,7 +2801,7 @@ subroutine SecondaryGenJacobian(sec_gen_vars,material_auxvar, &
                        (dm_plus(ngcells)*vol(ngcells))
 
   ! Calculate the jacobian term
-  jac_gen = area_fm * 1.d0 * 1000 * porosity * salt_diffusion_coeff(1) * &
+  jac_gen = area_fm * 55.5 * 1.d0 * sec_porosity * salt_diffusion_coeff(1) * &
             (Dsalt_x_N_Dsalt_x_prim - 1.d0)/ &
              dm_plus(ngcells)
 

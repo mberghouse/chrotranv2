@@ -765,6 +765,12 @@ subroutine OutputObservationTecplotSecTXT(realization_base)
                                                            local_id, &
                                                            PRINT_SEC_MIN_SI)
                 endif
+                if (observation%print_secondary_data(6)) then
+                  call WriteObservationSecondaryDataAtCell(fid, &
+                                                           realization_base, &
+                                                           local_id, &
+                                                           PRINT_SEC_SALT_MOLE_FRAC)
+                endif
               enddo
       end select
       observation => observation%next
@@ -1838,6 +1844,16 @@ subroutine WriteObservationSecondaryDataAtCell(fid,realization_base,local_id,iva
             write(fid,110,advance="no") &
               RealizGetVariableValueAtCell(realization_base,ghosted_id, &
                                            SECONDARY_TEMPERATURE,i)
+          enddo
+        end select
+     endif
+    if (ivar == PRINT_SEC_SALT_MOLE_FRAC) then
+      select case(option%iflowmode)
+        case(G_MODE)
+          do i = 1, option%nsec_cells
+            write(fid,110,advance="no") &
+              RealizGetVariableValueAtCell(realization_base,ghosted_id, &
+                                           SEC_SALT_MOLE_FRAC,i)
           enddo
         end select
      endif
