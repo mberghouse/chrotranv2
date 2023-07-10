@@ -56,8 +56,8 @@ petsc-intel:
     - docker --version
     - export PETSC_VERSION=$(cat ./.gitlab/petsc-git-version.txt)
     - export IMAGE=$CI_REGISTRY_IMAGE:$(PETSC_VERSION)_intel
-    - docker system prune -a --volumes -f
     - docker pull $IMAGE || true
+    - docker system prune -a --volumes -f
     - >
       docker build 
       -f ./.gitlab/dockerfile-petsc-intel 
