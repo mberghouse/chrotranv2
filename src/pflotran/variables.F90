@@ -69,7 +69,6 @@ module Variables_module
   PetscInt, parameter, public :: SECONDARY_TEMPERATURE =   59
   PetscInt, parameter, public :: SECONDARY_CONCENTRATION = 60
   PetscInt, parameter, public :: SEC_MIN_VOLFRAC =         61
-  PetscInt, parameter, public :: SEC_SALT_MOLE_FRAC= 62
 
   PetscInt, parameter, public :: SURFACE_LIQUID_HEAD        = 62
   PetscInt, parameter, public :: SURFACE_LIQUID_TEMPERATURE = 63
@@ -181,8 +180,8 @@ module Variables_module
   PetscInt, parameter, public :: WELL_AQ_MASS            = 145
   PetscInt, parameter, public :: WELL_LIQ_Q              = 146
   PetscInt, parameter, public :: WELL_GAS_Q              = 147
-  PetscInt, parameter, public :: WELL_LIQ_SATURATION       = 148
-  PetscInt, parameter, public :: WELL_GAS_SATURATION       = 149
+  PetscInt, parameter, public :: WELL_LIQ_SATURATION     = 148
+  PetscInt, parameter, public :: WELL_GAS_SATURATION     = 149
 
   PetscInt, parameter, public :: PRECIPITATE_SATURATION  = 150
   PetscInt, parameter, public :: SOLUBLE_MATRIX          = 151
@@ -192,5 +191,7 @@ module Variables_module
   PetscInt, parameter, public :: ARCHIE_TORTUOSITY_CONSTANT = 154
   PetscInt, parameter, public :: SURFACE_ELECTRICAL_CONDUCTIVITY = 155
   PetscInt, parameter, public :: WAXMAN_SMITS_CLAY_CONDUCTIVITY = 156
+
+  PetscInt, parameter, public :: SEC_SALT_MOLE_FRAC      = 157
 
 end module Variables_module
