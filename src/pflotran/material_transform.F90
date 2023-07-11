@@ -91,6 +91,9 @@ module Material_Transform_module
   type, public :: BE_base_type
     PetscReal :: smec_den        ! smectite particle density
     PetscReal :: bh_rad          ! borehole radius
+    PetscReal :: intr_rate       ! buffer intrusion rate
+    PetscReal :: eros_rate       ! buffer erosion rate
+    PetscReal :: sed_rate        ! buffer sedimentation rate
 !  contains
 !    procedure, public :: Verify => BEBaseVerify
 !    procedure, public :: Test => BEBaseTest
@@ -418,6 +421,9 @@ function BEBaseCreate()
 
   BEBaseCreate%smec_den = UNINITIALIZED_DOUBLE
   BEBaseCreate%bh_rad   = UNINITIALIZED_DOUBLE
+  BEBaseCreate%intr_rate = UNINITIALIZED_DOUBLE
+  BEBaseCreate%eros_rate = UNINITIALIZED_DOUBLE
+  BEBaseCreate%sed_rate = UNINITIALIZED_DOUBLE
 
 end function BEBaseCreate
 
@@ -514,26 +520,6 @@ function IllitizationAuxVarInit(option)
   IllitizationAuxVarInit => auxvar
 
 end function IllitizationAuxVarInit
-
-! ************************************************************************** !
-
-function BufferErosionAuxVarInit()
-  !
-  ! Initializes a buffer erosion auxiliary object
-  !
-  ! Author: Alex Salazar III
-  ! Date: 02/10/2022
-
-  implicit none
-
-  class(buffer_erosion_auxvar_type), pointer :: BufferErosionAuxVarInit
-  class(buffer_erosion_auxvar_type), pointer :: auxvar
-
-  allocate(auxvar)
-  
-  BufferErosionAuxVarInit => auxvar
-
-end function BufferErosionAuxVarInit
 
 ! ************************************************************************** !
 
@@ -1828,11 +1814,9 @@ subroutine BEDefaultSedimentationErosion(this, sed_rate, auxvar, option)
   class(buffer_erosion_auxvar_type), intent(in) :: auxvar
   type(option_type) :: option
 
-  PetscReal :: 
-  PetscReal :: 
-  PetscReal :: 
-  PetscReal :: 
-  PetscInt :: 
+  PetscReal :: Fexp, ratio, sedLamWx
+  PetscReal :: rRSS, NexpSed, Nal
+  PetscInt :: status
 
   Fexp = this%diff_coef_bh * this%smec_den * &
          (this%smec_vf_bh_init - this%af_vol_den) / &
@@ -1853,9 +1837,51 @@ subroutine BEDefaultSedimentationErosion(this, sed_rate, auxvar, option)
   end if
   
   rRSS = Fexp/sedLamWx
-  NexpSed = this%c_sed
+  NexpSed = this%c_sed * auxvar%frac_aperture * 2.d0 * PI * &
+            rRSS * sin(auxvar%frac_angle)**2.0d0
+  Nal = auxvar%frac_aperture**3.d0 / (12 * this%af_vis) * &
+        (this%af_den - auxvar%water_den) * EARTH_GRAVITY * & 
+        this% af_vol_den * this%smec_den * (2.0d0 * rRSS)
+  sed_rate = min(Nal,NexpSed)
   
 end subroutine BEDefaultSedimentationErosion
+
+! ************************************************************************** !
+
+subroutine BEDefaultOverallBufferLossRate(this, t, loss_rate, auxvar, option)
+
+  !
+  !
+  !
+  !
+  !
+
+  use Option_module
+  use PFLOTRAN_Constants_module
+   
+  implicit none
+
+  class(BE_default_type) :: this      ! buffer erosion object
+  PetscReal, intent(in) :: t          ! simulation time (s)
+  PetscReal, intent(out) :: loss_rate ! intrusion rate (kg/yr)
+  class(buffer_erosion_auxvar_type), intent(in) :: auxvar
+  type(option_type) :: option
+  
+  PetscReal :: t_yr                  ! simulation time in years
+  PetscReal :: ci_mM
+
+  t_yr = t*60.d0*60.d0*24.d0*365.d0  ! sec,min,hr,day
+  ! Overall buffer loss rate
+  
+  ci_mM = 8.d0 * sin (t_yr/20000.d0) + 8.d0
+
+  if (ci_mM < this%ci_ub) then 
+    loss_rate = max(this%eros_rate+this%sed_rate,this%intr_rate)
+  else
+    loss_rate = this%intr_rate 
+  end if
+
+end subroutine BEDefaultOverallBufferLossRate
 
 ! ************************************************************************** !
 
