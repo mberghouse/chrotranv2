@@ -2639,8 +2639,8 @@ subroutine SecondaryHeatJacobian(sec_heat_vars,therm_conductivity, &
   ! Calculates the source term jacobian contribution
   ! due to secondary continuum in the primary continuum residual
   !
-  ! Author: Satish Karra, LANL
-  ! Date: 06/6/12
+  ! Author: David Fukuyama
+  ! Date: 07/12/25
   !
 
   use Option_module

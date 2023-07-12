@@ -53,7 +53,7 @@ module Secondary_Continuum_Aux_module
     PetscReal :: half_aperture                      ! fracture aperture
     PetscReal :: epsilon                       ! vol. frac. of primary continuum
     type(sec_continuum_type) :: sec_continuum
-    PetscReal, pointer :: sec_salt_mole_frac(:)! array of temp. at secondary grid cells
+    PetscReal, pointer :: sec_salt_mole_frac(:)! array of salt mole fraction at secondary grid cells
     PetscReal, pointer :: area(:)              ! surface area
     PetscReal, pointer :: vol(:)               ! volume     face      node       face
     PetscReal, pointer :: dm_plus(:)           ! see fig.    |----------o----------|
@@ -187,8 +187,8 @@ subroutine SecondaryAuxGenDestroy(aux)
   ! Deallocates a general mode secondary continuum
   ! auxiliary object
   !
-  ! Author: Satish Karra, LANL
-  ! Date: 01/10/13
+  ! Author: David Fukuyama
+  ! Date: 07/05/23
   !
 
   implicit none
