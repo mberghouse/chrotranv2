@@ -9,8 +9,10 @@ module Material_Transform_module
 #include "petsc/finclude/petscsys.h"
 #include "petsc/finclude/petscvec.h"
 
+  use petscvec
   use petscsys
   use PFLOTRAN_Constants_module
+  use Dataset_Base_class
 
   implicit none
 
@@ -94,6 +96,13 @@ module Material_Transform_module
     PetscReal :: intr_rate       ! buffer intrusion rate
     PetscReal :: eros_rate       ! buffer erosion rate
     PetscReal :: sed_rate        ! buffer sedimentation rate
+    PetscReal, allocatable :: water_vel(:)       ! water velosity
+    PetscReal :: frac_aperture   ! fracture aperture
+    PetscReal :: frac_angle      ! fracture angle
+    class(dataset_base_type), pointer :: water_vel_dataset
+    class(dataset_base_type), pointer :: frac_aperture_dataset
+    class(dataset_base_type), pointer :: frac_angle_dataset
+    PetscReal :: ion_conc        ! concentration of ion (mM)
 !  contains
 !    procedure, public :: Verify => BEBaseVerify
 !    procedure, public :: Test => BEBaseTest
@@ -126,10 +135,6 @@ module Material_Transform_module
   type, public :: buffer_erosion_auxvar_type
     !data from PFLOTRAN
     PetscReal :: water_den       ! water desity
-    PetscReal, allocatable :: water_vel(:) ! water velosity
-    PetscReal :: frac_aperture   ! fracture aperture
-    PetscReal :: frac_angle      ! fracture angle
-    PetscReal :: ion_conc        ! concentration of ion (mM)
   end type buffer_erosion_auxvar_type
   !---------------------------------------------------------------------------
   type, public :: bats_transform_type
@@ -419,11 +424,15 @@ function BEBaseCreate()
 
   allocate(BEBaseCreate)
 
+  BEBaseCreate%frac_aperture = UNINITIALIZED_DOUBLE
+  allocate(BEBaseCreate%water_vel(3))
   BEBaseCreate%smec_den = UNINITIALIZED_DOUBLE
   BEBaseCreate%bh_rad   = UNINITIALIZED_DOUBLE
   BEBaseCreate%intr_rate = UNINITIALIZED_DOUBLE
   BEBaseCreate%eros_rate = UNINITIALIZED_DOUBLE
   BEBaseCreate%sed_rate = UNINITIALIZED_DOUBLE
+  nullify(BEBaseCreate%frac_angle_dataset)
+  nullify(BEBaseCreate%frac_aperture_dataset)
 
 end function BEBaseCreate
 
@@ -442,20 +451,20 @@ function BEDefaultCreate()
 
   allocate(BEDefaultCreate)
 
- BEDefaultCreate%diff_coef_bh    = UNINITIALIZED_DOUBLE
- BEDefaultCreate%smec_vf_bh_init = UNINITIALIZED_DOUBLE
- BEDefaultCreate%smec_vf_int_rim = UNINITIALIZED_DOUBLE
- BEDefaultCreate%y0              = UNINITIALIZED_DOUBLE
- BEDefaultCreate%y1              = UNINITIALIZED_DOUBLE
- BEDefaultCreate%y2              = UNINITIALIZED_DOUBLE
- BEDefaultCreate%ci_ub           = UNINITIALIZED_DOUBLE
- BEDefaultCreate%ci_lb           = UNINITIALIZED_DOUBLE
- BEDefaultCreate%af_vis          = UNINITIALIZED_DOUBLE
- BEDefaultCreate%af_den          = UNINITIALIZED_DOUBLE
- BEDefaultCreate%af_vol_den      = UNINITIALIZED_DOUBLE
- BEDefaultCreate%f1              = UNINITIALIZED_DOUBLE
- BEDefaultCreate%buffer_por      = UNINITIALIZED_DOUBLE
- BEDefaultCreate%can_rad         = UNINITIALIZED_DOUBLE
+  BEDefaultCreate%diff_coef_bh    = UNINITIALIZED_DOUBLE
+  BEDefaultCreate%smec_vf_bh_init = UNINITIALIZED_DOUBLE
+  BEDefaultCreate%smec_vf_int_rim = UNINITIALIZED_DOUBLE
+  BEDefaultCreate%y0              = UNINITIALIZED_DOUBLE
+  BEDefaultCreate%y1              = UNINITIALIZED_DOUBLE
+  BEDefaultCreate%y2              = UNINITIALIZED_DOUBLE
+  BEDefaultCreate%ci_ub           = UNINITIALIZED_DOUBLE
+  BEDefaultCreate%ci_lb           = UNINITIALIZED_DOUBLE
+  BEDefaultCreate%af_vis          = UNINITIALIZED_DOUBLE
+  BEDefaultCreate%af_den          = UNINITIALIZED_DOUBLE
+  BEDefaultCreate%af_vol_den      = UNINITIALIZED_DOUBLE
+  BEDefaultCreate%f1              = UNINITIALIZED_DOUBLE
+  BEDefaultCreate%buffer_por      = UNINITIALIZED_DOUBLE
+  BEDefaultCreate%can_rad         = UNINITIALIZED_DOUBLE
 
 end function BEDefaultCreate
 
@@ -476,9 +485,8 @@ function BufferErosionAuxVarInit()
   class(buffer_erosion_auxvar_type), pointer :: BEauxvar
 
   allocate(BEauxvar)
+
   BEauxvar%water_den = UNINITIALIZED_DOUBLE
-  BEauxvar%frac_aperture = UNINITIALIZED_DOUBLE
-  allocate(BEauxvar%water_vel(3))
 
   BufferErosionAuxVarInit => BEauxvar
 
@@ -1153,6 +1161,7 @@ subroutine BEDefaultRead(buffer_erosion_model, input, option)
   use Option_module
   use Input_Aux_module
   use String_module
+  use Dataset_module
 
   implicit none
 
@@ -1183,6 +1192,16 @@ subroutine BEDefaultRead(buffer_erosion_model, input, option)
       !------------------------------------------
       class is(BE_default_type)
         select case(trim(keyword))
+          case('FRACTURE_ANGLE')
+            call DatasetReadDoubleOrDataset(input,be_model%frac_angle, &
+                                          be_model%frac_angle_dataset, &
+                                          'fracture angle', &
+                                          'BUFFER_EROSION, GENERAL',option)
+          case('FRACTURE_APERTURE')
+            call DatasetReadDoubleOrDataset(input,be_model%frac_aperture, &
+                                          be_model%frac_aperture_dataset, &
+                                          'fracture aperture', &
+                                          'BUFFER_EROSION, GENERAL',option)
           case('SMECTITE_PARTICLE_DENSITY')
             call InputReadDouble(input,option,be_model%smec_den)
             call InputErrorMsg(input,option,'smectite density',&
@@ -1653,7 +1672,7 @@ end subroutine ILTBaseIllitization
 
 ! ************************************************************************** !
 
-subroutine BEDefaultIntrusionRate(this, t, intr_rate, auxvar, option)
+subroutine BEDefaultIntrusionRate(this, t, intr_rate, option)
 
   !
   !
@@ -1668,14 +1687,13 @@ subroutine BEDefaultIntrusionRate(this, t, intr_rate, auxvar, option)
   class(BE_default_type) :: this     ! buffer erosion object
   PetscReal, intent(in) :: t         ! simulation time (s)
   PetscReal, intent(out) :: intr_rate ! intrusion rate (kg/yr)
-  class(buffer_erosion_auxvar_type), intent(in) :: auxvar
   type(option_type), intent(inout) :: option
 
   PetscReal :: t_yr                  ! simulation time in years
 
   t_yr = t*60.d0*60.d0*24.d0*365.d0  ! sec,min,hr,day
 
-  intr_rate = auxvar%frac_aperture * &
+  intr_rate = this%frac_aperture * &
              (this%y0 + 2.0d0*this%y1*t_yr + 3.0d0*this%y2*t_yr**2.0d0)
 
 end subroutine BEDefaultIntrusionRate
@@ -1726,7 +1744,7 @@ end subroutine BELambertWSolve
 
 ! ************************************************************************** !
 
-subroutine BEDefaultSeepingErosion(this, eros_rate, auxvar, option)
+subroutine BEDefaultSeepingErosion(this, eros_rate, option)
 
   !
   !
@@ -1741,7 +1759,6 @@ subroutine BEDefaultSeepingErosion(this, eros_rate, auxvar, option)
 
   class(BE_default_type) :: this     ! buffer erosion object
   PetscReal, intent(out) :: eros_rate ! intrusion rate (kg/yr)
-  class(buffer_erosion_auxvar_type), intent(in) :: auxvar
   type(option_type) :: option
 
   PetscReal :: Dr, u, y, expo
@@ -1751,17 +1768,17 @@ subroutine BEDefaultSeepingErosion(this, eros_rate, auxvar, option)
   PetscInt :: status
 
   ! magnitude of water velocity using 2-norm fucntion from BLAS
-  u = sqrt(auxvar%water_vel(1)**2.d0 * &
-           auxvar%water_vel(2)**2.d0 * &
-           auxvar%water_vel(3)**2.d0)
+  u = sqrt(this%water_vel(1)**2.d0 * &
+           this%water_vel(2)**2.d0 * &
+           this%water_vel(3)**2.d0)
   
   ! calculate diffusion coefficient at the rim
-  if (auxvar%ion_conc > this%ci_ub) then
+  if (this%ion_conc > this%ci_ub) then
     Dr = 0.0d0  ! m^2/s
     y = 0.0d0
   else
-    if (auxvar%ion_conc > this%ci_lb) then
-      y = log(auxvar%ion_conc)
+    if (this%ion_conc > this%ci_lb) then
+      y = log(this%ion_conc)
     else
       y = -1.0d0
     end if
@@ -1789,7 +1806,7 @@ subroutine BEDefaultSeepingErosion(this, eros_rate, auxvar, option)
   rRSS = this%bh_rad*((G/2.d0)/seepLamWx)**2.d0  ! (m)
 
   ! Buffer erosion rate by Seeping water
-  eros_rate = this%smec_den*auxvar%frac_aperture*this%smec_vf_int_rim * &
+  eros_rate = this%smec_den*this%frac_aperture*this%smec_vf_int_rim * &
               4.0d0*sqrt(Dr*PI*rRSS*u)
   
 end subroutine BEDefaultSeepingErosion
@@ -1820,7 +1837,7 @@ subroutine BEDefaultSedimentationErosion(this, sed_rate, auxvar, option)
 
   Fexp = this%diff_coef_bh * this%smec_den * &
          (this%smec_vf_bh_init - this%af_vol_den) / &
-         (this%c_sed*sin(auxvar%frac_angle))
+         (this%c_sed*sin(this%frac_angle))
 
   ratio = Fexp/this%bh_rad
 
@@ -1837,9 +1854,9 @@ subroutine BEDefaultSedimentationErosion(this, sed_rate, auxvar, option)
   end if
   
   rRSS = Fexp/sedLamWx
-  NexpSed = this%c_sed * auxvar%frac_aperture * 2.d0 * PI * &
-            rRSS * sin(auxvar%frac_angle)**2.0d0
-  Nal = auxvar%frac_aperture**3.d0 / (12 * this%af_vis) * &
+  NexpSed = this%c_sed * this%frac_aperture * 2.d0 * PI * &
+            rRSS * sin(this%frac_angle)**2.0d0
+  Nal = this%frac_aperture**3.d0 / (12 * this%af_vis) * &
         (this%af_den - auxvar%water_den) * EARTH_GRAVITY * & 
         this% af_vol_den * this%smec_den * (2.0d0 * rRSS)
   sed_rate = min(Nal,NexpSed)
@@ -1848,7 +1865,7 @@ end subroutine BEDefaultSedimentationErosion
 
 ! ************************************************************************** !
 
-subroutine BEDefaultOverallBufferLossRate(this, t, loss_rate, auxvar, option)
+subroutine BEDefaultOverallBufferLossRate(this, t, loss_rate, option)
 
   !
   !
@@ -1864,7 +1881,6 @@ subroutine BEDefaultOverallBufferLossRate(this, t, loss_rate, auxvar, option)
   class(BE_default_type) :: this      ! buffer erosion object
   PetscReal, intent(in) :: t          ! simulation time (s)
   PetscReal, intent(out) :: loss_rate ! intrusion rate (kg/yr)
-  class(buffer_erosion_auxvar_type), intent(in) :: auxvar
   type(option_type) :: option
   
   PetscReal :: t_yr                  ! simulation time in years
