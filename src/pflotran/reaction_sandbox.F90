@@ -18,8 +18,9 @@ module Reaction_Sandbox_module
   use Reaction_Sand_FlexBioHill_class
   use Reaction_Sandbox_BioTH_class
   use Reaction_Sandbox_Radon_class
-
-  ! Add new reacton sandbox classes here.
+  use Reaction_Sandbox_ArcticGHG_class
+  
+  ! Add new reaction sandbox classes here.
 
   use PFLOTRAN_Constants_module
 
@@ -161,6 +162,8 @@ subroutine RSandboxRead2(local_sandbox_list,input,option)
 
     select case(trim(word))
       ! Add new cases statements for new reacton sandbox classes here.
+      case('ARCTIC_GHG')
+        new_sandbox => ArcticGHGCreate()
       case('BIODEGRADATION_HILL')
         new_sandbox => BioHillCreate()
       case('BIOPARTICLE')
