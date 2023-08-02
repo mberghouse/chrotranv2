@@ -1082,6 +1082,8 @@ subroutine FlowConditionRead(condition,input,option)
               sub_condition_ptr%itype = DIRICHLET_SEEPAGE_BC
             case('DIRICHLET_CONDUCTANCE')
               sub_condition_ptr%itype = DIRICHLET_CONDUCTANCE_BC
+            case('DIRICHLET_ZERO_GRADIENT')
+              sub_condition_ptr%itype = DIRICHLET_ZERO_GRADIENT_BC
             case('VOLUMETRIC_RATE')
               sub_condition_ptr%itype = VOLUMETRIC_RATE_SS
               rate_unit_string = 'm^3/sec'
@@ -1871,6 +1873,10 @@ subroutine FlowConditionGeneralRead(condition,input,option)
               sub_condition_ptr%itype = HYDROSTATIC_SEEPAGE_BC
             case('DIRICHLET_SEEPAGE')
               sub_condition_ptr%itype = DIRICHLET_SEEPAGE_BC
+            case('DIRICHLET_ZERO_GRADIENT')
+              sub_condition_ptr%itype = DIRICHLET_ZERO_GRADIENT_BC
+            case('ZERO_GRADIENT')
+              sub_condition_ptr%itype = ZERO_GRADIENT_BC
             case('MASS_RATE')
               sub_condition_ptr%itype = MASS_RATE_SS
               rate_string = 'kg/sec'

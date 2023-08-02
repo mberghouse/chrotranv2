@@ -2532,7 +2532,7 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
   PetscBool :: count_upwind_direction_flip_
   PetscBool :: debug_connection
   PetscBool :: dirichlet_solute = PETSC_FALSE
-
+  PetscBool :: dirichlet_zero_grad_solute = PETSC_FALSE
 
   PetscInt :: wat_comp_id, air_comp_id, energy_id, salt_comp_id
   PetscInt :: iphase
@@ -2648,7 +2648,8 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
   select case(bc_type)
     ! figure out the direction of flow
     case(DIRICHLET_BC,HYDROSTATIC_BC,HYDROSTATIC_SEEPAGE_BC, &
-         HYDROSTATIC_CONDUCTANCE_BC,DIRICHLET_SEEPAGE_BC)
+         HYDROSTATIC_CONDUCTANCE_BC,DIRICHLET_SEEPAGE_BC, &
+         DIRICHLET_ZERO_GRADIENT_BC,ZERO_GRADIENT_BC)
       if (gen_auxvar_up%mobility(iphase) + &
           gen_auxvar_dn%mobility(iphase) > eps) then
 
@@ -3395,15 +3396,21 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
     if (ibndtype(GENERAL_LIQUID_STATE_S_MOLE_DOF)==DIRICHLET_BC .or. &
         ibndtype(GENERAL_LIQUID_STATE_X_MOLE_DOF)==DIRICHLET_BC) then
       dirichlet_solute = PETSC_TRUE
+    elseif (ibndtype(GENERAL_LIQUID_STATE_S_MOLE_DOF)==DIRICHLET_ZERO_GRADIENT_BC .or. &
+            ibndtype(GENERAL_LIQUID_STATE_X_MOLE_DOF)==DIRICHLET_ZERO_GRADIENT_BC) then
+      dirichlet_zero_grad_solute = PETSC_TRUE
     endif
   elseif (.not. general_salt) then
     if (ibndtype(GENERAL_LIQUID_STATE_X_MOLE_DOF)==DIRICHLET_BC) then
       dirichlet_solute = PETSC_TRUE
+    elseif (ibndtype(GENERAL_LIQUID_STATE_X_MOLE_DOF)==DIRICHLET_ZERO_GRADIENT_BC) then
+      dirichlet_zero_grad_solute = PETSC_TRUE
     endif
   endif
   sat_dn = gen_auxvar_dn%sat(iphase)
   if ((sat_dn > eps .and. ibndtype(iphase) /= NEUMANN_BC) &
-      .or. (ibndtype(iphase)==NEUMANN_BC .and. dirichlet_solute)) then
+      .or. (ibndtype(iphase)==NEUMANN_BC .and. dirichlet_solute) &
+      .or. (dirichlet_zero_grad_solute .and. q > 0.d0)) then
     if (general_harmonic_diff_density) then
       ! density_ave in this case is not used.
       density_ave = 1.d0
