@@ -2815,31 +2815,6 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
     q = v_darcy(iphase) * area
     ! mole_flux[kmol phase/sec] = q[m^3 phase/sec] *
     !                             density_ave[kmol phase/m^3 phase]
-    ! if (v_darcy(iphase) > 0.d0) then !inflow
-    !   select case (ibndtype(2))
-    !     case(DIRICHLET_ZERO_GRADIENT,DIRICHLET,ZERO_GRADIENT)
-    !       xmol(air_comp_id) = auxvars(GENERAL_LIQUID_STATE_X_MOLE_DOF)
-    !   end select
-    !   if (general_salt) then
-    !     select case (ibndtype(4))
-    !       case(DIRICHLET_ZERO_GRADIENT,DIRICHLET,ZERO_GRADIENT)
-    !         xmol(salt_comp_id) = auxvars(GENERAL_LIQUID_STATE_S_MOLE_DOF)
-    !     end select
-    !   endif
-    !   xmol(iphase) = 1.d0 - xmol(salt_comp_id) - xmol(air_comp_id)
-    ! else !outflow
-    !   select case (ibndtype(2))
-    !     case(DIRICHLET_ZERO_GRADIENT,DIRICHLET)
-    !     case(ZERO_GRADIENT)
-          
-    !   end select
-    !   if (general_salt) then
-    !     select case (ibndtype(4))
-    !       case(DIRICHLET_ZERO_GRADIENT,DIRICHLET)
-    !       case(ZERO_GRADIENT)
-    !     end select
-    !   endif
-    ! endif
     tot_mole_flux = q*density_ave
     tot_mole_flux_ddel_pressure = dv_darcy_ddelta_pressure * area * &
                                   density_ave

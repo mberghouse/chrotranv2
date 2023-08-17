@@ -1,0 +1,195 @@
+# 1D zero-gradient bc
+SIMULATION
+  SIMULATION_TYPE SUBSURFACE
+  PROCESS_MODELS
+    SUBSURFACE_FLOW flow
+      MODE GENERAL
+      OPTIONS
+        SOLUTE SALT
+      /
+    /
+  /
+END
+
+SUBSURFACE
+#=========================== flow mode ========================================
+
+REGRESSION
+  ALL_CELLS
+  VARIABLES
+    LIQUID_MOLE_FRACTIONS
+    LIQUID_PRESSURE
+    LIQUID_DENSITY
+  /
+END
+#=========================== discretization ===================================
+GRID
+  TYPE structured
+  NXYZ 10 1 1
+  BOUNDS 
+    0.d0   0.d0  0.d0
+    10.d0 1.0d0 1.0d0
+  /                  
+END
+
+#=========================== fluid properties =================================
+FLUID_PROPERTY
+  DIFFUSION_COEFFICIENT 1.6d-6
+  SALT_DIFFUSION_COEFFICIENT 1.6D-6
+END
+
+#=========================== material properties ==============================
+MATERIAL_PROPERTY soil1
+  ID 1
+  POROSITY 1d-1
+  TORTUOSITY 1.0d0
+  ROCK_DENSITY 2700.d0 #kg/m3
+  CHARACTERISTIC_CURVES sf1
+  PERMEABILITY
+    PERM_ISO 1.D-13
+  /
+  THERMAL_CONDUCTIVITY_DRY 0.5d-6 MW/m-C
+  THERMAL_CONDUCTIVITY_WET 2.d-6 MW/m-C
+  HEAT_CAPACITY 830.d-6 MJ/kg-C
+END
+CHARACTERISTIC_CURVES sf1
+  SATURATION_FUNCTION VAN_GENUCHTEN
+    LIQUID_RESIDUAL_SATURATION 0.15D0
+    ALPHA 1.D-5
+    M 0.62D0
+    MAX_CAPILLARY_PRESSURE 1.D6
+  /
+  PERMEABILITY_FUNCTION MUALEM
+    PHASE LIQUID
+    LIQUID_RESIDUAL_SATURATION 0.15D0
+    M 0.62D0
+  /
+  PERMEABILITY_FUNCTION MUALEM_VG_GAS
+    PHASE GAS
+    LIQUID_RESIDUAL_SATURATION 0.2D0
+    GAS_RESIDUAL_SATURATION 0.1D0
+    M 0.5D0
+  /
+END
+#=========================== output options ===================================
+OUTPUT
+  SNAPSHOT_FILE
+    PERIODIC TIME 10 d
+#    FORMAT HDF5  
+    VARIABLES
+      MATERIAL_ID
+      LIQUID_PRESSURE
+      LIQUID_SATURATION
+      LIQUID_DENSITY
+      LIQUID_VISCOSITY
+      LIQUID_MOBILITY
+      LIQUID_MOLE_FRACTIONS
+      PERMEABILITY
+    END
+  END
+  # OBSERVATION_FILE
+  #   PERIODIC TIMESTEP 1
+  #   PRINT_COLUMN_IDS
+  # /
+  # MASS_BALANCE_FILE
+  #   PERIODIC TIMESTEP 1
+  #   PRINT_COLUMN_IDS
+  # /
+  # VELOCITY_AT_CENTER
+END
+
+#=========================== times ============================================
+TIME
+  FINAL_TIME 10.d0 d
+  INITIAL_TIMESTEP_SIZE 0.006d0 d
+  MAXIMUM_TIMESTEP_SIZE 1.0d1 d 
+END
+
+#=========================== regions ==========================================
+REGION all
+  COORDINATES
+     -1.d20 -1.d20 -1.d20
+     1.d20 1.d20 1.d20
+  /
+END
+
+REGION west
+  FACE WEST
+  COORDINATES
+    0.d0 -1.d20 -1.d20
+    0.d0 1.d20 1.d20
+  /
+END
+
+REGION east
+  FACE EAST
+  COORDINATES
+    10.d0 -1.d20 -1.d20
+    10.d0 1.d20 1.d20
+  /
+END
+
+#=========================== flow conditions ==================================
+FLOW_CONDITION initial
+  TYPE
+    LIQUID_PRESSURE DIRICHLET
+    TEMPERATURE DIRICHLET
+    MOLE_FRACTION ZERO_GRADIENT
+    SALT_MOLE_FRACTION ZERO_GRADIENT
+  /
+  LIQUID_PRESSURE 1.01325D6
+  TEMPERATURE 50.d0
+  MOLE_FRACTION 1.D-10
+  SALT_MOLE_FRACTION 1.d-10
+END
+
+FLOW_CONDITION inlet_flow
+  TYPE
+    LIQUID_FLUX NEUMANN
+    GAS_FLUX NEUMANN
+    ENERGY_FLUX NEUMANN
+    SALT_MOLE_FRACTION DIRICHLET
+  /
+  LIQUID_FLUX 5.D-7 m/d
+  GAS_FLUX 0.D0 m/s
+  ENERGY_FLUX 0.d0 W/m^2
+  SALT_MOLE_FRACTION 3.d-2
+END
+
+FLOW_CONDITION inlet_dir
+  TYPE
+    LIQUID_PRESSURE DIRICHLET
+    TEMPERATURE DIRICHLET
+    MOLE_FRACTION ZERO_GRADIENT
+    SALT_MOLE_FRACTION ZERO_GRADIENT
+  /
+  LIQUID_PRESSURE 1.11335D6
+  TEMPERATURE 50.D0
+  MOLE_FRACTION 1.D-10
+  SALT_MOLE_FRACTION 3.d-2
+END
+
+#=========================== condition couplers ===============================
+# initial condition
+INITIAL_CONDITION
+  FLOW_CONDITION initial
+  REGION all
+END
+
+BOUNDARY_CONDITION outlet
+  FLOW_CONDITION initial
+  REGION east
+END
+
+BOUNDARY_CONDITION inlet
+  FLOW_CONDITION inlet_dir
+  REGION west
+END
+
+#=========================== stratigraphy couplers ============================
+STRATA
+  REGION all
+  MATERIAL soil1
+END
+
+END_SUBSURFACE
