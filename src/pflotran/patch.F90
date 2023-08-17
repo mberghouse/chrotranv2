@@ -1833,7 +1833,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
             end select
           ! mole fraction; 3rd dof ----------------------- !
             select case(general%mole_fraction%itype)
-              case(DIRICHLET_BC)
+              case(DIRICHLET_BC,DIRICHLET_ZERO_GRADIENT_BC)
                 call PatchGetCouplerValueFromDataset(coupler,option, &
                             patch%grid,general%mole_fraction%dataset,iconn,xmol)
                 if (general_immiscible) then
@@ -1841,7 +1841,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                 endif
                 coupler%flow_aux_real_var(THREE_INTEGER,iconn) = xmol
                 dof3 = PETSC_TRUE
-                coupler%flow_bc_type(GENERAL_GAS_EQUATION_INDEX) = DIRICHLET_BC
+                coupler%flow_bc_type(GENERAL_GAS_EQUATION_INDEX) = general%mole_fraction%itype
               case default
                 string = GetSubConditionType(general%mole_fraction%itype)
                 option%io_buffer = &
@@ -1852,7 +1852,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
             if (general_salt .and. .not. general_soluble_matrix) then
               ! mole fraction; 4th dof ----------------------- !
               select case(general%salt_mole_fraction%itype)
-                case(DIRICHLET_BC)
+                case(DIRICHLET_BC,DIRICHLET_ZERO_GRADIENT_BC)
                   call PatchGetCouplerValueFromDataset(coupler,option, &
                          patch%grid,general%salt_mole_fraction%dataset,iconn,xmol2)
                     if (general_immiscible) then
@@ -1860,7 +1860,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                     endif
                     coupler%flow_aux_real_var(FOUR_INTEGER,iconn) = xmol2
                     dof4 = PETSC_TRUE
-                    coupler%flow_bc_type(GENERAL_SALT_EQUATION_INDEX) = DIRICHLET_BC
+                    coupler%flow_bc_type(GENERAL_SALT_EQUATION_INDEX) = general%salt_mole_fraction%itype
                  case default
                    string = GetSubConditionType(general%salt_mole_fraction%itype)
                    option%io_buffer = &
@@ -2496,7 +2496,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
     if (general_salt) dof4 = PETSC_TRUE
   endif
   if (associated(general%salt_mole_fraction)) then
-    coupler%flow_bc_type(GENERAL_SALT_EQUATION_INDEX) = DIRICHLET_BC
+    coupler%flow_bc_type(GENERAL_SALT_EQUATION_INDEX) = general%salt_mole_fraction%itype
     select type(selector => general%salt_mole_fraction%dataset)
       class is(dataset_ascii_type)
         coupler%flow_aux_real_var(FOUR_INTEGER,1:num_connections) = &

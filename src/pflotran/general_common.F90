@@ -3021,6 +3021,7 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
   xmol_bool = 1.d0
   bc_type = ibndtype(iphase)
   select case(bc_type)
+    case(DIRICHLET_ZERO_GRADIENT_BC,ZERO_GRADIENT_BC)
     case(DIRICHLET_BC,HYDROSTATIC_BC,HYDROSTATIC_SEEPAGE_BC, &
          HYDROSTATIC_CONDUCTANCE_BC,DIRICHLET_SEEPAGE_BC)
       if (gen_auxvar_up%mobility(iphase) + &
@@ -3410,7 +3411,7 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
   sat_dn = gen_auxvar_dn%sat(iphase)
   if ((sat_dn > eps .and. ibndtype(iphase) /= NEUMANN_BC) &
       .or. (ibndtype(iphase)==NEUMANN_BC .and. dirichlet_solute) &
-      .or. (dirichlet_zero_grad_solute .and. q > 0.d0)) then
+      .or. (dirichlet_zero_grad_solute .and. q < 0.d0)) then
     if (general_harmonic_diff_density) then
       ! density_ave in this case is not used.
       density_ave = 1.d0
@@ -3435,7 +3436,6 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
     endif
     stpd_dn = sat_dn*material_auxvar_dn%tortuosity* &
               gen_auxvar_dn%effective_porosity*den_dn
-
     dstpd_dn_dpordn = stpd_dn / gen_auxvar_dn%effective_porosity
     dstpd_dn_dsatdn = stpd_dn / sat_dn
     dstpd_dn_ddendn = tempreal * stpd_dn / den_dn
@@ -3444,11 +3444,11 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
     stpd_ave_over_dist = stpd_dn * dstpd_ave_over_dist_dstpd_dn
 
     if (general_diffuse_xmol) then ! delta of mole fraction
-      delta_xmol = gen_auxvar_up%xmol(air_comp_id,iphase) - &
-                   gen_auxvar_dn%xmol(air_comp_id,iphase)
+        delta_xmol = gen_auxvar_up%xmol(air_comp_id,iphase) - &
+                     gen_auxvar_dn%xmol(air_comp_id,iphase)
       if (general_salt) then
-        delta_xsmol = gen_auxvar_up%xmol(salt_comp_id,iphase) - &
-                      gen_auxvar_dn%xmol(salt_comp_id,iphase)
+          delta_xsmol = gen_auxvar_up%xmol(salt_comp_id,iphase) - &
+                        gen_auxvar_dn%xmol(salt_comp_id,iphase)
       endif
       delta_X_whatever = delta_xmol
       delta_X_whatever_dxmoldn = -1.d0
@@ -3483,6 +3483,9 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
     tot_mole_flux = dtot_mole_flux_ddeltaX * delta_X_whatever
     dtot_mole_flux_dstpd = tot_mole_flux / stpd_ave_over_dist
     dtot_mole_flux_ddenave = tot_mole_flux / density_ave
+    if (dirichlet_zero_grad_solute) then
+      tot_mole_flux = 0.d0
+    endif
     Res(wat_comp_id) = Res(wat_comp_id) - tot_mole_flux
     Res(air_comp_id) = Res(air_comp_id) + tot_mole_flux
     if (general_salt) then
@@ -3492,6 +3495,9 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
       !DF: The diffusion of dissolved air (above) is equal and opposite to water.
       !    This is not currently being applied to salt.
       !Res(wat_comp_id) = Res(wat_comp_id) - tot_mole_flux1
+      if (dirichlet_zero_grad_solute) then
+        tot_mole_flux1 = 0.d0
+      endif
       Res(salt_comp_id) = Res(salt_comp_id) + tot_mole_flux1
     endif
 
@@ -3915,7 +3921,7 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
   ! add heat conduction flux
   heat_flux = 0.d0
   select case (ibndtype(GENERAL_ENERGY_EQUATION_INDEX))
-    case (DIRICHLET_BC)
+    case (DIRICHLET_BC,DIRICHLET_ZERO_GRADIENT_BC)
       sat_dn = gen_auxvar_dn%sat(option%liquid_phase)
       call thermal_cc_dn%thermal_conductivity_function% &
            TCondTensorToScalar(dist,option)
