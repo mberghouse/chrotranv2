@@ -2533,6 +2533,7 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
   PetscBool :: debug_connection
   PetscBool :: dirichlet_solute = PETSC_FALSE
   PetscBool :: dirichlet_zero_grad_solute = PETSC_FALSE
+  PetscBool :: zero_grad_solute = PETSC_FALSE
 
   PetscInt :: wat_comp_id, air_comp_id, energy_id, salt_comp_id
   PetscInt :: iphase
@@ -2648,8 +2649,7 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
   select case(bc_type)
     ! figure out the direction of flow
     case(DIRICHLET_BC,HYDROSTATIC_BC,HYDROSTATIC_SEEPAGE_BC, &
-         HYDROSTATIC_CONDUCTANCE_BC,DIRICHLET_SEEPAGE_BC, &
-         DIRICHLET_ZERO_GRADIENT_BC,ZERO_GRADIENT_BC)
+         HYDROSTATIC_CONDUCTANCE_BC,DIRICHLET_SEEPAGE_BC)
       if (gen_auxvar_up%mobility(iphase) + &
           gen_auxvar_dn%mobility(iphase) > eps) then
 
@@ -2815,6 +2815,31 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
     q = v_darcy(iphase) * area
     ! mole_flux[kmol phase/sec] = q[m^3 phase/sec] *
     !                             density_ave[kmol phase/m^3 phase]
+    ! if (v_darcy(iphase) > 0.d0) then !inflow
+    !   select case (ibndtype(2))
+    !     case(DIRICHLET_ZERO_GRADIENT,DIRICHLET,ZERO_GRADIENT)
+    !       xmol(air_comp_id) = auxvars(GENERAL_LIQUID_STATE_X_MOLE_DOF)
+    !   end select
+    !   if (general_salt) then
+    !     select case (ibndtype(4))
+    !       case(DIRICHLET_ZERO_GRADIENT,DIRICHLET,ZERO_GRADIENT)
+    !         xmol(salt_comp_id) = auxvars(GENERAL_LIQUID_STATE_S_MOLE_DOF)
+    !     end select
+    !   endif
+    !   xmol(iphase) = 1.d0 - xmol(salt_comp_id) - xmol(air_comp_id)
+    ! else !outflow
+    !   select case (ibndtype(2))
+    !     case(DIRICHLET_ZERO_GRADIENT,DIRICHLET)
+    !     case(ZERO_GRADIENT)
+          
+    !   end select
+    !   if (general_salt) then
+    !     select case (ibndtype(4))
+    !       case(DIRICHLET_ZERO_GRADIENT,DIRICHLET)
+    !       case(ZERO_GRADIENT)
+    !     end select
+    !   endif
+    ! endif
     tot_mole_flux = q*density_ave
     tot_mole_flux_ddel_pressure = dv_darcy_ddelta_pressure * area * &
                                   density_ave
@@ -3400,18 +3425,22 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
     elseif (ibndtype(GENERAL_LIQUID_STATE_S_MOLE_DOF)==DIRICHLET_ZERO_GRADIENT_BC .or. &
             ibndtype(GENERAL_LIQUID_STATE_X_MOLE_DOF)==DIRICHLET_ZERO_GRADIENT_BC) then
       dirichlet_zero_grad_solute = PETSC_TRUE
+    elseif (ibndtype(GENERAL_LIQUID_STATE_S_MOLE_DOF)==ZERO_GRADIENT_BC .or. &
+            ibndtype(GENERAL_LIQUID_STATE_X_MOLE_DOF)==ZERO_GRADIENT_BC) then
+      zero_grad_solute = PETSC_TRUE
     endif
   elseif (.not. general_salt) then
     if (ibndtype(GENERAL_LIQUID_STATE_X_MOLE_DOF)==DIRICHLET_BC) then
       dirichlet_solute = PETSC_TRUE
     elseif (ibndtype(GENERAL_LIQUID_STATE_X_MOLE_DOF)==DIRICHLET_ZERO_GRADIENT_BC) then
       dirichlet_zero_grad_solute = PETSC_TRUE
+    elseif (ibndtype(GENERAL_LIQUID_STATE_X_MOLE_DOF)==ZERO_GRADIENT_BC) then
+      zero_grad_solute = PETSC_TRUE
     endif
   endif
   sat_dn = gen_auxvar_dn%sat(iphase)
   if ((sat_dn > eps .and. ibndtype(iphase) /= NEUMANN_BC) &
-      .or. (ibndtype(iphase)==NEUMANN_BC .and. dirichlet_solute) &
-      .or. (dirichlet_zero_grad_solute .and. q < 0.d0)) then
+      .or. (ibndtype(iphase)==NEUMANN_BC .and. (dirichlet_solute .or. dirichlet_zero_grad_solute))) then
     if (general_harmonic_diff_density) then
       ! density_ave in this case is not used.
       density_ave = 1.d0
@@ -3483,7 +3512,7 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
     tot_mole_flux = dtot_mole_flux_ddeltaX * delta_X_whatever
     dtot_mole_flux_dstpd = tot_mole_flux / stpd_ave_over_dist
     dtot_mole_flux_ddenave = tot_mole_flux / density_ave
-    if (dirichlet_zero_grad_solute) then
+    if ((dirichlet_zero_grad_solute .and. q < 0.d0) .or. (zero_grad_solute)) then
       tot_mole_flux = 0.d0
     endif
     Res(wat_comp_id) = Res(wat_comp_id) - tot_mole_flux
@@ -3495,7 +3524,7 @@ subroutine GeneralBCFlux(ibndtype,auxvar_mapping,auxvars, &
       !DF: The diffusion of dissolved air (above) is equal and opposite to water.
       !    This is not currently being applied to salt.
       !Res(wat_comp_id) = Res(wat_comp_id) - tot_mole_flux1
-      if (dirichlet_zero_grad_solute) then
+      if ((dirichlet_zero_grad_solute .and. q < 0.d0) .or. (zero_grad_solute)) then
         tot_mole_flux1 = 0.d0
       endif
       Res(salt_comp_id) = Res(salt_comp_id) + tot_mole_flux1

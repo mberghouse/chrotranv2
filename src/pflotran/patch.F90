@@ -1833,7 +1833,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
             end select
           ! mole fraction; 3rd dof ----------------------- !
             select case(general%mole_fraction%itype)
-              case(DIRICHLET_BC,DIRICHLET_ZERO_GRADIENT_BC)
+              case(DIRICHLET_BC,DIRICHLET_ZERO_GRADIENT_BC,ZERO_GRADIENT_BC)
                 call PatchGetCouplerValueFromDataset(coupler,option, &
                             patch%grid,general%mole_fraction%dataset,iconn,xmol)
                 if (general_immiscible) then
@@ -1852,7 +1852,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
             if (general_salt .and. .not. general_soluble_matrix) then
               ! mole fraction; 4th dof ----------------------- !
               select case(general%salt_mole_fraction%itype)
-                case(DIRICHLET_BC,DIRICHLET_ZERO_GRADIENT_BC)
+                case(DIRICHLET_BC,DIRICHLET_ZERO_GRADIENT_BC,ZERO_GRADIENT_BC)
                   call PatchGetCouplerValueFromDataset(coupler,option, &
                          patch%grid,general%salt_mole_fraction%dataset,iconn,xmol2)
                     if (general_immiscible) then
