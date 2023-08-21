@@ -544,17 +544,17 @@ subroutine TFluxCoef(rt_parameter, &
     ! upstream weighting
     ! units = (m^3 water/m^2 bulk/sec)
     if (q > 0.d0) then
-      coef_up(:) =  tran_coefs_over_dist(:,iphase)+q
+      coef_up(:) =  tran_coefs_over_dist(:,iphase)+q*epsilon_up
       coef_dn(:) = -tran_coefs_over_dist(:,iphase)
     else
       coef_up(:) =  tran_coefs_over_dist(:,iphase)
-      coef_dn(:) = -tran_coefs_over_dist(:,iphase)+q
+      coef_dn(:) = -tran_coefs_over_dist(:,iphase)+q*epsilon_dn
     endif
 
     ! units = (m^3 water/m^2 bulk/sec)*(m^2 bulk)*(1000 L water/m^3 water)
     !       = L water/sec
-    T_up(:,iphase) = coef_up*area*epsilon_up*1000.d0  ! 1000 converts m^3 -> L
-    T_dn(:,iphase) = coef_dn*area*epsilon_dn*1000.d0
+    T_up(:,iphase) = coef_up*area*1000.d0  ! 1000 converts m^3 -> L
+    T_dn(:,iphase) = coef_dn*area*1000.d0
   enddo
 
 end subroutine TFluxCoef
