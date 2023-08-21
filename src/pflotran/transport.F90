@@ -378,7 +378,8 @@ end subroutine TDispersionBC
 subroutine TFlux(rt_parameter, &
                  rt_auxvar_up,global_auxvar_up, &
                  rt_auxvar_dn,global_auxvar_dn, &
-                 coef_up,coef_dn,option,Flux,Res)
+                 coef_up,coef_dn, &
+                 option,Flux,Res)
   !
   ! Computes flux term in residual function
   !
@@ -496,7 +497,8 @@ subroutine TFluxCoef(rt_parameter, &
                      global_auxvar_up,global_auxvar_dn, &
                      option,area,velocity, &
                      tran_coefs_over_dist, &
-                     fraction_upwind,T_up,T_dn)
+                     fraction_upwind,epsilon_up,epsilon_dn, &
+                     T_up,T_dn)
   !
   ! Computes flux coefficients for transport matrix
   !
@@ -525,6 +527,7 @@ subroutine TFluxCoef(rt_parameter, &
   PetscReal :: coef_up(rt_parameter%naqcomp)
   PetscReal :: coef_dn(rt_parameter%naqcomp)
   PetscReal :: q
+  PetscReal :: epsilon_up, epsilon_dn
 
   nphase = rt_parameter%nphase
 
@@ -550,8 +553,8 @@ subroutine TFluxCoef(rt_parameter, &
 
     ! units = (m^3 water/m^2 bulk/sec)*(m^2 bulk)*(1000 L water/m^3 water)
     !       = L water/sec
-    T_up(:,iphase) = coef_up*area*1000.d0  ! 1000 converts m^3 -> L
-    T_dn(:,iphase) = coef_dn*area*1000.d0
+    T_up(:,iphase) = coef_up*area*epsilon_up*1000.d0  ! 1000 converts m^3 -> L
+    T_dn(:,iphase) = coef_dn*area*epsilon_dn*1000.d0
   enddo
 
 end subroutine TFluxCoef
@@ -562,7 +565,8 @@ subroutine TFluxCoefBC(bctype,rt_parameter, &
                        global_auxvar_up,global_auxvar_dn, &
                        option,area,velocity, &
                        tran_coefs_over_dist, &
-                       fraction_upwind,T_up,T_dn)
+                       fraction_upwind,epsilon_up,epsilon_dn, &
+                       T_up,T_dn)
   !
   ! Computes boundary flux coefficients for transport matrix
   !
@@ -585,6 +589,7 @@ subroutine TFluxCoefBC(bctype,rt_parameter, &
   PetscReal :: fraction_upwind
   PetscReal :: T_up(rt_parameter%naqcomp,rt_parameter%nphase)
   PetscReal :: T_dn(rt_parameter%naqcomp,rt_parameter%nphase)
+  PetscReal :: epsilon_up, epsilon_dn
 
   select case(bctype)
     case(MEMBRANE_BC)
@@ -595,7 +600,8 @@ subroutine TFluxCoefBC(bctype,rt_parameter, &
                      global_auxvar_up,global_auxvar_dn, &
                      option,area,velocity, &
                      tran_coefs_over_dist, &
-                     fraction_upwind,T_up,T_dn)
+                     fraction_upwind,epsilon_up,epsilon_dn,&
+                     T_up,T_dn)
   end select
 
 end subroutine TFluxCoefBC
