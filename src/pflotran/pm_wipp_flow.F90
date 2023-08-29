@@ -564,6 +564,8 @@ subroutine PMWIPPFloReadNewtonSelectCase(this,input,keyword,found, &
 
   found = PETSC_TRUE
   select case(trim(keyword))
+    case('CENTRAL_DIFFERENCE_JACOBIAN')
+        wippflo_central_diff_jacobian = PETSC_TRUE
     case('LIQUID_RESIDUAL_INFINITY_TOL')
       call InputReadDouble(input,option,this%liquid_residual_infinity_tol)
       call InputErrorMsg(input,option,keyword,error_string)
@@ -763,7 +765,7 @@ recursive subroutine PMWIPPFloInitializeRun(this)
         call this%realization%comm1%GlobalToLocal(field%work,field%work_loc)
         call VecGetArrayReadF90(field%work_loc,work_loc_p,ierr);CHKERRQ(ierr)
         do ghosted_id = 1, grid%ngmax
-          do idof = 0, option%nflowdof
+          do idof = 0, 2*option%nflowdof
             wippflo_auxvars(idof,ghosted_id)%alpha = work_loc_p(ghosted_id)
           enddo
         enddo
@@ -801,7 +803,7 @@ recursive subroutine PMWIPPFloInitializeRun(this)
         call this%realization%comm1%GlobalToLocal(field%work,field%work_loc)
         call VecGetArrayReadF90(field%work_loc,work_loc_p,ierr);CHKERRQ(ierr)
         do ghosted_id = 1, patch%grid%ngmax
-          do idof = 0, option%nflowdof
+          do idof = 0, 2*option%nflowdof
             wippflo_auxvars(idof,ghosted_id)%elevation = work_loc_p(ghosted_id)
           enddo
         enddo
@@ -861,14 +863,14 @@ recursive subroutine PMWIPPFloInitializeRun(this)
     call this%realization%comm1%GlobalToLocal(field%work,field%work_loc)
     call VecGetArrayReadF90(field%work_loc,work_loc_p,ierr);CHKERRQ(ierr)
     do ghosted_id = 1, grid%ngmax
-      do idof = 0, option%nflowdof
+      do idof = 0, 2*option%nflowdof
         wippflo_auxvars(idof,ghosted_id)%elevation = work_loc_p(ghosted_id)
       enddo
     enddo
     call VecRestoreArrayReadF90(field%work_loc,work_loc_p,ierr);CHKERRQ(ierr)
   else ! or set them baesd on grid cell elevation
     do ghosted_id = 1, grid%ngmax
-      do idof = 0, option%nflowdof
+      do idof = 0, 2*option%nflowdof
         wippflo_auxvars(idof,ghosted_id)%elevation = grid%z(ghosted_id)
       enddo
     enddo

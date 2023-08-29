@@ -14,6 +14,7 @@ module WIPP_Flow_Aux_module
   PetscReal, public :: wippflo_sat_min_pert = 1.d-10
   PetscReal, public :: wippflo_pres_min_pert = 1.d-2
 
+  PetscBool, public :: wippflo_central_diff_jacobian = PETSC_FALSE
   PetscBool, public :: wippflo_residual_test = PETSC_FALSE
   PetscInt, public :: wippflo_residual_test_cell = 0
   PetscBool, public :: wippflo_jacobian_test = PETSC_FALSE
@@ -336,9 +337,12 @@ subroutine WIPPFloAuxVarCompute(x,wippflo_auxvar,global_auxvar, &
   PetscReal :: aux(1)
   PetscReal :: perm_for_cc
   PetscReal :: prev_effective_porosity
+  PetscReal :: epsilon, eps_liq
   PetscErrorCode :: ierr
 
   ierr = 0
+
+  epsilon = 1.d-10
 
   lid = option%liquid_phase
   gid = option%gas_phase
@@ -369,6 +373,9 @@ subroutine WIPPFloAuxVarCompute(x,wippflo_auxvar,global_auxvar, &
 
   call EOSWaterSaturationPressure(wippflo_auxvar%temp, &
                                   wippflo_auxvar%pres(spid),ierr)
+  eps_liq = 1.d0 - epsilon
+  wippflo_auxvar%sat(gid) = max(min(wippflo_auxvar%sat(gid),eps_liq),epsilon)
+
   wippflo_auxvar%sat(lid) = 1.d0 - wippflo_auxvar%sat(gid)
 
   cell_pressure = wippflo_auxvar%pres(lid)
@@ -584,7 +591,8 @@ subroutine WIPPFloAuxVarPerturb(wippflo_auxvar,global_auxvar, &
   class(characteristic_curves_type) :: characteristic_curves
 
   PetscReal :: x(option%nflowdof), x_pert(option%nflowdof), &
-               pert(option%nflowdof), x_pert_save(option%nflowdof)
+               pert(option%nflowdof), x_pert_save(option%nflowdof), &
+               x_pert_plus(option%nflowdof), x_pert_minus(option%nflowdof)
 
   PetscReal, parameter :: perturbation_tolerance = 1.d-8
   PetscReal, parameter :: min_perturbation = 1.d-10
@@ -633,11 +641,24 @@ subroutine WIPPFloAuxVarPerturb(wippflo_auxvar,global_auxvar, &
   ! WIPPFLO_UPDATE_FOR_DERIVATIVE indicates call from perturbation
   option%iflag = WIPPFLO_UPDATE_FOR_DERIVATIVE
   do idof = 1, option%nflowdof
+
+    if (wippflo_central_diff_jacobian) then
+      !pert(idof) = max(1.d-7 * x(idof),1.d-7)
+
+      x_pert_minus = x
+      x_pert_minus(idof) = x(idof) - pert(idof)
+      call WIPPFloAuxVarCompute(x_pert_minus, &
+             wippflo_auxvar(idof+option%nflowdof),global_auxvar, &
+             material_auxvar, &
+             characteristic_curves,natural_id,option)
+    endif
+
     wippflo_auxvar(idof)%pert = pert(idof)
-    x_pert = x
-    x_pert(idof) = x(idof) + pert(idof)
+    wippflo_auxvar(idof+option%nflowdof)%pert = pert(idof)
+    x_pert_plus = x
+    x_pert_plus(idof) = x(idof) + pert(idof)
     x_pert_save = x_pert
-    call WIPPFloAuxVarCompute(x_pert,wippflo_auxvar(idof),global_auxvar, &
+    call WIPPFloAuxVarCompute(x_pert_plus,wippflo_auxvar(idof),global_auxvar, &
                               material_auxvar, &
                               characteristic_curves,natural_id,option)
   enddo

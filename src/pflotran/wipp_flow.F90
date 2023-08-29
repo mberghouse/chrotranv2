@@ -123,9 +123,9 @@ subroutine WIPPFloSetup(realization)
   endif
 
   ndof = option%nflowdof
-  allocate(wippflo_auxvars(0:ndof,grid%ngmax))
+  allocate(wippflo_auxvars(0:2*ndof,grid%ngmax))
   do ghosted_id = 1, grid%ngmax
-    do idof = 0, ndof
+    do idof = 0, 2*ndof
       call WIPPFloAuxVarInit(wippflo_auxvars(idof,ghosted_id),option)
     enddo
   enddo
