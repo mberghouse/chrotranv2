@@ -1334,14 +1334,14 @@ subroutine WIPPFloAccumDerivative(wippflo_auxvar,global_auxvar, &
   PetscReal :: res_pert_plus(option%nflowdof), res_pert_minus(option%nflowdof)
   PetscInt :: idof, irow
 
-!  if (.not. wippflo_central_diff_jacobian) then
+  if (.not. wippflo_central_diff_jacobian) then
     call WIPPFloAccumulation(wippflo_auxvar(ZERO_INTEGER), &
                              global_auxvar, &
                              material_auxvar,option, &
                              res,PETSC_FALSE)
-!  endif
+  endif
 
-!  if (wippflo_central_diff_jacobian) then
+  if (wippflo_central_diff_jacobian) then
     do idof = 1, option%nflowdof
         call WIPPFloAccumulation(wippflo_auxvar(idof), &
                                   global_auxvar, &
@@ -1360,7 +1360,7 @@ subroutine WIPPFloAccumDerivative(wippflo_auxvar,global_auxvar, &
                           wippflo_auxvar(idof)%pert)
         enddo !irow
       enddo ! idof
-!  else
+  else
     do idof = 1, option%nflowdof
       call WIPPFloAccumulation(wippflo_auxvar(idof), &
                                global_auxvar, &
@@ -1370,7 +1370,7 @@ subroutine WIPPFloAccumDerivative(wippflo_auxvar,global_auxvar, &
         J(irow,idof) = (res_pert(irow)-res(irow))/wippflo_auxvar(idof)%pert
       enddo !irow
     enddo ! idof
-!  endif
+  endif
 end subroutine WIPPFloAccumDerivative
 
 ! ************************************************************************** !
@@ -1417,7 +1417,7 @@ subroutine XXFluxDerivative(wippflo_auxvar_up,global_auxvar_up, &
   Jdn = 0.d0
 
   option%iflag = -2
-!  if (.not. wippflo_central_diff_jacobian) then
+  if (.not. wippflo_central_diff_jacobian) then
   call XXFlux(wippflo_auxvar_up(ZERO_INTEGER),global_auxvar_up, &
                    material_auxvar_up, &
                    wippflo_auxvar_dn(ZERO_INTEGER),global_auxvar_dn, &
@@ -1430,7 +1430,7 @@ subroutine XXFluxDerivative(wippflo_auxvar_up,global_auxvar_up, &
                    ! avoid double counting upwind direction flip
                    PETSC_FALSE, & ! count upwind direction flip
                    PETSC_FALSE)
-!  endif
+  endif
   res_dn = res_up
 
   if (wippflo_jacobian_test) then
@@ -1439,7 +1439,7 @@ subroutine XXFluxDerivative(wippflo_auxvar_up,global_auxvar_up, &
   endif
 
   ! upgradient derivatives
-!  if (wippflo_central_diff_jacobian) then
+  if (wippflo_central_diff_jacobian) then
     do idof = 1, option%nflowdof
          call XXFlux(wippflo_auxvar_up(idof),global_auxvar_up, &
                        material_auxvar_up, &
@@ -1469,7 +1469,7 @@ subroutine XXFluxDerivative(wippflo_auxvar_up,global_auxvar_up, &
                             wippflo_auxvar_up(idof)%pert)
          enddo !irow
        enddo ! idof
-!  else
+  else
     do idof = 1, option%nflowdof
       call XXFlux(wippflo_auxvar_up(idof),global_auxvar_up, &
                        material_auxvar_up, &
@@ -1493,10 +1493,10 @@ subroutine XXFluxDerivative(wippflo_auxvar_up,global_auxvar_up, &
                          wippflo_auxvar_up(idof)%pert
       enddo !irow
     enddo ! idof
-!  endif
+  endif
 
   ! downgradient derivatives
-!  if (wippflo_central_diff_jacobian) then
+  if (wippflo_central_diff_jacobian) then
     do idof = 1, option%nflowdof
         call XXFlux(wippflo_auxvar_up(ZERO_INTEGER),global_auxvar_up, &
                        material_auxvar_up, &
@@ -1529,7 +1529,7 @@ subroutine XXFluxDerivative(wippflo_auxvar_up,global_auxvar_up, &
   !geh:print *, 'dn: ', irow, idof, Jdn(irow,idof), hyd_auxvar_dn(idof)%pert
         enddo !irow
       enddo ! idof
-!  else
+  else
     do idof = 1, option%nflowdof
       call XXFlux(wippflo_auxvar_up(ZERO_INTEGER),global_auxvar_up, &
                        material_auxvar_up, &
@@ -1553,7 +1553,7 @@ subroutine XXFluxDerivative(wippflo_auxvar_up,global_auxvar_up, &
                          wippflo_auxvar_dn(idof)%pert
       enddo !irow
     enddo ! idof
-!  endif
+  endif
 
 end subroutine XXFluxDerivative
 
@@ -1602,7 +1602,7 @@ subroutine XXBCFluxDerivative(ibndtype,auxvar_mapping,auxvars, &
   Jdn = 0.d0
 
   option%iflag = -2
-!  if (.not. wippflo_central_diff_jacobian) then
+  if (.not. wippflo_central_diff_jacobian) then
     call XXBCFlux(ibndtype,auxvar_mapping,auxvars, &
                      wippflo_auxvar_up,global_auxvar_up, &
                      wippflo_auxvar_dn(ZERO_INTEGER),global_auxvar_dn, &
@@ -1615,10 +1615,10 @@ subroutine XXBCFluxDerivative(ibndtype,auxvar_mapping,auxvars, &
                      ! avoid double counting upwind direction flip
                      PETSC_FALSE, & ! count upwind direction flip
                      PETSC_FALSE)
-!  endif
+  endif
 
   ! downgradient derivatives
-!  if (wippflo_central_diff_jacobian) then
+  if (wippflo_central_diff_jacobian) then
     do idof = 1, option%nflowdof
         call XXBCFlux(ibndtype,auxvar_mapping,auxvars, &
                          wippflo_auxvar_up,global_auxvar_up, &
@@ -1651,7 +1651,7 @@ subroutine XXBCFluxDerivative(ibndtype,auxvar_mapping,auxvars, &
                             wippflo_auxvar_dn(idof)%pert)
         enddo !irow
       enddo ! idof
-!  else
+  else
     do idof = 1, option%nflowdof
       call XXBCFlux(ibndtype,auxvar_mapping,auxvars, &
                        wippflo_auxvar_up,global_auxvar_up, &
@@ -1668,7 +1668,7 @@ subroutine XXBCFluxDerivative(ibndtype,auxvar_mapping,auxvars, &
         Jdn(irow,idof) = (res_pert(irow)-res(irow))/wippflo_auxvar_dn(idof)%pert
       enddo !irow
     enddo ! idof
-!  endif
+  endif
 end subroutine XXBCFluxDerivative
 
 ! ************************************************************************** !
@@ -1723,14 +1723,14 @@ subroutine WIPPFloSrcSinkDerivative(option,qsrc,flow_src_sink_type, &
 
 
   ! unperturbed wippflo_auxvars value
-!  if (.not. wippflo_central_diff_jacobian) then
+  if (.not. wippflo_central_diff_jacobian) then
     call WIPPFloSrcSink(option,qsrc,flow_src_sink_type, &
                       wippflo_auxvars(ZERO_INTEGER),global_auxvar, &
                       material_auxvar,dummy_real,scale,res,PETSC_FALSE)
-!  endif
+  endif
 
   ! perturbed wippflo_auxvars values
-!  if (wippflo_central_diff_jacobian) then
+  if (wippflo_central_diff_jacobian) then
     do idof = 1, option%nflowdof
       call WIPPFloSrcSink(option,qsrc,flow_src_sink_type, &
                           wippflo_auxvars(idof),global_auxvar, &
@@ -1746,7 +1746,7 @@ subroutine WIPPFloSrcSinkDerivative(option,qsrc,flow_src_sink_type, &
                         wippflo_auxvars(idof)%pert)
       enddo !irow
     enddo ! idof
-!  else
+  else
     do idof = 1, option%nflowdof
 
     if (Initialized(wippflo_auxvars(idof)%well%pl)) then
@@ -1770,7 +1770,7 @@ subroutine WIPPFloSrcSinkDerivative(option,qsrc,flow_src_sink_type, &
         Jac(irow,idof) = (res_pert(irow)-res(irow))/wippflo_auxvars(idof)%pert
       enddo !irow
     enddo ! idof
-!  endif
+  endif
 
 end subroutine WIPPFloSrcSinkDerivative
 
