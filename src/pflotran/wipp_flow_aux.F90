@@ -374,7 +374,7 @@ subroutine WIPPFloAuxVarCompute(x,wippflo_auxvar,global_auxvar, &
   call EOSWaterSaturationPressure(wippflo_auxvar%temp, &
                                   wippflo_auxvar%pres(spid),ierr)
   eps_liq = 1.d0 - epsilon
-  wippflo_auxvar%sat(gid) = max(min(wippflo_auxvar%sat(gid),eps_liq),epsilon)
+  !wippflo_auxvar%sat(gid) = max(min(wippflo_auxvar%sat(gid),eps_liq),epsilon)
 
   wippflo_auxvar%sat(lid) = 1.d0 - wippflo_auxvar%sat(gid)
 
