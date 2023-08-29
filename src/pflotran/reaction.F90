@@ -5879,7 +5879,7 @@ subroutine RUpdateKineticState(rt_auxvar,global_auxvar,material_auxvar, &
   type(global_auxvar_type) :: global_auxvar
   type(material_auxvar_type) :: material_auxvar
   class(reaction_rt_type) :: reaction
-  PetscBool :: kinetic_state_updated
+  PetscBool, intent(out) :: kinetic_state_updated
   type(option_type) :: option
 
   ! toggled true if any kinetic states are updated in the routines below

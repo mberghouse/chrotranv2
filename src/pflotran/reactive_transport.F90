@@ -25,6 +25,7 @@ module Reactive_Transport_module
             RTMaxChange, &
             RTUpdateEquilibriumState, &
             RTUpdateKineticState, &
+            RTTruncateMineralVolumeFractions, &
             RTUpdateMassBalance, &
             RTResidual, &
             RTJacobian, &
@@ -937,6 +938,47 @@ subroutine RTUpdateKineticState(realization)
   endif
 
 end subroutine RTUpdateKineticState
+
+! ************************************************************************** !
+
+subroutine RTTruncateMineralVolumeFractions(realization)
+  !
+  ! Truncates mineral volume fractions to zero
+  !
+  ! Author: Glenn Hammond
+  ! Date: 08/28/23
+  !
+  use Grid_module
+  use Option_module
+  use Patch_module
+  use Reaction_Mineral_module
+  use Realization_Subsurface_class
+
+  implicit none
+
+  class(realization_subsurface_type) :: realization
+
+  type(patch_type), pointer :: patch
+  type(grid_type), pointer :: grid
+  type(option_type), pointer :: option
+  class(reaction_rt_type), pointer :: reaction
+  type(reactive_transport_auxvar_type), pointer :: rt_auxvars(:)
+  PetscInt :: ghosted_id, local_id
+
+  option => realization%option
+  patch => realization%patch
+  grid => patch%grid
+  reaction => realization%reaction
+  rt_auxvars => patch%aux%RT%auxvars
+
+  do local_id = 1, grid%nlmax
+    ghosted_id = grid%nL2G(local_id)
+    if (patch%imat(ghosted_id) <= 0) cycle
+    call MineralTruncateVolumeFractions(rt_auxvars(ghosted_id), &
+                                         reaction,option)
+  enddo
+
+end subroutine RTTruncateMineralVolumeFractions
 
 ! ************************************************************************** !
 

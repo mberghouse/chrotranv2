@@ -23,7 +23,8 @@ module Reaction_Mineral_module
             RMineralSaturationIndex, &
             MineralUpdateTempDepCoefs, &
             MineralUpdateSpecSurfaceArea, &
-            MineralUpdateKineticState
+            MineralUpdateKineticState, &
+            MineralTruncateVolumeFractions
 
 contains
 
@@ -1496,8 +1497,6 @@ subroutine MineralUpdateKineticState(rt_auxvar,global_auxvar,material_auxvar, &
                     option%tran_dt
     rt_auxvar%mnrl_volfrac(imnrl) = rt_auxvar%mnrl_volfrac(imnrl) + &
                                     delta_volfrac
-    if (rt_auxvar%mnrl_volfrac(imnrl) < 0.d0) &
-      rt_auxvar%mnrl_volfrac(imnrl) = 0.d0
 
     ! CO2-specific
     if (option%iflowmode == MPH_MODE) then
@@ -1523,5 +1522,32 @@ subroutine MineralUpdateKineticState(rt_auxvar,global_auxvar,material_auxvar, &
   enddo
 
 end subroutine MineralUpdateKineticState
+
+! ************************************************************************** !
+
+subroutine MineralTruncateVolumeFractions(rt_auxvar,reaction,option)
+  !
+  ! Truncates negative mineral volume fractions (resulting from overshoot
+  ! due to the explicit update of minerals) to zero.
+  !
+  ! Author: Glenn Hammond
+  ! Date: 08/28/23
+  !
+  use Option_module
+
+  implicit none
+
+  type(reactive_transport_auxvar_type) :: rt_auxvar
+  class(reaction_rt_type) :: reaction
+  type(option_type) :: option
+
+  PetscInt :: imnrl
+
+  do imnrl = 1, reaction%mineral%nkinmnrl
+    if (rt_auxvar%mnrl_volfrac(imnrl) < 0.d0) &
+      rt_auxvar%mnrl_volfrac(imnrl) = 0.d0
+  enddo
+
+end subroutine MineralTruncateVolumeFractions
 
 end module Reaction_Mineral_module

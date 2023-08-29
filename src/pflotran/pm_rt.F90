@@ -651,7 +651,8 @@ subroutine PMRTFinalizeTimestep(this)
   ! Date: 04/03/13
   !
 
-  use Reactive_Transport_module, only : RTMaxChange
+  use Reactive_Transport_module, only : RTMaxChange, &
+                                        RTTruncateMineralVolumeFractions
   use Variables_module, only : POROSITY
   use Material_module, only : MaterialGetAuxVarVecLoc
   use Material_Aux_module, only : POROSITY_BASE
@@ -661,6 +662,8 @@ subroutine PMRTFinalizeTimestep(this)
 
   class(pm_rt_type) :: this
   PetscErrorCode :: ierr
+
+  call RTTruncateMineralVolumeFractions(this%realization)
 
   if (this%transient_porosity) then
     call VecCopy(this%realization%field%porosity_tpdt, &
