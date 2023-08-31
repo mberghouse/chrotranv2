@@ -10,7 +10,7 @@ module NW_Transport_Aux_module
 
   private
 
-  PetscReal, public :: MIN_LIQ_SAT = 1.0d-5
+  PetscReal, public :: MIN_LIQ_SAT = 1.0d-15
   PetscBool, public :: nwt_well_quasi_imp_coupled = PETSC_FALSE
 
   type, public :: nwt_well_aux_type

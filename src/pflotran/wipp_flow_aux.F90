@@ -337,12 +337,13 @@ subroutine WIPPFloAuxVarCompute(x,wippflo_auxvar,global_auxvar, &
   PetscReal :: aux(1)
   PetscReal :: perm_for_cc
   PetscReal :: prev_effective_porosity
-  PetscReal :: epsilon, eps_liq
+  PetscReal :: eps_gas, eps_liq
   PetscErrorCode :: ierr
 
   ierr = 0
 
-  epsilon = 1.d-10
+  !min gas saturation
+  eps_gas = 1.d-10
 
   lid = option%liquid_phase
   gid = option%gas_phase
@@ -373,8 +374,8 @@ subroutine WIPPFloAuxVarCompute(x,wippflo_auxvar,global_auxvar, &
 
   call EOSWaterSaturationPressure(wippflo_auxvar%temp, &
                                   wippflo_auxvar%pres(spid),ierr)
-  eps_liq = 1.d0 - epsilon
-  !wippflo_auxvar%sat(gid) = max(min(wippflo_auxvar%sat(gid),eps_liq),epsilon)
+  eps_liq = 1.d0 - eps_gas
+  wippflo_auxvar%sat(gid) = min(max(wippflo_auxvar%sat(gid),0.d0),eps_liq)
 
   wippflo_auxvar%sat(lid) = 1.d0 - wippflo_auxvar%sat(gid)
 
