@@ -497,8 +497,7 @@ subroutine TFluxCoef(rt_parameter, &
                      global_auxvar_up,global_auxvar_dn, &
                      option,area,velocity, &
                      tran_coefs_over_dist, &
-                     fraction_upwind,epsilon_up,epsilon_dn, &
-                     T_up,T_dn)
+                     fraction_upwind,T_up,T_dn)
   !
   ! Computes flux coefficients for transport matrix
   !
@@ -527,7 +526,6 @@ subroutine TFluxCoef(rt_parameter, &
   PetscReal :: coef_up(rt_parameter%naqcomp)
   PetscReal :: coef_dn(rt_parameter%naqcomp)
   PetscReal :: q
-  PetscReal :: epsilon_up, epsilon_dn
 
   nphase = rt_parameter%nphase
 
@@ -544,11 +542,11 @@ subroutine TFluxCoef(rt_parameter, &
     ! upstream weighting
     ! units = (m^3 water/m^2 bulk/sec)
     if (q > 0.d0) then
-      coef_up(:) =  tran_coefs_over_dist(:,iphase)+q*epsilon_up
+      coef_up(:) =  tran_coefs_over_dist(:,iphase)+q
       coef_dn(:) = -tran_coefs_over_dist(:,iphase)
     else
       coef_up(:) =  tran_coefs_over_dist(:,iphase)
-      coef_dn(:) = -tran_coefs_over_dist(:,iphase)+q*epsilon_dn
+      coef_dn(:) = -tran_coefs_over_dist(:,iphase)+q
     endif
 
     ! units = (m^3 water/m^2 bulk/sec)*(m^2 bulk)*(1000 L water/m^3 water)
@@ -565,8 +563,8 @@ subroutine TFluxCoefBC(bctype,rt_parameter, &
                        global_auxvar_up,global_auxvar_dn, &
                        option,area,velocity, &
                        tran_coefs_over_dist, &
-                       fraction_upwind,epsilon_up,epsilon_dn, &
-                       T_up,T_dn)
+                       fraction_upwind,T_up,T_dn)
+
   !
   ! Computes boundary flux coefficients for transport matrix
   !
@@ -589,7 +587,6 @@ subroutine TFluxCoefBC(bctype,rt_parameter, &
   PetscReal :: fraction_upwind
   PetscReal :: T_up(rt_parameter%naqcomp,rt_parameter%nphase)
   PetscReal :: T_dn(rt_parameter%naqcomp,rt_parameter%nphase)
-  PetscReal :: epsilon_up, epsilon_dn
 
   select case(bctype)
     case(MEMBRANE_BC)
@@ -600,8 +597,8 @@ subroutine TFluxCoefBC(bctype,rt_parameter, &
                      global_auxvar_up,global_auxvar_dn, &
                      option,area,velocity, &
                      tran_coefs_over_dist, &
-                     fraction_upwind,epsilon_up,epsilon_dn,&
-                     T_up,T_dn)
+                     fraction_upwind,T_up,T_dn)
+
   end select
 
 end subroutine TFluxCoefBC

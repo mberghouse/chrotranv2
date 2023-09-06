@@ -1341,7 +1341,6 @@ subroutine RTCalculateRHS_t0(realization)
   PetscInt :: local_id, ghosted_id
   PetscInt :: iphase
   PetscInt :: istartaq, iendaq
-  PetscReal :: epsilon_up, epsilon_dn
 
   PetscErrorCode :: ierr
 
@@ -1395,7 +1394,6 @@ subroutine RTCalculateRHS_t1(realization,rhs_vec)
   use Field_module
   use Grid_module
   use Transport_Constraint_RT_module
-  use Secondary_Continuum_Aux_module
 
   implicit none
 
@@ -1425,7 +1423,6 @@ subroutine RTCalculateRHS_t1(realization,rhs_vec)
   type(connection_set_type), pointer :: cur_connection_set
   type(coupler_type), pointer :: source_sink
   type(reactive_transport_param_type), pointer :: rt_parameter
-  type(sec_transport_type), pointer :: rt_sec_transport_vars(:)
   PetscInt :: sum_connection, iconn
   PetscReal :: qsrc(2)
   PetscInt :: offset, istartall, iendall, icomp, iactgas
@@ -1433,7 +1430,6 @@ subroutine RTCalculateRHS_t1(realization,rhs_vec)
   PetscReal :: coef_in(2), coef_out(2)
   PetscInt :: nphase
   PetscErrorCode :: ierr
-  PetscReal :: epsilon_up, epsilon_dn
 
   option => realization%option
   field => realization%field
@@ -1460,10 +1456,6 @@ subroutine RTCalculateRHS_t1(realization,rhs_vec)
   endif
 #endif
 
-  if (option%use_sc) then
-    rt_sec_transport_vars => patch%aux%SC_RT%sec_transport_vars
-  endif
-
   ! Get vectors
   call VecGetArrayF90(rhs_vec,rhs_p,ierr);CHKERRQ(ierr)
 
@@ -1484,14 +1476,6 @@ subroutine RTCalculateRHS_t1(realization,rhs_vec)
 
       if (patch%imat(ghosted_id) <= 0) cycle
 
-      if (option%use_sc) then
-        epsilon_up = rt_sec_transport_vars(sum_connection)%epsilon
-        epsilon_dn = rt_sec_transport_vars(ghosted_id)%epsilon
-      else
-        epsilon_up = 1.d0
-        epsilon_dn = 1.d0
-      endif
-
       call TFluxCoefBC(boundary_condition%tran_condition%itype,rt_parameter, &
                        global_auxvars_bc(sum_connection), &
                        global_auxvars(ghosted_id), &
@@ -1500,7 +1484,6 @@ subroutine RTCalculateRHS_t1(realization,rhs_vec)
                        patch%boundary_tran_coefs(:,:,sum_connection), &
                        ! this 0.5 only applies to the non-upwinded conditional
                        0.5d0, & ! fraction upwind (0.d0 upwind, 0.5 central)
-                       epsilon_up,epsilon_dn, &
                        coef_up,coef_dn)
 
       ! coef_dn not needed
@@ -1640,7 +1623,6 @@ subroutine RTCalculateTransportMatrix(realization,T)
   use Coupler_module
   use Connection_module
   use Debug_module
-  use Secondary_Continuum_Aux_module
 
   implicit none
 
@@ -1663,7 +1645,6 @@ subroutine RTCalculateTransportMatrix(realization,T)
   type(connection_set_type), pointer :: cur_connection_set
   type(coupler_type), pointer :: source_sink
   type(reactive_transport_param_type), pointer :: rt_parameter
-  type(sec_transport_type), pointer :: rt_sec_transport_vars(:)
   PetscInt :: sum_connection, iconn
   PetscReal :: coef
   !TODO(geh): replace these with parameters RT_MAX_AQCOMP,RT_MAX_NPHASE
@@ -1675,7 +1656,6 @@ subroutine RTCalculateTransportMatrix(realization,T)
   PetscViewer :: viewer
   PetscInt :: nphase
   PetscErrorCode :: ierr
-  PetscReal :: epsilon_up, epsilon_dn
 
   character(len=MAXSTRINGLENGTH) :: string
 
@@ -1689,10 +1669,6 @@ subroutine RTCalculateTransportMatrix(realization,T)
   rt_parameter => patch%aux%RT%rt_parameter
 
   nphase = rt_parameter%nphase
-
-  if (option%use_sc) then
-    rt_sec_transport_vars => patch%aux%SC_RT%sec_transport_vars
-  endif
 
   call MatZeroEntries(T,ierr);CHKERRQ(ierr)
 
@@ -1716,14 +1692,6 @@ subroutine RTCalculateTransportMatrix(realization,T)
       if (patch%imat(ghosted_id_up) <= 0 .or.  &
           patch%imat(ghosted_id_dn) <= 0) cycle
 
-      if (option%use_sc) then
-        epsilon_up = rt_sec_transport_vars(ghosted_id_up)%epsilon
-        epsilon_dn = rt_sec_transport_vars(ghosted_id_dn)%epsilon
-      else
-        epsilon_up = 1.d0
-        epsilon_dn = 1.d0
-      endif
-
       call TFluxCoef(rt_parameter, &
                      global_auxvars(ghosted_id_up), &
                      global_auxvars(ghosted_id_dn), &
@@ -1731,7 +1699,6 @@ subroutine RTCalculateTransportMatrix(realization,T)
                      patch%internal_velocities(:,sum_connection), &
                      patch%internal_tran_coefs(:,:,sum_connection), &
                      cur_connection_set%dist(-1,iconn), &
-                     epsilon_up,epsilon_dn, &
                      coef_up,coef_dn)
 
       if (local_id_up > 0) then
@@ -1777,7 +1744,6 @@ subroutine RTCalculateTransportMatrix(realization,T)
                        patch%boundary_velocities(:,sum_connection), &
                        patch%boundary_tran_coefs(:,:,sum_connection), &
                        0.5d0, & ! fraction upwind (0.d0 upwind, 0.5 central)
-                       epsilon_up,epsilon_dn,&
                        coef_up,coef_dn)
 
  !     coef_dn = coef_dn*global_auxvars(ghosted_id)%den_kg*1.d-3
@@ -2099,7 +2065,6 @@ subroutine RTComputeBCMassBalanceOS(realization)
   use Coupler_module
   use Debug_module
   use Transport_Constraint_RT_module
-  use Secondary_Continuum_Aux_module
 
   implicit none
 
@@ -2125,7 +2090,6 @@ subroutine RTComputeBCMassBalanceOS(realization)
   type(coupler_type), pointer :: boundary_condition
   type(coupler_type), pointer :: source_sink
   type(connection_set_type), pointer :: cur_connection_set
-  type(sec_transport_type), pointer :: rt_sec_transport_vars(:)
   PetscInt :: sum_connection, iconn
   PetscInt :: flow_src_sink_type
   PetscReal :: qsrc(2)
@@ -2135,7 +2099,6 @@ subroutine RTComputeBCMassBalanceOS(realization)
   PetscReal :: Flux(realization%reaction%naqcomp,realization%reaction%nphase)
   PetscReal :: coef_in(2), coef_out(2)
   PetscInt :: nphase
-  PetscReal :: epsilon_up, epsilon_dn
 
   option => realization%option
   field => realization%field
@@ -2168,14 +2131,6 @@ subroutine RTComputeBCMassBalanceOS(realization)
 
       if (patch%imat(ghosted_id) <= 0) cycle
 
-      if (option%use_sc) then
-        epsilon_up = rt_sec_transport_vars(sum_connection)%epsilon
-        epsilon_dn = rt_sec_transport_vars(ghosted_id)%epsilon
-      else
-        epsilon_up = 1.d0
-        epsilon_dn = 1.d0
-      endif
-
       ! TFluxCoef accomplishes the same as what TBCCoef would
       call TFluxCoef(rt_parameter, &
                      global_auxvars_bc(sum_connection), &
@@ -2184,7 +2139,6 @@ subroutine RTComputeBCMassBalanceOS(realization)
                      patch%boundary_velocities(:,sum_connection), &
                      patch%boundary_tran_coefs(:,:,sum_connection), &
                      0.5d0, &
-                     epsilon_up,epsilon_dn, &
                      coef_up,coef_dn)
       ! TFlux accomplishes the same as what TBCFlux would
       call TFlux(rt_parameter, &
@@ -2480,7 +2434,6 @@ subroutine RTResidualFlux(snes,xx,r,realization,ierr)
   type(reactive_transport_auxvar_type), pointer :: rt_auxvars(:), rt_auxvars_bc(:)
   type(global_auxvar_type), pointer :: global_auxvars(:), global_auxvars_bc(:)
   type(material_auxvar_type), pointer :: material_auxvars(:)
-  type(sec_transport_type), pointer :: rt_sec_transport_vars(:)
 
   type(coupler_type), pointer :: boundary_condition
   type(connection_set_list_type), pointer :: connection_set_list
@@ -2495,7 +2448,6 @@ subroutine RTResidualFlux(snes,xx,r,realization,ierr)
   PetscReal :: Res(realization%reaction%ncomp)
   PetscReal :: Flux(realization%patch%aux%RT%rt_parameter%naqcomp, &
                     realization%option%transport%nphase)
-  PetscReal :: epsilon_up, epsilon_dn
 
   option => realization%option
   field => realization%field
@@ -2515,10 +2467,6 @@ subroutine RTResidualFlux(snes,xx,r,realization,ierr)
     call RTUpdateAuxVars(realization,PETSC_TRUE,PETSC_TRUE,PETSC_TRUE)
   else
     call RTUpdateAuxVars(realization,PETSC_TRUE,PETSC_TRUE,PETSC_FALSE)
-  endif
-
-  if (option%use_sc) then
-    rt_sec_transport_vars => patch%aux%SC_RT%sec_transport_vars
   endif
 
   if (option%compute_mass_balance_new) then
@@ -2548,14 +2496,6 @@ subroutine RTResidualFlux(snes,xx,r,realization,ierr)
       if (patch%imat(ghosted_id_up) <= 0 .or.  &
           patch%imat(ghosted_id_dn) <= 0) cycle
 
-      if (option%use_sc) then
-        epsilon_up = rt_sec_transport_vars(ghosted_id_up)%epsilon
-        epsilon_dn = rt_sec_transport_vars(ghosted_id_dn)%epsilon
-      else
-        epsilon_up = 1.d0
-        epsilon_dn = 1.d0
-      endif
-
       ! TFluxCoef will eventually be moved to another routine where it should be
       ! called only once per flux interface at the beginning of a transport
       ! time step.
@@ -2567,7 +2507,6 @@ subroutine RTResidualFlux(snes,xx,r,realization,ierr)
                 patch%internal_velocities(:,sum_connection), &
                 patch%internal_tran_coefs(:,:,sum_connection), &
                 cur_connection_set%dist(-1,iconn), &
-                epsilon_up,epsilon_dn, &
                 coef_up,coef_dn)
 
       call TFlux(rt_parameter, &
@@ -2633,14 +2572,6 @@ subroutine RTResidualFlux(snes,xx,r,realization,ierr)
 
       if (patch%imat(ghosted_id) <= 0) cycle
 
-      if (option%use_sc) then
-        epsilon_up = rt_sec_transport_vars(ghosted_id_up)%epsilon
-        epsilon_dn = rt_sec_transport_vars(ghosted_id_dn)%epsilon
-      else
-        epsilon_up = 1.d0
-        epsilon_dn = 1.d0
-      endif
-
       call TFluxCoefBC(boundary_condition%tran_condition%itype, &
                        rt_parameter, &
                        global_auxvars_bc(sum_connection), &
@@ -2649,7 +2580,6 @@ subroutine RTResidualFlux(snes,xx,r,realization,ierr)
                        patch%boundary_velocities(:,sum_connection), &
                        patch%boundary_tran_coefs(:,:,sum_connection), &
                        0.5d0, &
-                       epsilon_up,epsilon_dn, &
                        coef_up,coef_dn)
       call TFlux(rt_parameter, &
                   rt_auxvars_bc(sum_connection), &
@@ -3323,7 +3253,6 @@ subroutine RTJacobianFlux(snes,xx,A,B,realization,ierr)
   type(coupler_type), pointer :: boundary_condition
   type(connection_set_list_type), pointer :: connection_set_list
   type(connection_set_type), pointer :: cur_connection_set
-  type(sec_transport_type), pointer :: rt_sec_transport_vars(:)
   PetscInt :: sum_connection, iconn
   PetscInt :: ghosted_id_up, ghosted_id_dn, local_id_up, local_id_dn
 
@@ -3333,7 +3262,6 @@ subroutine RTJacobianFlux(snes,xx,A,B,realization,ierr)
                        realization%option%transport%nphase)
   PetscReal :: Jup(realization%reaction%ncomp,realization%reaction%ncomp)
   PetscReal :: Jdn(realization%reaction%ncomp,realization%reaction%ncomp)
-  PetscReal :: epsilon_up, epsilon_dn
 
   option => realization%option
   field => realization%field
@@ -3346,10 +3274,6 @@ subroutine RTJacobianFlux(snes,xx,A,B,realization,ierr)
   global_auxvars => patch%aux%Global%auxvars
   global_auxvars_bc => patch%aux%Global%auxvars_bc
   material_auxvars => patch%aux%Material%auxvars
-
-  if (option%use_sc) then
-    rt_sec_transport_vars => patch%aux%SC_RT%sec_transport_vars
-  endif
 
   ! Interior Flux Terms -----------------------------------
   ! must zero out Jacobian blocks
@@ -3373,14 +3297,6 @@ subroutine RTJacobianFlux(snes,xx,A,B,realization,ierr)
       if (patch%imat(ghosted_id_up) <= 0 .or.  &
           patch%imat(ghosted_id_dn) <= 0) cycle
 
-      if (option%use_sc) then
-        epsilon_up = rt_sec_transport_vars(ghosted_id_up)%epsilon
-        epsilon_dn = rt_sec_transport_vars(ghosted_id_dn)%epsilon
-      else
-        epsilon_up = 1.d0
-        epsilon_dn = 1.d0
-      endif
-
       call TFluxCoef(rt_parameter, &
                 global_auxvars(ghosted_id_up), &
                 global_auxvars(ghosted_id_dn), &
@@ -3388,7 +3304,6 @@ subroutine RTJacobianFlux(snes,xx,A,B,realization,ierr)
                 patch%internal_velocities(:,sum_connection), &
                 patch%internal_tran_coefs(:,:,sum_connection), &
                 cur_connection_set%dist(-1,iconn), &
-                epsilon_up,epsilon_dn, &
                 coef_up,coef_dn)
       call TFluxDerivative(rt_parameter, &
                            rt_auxvars(ghosted_id_up), &
@@ -3453,14 +3368,6 @@ subroutine RTJacobianFlux(snes,xx,A,B,realization,ierr)
 
       if (patch%imat(ghosted_id) <= 0) cycle
 
-      if (option%use_sc) then
-        epsilon_up = rt_sec_transport_vars(ghosted_id_up)%epsilon
-        epsilon_dn = rt_sec_transport_vars(ghosted_id_dn)%epsilon
-      else
-        epsilon_up = 1.d0
-        epsilon_dn = 1.d0
-      endif
-
       call TFluxCoefBC(boundary_condition%tran_condition%itype, &
                        rt_parameter, &
                        global_auxvars_bc(sum_connection), &
@@ -3469,7 +3376,6 @@ subroutine RTJacobianFlux(snes,xx,A,B,realization,ierr)
                        patch%boundary_velocities(:,sum_connection), &
                        patch%boundary_tran_coefs(:,:,sum_connection), &
                        0.5d0, & ! fraction upwind (0.d0 upwind, 0.5 central)
-                       epsilon_up,epsilon_dn, &
                        coef_up,coef_dn)
       call TFluxDerivative(rt_parameter, &
                            rt_auxvars_bc(sum_connection), &
