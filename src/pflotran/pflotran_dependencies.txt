@@ -1276,7 +1276,6 @@ inversion_parameter.o : \
   input_aux.o \
   material_aux.o \
   option.o \
-  option_inversion.o \
   pflotran_constants.o \
   string.o \
   units.o \
@@ -2739,7 +2738,7 @@ reaction_sandbox.o : \
   output_aux.o \
   pflotran_constants.o \
   reaction_aux.o \
-  reaction_sandbox_arcticGHG.o \
+  reaction_sandbox_arcticghg.o \
   reaction_sandbox_base.o \
   reaction_sandbox_bioTH.o \
   reaction_sandbox_biohill.o \
@@ -2758,13 +2757,14 @@ reaction_sandbox.o : \
   reactive_transport_aux.o \
   string.o \
   utility.o
-reaction_sandbox_arcticGHG.o : \
+reaction_sandbox_arcticghg.o : \
   global_aux.o \
   input_aux.o \
   material_aux.o \
   option.o \
   pflotran_constants.o \
   reaction_aux.o \
+  reaction_immobile_aux.o \
   reaction_sandbox_base.o \
   reactive_transport_aux.o \
   string.o \
@@ -2946,7 +2946,6 @@ reaction_sandbox_ufd_wp.o : \
   reactive_transport_aux.o \
   string.o \
   units.o
-
 reaction_solid_solution.o : \
   input_aux.o \
   option.o \
