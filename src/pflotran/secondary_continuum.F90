@@ -2585,7 +2585,6 @@ subroutine SecondaryGenResidual(sec_gen_vars, sec_porosity, &
 
   alpha = option%flow_dt*salt_diffusion_coeff(1)
 
-
 ! Setting the coefficients
   do i = 2, ngcells-1
     coeff_left(i) = -alpha*area(i-1)/((dm_minus(i) + dm_plus(i-1))*vol(i))
