@@ -40,6 +40,7 @@ module Material_module
     class(dataset_base_type), pointer :: tortuosity_dataset
     PetscReal :: tortuosity
     PetscBool :: tortuosity_function_of_porosity
+    PetscBool :: soluble
     PetscInt :: saturation_function_id
     character(len=MAXWORDLENGTH) :: saturation_function_name
     PetscInt :: thermal_conductivity_function_id
@@ -199,6 +200,7 @@ function MaterialPropertyCreate(option)
 !  material_property%porosity_dataset_name = ''
   nullify(material_property%porosity_dataset)
   nullify(material_property%tortuosity_dataset)
+  material_property%soluble = PETSC_FALSE
   material_property%tortuosity_function_of_porosity = PETSC_FALSE
   material_property%tortuosity = 1.d0
   material_property%tortuosity_pwr = 0.d0
@@ -484,6 +486,9 @@ subroutine MaterialPropertyRead(material_property,input,option)
                              material_property%tortuosity_func_porosity_pwr)
         call InputErrorMsg(input,option,'tortuosity power as a function of &
                            &porosity','MATERIAL_PROPERTY')
+      case('SOLUBLE')
+        material_property%soluble = PETSC_TRUE
+        call InputErrorMsg(input,option,'SOLUBLE','MATERIAL_PROPERTY')
       case('WIPP-FRACTURE')
         ! Calculates permeability and porosity induced by fracture,
         ! which is described by pressure within certain range of pressure

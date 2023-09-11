@@ -216,7 +216,7 @@ subroutine PMGeneralSetFlowMode(pm,option)
   allocate(pm%converged_cell(option%nflowdof,general_max_states,MAX_INDEX))
   allocate(pm%converged_real(option%nflowdof,general_max_states,MAX_INDEX))
 
-  if (optioN%nflowdof == 3) then
+  if (option%nflowdof == 3) then
     rel_update_inf_tol = &
       reshape([pres_rel_inf_tol,xmol_rel_inf_tol,temp_rel_inf_tol, &
                pres_rel_inf_tol,pres_rel_inf_tol,temp_rel_inf_tol, &

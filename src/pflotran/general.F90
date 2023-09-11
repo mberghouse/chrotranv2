@@ -908,7 +908,7 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
                   end select
                 case(NEUMANN_BC)
                 case default
-                  if (general_soluble_matrix) then
+                  if (material_auxvars(ghosted_id)%soluble) then
                     continue
                   else
                     option%io_buffer = 'Unknown BC type in GeneralUpdateAuxVars().'
@@ -940,7 +940,7 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
       if (istate <= 5) then
         global_auxvars_bc(sum_connection)%istate = istate
       else
-        if (general_soluble_matrix) then
+        if (material_auxvars(ghosted_id)%soluble) then
           global_auxvars_bc(sum_connection)%istate = LGP_STATE
         else
           global_auxvars_bc(sum_connection)%istate = TWO_PHASE_STATE
@@ -1034,7 +1034,7 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
       endif
 
       ! Check if porosity is set if 4 dof
-      if (general_salt .and. general_soluble_matrix) then
+      if (general_salt .and. material_auxvars(ghosted_id)%soluble) then
         ! if (associated(source_sink%flow_condition%general%porosity)) then
         !   gen_auxvars_ss(ZERO_INTEGER,sum_connection)%effective_porosity = &
         !     source_sink%flow_condition%general%effective_porosity%dataset%rarray(1)
@@ -1048,7 +1048,7 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
       xxss(2) = 5.d-1
       xxss(3) = gen_auxvars_ss(ZERO_INTEGER,sum_connection)%temp
       if (general_salt) then
-        if (general_soluble_matrix) then
+        if (material_auxvars(ghosted_id)%soluble) then
           xxss(4) = gen_auxvars_ss(ZERO_INTEGER,sum_connection)%effective_porosity
         else
           xxss(4) = gen_auxvars_ss(ZERO_INTEGER,sum_connection)%xmol(option%salt_id,option%liquid_phase)
@@ -1068,17 +1068,17 @@ subroutine GeneralUpdateAuxVars(realization,update_state,update_state_bc)
           dabs(qsrc(air_comp_id)) > 0.d0) then
         global_auxvars_ss(sum_connection)%istate = TWO_PHASE_STATE
       elseif (dabs(qsrc(wat_comp_id)) > 0.d0) then
-        if (general_salt .and. .not. general_soluble_matrix) then
+        if (general_salt .and. .not. material_auxvars(ghosted_id)%soluble) then
           global_auxvars_ss(sum_connection)%istate = LIQUID_STATE
-        elseif (general_salt .and. general_soluble_matrix) then
+        elseif (general_salt .and. material_auxvars(ghosted_id)%soluble) then
           global_auxvars_ss(sum_connection)%istate = LP_STATE
         endif
       elseif (dabs(qsrc(air_comp_id)) > 0.d0) then
         global_auxvars_ss(sum_connection)%istate = GAS_STATE
       else
-        if (general_salt .and. .not. general_soluble_matrix) then
+        if (general_salt .and. .not. material_auxvars(ghosted_id)%soluble) then
           global_auxvars_ss(sum_connection)%istate = TWO_PHASE_STATE
-        elseif (general_salt .and. general_soluble_matrix) then
+        elseif (general_salt .and. material_auxvars(ghosted_id)%soluble) then
           global_auxvars_ss(sum_connection)%istate = LGP_STATE
         endif
       endif

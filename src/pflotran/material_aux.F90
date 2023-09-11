@@ -62,6 +62,7 @@ module Material_Aux_module
     PetscReal :: dporosity_dp
     PetscReal :: tortuosity
     PetscReal :: soil_particle_density
+    PetscBool :: soluble
     PetscReal, pointer :: permeability(:)
     PetscReal, pointer :: sat_func_prop(:)
     PetscReal, pointer :: soil_properties(:) ! den, therm. cond., heat cap.
@@ -259,6 +260,7 @@ subroutine MaterialAuxVarInit(auxvar,option)
   auxvar%dporosity_dp = 0.d0
   auxvar%tortuosity = UNINITIALIZED_DOUBLE
   auxvar%soil_particle_density = UNINITIALIZED_DOUBLE
+  auxvar%soluble = PETSC_FALSE
   if (option%iflowmode /= NULL_MODE) then
     if (option%flow%full_perm_tensor) then
       allocate(auxvar%permeability(6))
@@ -337,6 +339,7 @@ subroutine MaterialAuxVarCopy(auxvar,auxvar2,option)
   auxvar2%porosity = auxvar%porosity
   auxvar2%tortuosity = auxvar%tortuosity
   auxvar2%soil_particle_density = auxvar%soil_particle_density
+  auxvar2%soluble = auxvar%soluble
   if (associated(auxvar%permeability)) then
     auxvar2%permeability = auxvar%permeability
   endif
@@ -353,7 +356,7 @@ end subroutine MaterialAuxVarCopy
 ! ************************************************************************** !
 
 subroutine MaterialAuxSetPermTensorModel(model,option)
-
+ 
   use Option_module
 
   implicit none
