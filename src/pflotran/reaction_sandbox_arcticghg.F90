@@ -64,11 +64,18 @@ module Reaction_Sandbox_ArcticGHG_class
     PetscReal :: k_in_o2
     PetscBool :: methanogenesis
     PetscReal :: k_ch4
+    PetscReal :: k_ch4ox
+    PetscReal :: k_ch4ox_o2
     PetscReal :: r_ch4_max
+    PetscReal :: r_ch4ox_max
     PetscReal :: ae_ch4
+    PetscReal :: ae_ch4ox
     PetscReal :: slope_ch4
     PetscReal :: intercept_ch4
     PetscReal :: alpha_ch4
+    PetscReal :: slope_ch4ox
+    PetscReal :: intercept_ch4ox
+    PetscReal :: alpha_ch4ox
     PetscReal :: k_in_ch4
     PetscBool :: methane_oxidation
 
@@ -163,7 +170,7 @@ subroutine ArcticGHGRead(this,input,option)
   PetscInt :: nrxn
 
   K_CH2Oaq = UNINITIALIZED_DOUBLE
-  error_string = 'CHEMISTRY,REACTION_SANDBOX,hARCTIC_GHG'
+  error_string = 'ARCTIC_GHG'
 
   call InputPushBlock(input,option)
   do
@@ -173,7 +180,7 @@ subroutine ArcticGHGRead(this,input,option)
 
     call InputReadCard(input,option,word)
     call InputErrorMsg(input,option,'keyword', &
-           'CHEMISTRY,REACTION_SANDBOX,iARCTIC_GHG')
+           'CHEMISTRY,REACTION_SANDBOX,ARCTIC_GHG')
     call StringToUpper(word)
 
     select case(trim(word))
@@ -323,24 +330,42 @@ subroutine ArcticGHGRead(this,input,option)
                        'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE,DECAY_AQUEOUS')
                 call StringToUpper(word)
                 select case(trim(word))
-                  case('HALF_SATURATION_CONSTANT','MONOD_CONSTANT')
-                    call InputReadDouble(input,option,this%k_ch4)
+                  case('HALF_SATURATION_CONSTANT_CH4','MONOD_CONSTANT_CH4')
+                    call InputReadDouble(input,option,this%k_ch4ox)
                     call InputErrorMsg(input,option,word,error_string)
+                    call InputReadAndConvertUnits(input,this%k_ch4ox, &
+                                       'mol/L','CHEMISTRY,REACTION_SANDBOX,ARCTICGHG,REACTION,&
+                                                 &METHANE_OXIDATION,MONOD_CONSTANT_CH4',option)
+                  case('HALF_SATURATION_CONSTANT_O2','MONOD_CONSTANT_O2')
+                    call InputReadDouble(input,option,this%k_ch4ox_o2)
+                    call InputErrorMsg(input,option,word,error_string)
+                    call InputReadAndConvertUnits(input,this%k_ch4ox_o2, &
+                                       'mol/L','CHEMISTRY,REACTION_SANDBOX,ARCTICGHG,REACTION,&
+                                                 &METHANE_OXIDATION,MONOD_CONSTANT_CH4',option)
                   case('RMAX')
-                    call InputReadDouble(input,option,this%r_ch4_max)
+                    call InputReadDouble(input,option,this%r_ch4ox_max)
                     call InputErrorMsg(input,option,word,error_string)
+                    call InputReadAndConvertUnits(input,this%r_ch4ox_max, &
+                                       'mol/L-s','CHEMISTRY,REACTION_SANDBOX,ARCTICGHG,REACTION,&
+                                                &METHANE_OXIDATION,RMAX',option)
                   case('ACTIVATION_ENERGY')
-                    call InputReadDouble(input,option,this%ae_ch4)
+                    call InputReadDouble(input,option,this%ae_ch4ox)
                     call InputErrorMsg(input,option,word,error_string)
+                    call InputReadAndConvertUnits(input,this%ae_ch4ox, &
+                                       'J/mol','CHEMISTRY,REACTION_SANDBOX,ARCTICGHG,REACTION,&
+                                                &METHANE_OXIDATION,ACTIVATION_ENERGY',option)
                   case('MONOD_SLOPE')
-                    call InputReadDouble(input,option,this%slope_ch4)
+                    call InputReadDouble(input,option,this%slope_ch4ox)
                     call InputErrorMsg(input,option,word,error_string)
                   case('MONOD_INTERCEPT')
-                    call InputReadDouble(input,option,this%intercept_ch4)
+                    call InputReadDouble(input,option,this%intercept_ch4ox)
                     call InputErrorMsg(input,option,word,error_string)
                   case('ALPHA')
-                    call InputReadDouble(input,option,this%alpha_ch4)
+                    call InputReadDouble(input,option,this%alpha_ch4ox)
                     call InputErrorMsg(input,option,word,error_string)
+                    call InputReadAndConvertUnits(input,this%alpha_ch4ox, &
+                                       'mol/L-s','CHEMISTRY,REACTION_SANDBOX,ARCTICGHG,REACTION,&
+                                                &METHANE_OXIDATION,ALPHA',option)
                   case default
                     call InputKeywordUnrecognized(input,word, &
                            'CHEMISTRY,REACTION_SANDBOX,ARCTICGHG,METHANE_OXIDATION',option)
@@ -464,12 +489,27 @@ subroutine ArcticGHGSetup(this,reaction,option)
       this%species_CO2_id = &
         GetPrimarySpeciesIDFromName(word,reaction,option)
     endif
-    this%stoich(this%methanogenesis_id,this%species_CH2O_id) = -1
+    this%stoich(this%methanogenesis_id,this%species_CH2O_id) = -1.d0
     this%stoich(this%methanogenesis_id,this%species_CH4_id) = 0.5d0
     this%stoich(this%methanogenesis_id,this%species_CO2_id) = 0.5d0
   endif
 
-  
+  if (this%methane_oxidation) then
+    if (.not. this%methanogenesis) then
+      word = 'CH4'
+      this%species_CH4_id = &
+        GetPrimarySpeciesIDFromName(word,reaction,option)
+    endif
+    if (.not. this%respiration) then
+      word = 'CO2'
+      this%species_CO2_id = &
+        GetPrimarySpeciesIDFromName(word,reaction,option)
+    endif
+    this%stoich(this%methane_oxidation_id,this%species_O2_id) = -1.d0
+    this%stoich(this%methane_oxidation_id,this%species_CH4_id) = -1.d0
+    this%stoich(this%methane_oxidation_id,this%species_CO2_id) = 1.d0
+  endif
+
   !Immobile species
   ! word = 'Xim'
   ! this%species_Xim_id = &
@@ -533,7 +573,7 @@ subroutine ArcticGHGEvaluate(this,Residual,Jacobian,compute_derivative, &
 
 !  Xim_offset = this%species_Xim_id + reaction%offset_immobile
   volume = material_auxvar%volume   ! m^3 bulk volume
-  volume_L_water = volume * material_auxvar%porosity * 1.d3 ! L pore water
+  volume_L_water = volume * material_auxvar%porosity * 1.d3 * global_auxvar%sat(1)! L pore water
   if (this%molarity_units) then
     molality_to_molarity = global_auxvar%den_kg(iphase)*1.d-3
  else
@@ -571,6 +611,9 @@ subroutine ArcticGHGEvaluate(this,Residual,Jacobian,compute_derivative, &
   ! Methanogenesis
   if (this%methanogenesis) then
     CH4 = rt_auxvar%pri_molal(this%species_CH4_id) * molality_to_molarity
+    if (.not. this%respiration) then
+      O2   = rt_auxvar%pri_molal(this%species_O2_id) * molality_to_molarity
+    endif
     if (Initialized(this%alpha_ch4)) then
       this%r_ch4_max = this%alpha_ch4 * exp(-1.d0*this%ae_ch4/(R*T))
     endif
@@ -586,10 +629,30 @@ subroutine ArcticGHGEvaluate(this,Residual,Jacobian,compute_derivative, &
     Residual(this%species_CH2O_id) = Residual(this%species_CH2O_id) - this%I_r(this%methanogenesis_id) * &
                                    volume_L_water * this%stoich(this%methanogenesis_id,this%species_CH2O_id)
   endif
-
+  !print *, 'ch4 reaction rate: ',this%r_ch4_max
   ! Methane oxidation
   if (this%methane_oxidation) then
-
+    if (.not. this%methanogenesis) then
+      CH4 = rt_auxvar%pri_molal(this%species_CH4_id) * molality_to_molarity
+    endif
+    if (.not. this%respiration) then
+      O2  = rt_auxvar%pri_molal(this%species_O2_id) * molality_to_molarity
+      CO2 = rt_auxvar%pri_molal(this%species_CO2_id) * molality_to_molarity
+    endif
+    if (Initialized(this%alpha_ch4ox)) then
+      this%r_ch4_max = this%alpha_ch4ox * exp(-1.d0*this%ae_ch4ox/(R*T))
+    endif
+    if (Initialized(this%slope_o2)) then
+      this%k_ch4 = this%intercept_ch4ox + (T-273.15d0) * this%slope_ch4ox
+    endif
+    this%I_r(this%methane_oxidation_id) = this%r_ch4ox_max * CH4 / (this%k_ch4ox + CH4) * &
+                                          O2 / (this%k_ch4ox_o2 + O2)
+    Residual(this%species_CH4_id) = Residual(this%species_CH4_id) - this%I_r(this%methane_oxidation_id) * &
+                                   volume_L_water * this%stoich(this%methane_oxidation_id,this%species_CH4_id)
+    Residual(this%species_O2_id) = Residual(this%species_O2_id) - this%I_r(this%methane_oxidation_id) * &
+                                   volume_L_water * this%stoich(this%methane_oxidation_id,this%species_O2_id)
+    Residual(this%species_CO2_id) = Residual(this%species_CO2_id) - this%I_r(this%methane_oxidation_id) * &
+                                   volume_L_water * this%stoich(this%methane_oxidation_id,this%species_CO2_id)
   endif
 
   ! do irxn = 1, this%nrxn
