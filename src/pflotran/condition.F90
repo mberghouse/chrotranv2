@@ -456,13 +456,13 @@ function FlowGeneralSubConditionPtr(input,sub_condition_name,general, &
     !      sub_condition_ptr => FlowSubConditionCreate(ONE_INTEGER)
     !      general%porosity => sub_condition_ptr
     !   endif
-    case('SOLUBILITY')
-      if (associated(general%solubility)) then
-        sub_condition_ptr => general%solubility
-      else
-        sub_condition_ptr => FlowSubConditionCreate(ONE_INTEGER)
-        general%solubility => sub_condition_ptr
-      endif
+    ! case('SOLUBILITY')
+    !   if (associated(general%solubility)) then
+    !     sub_condition_ptr => general%solubility
+    !   else
+    !     sub_condition_ptr => FlowSubConditionCreate(ONE_INTEGER)
+    !     general%solubility => sub_condition_ptr
+    !   endif
     case('LIQUID_FLUX')
       if (associated(general%liquid_flux)) then
         sub_condition_ptr => general%liquid_flux
@@ -1237,6 +1237,8 @@ subroutine FlowConditionRead(condition,input,option)
                                  energy_rate%dataset, &
                                  energy_rate%units,internal_units)
         input%force_units = PETSC_FALSE
+      case('SOLUBILITY')
+        
       case('WELL')
         internal_units = 'Pa'
         call ConditionReadValues(input,option,word, &
@@ -1880,6 +1882,8 @@ subroutine FlowConditionGeneralRead(condition,input,option)
               sub_condition_ptr%itype = HYDROSTATIC_SEEPAGE_BC
             case('DIRICHLET_SEEPAGE')
               sub_condition_ptr%itype = DIRICHLET_SEEPAGE_BC
+            case('AT_SOLUBILITY')
+              sub_condition_ptr%itype = AT_SOLUBILITY_BC
             case('MASS_RATE')
               sub_condition_ptr%itype = MASS_RATE_SS
               rate_string = 'kg/sec'
@@ -2011,7 +2015,7 @@ subroutine FlowConditionGeneralRead(condition,input,option)
       case('LIQUID_PRESSURE','GAS_PRESSURE','LIQUID_SATURATION', &
            'GAS_SATURATION', 'TEMPERATURE','MOLE_FRACTION','RATE', &
            'LIQUID_FLUX','GAS_FLUX','ENERGY_FLUX','RELATIVE_HUMIDITY', &
-           'SALT_MOLE_FRACTION','PRECIPITATE_SATURATION','SOLUBILITY')!,'POROSITY')
+           'SALT_MOLE_FRACTION','PRECIPITATE_SATURATION')!,'POROSITY')
         select case(option%iflowmode)
           case(G_MODE,WF_MODE)
             sub_condition_ptr => &
@@ -2023,7 +2027,7 @@ subroutine FlowConditionGeneralRead(condition,input,option)
             internal_units = 'Pa'
           case('LIQUID_SATURATION','GAS_SATURATION','MOLE_FRACTION', &
                 'RELATIVE_HUMIDITY','SALT_MOLE_FRACTION', &
-                'PRECIPITATE_SATURATION','SOLUBILITY')!,'POROSITY')
+                'PRECIPITATE_SATURATION','AT_SOLUBILITY')!,'POROSITY')
             internal_units = 'unitless'
           case('TEMPERATURE')
             internal_units = 'C'
@@ -2135,7 +2139,7 @@ subroutine FlowConditionGeneralRead(condition,input,option)
         else if (associated(general%gas_pressure) .and. &
                 associated(general%gas_saturation)) then
           ! two phase condition
-          if (associated(general%solubility)) then
+          if (general%salt_mole_fraction%itype == AT_SOLUBILITY_BC) then
             condition%iphase = LGP_STATE
           else
             condition%iphase = TWO_PHASE_STATE
@@ -2154,10 +2158,10 @@ subroutine FlowConditionGeneralRead(condition,input,option)
         else if (associated(general%liquid_pressure) .and. &
                  associated(general%mole_fraction)) then
           if (((option%nflowdof == 4) .and. (associated(general%salt_mole_fraction) &
-               .or. associated(general%solubility)) &
+               .or. general%salt_mole_fraction%itype == AT_SOLUBILITY_BC) &
                .or. (option%nflowdof == 3))) then
             ! liquid phase condition
-            if (associated(general%solubility)) then
+            if (general%salt_mole_fraction%itype == AT_SOLUBILITY_BC) then
               condition%iphase = LP_STATE
             else
               condition%iphase = LIQUID_STATE
@@ -2167,7 +2171,7 @@ subroutine FlowConditionGeneralRead(condition,input,option)
                  (associated(general%mole_fraction) .or. &
                   associated(general%relative_humidity))) then
           ! gas phase condition
-          if (associated(general%solubility)) then
+          if (general%salt_mole_fraction%itype == AT_SOLUBILITY_BC) then
             condition%iphase = GP_STATE
           else
             condition%iphase = GAS_STATE
@@ -2184,7 +2188,7 @@ subroutine FlowConditionGeneralRead(condition,input,option)
             &a gas saturation'
           call PrintErrMsg(option)
         endif
-        if (associated(general%solubility)) then
+        if (general%salt_mole_fraction%itype == AT_SOLUBILITY_BC) then
           condition%iphase = LGP_STATE
         else
            condition%iphase = TWO_PHASE_STATE
@@ -2267,8 +2271,8 @@ subroutine FlowConditionGeneralRead(condition,input,option)
     i = i + 1
   ! if (associated(general%porosity)) &
   !   i = i + 1
-  if (associated(general%solubility)) & 
-    i = i + 1
+  ! if (associated(general%solubility)) & 
+  !   i = i + 1
   if (associated(general%temperature)) &
     i = i + 1
   if (associated(general%liquid_flux)) &
@@ -2317,10 +2321,10 @@ subroutine FlowConditionGeneralRead(condition,input,option)
   !    i = i + 1
   !    condition%sub_condition_ptr(i)%ptr => general%porosity
   ! endif
-  if (associated(general%solubility)) then
-    i = i + 1
-    condition%sub_condition_ptr(i)%ptr => general%solubility
-  endif
+  ! if (associated(general%solubility)) then
+  !   i = i + 1
+  !   condition%sub_condition_ptr(i)%ptr => general%solubility
+  ! endif
   if (associated(general%temperature)) then
     i = i + 1
     condition%sub_condition_ptr(i)%ptr => general%temperature
@@ -3530,6 +3534,8 @@ subroutine ConditionReadValues(input,option,keyword,dataset_base, &
       error_string = 'CONDITION,' // trim(keyword) // ',SINGLE'
       call DatasetAsciiReadSingle(dataset_ascii,input,data_external_units, &
                                   data_internal_units,error_string,option)
+    else if (StringCompare(word,'AT_SOLUBILITY')) then
+      !
     else
       option%io_buffer = 'Keyword "' // trim(word) // &
         '" not recognized in when reading condition values for "' // &

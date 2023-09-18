@@ -46,6 +46,7 @@ subroutine CondControlAssignFlowInitCond(realization)
   use Patch_module
   use EOS_Water_module
   use Material_Aux_module
+  use Material_module
 
   use Global_module
   use Variables_module, only : STATE
@@ -75,6 +76,7 @@ subroutine CondControlAssignFlowInitCond(realization)
   type(flow_general_condition_type), pointer :: general
   type(flow_hydrate_condition_type), pointer :: hydrate
   type(material_auxvar_type), pointer :: material_auxvars(:)
+  type(material_property_ptr_type), pointer :: material_property_array(:)
   class(dataset_base_type), pointer :: dataset
   PetscBool :: dataset_flag(realization%option%nflowdof)
   PetscInt :: num_connections
@@ -87,6 +89,7 @@ subroutine CondControlAssignFlowInitCond(realization)
   discretization => realization%discretization
   field => realization%field
   patch => realization%patch
+  material_property_array => patch%material_property_array   !DF: check
 
   ! to catch uninitialized grid cells.  see VecMin check at bottom.
   call VecSet(field%work_loc,UNINITIALIZED_DOUBLE,ierr);CHKERRQ(ierr)
@@ -267,15 +270,22 @@ subroutine CondControlAssignFlowInitCond(realization)
                    option%io_buffer = 'Gas saturation ' // trim(string)
                    call PrintErrMsg(option)
                 endif
-                if (general_salt .and. associated(general%solubility)) then
+                ! if (general_salt .and. associated(general%solubility)) then
+                !    if (.not. &
+                !         (general%solubility%itype == DIRICHLET_BC .or. &
+                !         general%solubility%itype == HYDROSTATIC_BC)) then
+                !       option%io_buffer = 'Porosity ' // trim(string)
+                !       call PrintErrMsg(option)
+                !    endif
+                ! endif
+                if (associated(general%precipitate_saturation)) then
                    if (.not. &
-                        (general%solubility%itype == DIRICHLET_BC .or. &
-                        general%solubility%itype == HYDROSTATIC_BC)) then
-                      option%io_buffer = 'Porosity ' // trim(string)
+                        (general%precipitate_saturation%itype == DIRICHLET_BC .or. &
+                        general%precipitate_saturation%itype == HYDROSTATIC_BC)) then
+                      option%io_buffer = 'Precipitate saturation ' // trim(string)
                       call PrintErrMsg(option)
                    endif
-                endif
-                if (general_salt) then
+                elseif (general%salt_mole_fraction%itype == AT_SOLUBILITY_BC) then
                    if (.not. &
                         (general%precipitate_saturation%itype == DIRICHLET_BC .or. &
                         general%precipitate_saturation%itype == HYDROSTATIC_BC)) then
@@ -432,7 +442,7 @@ subroutine CondControlAssignFlowInitCond(realization)
                     xx_p(ibegin+GENERAL_PRECIPITATE_SAT_DOF) = &
                          general%precipitate_saturation%dataset%rarray(1)
                   elseif (general_salt .and. associated(general%solubility)) then
-                    if (material_auxvars(ghosted_id)%soluble) then
+                    if (material_property_array(patch%imat(ghosted_id))%ptr%soluble) then
                       xx_p(ibegin+GENERAL_POROSITY_DOF) = &
                            material_auxvars(ghosted_id)%porosity
                     else
@@ -474,7 +484,7 @@ subroutine CondControlAssignFlowInitCond(realization)
                     xx_p(ibegin+GENERAL_PRECIPITATE_SAT_DOF) = &
                          general%precipitate_saturation%dataset%rarray(1)
                   elseif (general_salt .and. associated(general%solubility)) then
-                    if (material_auxvars(ghosted_id)%soluble) then
+                    if (material_property_array(patch%imat(ghosted_id))%ptr%soluble) then
                       xx_p(ibegin+GENERAL_POROSITY_DOF) = &
                            material_auxvars(ghosted_id)%porosity
                     else
@@ -503,7 +513,7 @@ subroutine CondControlAssignFlowInitCond(realization)
                     xx_p(ibegin+GENERAL_PRECIPITATE_SAT_DOF) = &
                          general%precipitate_saturation%dataset%rarray(1)
                   elseif (general_salt .and. associated(general%solubility)) then
-                      if (material_auxvars(ghosted_id)%soluble) then
+                      if (material_property_array(patch%imat(ghosted_id))%ptr%soluble) then
                         xx_p(ibegin+GENERAL_POROSITY_DOF) = &
                              material_auxvars(ghosted_id)%porosity
                       else
