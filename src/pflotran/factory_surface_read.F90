@@ -213,7 +213,7 @@ subroutine FactorySurfaceReadInput(simulation,input)
   use Time_Storage_module
   use Realization_Surface_class
   use Material_Surface_module
-  use Realization_Subsurface_class
+  use Realization_Common_module
 
   implicit none
 

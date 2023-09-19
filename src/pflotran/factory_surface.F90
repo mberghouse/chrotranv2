@@ -199,7 +199,7 @@ subroutine FactorySurfaceSetupRealization(simulation)
   use Option_module
   use Init_Common_module
   use Realization_Surface_class
-  use Realization_Subsurface_class
+  use Realization_Common_module
   use Waypoint_module
   use Init_Surface_Flow_module
   use Init_Surface_module
