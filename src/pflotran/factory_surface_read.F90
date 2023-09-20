@@ -115,10 +115,7 @@ subroutine FactorySurfaceReadRequiredCards(simulation,input)
   class(simulation_surface_type) :: simulation
 
   character(len=MAXSTRINGLENGTH) :: string
-  character(len=MAXWORDLENGTH) :: word
-  character(len=MAXWORDLENGTH) :: card
   type(patch_type), pointer :: patch
-  type(grid_type), pointer :: grid
   class(realization_surface_type), pointer :: surface_realization
   type(discretization_type), pointer :: discretization
   type(option_type), pointer :: option
@@ -221,35 +218,19 @@ subroutine FactorySurfaceReadInput(simulation,input)
 
   character(len=MAXWORDLENGTH) :: word
   character(len=MAXWORDLENGTH) :: card
-  character(len=MAXSTRINGLENGTH) :: string, temp_string
+  character(len=MAXSTRINGLENGTH) :: string
   character(len=MAXWORDLENGTH) :: internal_units
-  character(len=MAXSTRINGLENGTH) :: error_string
 
   character(len=1) :: backslash
   PetscReal :: temp_real, temp_real2
-  PetscReal, pointer :: temp_real_array(:)
-  PetscInt :: temp_int
-
-  PetscBool :: vel_cent
-  PetscBool :: vel_face
-  PetscBool :: fluxes
-  PetscBool :: mass_flowrate
-  PetscBool :: energy_flowrate
-  PetscBool :: aveg_mass_flowrate
-  PetscBool :: aveg_energy_flowrate
-
-  PetscInt :: flag1
 
   type(region_type), pointer :: region
   type(flow_condition_type), pointer :: flow_condition
   type(coupler_type), pointer :: coupler
   type(strata_type), pointer :: strata
-  type(observation_type), pointer :: observation
   class(pmc_base_type), pointer :: master_pmc
 
   type(waypoint_type), pointer :: waypoint
-
-  type(material_property_type), pointer :: material_property
 
   class(realization_surface_type), pointer :: realization
   type(grid_type), pointer :: grid
@@ -257,11 +238,7 @@ subroutine FactorySurfaceReadInput(simulation,input)
   type(field_surface_type), pointer :: field_surface
   type(patch_type), pointer :: patch
   type(output_option_type), pointer :: output_option
-  class(dataset_base_type), pointer :: dataset
-  class(dataset_ascii_type), pointer :: dataset_ascii
   type(time_storage_type), pointer :: default_time_storage
-  class(data_mediator_dataset_type), pointer :: flow_data_mediator
-  class(data_mediator_dataset_type), pointer :: rt_data_mediator
   type(waypoint_list_type), pointer :: waypoint_list
   type(waypoint_list_type), pointer :: waypoint_list_time_card
   type(input_type), pointer :: input
@@ -269,13 +246,8 @@ subroutine FactorySurfaceReadInput(simulation,input)
 
   PetscReal :: dt_init
   PetscReal :: dt_min
-  PetscReal :: units_conversion
 
   class(timestepper_base_type), pointer :: temp_timestepper
-
-  PetscReal :: msfsalt, msfwatr, mlfsalt, mlfwatr
-
-  class(pm_base_type), pointer :: pm_flow
 
   internal_units = 'not_assigned'
   nullify(default_time_storage)

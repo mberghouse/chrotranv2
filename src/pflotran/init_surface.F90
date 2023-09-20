@@ -39,20 +39,17 @@ subroutine SurfaceInitMaterialProperties(surface_realization)
   class(realization_surface_type) :: surface_realization
 
   PetscReal, pointer :: man0_p(:)
-  PetscReal, pointer :: vec_p(:)
-  
-  PetscInt :: icell, local_id, ghosted_id, natural_id, surf_material_id
+
+  PetscInt :: icell, local_id, ghosted_id, surf_material_id
   PetscInt :: istart, iend
-  character(len=MAXSTRINGLENGTH) :: group_name
   character(len=MAXSTRINGLENGTH) :: dataset_name
   PetscErrorCode :: ierr
-  
+
   type(option_type), pointer :: option
   type(grid_type), pointer :: grid
   type(discretization_type), pointer :: discretization
   type(field_surface_type), pointer :: field_surface
   type(strata_type), pointer :: strata
-  type(patch_type), pointer :: patch  
   type(patch_type), pointer :: cur_patch
 
   type(material_surface_property_type), pointer :: material_surface_property
@@ -156,7 +153,7 @@ subroutine SurfaceInitMaterialProperties(surface_realization)
                               //  ' defined in input file.'
           call PrintErrMsgByRank(option)
         endif
-      else if (Uninitialized(surf_material_id)) then 
+      else if (Uninitialized(surf_material_id)) then
         write(dataset_name,*) grid%nG2A(ghosted_id)
         option%io_buffer = 'Uninitialized surface material id in patch at cell ' // &
                             trim(adjustl(dataset_name))
@@ -176,10 +173,10 @@ subroutine SurfaceInitMaterialProperties(surface_realization)
     enddo ! local_id - loop
 
     call VecRestoreArrayF90(field_surface%mannings0,man0_p,ierr);CHKERRQ(ierr)
-      
+
     cur_patch => cur_patch%next
   enddo ! looping over patches
-  
+
   call MaterialSurfacePropertyDestroy(null_material_surface_property)
   nullify(null_material_surface_property)
 

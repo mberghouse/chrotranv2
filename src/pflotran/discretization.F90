@@ -330,12 +330,9 @@ subroutine DiscretizationSurfaceReadRequiredCards(discretization,input,option)
   type(discretization_type),pointer :: discretization
   character(len=MAXWORDLENGTH) :: word
   type(grid_type), pointer :: grid
-  type(grid_structured_type), pointer :: str_grid
   type(grid_unstructured_type), pointer :: un_str_grid
-  character(len=MAXWORDLENGTH) :: structured_grid_ctype
   character(len=MAXWORDLENGTH) :: unstructured_grid_ctype
 
-  PetscInt :: structured_grid_itype
   PetscInt :: unstructured_grid_itype
   PetscInt :: nx, ny, nz
 
@@ -685,7 +682,7 @@ subroutine DiscretizationRead(discretization,input,option)
         end select
       case('RIGHT_HAND_RULE_CHECK_ALL')
         discretization%grid%unstructured_grid% &
-                         check_all_points_rh_rule = PETSC_TRUE         
+                         check_all_points_rh_rule = PETSC_TRUE
       case default
         call InputKeywordUnrecognized(input,word,'GRID',option)
     end select

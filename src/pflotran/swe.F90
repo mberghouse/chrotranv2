@@ -830,7 +830,9 @@ subroutine SWERHSFunction(ts,time,x,f,surface_realization,ierr)
   call SWERHSFunctionBoundaryConn(f,surface_realization,max_courant_num);
   call SWERHSFunctionAddAccumulationTerm(f,surface_realization,ierr);CHKERRQ(ierr)
 
-  call MPI_Allreduce(MPI_IN_PLACE,max_courant_num,ONE_INTEGER_MPI,MPI_DOUBLE_PRECISION,MPI_MAX,option%mycomm,ierr);CHKERRQ(ierr);
+  call MPI_Allreduce(MPI_IN_PLACE,max_courant_num,ONE_INTEGER_MPI, &
+                     MPI_DOUBLE_PRECISION,MPI_MAX,option%mycomm, &
+                     ierr);CHKERRQ(ierr);
   write(*,*)'max_courant_num = ',max_courant_num
 
 end subroutine SWERHSFunction

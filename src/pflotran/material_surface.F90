@@ -6,19 +6,19 @@ module Material_Surface_module
   use PFLOTRAN_Constants_module
 
   implicit none
-  
+
   private
-  
+
   type, public :: material_surface_property_type
-    
+
     character(len=MAXWORDLENGTH) :: name
     PetscInt :: external_id
     PetscInt :: internal_id
     PetscReal :: mannings
-    
+
     type(material_surface_property_type), pointer :: next
   end type material_surface_property_type
-  
+
   type, public :: material_surface_property_ptr_type
     type(material_surface_property_type), pointer :: ptr
   end type material_surface_property_ptr_type
@@ -39,27 +39,27 @@ module Material_Surface_module
 ! ************************************************************************** !
 
 function MaterialSurfacePropertyCreate()
-  ! 
+  !
   ! This routine creates a surface material property
-  ! 
+  !
   ! Author: Gautam Bisht, ORNL
   ! Date: 02/09/12
-  ! 
+  !
 
   implicit none
-  
+
   type(material_surface_property_type), pointer :: MaterialSurfacePropertyCreate
   type(material_surface_property_type), pointer :: material_surface_property
-  
+
   allocate(material_surface_property)
 
   material_surface_property%name        = ''
   material_surface_property%internal_id = 0
   material_surface_property%external_id = 0
   material_surface_property%mannings    = 0.d0
-  
+
   nullify(material_surface_property%next)
-  
+
   MaterialSurfacePropertyCreate => material_surface_property
 
 end function MaterialSurfacePropertyCreate
@@ -67,35 +67,34 @@ end function MaterialSurfacePropertyCreate
 ! ************************************************************************** !
 
 subroutine MaterialSurfacePropertyRead(material_surface_property,input,option)
-  ! 
+  !
   ! This routine reads in contents of a surface material property
-  ! 
+  !
   ! Author: Gautam Bisht, ORNL
   ! Date: 02/09/12
-  ! 
+  !
   use Option_module
   use Input_Aux_module
   use String_module
-  
+
   implicit none
-  
+
   type(material_surface_property_type) :: material_surface_property
   type(input_type), pointer :: input
   type(option_type) :: option
-  
-  character(len=MAXWORDLENGTH) :: keyword, word
-  character(len=MAXSTRINGLENGTH) :: string
+
+  character(len=MAXWORDLENGTH) :: keyword
 
   call InputPushBlock(input,option)
   do
     call InputReadPflotranString(input,option)
-    
+
     if (InputCheckExit(input,option)) exit
-  
+
     call InputReadCard(input,option,keyword)
     call InputErrorMsg(input,option,'keyword','SURFACE_MATERIAL_PROPERTY')
     call StringToUpper(keyword)
-    
+
     select case(trim(keyword))
       case('ID')
         call InputReadInt(input,option,material_surface_property%external_id)
@@ -109,25 +108,25 @@ subroutine MaterialSurfacePropertyRead(material_surface_property,input,option)
       end select
   enddo
   call InputPopBlock(input,option)
-  
+
 end subroutine MaterialSurfacePropertyRead
 
 ! ************************************************************************** !
 
 subroutine MaterialSurfacePropertyAddToList(material_surface_property,list)
-  ! 
+  !
   ! This routine adds a surface material property to a linked list
-  ! 
+  !
   ! Author: Gautam Bisht, ORNL
   ! Date: 02/09/12
-  ! 
+  !
 
   implicit none
-  
+
   type(material_surface_property_type), pointer :: material_surface_property
   type(material_surface_property_type), pointer :: list
   type(material_surface_property_type), pointer :: cur_material_surface_property
-  
+
   if (associated(list)) then
     cur_material_surface_property => list
     ! loop to end of list
@@ -141,42 +140,42 @@ subroutine MaterialSurfacePropertyAddToList(material_surface_property,list)
     list => material_surface_property
     material_surface_property%internal_id = 1
   endif
-  
+
 end subroutine MaterialSurfacePropertyAddToList
 
 ! ************************************************************************** !
 
 recursive subroutine MaterialSurfacePropertyDestroy(material_surface_property)
-  ! 
+  !
   ! This routine destroys a surface material property
-  ! 
+  !
   ! Author: Gautam Bisht, ORNL
   ! Date: 02/09/12
-  ! 
+  !
 
   implicit none
-  
+
   type(material_surface_property_type), pointer :: material_surface_property
-  
+
   if (.not.associated(material_surface_property)) return
-  
+
   call MaterialSurfacePropertyDestroy(material_surface_property%next)
-  
+
   deallocate(material_surface_property)
   nullify(material_surface_property)
-  
+
 end subroutine MaterialSurfacePropertyDestroy
 
 ! ************************************************************************** !
 
 subroutine MaterialSurfacePropConvertListToArray(list,array,option)
-  ! 
+  !
   ! This routine creates an array of pointers to the surface_material_properties
   ! in the list (similar to subroutine MaterialPropConvertListToArray)
-  ! 
+  !
   ! Author: Gautam Bisht, ORNL
   ! Date: 02/11/12
-  ! 
+  !
   use Option_module
   use String_module
 
@@ -187,8 +186,6 @@ subroutine MaterialSurfacePropConvertListToArray(list,array,option)
   type(option_type) :: option
 
   type(material_surface_property_type), pointer :: cur_material_property
-  type(material_surface_property_type), pointer :: prev_material_property
-  type(material_surface_property_type), pointer :: next_material_property
   PetscInt :: i, j, length1,length2, max_internal_id, max_external_id
   PetscInt, allocatable :: id_count(:)
   PetscBool :: error_flag
@@ -285,14 +282,14 @@ end subroutine MaterialSurfacePropConvertListToArray
 
 function MaterialSurfacePropGetPtrFromArray(material_surface_property_name, &
                                             material_surface_property_array)
-  ! 
+  !
   ! This routine returns a pointer to the surface material property matching
   ! surface_material_propertry_name (similar to subroutine
   ! MaterialPropGetPtrFromArray)
-  ! 
+  !
   ! Author: Gautam Bisht, ORNL
   ! Date: 02/11/12
-  ! 
+  !
 
   use String_module
 

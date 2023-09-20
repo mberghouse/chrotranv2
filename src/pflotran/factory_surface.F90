@@ -209,8 +209,7 @@ subroutine FactorySurfaceSetupRealization(simulation)
   class(simulation_surface_type) :: simulation
 
   class(realization_surface_type), pointer :: realization_surface
-  type(waypoint_list_type) :: waypoint_list
-  
+
   type(option_type), pointer :: option
 
   realization_surface => simulation%surface_realization

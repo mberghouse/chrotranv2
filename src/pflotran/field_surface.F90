@@ -32,19 +32,19 @@ contains
 ! ************************************************************************** !
 
 function FieldSurfaceCreate()
-  ! 
+  !
   ! Allocates and initializes a new field_surface_type object
-  ! 
+  !
   ! Author: Gautam Bisht
   ! Date: 03/22/23
-  ! 
+  !
 
   implicit none
-  
+
   type(field_surface_type), pointer :: FieldSurfaceCreate
-  
+
   type(field_surface_type), pointer :: field_surface
-  
+
   allocate(field_surface)
 
   ! nullify PetscVecs
@@ -55,14 +55,14 @@ function FieldSurfaceCreate()
   field_surface%work_loc = PETSC_NULL_VEC
 
   field_surface%area = PETSC_NULL_VEC
-  
+
   field_surface%flow_r = PETSC_NULL_VEC
   field_surface%flow_xx = PETSC_NULL_VEC
   field_surface%flow_xx_loc = PETSC_NULL_VEC
   field_surface%flow_dxx = PETSC_NULL_VEC
   field_surface%flow_yy = PETSC_NULL_VEC
   field_surface%flow_accum = PETSC_NULL_VEC
-  
+
 
   FieldSurfaceCreate => field_surface
 
@@ -71,17 +71,17 @@ end function FieldSurfaceCreate
 ! ************************************************************************** !
 
 subroutine FieldSurfaceDestroy(field_surface)
-  ! 
+  !
   ! Deallocates a field object
-  ! 
+  !
   ! Author: Gautam Bisht
   ! Date: 03/22/23
-  ! 
+  !
 
   implicit none
-  
+
   type(field_surface_type), pointer :: field_surface
-  
+
   PetscErrorCode :: ierr
 
   ! Destroy PetscVecs
@@ -102,7 +102,7 @@ subroutine FieldSurfaceDestroy(field_surface)
   if (field_surface%area  /= PETSC_NULL_VEC) then
     call VecDestroy(field_surface%area,ierr);CHKERRQ(ierr)
   endif
-  
+
   if (field_surface%flow_r /= PETSC_NULL_VEC) then
     call VecDestroy(field_surface%flow_r,ierr);CHKERRQ(ierr)
   endif

@@ -48,7 +48,7 @@ end subroutine PMSurfaceFlowInit
 
 subroutine PMSurfaceFlowStep(this)
 
-  ! Sets realization_surface_type 
+  ! Sets realization_surface_type
   !
   ! Author: Gautam Bisht
   ! Date: 05/03/23
@@ -68,7 +68,7 @@ end subroutine PMSurfaceFlowStep
 
 subroutine PMSurfaceSetRealization(this,surface_realization)
 
-  ! Sets realization_surface_type 
+  ! Sets realization_surface_type
   !
   ! Author: Gautam Bisht
   ! Date: 05/02/23

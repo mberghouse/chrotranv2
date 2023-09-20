@@ -24,40 +24,40 @@ contains
 ! ************************************************************************** !
 
 function PMCSurfaceCreate()
-  ! 
+  !
   ! Allocates and initializes a new process model coupler object
-  ! 
+  !
   ! Author: Gautam Bisht
   ! Date: 03/22/23
-  ! 
+  !
 
   implicit none
-  
+
   class(pmc_surface_type), pointer :: PMCSurfaceCreate
-  
+
   class(pmc_surface_type), pointer :: pmc
-  
+
   allocate(pmc)
   call pmc%Init()
-  
-  PMCSurfaceCreate => pmc  
-  
+
+  PMCSurfaceCreate => pmc
+
 end function PMCSurfaceCreate
 
 ! ************************************************************************** !
 
 subroutine PMCSurfaceInit(this)
-  ! 
+  !
   ! Initializes a new process model coupler object
-  ! 
+  !
   ! Author: Gautam Bisht
   ! Date: 03/22/23
-  ! 
+  !
 
   implicit none
-  
+
   class(pmc_surface_type) :: this
-  
+
   call PMCBaseInit(this)
   nullify(this%surface_realization)
 
@@ -66,19 +66,19 @@ end subroutine PMCSurfaceInit
 ! ************************************************************************** !
 
 subroutine PMCSurfaceSetupSolvers(this)
-  ! 
+  !
   ! Sets up the PETSc solver
-  ! 
+  !
   ! Author: Gautam Bisht
   ! Date: 04/05/23
-  ! 
+  !
   use Option_module
   use Timestepper_TS_class
 
   implicit none
-  
+
   class(pmc_surface_type) :: this
-  
+
   type(option_type), pointer :: option
 
   option => this%option
@@ -99,12 +99,12 @@ end subroutine PMCSurfaceSetupSolvers
 ! ************************************************************************** !
 
 subroutine PMCSurfaceSetupSolvers_TS(this)
-  ! 
+  !
   ! Sets up the PETSc TS solver
-  ! 
+  !
   ! Author: Gautam Bisht
   ! Date: 04/05/23
-  ! 
+  !
   use Convergence_module
   use Discretization_module
   use Option_module
@@ -118,9 +118,9 @@ subroutine PMCSurfaceSetupSolvers_TS(this)
   use Timestepper_TS_class
 
   implicit none
-  
+
   class(pmc_surface_type) :: this
-  
+
   type(solver_type), pointer :: solver
   type(option_type), pointer :: option
   PetscErrorCode :: ierr

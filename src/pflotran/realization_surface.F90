@@ -28,7 +28,7 @@ module Realization_Surface_class
     character(len=MAXSTRINGLENGTH) :: subsurf_filename
 
     class(dataset_base_type), pointer :: datasets
-  
+
   end type realization_surface_type
 
   public :: RealizationSurfaceCreate, &
@@ -46,25 +46,25 @@ contains
 ! ************************************************************************** !
 
 function RealizationSurfaceCreate(option)
-  ! 
+  !
   ! This routine allocates and initializes a new SurfaceRealization object
-  ! 
+  !
   ! Author: Gautam Bisht
   ! Date: 03/22/23
-  ! 
+  !
   implicit none
 
   type(option_type), pointer :: option
   class(realization_surface_type),pointer :: RealizationSurfaceCreate
   class(realization_surface_type),pointer :: surf_realization
-  
+
   allocate(surf_realization)
   call RealizationBaseInit(surf_realization,option)
   surf_realization%option => option
 
   allocate(surf_realization%surf_region_list)
   call RegionInitList(surf_realization%surf_region_list)
-  
+
   allocate(surf_realization%surf_flow_conditions)
   call FlowConditionInitList(surf_realization%surf_flow_conditions)
 
@@ -80,12 +80,12 @@ end function RealizationSurfaceCreate
 ! ************************************************************************** !
 
 subroutine RealizationSurfaceCreateDiscretization(surf_realization)
-  ! 
+  !
   ! This routine creates grid
-  ! 
+  !
   ! Author: Gautam Bisht
   ! Date: 03/22/23
-  ! 
+  !
   use Grid_module
   use Grid_Unstructured_Aux_module, only : UGridMapIndices
   use Grid_Unstructured_module, only     : UGridEnsureRightHandRule
@@ -93,7 +93,7 @@ subroutine RealizationSurfaceCreateDiscretization(surf_realization)
   use Discretization_module
   use Grid_Unstructured_Cell_module
   use DM_Kludge_module
-  
+
   implicit none
 
   class(realization_surface_type) :: surf_realization
@@ -146,7 +146,7 @@ subroutine RealizationSurfaceCreateDiscretization(surf_realization)
                           discretization%stencil_type,&
                           option)
       call GridComputeCoordinates(grid,discretization%origin_global,option, &
-                                  discretization%dm_1dof%ugdm) 
+                                  discretization%dm_1dof%ugdm)
       call UGridEnsureRightHandRule(grid%unstructured_grid,grid%x, &
                                     grid%y,grid%z,grid%nG2A,grid%nL2G,option)
     case default
@@ -257,9 +257,9 @@ subroutine RealizationSurfaceProcessFlowConditions(surf_realization)
   type(option_type), pointer :: option
   character(len=MAXSTRINGLENGTH) :: string
   PetscInt :: i
-  
+
   option => surf_realization%option
-  
+
   ! loop over flow conditions looking for linkage to datasets
   cur_surf_flow_condition => surf_realization%surf_flow_conditions%first
   do
@@ -515,13 +515,13 @@ end subroutine RealizationSurfaceProcessCouplers
 ! ************************************************************************** !
 
 subroutine RealizationSurfaceLocalToLocalWithArray(surf_realization,array_id)
-  ! 
+  !
   ! This routine takes an F90 array that is ghosted and updates the ghosted
   ! values.
-  ! 
+  !
   ! Author: Gautam Bisht
   ! Date: 04/04/23
-  ! 
+  !
 
   use Discretization_module
   use Grid_module
@@ -532,7 +532,7 @@ subroutine RealizationSurfaceLocalToLocalWithArray(surf_realization,array_id)
 
   class(realization_surface_type) :: surf_realization
   PetscInt :: array_id
-  
+
   type(patch_type), pointer :: cur_patch
   type(grid_type), pointer :: grid
   type(field_surface_type), pointer :: surf_field
@@ -571,22 +571,20 @@ end subroutine RealizationSurfaceLocalToLocalWithArray
 ! ************************************************************************** !
 
 subroutine RealizationSurfaceInitAllCouplerAuxVars(surf_realization)
-  ! 
+  !
   ! This routine initializez coupler auxillary variables within list
-  ! 
+  !
   ! Author: Gautam Bisht
   ! Date: 04/04/23
-  ! 
+  !
 
   use Condition_module
   use Patch_module
   use Option_module
 
   implicit none
-  
+
   class(realization_surface_type) :: surf_realization
-  
-  type(patch_type), pointer :: cur_patch
 
   call FlowConditionUpdate(surf_realization%surf_flow_conditions, &
                            surf_realization%option)
@@ -596,16 +594,16 @@ subroutine RealizationSurfaceInitAllCouplerAuxVars(surf_realization)
 
 end subroutine RealizationSurfaceInitAllCouplerAuxVars
 
-! ************************************************************************** !
+! *******s******************************************************************* !
 
 subroutine RealizationSurfaceAddWaypointsToList(surf_realization,waypoint_list)
-  ! 
+  !
   ! This routine creates waypoints assocated with source/sink, boundary
   ! condition, etc. and adds to a list
-  ! 
+  !
   ! Author: Gautam Bisht
   ! Date: 04/04/23
-  ! 
+  !
   use Option_module
   use Waypoint_module
   use Time_Storage_module
@@ -620,7 +618,7 @@ subroutine RealizationSurfaceAddWaypointsToList(surf_realization,waypoint_list)
   type(waypoint_type), pointer :: waypoint, cur_waypoint
   type(option_type), pointer :: option
   PetscInt :: itime, isub_condition
-  PetscReal :: temp_real, final_time
+  PetscReal :: final_time
   PetscReal, pointer :: times(:)
 
   option => surf_realization%option

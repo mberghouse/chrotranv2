@@ -1,5 +1,5 @@
 module Simulation_Surface_class
-    
+
 #include "petsc/finclude/petscvec.h"
 use petscvec
 use PFLOTRAN_Constants_module
@@ -19,7 +19,7 @@ use Realization_Surface_class
   private
 
   type, public, extends(simulation_base_type) :: simulation_surface_type
-    type(option_type), pointer :: option    
+    type(option_type), pointer :: option
     PetscInt :: stop_flag
     type(output_option_type), pointer :: output_option
     class(pmc_base_type), pointer :: process_model_coupler_list
