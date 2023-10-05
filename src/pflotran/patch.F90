@@ -5646,11 +5646,14 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
                 patch%aux%Richards%auxvars(grid%nL2G(local_id))%pc
             enddo
           case(LIQUID_HEAD)
+            tempreal = option%flow%reference_pressure
             do local_id=1,grid%nlmax
+              ghosted_id = grid%nL2G(local_id)
               vec_ptr(local_id) = &
-                patch%aux%Global%auxvars(grid%nL2G(local_id))%pres(1)/ &
+                (patch%aux%Global%auxvars(ghosted_id)%pres(1)-tempreal)/ &
                 EARTH_GRAVITY/ &
-                patch%aux%Global%auxvars(grid%nL2G(local_id))%den_kg(1)
+                patch%aux%Global%auxvars(ghosted_id)%den_kg(1) + &
+                grid%z(ghosted_id)
             enddo
           case(LIQUID_SATURATION)
             do local_id=1,grid%nlmax
@@ -5697,11 +5700,14 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
                 patch%aux%ZFlow%auxvars(ZERO_INTEGER,grid%nL2G(local_id))%pc
             enddo
           case(LIQUID_HEAD)
+            tempreal = option%flow%reference_pressure
             do local_id=1,grid%nlmax
+              ghosted_id = grid%nL2G(local_id)
               vec_ptr(local_id) = &
-                patch%aux%ZFlow%auxvars(ZERO_INTEGER,grid%nL2G(local_id))%pres/ &
+                (patch%aux%ZFlow%auxvars(ZERO_INTEGER,ghosted_id)%pres- &
+                 tempreal)/ &
                 EARTH_GRAVITY/ &
-                zflow_density_kg
+                zflow_density_kg + grid%z(ghosted_id)
             enddo
           case(LIQUID_SATURATION)
             do local_id=1,grid%nlmax
@@ -7213,9 +7219,11 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
           case(CAPILLARY_PRESSURE)
             value = patch%aux%Richards%auxvars(ghosted_id)%pc
           case(LIQUID_HEAD)
-            value = patch%aux%Global%auxvars(ghosted_id)%pres(1)/ &
+            value = (patch%aux%Global%auxvars(ghosted_id)%pres(1)- &
+                     option%flow%reference_pressure)/ &
                     EARTH_GRAVITY/ &
-                    patch%aux%Global%auxvars(ghosted_id)%den_kg(1)
+                    patch%aux%Global%auxvars(ghosted_id)%den_kg(1) + &
+                    grid%z(ghosted_id)
           case(LIQUID_SATURATION)
             value = patch%aux%Global%auxvars(ghosted_id)%sat(1)
           case(LIQUID_DENSITY)
@@ -7242,8 +7250,10 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
           case(CAPILLARY_PRESSURE)
             value = patch%aux%ZFlow%auxvars(ZERO_INTEGER,ghosted_id)%pc
           case(LIQUID_HEAD)
-            value = patch%aux%ZFlow%auxvars(ZERO_INTEGER,ghosted_id)%pres/ &
-                    EARTH_GRAVITY/zflow_density_kg
+            value = (patch%aux%ZFlow%auxvars(ZERO_INTEGER,ghosted_id)%pres- &
+                     option%flow%reference_pressure)/ &
+                    EARTH_GRAVITY/zflow_density_kg + &
+                    grid%z(ghosted_id)
           case(LIQUID_SATURATION)
             value = patch%aux%ZFlow%auxvars(ZERO_INTEGER,ghosted_id)%sat
           case(SOLUTE_CONCENTRATION)
