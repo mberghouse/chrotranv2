@@ -116,7 +116,7 @@ plot_aqueous(plt,observation_filename,scale_string)
 plot_immobile(plt,observation_filename,scale_string)
 
 f.subplots_adjust(hspace=0.2,wspace=0.10,
-                  bottom=.12,top=.85,
+                  bottom=.12,top=.92,
                   left=.1,right=.85)
 
 plt.show()
