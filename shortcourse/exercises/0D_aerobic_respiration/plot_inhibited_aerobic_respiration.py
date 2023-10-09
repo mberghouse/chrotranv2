@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import math
 import pflotran as pft
 
-observation_filename = 'biodegradation-obs-0.pft'
+observation_filename = 'inhibited_aerobic_respiration-obs-0.pft'
 
 legend_fontsize = 'small'
 
@@ -27,7 +27,7 @@ def plot_aqueous(plt,filename,scale_string):
 
   maxval = -1.e20
   minval = 1.e-10
-  columns = [2,3,4,5]
+  columns = [2,3,4]
   for icol in range(len(columns)):
     data = pft.Dataset(filename,1,columns[icol])
     ydata = data.get_array('y')
@@ -64,7 +64,7 @@ def plot_immobile(plt,filename,scale_string):
   plt.yscale(scale_string)
   maxval = -1.e20
   minval = 1.e-10
-  columns = [6]
+  columns = [5]
   for icol in range(len(columns)):
     data = pft.Dataset(filename,1,columns[icol])
     ydata = data.get_array('y')
@@ -84,33 +84,25 @@ def plot_immobile(plt,filename,scale_string):
   legend.draw_frame(False)
 
 aq_labels = []
-aq_labels.append('Aaq')
-aq_labels.append('Baq')
-aq_labels.append('Caq')
-aq_labels.append('Daq')
-aq_labels.append('Eaq')
-aq_labels.append('Faq')
+aq_labels.append('O2(aq)')
+aq_labels.append('CH2O(aq)')
+aq_labels.append('CO2(aq)')
 
 aq_colors = []
 aq_colors.append('blue')
 aq_colors.append('green')
 aq_colors.append('red')
-aq_colors.append('cyan')
-aq_colors.append('magenta')
-aq_colors.append('y')
 
 im_labels = []
-im_labels.append('Xim')
-im_labels.append('Yim')
+im_labels.append('Biomass')
 
 im_colors = []
 im_colors.append('darkorange')
-im_colors.append('navy')
 
 f = plt.figure(figsize=(10,6))
 
 #linear scale
-plt.title('Biodegradation Time History')
+plt.title('Inhibited Aerobic Respiration Time History')
 scale_string = 'linear'
 plot_aqueous(plt,observation_filename,scale_string)
 plot_immobile(plt,observation_filename,scale_string)
