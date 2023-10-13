@@ -379,12 +379,10 @@ subroutine ZFlowFluxHarmonicPermOnly(zflow_auxvar_up,global_auxvar_up, &
     endif
     delta_conc = zflow_auxvar_up%conc - zflow_auxvar_dn%conc
     D_molecular = zflow_parameter%diffusion_coef
-    D_hyd_up = D_mech_up + &
-               zflow_auxvar_up%effective_porosity * zflow_auxvar_up%sat * &
-               material_auxvar_up%tortuosity * D_molecular
-    D_hyd_dn = D_mech_dn + &
-               zflow_auxvar_dn%effective_porosity * zflow_auxvar_dn%sat * &
-               material_auxvar_dn%tortuosity * D_molecular
+    D_hyd_up = zflow_auxvar_up%effective_porosity * zflow_auxvar_up%sat * &
+               (D_mech_up + material_auxvar_up%tortuosity * D_molecular)
+    D_hyd_dn = zflow_auxvar_dn%effective_porosity * zflow_auxvar_dn%sat * &
+               (D_mech_dn + material_auxvar_dn%tortuosity * D_molecular)
     numerator = D_hyd_up * D_hyd_dn
     denominator = dist_up*D_hyd_dn + dist_dn*D_hyd_up
     if (denominator == 0.d0) then
@@ -414,17 +412,21 @@ subroutine ZFlowFluxHarmonicPermOnly(zflow_auxvar_up,global_auxvar_up, &
           call PrintErrMsg(option)
         endif
         dD_mech_up_dpup = 0.d0
-        dD_hyd_up_dpup = dD_mech_up_dpup + &
+        dD_hyd_up_dpup = (zflow_auxvar_up%effective_porosity * &
+                          zflow_auxvar_up%sat * dD_mech_up_dpup) + &
                          (zflow_auxvar_up%dsat_dp * &
                           zflow_auxvar_up%effective_porosity + &
                           zflow_auxvar_up%sat * zflow_auxvar_up%dpor_dp) * &
-                         material_auxvar_up%tortuosity * D_molecular
+                         (D_mech_up + &
+                          material_auxvar_up%tortuosity * D_molecular)
         dD_mech_dn_dpdn = 0.d0
-        dD_hyd_dn_dpdn = dD_mech_dn_dpdn + &
+        dD_hyd_dn_dpdn = (zflow_auxvar_dn%effective_porosity * &
+                          zflow_auxvar_dn%sat * dD_mech_dn_dpdn) + &
                          (zflow_auxvar_dn%dsat_dp * &
                           zflow_auxvar_dn%effective_porosity + &
                           zflow_auxvar_dn%sat * zflow_auxvar_dn%dpor_dp) * &
-                         material_auxvar_dn%tortuosity * D_molecular
+                         (D_mech_dn + &
+                          material_auxvar_dn%tortuosity * D_molecular)
         tempreal = denominator * denominator
         dDeff_over_dist_dpup = dD_hyd_up_dpup * D_hyd_dn * D_hyd_dn * &
                                dist_up / tempreal
@@ -696,9 +698,8 @@ subroutine ZFlowBCFluxHarmonicPermOnly(ibndtype,auxvar_mapping,auxvars, &
     endif
     delta_conc = zflow_auxvar_up%conc - zflow_auxvar_dn%conc
     D_molecular = zflow_parameter%diffusion_coef
-    D_hyd_dn = D_mech_dn + &
-               zflow_auxvar_dn%effective_porosity * zflow_auxvar_dn%sat * &
-               material_auxvar_dn%tortuosity * D_molecular
+    D_hyd_dn = zflow_auxvar_dn%effective_porosity * zflow_auxvar_dn%sat * &
+               (D_mech_dn + material_auxvar_dn%tortuosity * D_molecular)
     Deff_over_dist = dispersion_scale * D_hyd_dn / dist(0)
     ! Res[mol/sec]
     Res(zflow_sol_tran_eq) = Res(zflow_sol_tran_eq) + &
@@ -712,11 +713,13 @@ subroutine ZFlowBCFluxHarmonicPermOnly(ibndtype,auxvar_mapping,auxvars, &
         L_per_m3
       if (zflow_liq_flow_eq > 0) then
         dD_mech_dn_dpdn = 0.d0
-        dD_hyd_dn_dpdn = dD_mech_dn_dpdn + &
+        dD_hyd_dn_dpdn = (zflow_auxvar_dn%effective_porosity * &
+                          zflow_auxvar_dn%sat * dD_mech_dn_dpdn) + &
                          (zflow_auxvar_dn%dsat_dp * &
                           zflow_auxvar_dn%effective_porosity + &
                           zflow_auxvar_dn%sat * zflow_auxvar_dn%dpor_dp) * &
-                         material_auxvar_dn%tortuosity * D_molecular
+                         (D_mech_dn + &
+                          material_auxvar_dn%tortuosity * D_molecular)
         dDeff_over_dist_dpdn = dD_hyd_dn_dpdn / dist(0)
         Jdn(zflow_sol_tran_eq,zflow_liq_flow_eq) = &
           (dq_dpdn * conc_upwind + &

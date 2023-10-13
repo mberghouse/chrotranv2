@@ -210,17 +210,17 @@ subroutine TDispersion(global_auxvar_up,material_auxvar_up, &
       mechanical_dispersion_up = dispersivity_up(LONGITUDINAL)*dabs(q)
       mechanical_dispersion_dn = dispersivity_dn(LONGITUDINAL)*dabs(q)
     endif
-    ! hydrodynamic dispersion = mechanical disperson + &
-    !   saturation * porosity * tortuosity * molecular diffusion
+    ! hydrodynamic dispersion = saturation * porosity * &
+    !          (mechanical dispersion + tortuosity * molecular diffusion)
     hydrodynamic_dispersion_up(:) = &
-      max(mechanical_dispersion_up + &
-          epsilon_up * sat_up * material_auxvar_up%porosity * &
-          material_auxvar_up%tortuosity * molecular_diffusion_up(:), &
+      max(epsilon_up * sat_up * material_auxvar_up%porosity * &
+          (mechanical_dispersion_up + &
+           material_auxvar_up%tortuosity * molecular_diffusion_up(:)), &
           1.d-40)
     hydrodynamic_dispersion_dn(:) = &
-      max(mechanical_dispersion_dn + &
-          epsilon_dn * sat_dn * material_auxvar_dn%porosity * &
-          material_auxvar_dn%tortuosity * molecular_diffusion_dn(:), &
+      max(epsilon_dn * sat_dn * material_auxvar_dn%porosity * &
+          (mechanical_dispersion_dn + &
+           material_auxvar_dn%tortuosity * molecular_diffusion_dn(:)), &
           1.d-40)
     ! harmonic average of hydrodynamic dispersion divided by distance
     harmonic_tran_coefs_over_dist(:,iphase) = &
@@ -354,14 +354,14 @@ subroutine TDispersionBC(ibndtype, &
       case(DIRICHLET_BC,DIRICHLET_ZERO_GRADIENT_BC)
         ! if outflow, skip
         if (ibndtype == DIRICHLET_ZERO_GRADIENT_BC .and. q < 0.d0) cycle
-        ! hydrodynamic dispersion = mechanical disperson + &
-        !   saturation * porosity * tortuosity * molecular diffusion
+        ! hydrodynamic dispersion = saturation * porosity * &
+        !         (mechanical disperson + tortuosity * molecular diffusion)
         hydrodynamic_dispersion(:) = &
-          max(mechanical_dispersion + &
               ! yes, sat_up due to boundary saturation governing, but
               ! perhaps we could use an average in the future
-              epsilon_dn * sat_up * material_auxvar_dn%porosity * &
-              material_auxvar_dn%tortuosity * molecular_diffusion(:), &
+          max(epsilon_dn * sat_up * material_auxvar_dn%porosity * &
+              (mechanical_dispersion + &
+               material_auxvar_dn%tortuosity * molecular_diffusion(:)), &
               1.d-40)
         ! hydrodynamic dispersion divided by distance
         ! units = (m^3 water/m^4 bulk)*(m^2 bulk/sec) = m^3 water/m^2 bulk/sec
