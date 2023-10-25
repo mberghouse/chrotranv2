@@ -4011,6 +4011,14 @@ subroutine PatchUpdateCouplerAuxVarsTH(patch,coupler,option)
                                                TH_PRESSURE_DOF)
           class is(dataset_common_hdf5_type)
             ! skip cell indexed datasets used in initial conditions
+            if (coupler%itype /= INITIAL_COUPLER_TYPE) then
+              option%io_buffer = 'Cell indexed dataset cannot be coupled &
+                &to boundary conditions or source/sinks. That is the case &
+                &for FLOW_CONDITION "' // trim(flow_condition%name) // &
+                '" in BOUNDARY_CONDITION or SOURCE_SINK "' // &
+                trim(coupler%name) // '".'
+              call PrintErrMsg(option)
+            endif
           class default
             call PrintMsg(option,'th%pressure%itype,DIRICHLET_BC')
             call DatasetUnknownClass(selector,option, &
@@ -4058,6 +4066,14 @@ subroutine PatchUpdateCouplerAuxVarsTH(patch,coupler,option)
                                                  TH_TEMPERATURE_DOF)
             class is(dataset_common_hdf5_type)
               ! skip cell indexed datasets used in initial conditions
+              if (coupler%itype /= INITIAL_COUPLER_TYPE) then
+                option%io_buffer = 'Cell indexed dataset cannot be coupled &
+                  &to boundary conditions or source/sinks. That is the case &
+                  &for FLOW_CONDITION "' // trim(flow_condition%name) // &
+                  '" in BOUNDARY_CONDITION or SOURCE_SINK "' // &
+                  trim(coupler%name) // '".'
+                call PrintErrMsg(option)
+              endif
             class default
               call PrintMsg(option,'th%temperature%itype,DIRICHLET_BC')
               call DatasetUnknownClass(selector,option, &
