@@ -1,4 +1,4 @@
-#Description: 1D transport with biodegradation
+#Description: Batch aerobic respiration with inhibition
 
 SIMULATION
   SIMULATION_TYPE SUBSURFACE
