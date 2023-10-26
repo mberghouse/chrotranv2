@@ -65,10 +65,12 @@
 %-----------------------------------------------------------------------------
 \section{Description of 1D Transport, Sorption and Decay Scenario}
 
-\subsection{1D Transport, Sorption and Decay Conceptual Model}
-
 \frame{\frametitle{Description of 1D Transport, Sorption and Decay Scenario}
 
+\begin{figure}
+\centering
+\includegraphics[width=0.9\linewidth]{./advection_dispersion_fig}
+\end{figure}
 The ``1D Transport, Sorption and Decay Scenario'' simulates solute transport (i.e., advection and diffusion), linear sorption and radioactive decay along a horizontal, 1D domain measuring 100 meters in length with unit cross sectional area.  Assumptions regarding transport include:
 
 \begin{itemize}
@@ -83,8 +85,6 @@ The ``1D Transport, Sorption and Decay Scenario'' simulates solute transport (i.
 }
 
 %-----------------------------------------------------------------------------
-\subsection{Governing Equations
-}
 \frame{\frametitle{Governing Reactive Transport Equations}
 
 \Large
@@ -118,10 +118,19 @@ k &\eq \text{first-order rate constant}
 %-----------------------------------------------------------------------------
 \section{Description of Input Deck: Transport Only}
 
+\begin{frame}[fragile]\frametitle{Transport Only}
+
+\Large
+Set up the input file.
+\large
+\begin{itemize}
+  \item Add SIMULATION block
+  \item Add SUBSURFACE block
+\end{itemize}
+
+\end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{SIMULATION}
-
 \begin{frame}[fragile]\frametitle{SIMULATION}
 
 \begin{itemize}
@@ -149,7 +158,6 @@ END_SUBSURFACE
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{GRID}
 \begin{frame}[fragile,containsverbatim]\frametitle{GRID}
 
 \begin{itemize}
@@ -171,8 +179,6 @@ END  \bluecomment{! <-- closes out GRID card}
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{REGION}
-
 \begin{frame}[fragile,containsverbatim,allowframebreaks]\frametitle{REGION}
 
 \vspace{1 cm}
@@ -216,8 +222,6 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{MATERIAL\_PROPERTY}
-
 \begin{frame}[fragile,containsverbatim]\frametitle{MATERIAL\_PROPERTY}
 
 \begin{itemize}
@@ -242,8 +246,6 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{FLUID\_PROPERTY}
-
 \begin{frame}[fragile,containsverbatim]\frametitle{FLUID\_PROPERTY}
 
 \begin{itemize}
@@ -260,8 +262,6 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{CHEMISTRY}
-
 \begin{frame}[fragile]\frametitle{CHEMISTRY}
 
 \begin{itemize}
@@ -283,8 +283,6 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{CONSTRAINT}
-
 \begin{frame}[fragile]\frametitle{CONSTRAINT}
 
 \begin{itemize}
@@ -310,8 +308,6 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{TRANSPORT\_CONDITION}
-
 \begin{frame}[fragile]\frametitle{TRANSPORT\_CONDITION}
 
 
@@ -338,8 +334,6 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{STRATA}
-
 \begin{frame}[fragile]\frametitle{STRATA}
 
 \begin{itemize}
@@ -359,8 +353,6 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{INITIAL\_CONDITION}
-
 \begin{frame}[fragile]\frametitle{INITIAL\_CONDITION}
 
 \begin{itemize}
@@ -379,8 +371,6 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{BOUNDARY\_CONDITION}
-
 \begin{frame}[fragile]\frametitle{BOUNDARY\_CONDITION}
 
 \begin{itemize}
@@ -405,8 +395,6 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{LINEAR\_SOLVER}
-
 \begin{frame}[fragile]\frametitle{LINEAR\_SOLVER}
 
 \begin{itemize}
@@ -426,8 +414,6 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{TIME}
-
 \begin{frame}[fragile]\frametitle{TIME}
 
 \begin{itemize}
@@ -449,8 +435,6 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{OUTPUT}
-
 \begin{frame}[fragile]\frametitle{OUTPUT}
 
 \begin{itemize}
@@ -471,8 +455,6 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{Flow Field}
-
 \begin{frame}[fragile]\frametitle{Flow Field}
 
 \begin{itemize}
@@ -494,8 +476,6 @@ REFERENCE_LIQUID_DENSITY 1000. kg/m^3
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{Running transport.in}
-
 \begin{frame}[fragile]\frametitle{Running PFLOTRAN}
 
 \begin{semiverbatim}
@@ -510,11 +490,9 @@ REFERENCE_LIQUID_DENSITY 1000. kg/m^3
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\section{Description of Input Deck: Adding Sorption}
+\section{Description of Input Deck: Transport and Sorption}
 
-\subsection{Input File Modifications}
-
-\begin{frame}[fragile]\frametitle{Adding Sorption}
+\begin{frame}[fragile]\frametitle{Transport and Sorption}
 
 Input File Modifications
 \begin{itemize}
@@ -533,8 +511,6 @@ Input File Modifications
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{CHEMISTRY}
-
 \begin{frame}[fragile,containsverbatim,allowframebreaks]\frametitle{CHEMISTRY}
 
 \begin{itemize}
@@ -561,8 +537,6 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{MATERIAL\_PROPERTY}
-
 \begin{frame}[fragile,containsverbatim]\frametitle{MATERIAL\_PROPERTY}
 
 \begin{itemize}
@@ -583,8 +557,6 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{CONSTRAINT}
-
 \begin{frame}[fragile]\frametitle{CONSTRAINT}
 
 \begin{itemize}
@@ -612,8 +584,6 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{SORPTION}
-
 \begin{frame}[fragile,containsverbatim,allowframebreaks]\frametitle{SORPTION}
 
 \begin{itemize}
@@ -641,8 +611,6 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{Running transport\_sorption.in}
-
 \begin{frame}[fragile]\frametitle{Running PFLOTRAN}
 
 \begin{semiverbatim}
@@ -657,11 +625,9 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\section{Description of Input Deck: Adding Radioactive Decay}
+\section{Description of Input Deck: Transport and Radioactive Decay}
 
-\subsection{Input File Modifications}
-
-\begin{frame}[fragile]\frametitle{Adding Radioactive Decay}
+\begin{frame}[fragile]\frametitle{Transport and Radioactive Decay}
 
 Input File Modifications (beginning with \textit{transport.in})
 \begin{itemize}
@@ -679,8 +645,6 @@ Input File Modifications (beginning with \textit{transport.in})
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{CHEMISTRY}
-
 \begin{frame}[fragile,containsverbatim,allowframebreaks]\frametitle{CHEMISTRY}
 
 \begin{itemize}
@@ -708,8 +672,6 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{CONSTRAINT}
-
 \begin{frame}[fragile]\frametitle{CONSTRAINT}
 
 \begin{itemize}
@@ -739,8 +701,6 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{RADIOACTIVE\_DECAY\_REACTION}
-
 \begin{frame}[fragile,containsverbatim,allowframebreaks]\frametitle{RADIOACTIVE\_DECAY\_REACTION}
 
 \begin{itemize}
@@ -767,8 +727,6 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{Running transport\_decay.in}
-
 \begin{frame}[fragile]\frametitle{Running PFLOTRAN}
 
 \begin{semiverbatim}
@@ -783,11 +741,9 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\section{Description of Input Deck: Adding Sorption and Radioactive Decay}
+\section{Description of Input Deck: Transport, Sorption and Radioactive Decay}
 
-\subsection{Input File Modifications}
-
-\begin{frame}[fragile]\frametitle{Adding Sorption and Radioactive Decay}
+\begin{frame}[fragile]\frametitle{Transport, Sorption and Radioactive Decay}
 
 Input File Modifications (beginning with a merge of \textit{transport\_sorption.in} and \textit{transport\_decay.in})
 \begin{itemize}
@@ -806,8 +762,6 @@ Input File Modifications (beginning with a merge of \textit{transport\_sorption.
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{CHEMISTRY}
-
 \begin{frame}[fragile]\frametitle{CHEMISTRY}
 
 \begin{itemize}
@@ -835,8 +789,6 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{CONSTRAINT}
-
 \begin{frame}[fragile]\frametitle{CONSTRAINT}
 
 \begin{itemize}
@@ -864,8 +816,6 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{SORPTION and RADIOACTIVE\_DECAY\_REACTION}
-
 \begin{frame}[fragile]\frametitle{SORPTION and RADIOACTIVE\_DECAY\_REACTION}
 
 \begin{itemize}
@@ -894,8 +844,6 @@ CHEMISTRY
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\subsection{Running transport\_sorption\_decay.in}
-
 \begin{frame}[fragile]\frametitle{Running PFLOTRAN}
 
 \begin{semiverbatim}
