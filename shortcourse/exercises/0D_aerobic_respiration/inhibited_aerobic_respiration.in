@@ -14,10 +14,6 @@ SUBSURFACE
 #=========================== numerical methods ================================
 NUMERICAL_METHODS TRANSPORT
 
-  NEWTON_SOLVER
-    NUMERICAL_JACOBIAN
-  /
-
   LINEAR_SOLVER
     SOLVER DIRECT
   /

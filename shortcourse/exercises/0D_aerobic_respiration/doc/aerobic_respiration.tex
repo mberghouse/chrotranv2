@@ -16,7 +16,13 @@
 \newcommand{\ec}{\end{center}}
 \newcommand{\eq}{\ =\ }
 
-\newcommand{\ci}{{c_i}}
+\newcommand{\oxygen}{{\text{O}_2}}
+\newcommand{\organiccarbon}{{\text{CH}_2\text{O}}}
+\newcommand{\carbondioxide}{{\text{CO}_2}}
+\newcommand{\water}{{\text{H}_2\text{O}}}
+\newcommand{\biomass}{{\text{Biomass}}}
+
+\newcommand{\ci}[1]{{C_#1}}
 \newcommand{\Xim}{{X_\text{im}}}
 
 \newcommand\gehcomment[1]{{{\color{orange} #1}}}
@@ -42,7 +48,7 @@
 \end{comment}
 
 \begin{document}
-\title{Batch Biodegradation Scenario\ldots\\in a Nutshell}
+\title{Batch Aerobic Respiration Scenario\ldots\\in a Nutshell}
 \author{Glenn Hammond}
 \date{\today}
 
@@ -52,18 +58,18 @@
 %\begin{frame}[fragile,containsverbatim,allowframebreaks]\frametitle{Frame Title}
 
 %-----------------------------------------------------------------------------
-\section{Description of Batch Biodegradation Scenario}
+\section{Description of Batch Aerobic Respiration Scenario}
 
-\begin{frame}[fragile,containsverbatim]\frametitle{Description of Batch Biodegradation Scenario}
+\begin{frame}[fragile,containsverbatim]\frametitle{Description of Batch Aerobic Respiration Scenario}
 
 \begin{textblock*}{5cm}(10cm,1cm) % {block width} (coords)
   \includegraphics[width=0.3\linewidth]{./reactor_fig}
 \end{textblock*}
 \vspace{1cm}
-The ``Batch Biodegradation'' scenario simulates the microbially mediated decomposition of two reactants (\verb|Aaq| and \verb|Baq|) into two products (\verb|Caq| and \verb|Daq|) in a batch reactor over a week's time.
+The ``Batch Aerobic Respiration'' scenario simulates the microbially mediated consumption of organic carbon with oxygen as the electron acceptor in a batch reactor over a week's time.
 
 \EQ
-Aaq + 0.25\, Baq \rightarrow 0.33\, Caq + Daq
+\oxygen + \organiccarbon \rightarrow \carbondioxide + \water
 \EN
 
 \begin{itemize}
@@ -75,25 +81,25 @@ Aaq + 0.25\, Baq \rightarrow 0.33\, Caq + Daq
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\frame{\frametitle{Governing Reactive Equations}
+\frame{\frametitle{Governing Reactive Transport Equations}
 
 \large
 
 \BA
-  \frac{d \ci}{d t} &\eq -\nu_i I_r \\
+  \frac{d \ci{i}}{d t} &\eq -\nu_i I_r \\
   \frac{d X}{d t} &\eq yield_{X_{im}} I_r - k_\text{decay} \Xim \\
-	I_r &\eq k_\text{max} X_{im} \frac{A_{aq}}{K_{A_{aq}} + A_{aq}}\times\frac{B_{aq}}{K_{B_{aq}} + B_{aq}}\times\frac{I_{C_{aq}}}{I_{C_{aq}}+C_{aq}}
+	I_r &\eq k_\text{max} X_{im} \frac{\ci{\oxygen}}{K_{\oxygen} + \ci{\oxygen}}\times\frac{\ci{\organiccarbon}}{K_{\organiccarbon} + \ci{\organiccarbon}}
 \EA
 
 %\bigskip
 %\normalsize
 \footnotesize
 \begin{align*}
-\ci &\eq \text{aqueous concentration for species } i \\
+\ci{i} &\eq \text{aqueous concentration for species } i \\
 \Xim &\eq \text{biomass concentration} \\
 \nu_i &\eq \text{stoichiometry of species } i \text{ in reaction} \\
 I_r &\eq \text{reaction rate} \\
-yield_{X_{im}} &\eq \text{yield or fraction of mass synthesized to biomass} \\
+yield_\Xim &\eq \text{yield or fraction of mass synthesized to biomass} \\
 k_\text{decay} &\eq \text{first order decay rate} \\
 k_\text{max} &\eq \text{maximum utilization rate} \\
 K_{A_{aq}} &\eq \text{half saturation constant for species } A_{aq} \\
@@ -104,7 +110,6 @@ I_{C_{aq}} &\eq \text{inhibition factor for species } C_{aq}
 
 %-----------------------------------------------------------------------------
 \section{Description of Input Deck}
-
 
 %-----------------------------------------------------------------------------
 \begin{frame}[fragile]\frametitle{SIMULATION}
@@ -137,16 +142,12 @@ END_SUBSURFACE
 \begin{frame}[fragile]\frametitle{NUMERICAL\_METHODS}
 
 \begin{itemize}
-\item Enable numerical derivatives.
 \item Due to the small problem size, request a direct solver instead of the default iterative BiCGStab Krylov solver.
 \end{itemize}
 
 \begin{semiverbatim}
 
 NUMERICAL_METHODS TRANSPORT
-  NEWTON_SOLVER
-    NUMERICAL_JACOBIAN
-  /
   LINEAR_SOLVER
     SOLVER DIRECT
   /
@@ -199,43 +200,37 @@ REFERENCE_LIQUID_DENSITY 1000.d0
 \begin{frame}[fragile,containsverbatim,allowframebreaks]\frametitle{CHEMISTRY}
 
 \begin{itemize}
-  \item Specify a microbial reaction with four aqueous species (Aaq, Baq, Caq, Daq) and biomass (Xim) growth and decay
+  \item Specify a microbial reaction with three aqueous species ($\oxygen$, $\organiccarbon$, $\carbondioxide$) and biomass ($\biomass$) growth and decay
 \end{itemize}
 
 \begin{semiverbatim}
 
 CHEMISTRY
   PRIMARY_SPECIES
-    Aaq
-    Baq
-    Caq
-    Daq
+    O2(aq)
+    CH2O(aq)
+    CO2(aq)
   /
   IMMOBILE_SPECIES
-    Xim
+    Biomass
   /
 \end{semiverbatim}
 \newpage
-\scriptsize
+\normalsize
 \begin{semiverbatim}
   MICROBIAL_REACTION
-    REACTION Aaq + 0.25 Baq <-> 0.33 Caq + Daq
-    RATE_CONSTANT 9.d-2
+    REACTION O2(aq) + CH2O(aq) <-> CO2(aq) + H2O
+    RATE_CONSTANT 4.d-2
     MONOD
-      SPECIES_NAME Aaq
+      SPECIES_NAME O2(aq)
       HALF_SATURATION_CONSTANT 2.d-4
     /
     MONOD
-      SPECIES_NAME Baq
+      SPECIES_NAME CH2O(aq)
       HALF_SATURATION_CONSTANT 1.25d-5
     /
-    INHIBITION
-      SPECIES_NAME Caq
-      TYPE MONOD
-      INHIBITION_CONSTANT 2.5d-4
-    /
     BIOMASS
-      SPECIES_NAME Xim
+      SPECIES_NAME Biomass
       YIELD 1.d-4
     /
   /
@@ -243,10 +238,10 @@ CHEMISTRY
 \normalsize
 \begin{semiverbatim}
   IMMOBILE_DECAY_REACTION
-    SPECIES_NAME Xim
+    SPECIES_NAME Biomass
     RATE_CONSTANT 1.d-6
   /
-  DATABASE ../../../database/simple_rxn_database.dat
+  DATABASE ./aerobic_respiration.dat
   LOG_FORMULATION
   ACTIVITY_COEFFICIENTS OFF
   OUTPUT
@@ -357,46 +352,25 @@ END
 \end{frame}
 
 %-----------------------------------------------------------------------------
-\begin{frame}[fragile]\frametitle{CONSTRAINT}
+\begin{frame}[fragile]\frametitle{TRANSPORT\_CONDITION {\large with Embedded CONSTRAINT}}
 
 \begin{itemize}
-  \item Set up the initial concentrations
-\end{itemize}
-
-\begin{semiverbatim}
-
-CONSTRAINT initial
-  CONCENTRATIONS \bluecomment{# [mol/L]}
-    Aaq  1.d-3   F
-    Baq  5.d-4   F
-    Caq  1.d-10  F
-    Daq  1.d-10  F
-  /
-  IMMOBILE     \bluecomment{# [mol/m^3 bulk]}
-    Xim  1.d-4
-  /
-END
-
-\end{semiverbatim}
-
-\end{frame}
-
-%-----------------------------------------------------------------------------
-\begin{frame}[fragile]\frametitle{TRANSPORT\_CONDITION}
-
-
-\begin{itemize}
-  \item Couple transport constraint with transport condition
+  \item Embed transport constraint within transport condition
 \end{itemize}
 \begin{semiverbatim}
-
 TRANSPORT_CONDITION initial
   TYPE ZERO_GRADIENT
-  CONSTRAINT_LIST
-    0.d0 initial
-  /
+  \redcomment{CONSTRAINT initial
+    CONCENTRATIONS # [mol/L]
+      O2(aq)    1.5d-3   F
+      CH2O(aq)  2.d-3    F
+      CO2(aq)   1.d-10   F
+    /
+    IMMOBILE    # [mol/m^3 bulk]
+      Biomass   1.d-4
+    /
+  /}
 END
-
 \end{semiverbatim}
 
 \end{frame}
@@ -445,9 +419,47 @@ END
 \begin{semiverbatim}
 
 > cd $PFLOTRAN_DIR/
-> cd shortcourse/exercises/0D_biodegradation
-> pflotran -input_prefix biodegradation
-> python plot_biodegradation.py
+> cd shortcourse/exercises/0D_aerobic_respiriation
+> pflotran -input_prefix aerobic_respiriation
+> python plot_aerobic_respiriation.py
+
+\end{semiverbatim}
+
+\end{frame}
+
+%-----------------------------------------------------------------------------
+\begin{frame}[fragile]\frametitle{Add Inhibition Due to Oxygen Depletion}
+
+\begin{semiverbatim}
+  MICROBIAL_REACTION
+    ...
+    MONOD
+      SPECIES_NAME CH2O(aq)
+      HALF_SATURATION_CONSTANT 1.25d-5
+    /
+    \redcomment{INHIBITION
+      SPECIES_NAME O2(aq)
+      TYPE SMOOTHSTEP 1.d-3
+      INHIBITION_CONSTANT 2.5d-4
+    /}
+    BIOMASS
+      SPECIES_NAME Biomass
+      YIELD 1.d-4
+    /
+  /
+\end{semiverbatim}
+
+\end{frame}
+
+%-----------------------------------------------------------------------------
+\begin{frame}[fragile]\frametitle{Running PFLOTRAN}
+
+\begin{semiverbatim}
+
+> cd $PFLOTRAN_DIR/
+> cd shortcourse/exercises/0D_aerobic_respiriation
+> pflotran -input_prefix inhibited_aerobic_respiriation
+> python plot_inhibited_aerobic_respiration.py
 
 \end{semiverbatim}
 
