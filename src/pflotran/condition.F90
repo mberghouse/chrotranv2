@@ -53,7 +53,6 @@ module Condition_module
     type(flow_sub_condition_type), pointer :: mole_fraction
     type(flow_sub_condition_type), pointer :: salt_mole_fraction
 !    type(flow_sub_condition_type), pointer :: porosity
-    type(flow_sub_condition_type), pointer :: solubility
     type(flow_sub_condition_type), pointer :: relative_humidity
     type(flow_sub_condition_type), pointer :: temperature
     type(flow_sub_condition_type), pointer :: rate
@@ -317,7 +316,6 @@ function FlowGeneralConditionCreate(option)
   nullify(general_condition%mole_fraction)
   nullify(general_condition%salt_mole_fraction)
 !  nullify(general_condition%porosity)
-  nullify(general_condition%solubility)
   nullify(general_condition%temperature)
   nullify(general_condition%liquid_flux)
   nullify(general_condition%gas_flux)
@@ -2139,8 +2137,10 @@ subroutine FlowConditionGeneralRead(condition,input,option)
         else if (associated(general%gas_pressure) .and. &
                 associated(general%gas_saturation)) then
           ! two phase condition
-          if (general%salt_mole_fraction%itype == AT_SOLUBILITY_BC) then
-            condition%iphase = LGP_STATE
+          if (associated(general%salt_mole_fraction)) then
+            if (general%salt_mole_fraction%itype == AT_SOLUBILITY_BC) then
+              condition%iphase = LGP_STATE
+            endif
           else
             condition%iphase = TWO_PHASE_STATE
           endif
@@ -2157,22 +2157,23 @@ subroutine FlowConditionGeneralRead(condition,input,option)
           condition%iphase = LGP_STATE
         else if (associated(general%liquid_pressure) .and. &
                  associated(general%mole_fraction)) then
-          if (((option%nflowdof == 4) .and. (associated(general%salt_mole_fraction) &
-               .or. general%salt_mole_fraction%itype == AT_SOLUBILITY_BC) &
-               .or. (option%nflowdof == 3))) then
-            ! liquid phase condition
+          if (associated(general%salt_mole_fraction)) then
             if (general%salt_mole_fraction%itype == AT_SOLUBILITY_BC) then
               condition%iphase = LP_STATE
             else
               condition%iphase = LIQUID_STATE
             endif
+          else
+            condition%iphase = LIQUID_STATE
           endif
         else if (associated(general%gas_pressure) .and. &
                  (associated(general%mole_fraction) .or. &
                   associated(general%relative_humidity))) then
           ! gas phase condition
-          if (general%salt_mole_fraction%itype == AT_SOLUBILITY_BC) then
-            condition%iphase = GP_STATE
+          if (associated(general%salt_mole_fraction)) then
+            if (general%salt_mole_fraction%itype == AT_SOLUBILITY_BC) then
+              condition%iphase = GP_STATE
+            endif
           else
             condition%iphase = GAS_STATE
           endif
@@ -2188,8 +2189,10 @@ subroutine FlowConditionGeneralRead(condition,input,option)
             &a gas saturation'
           call PrintErrMsg(option)
         endif
-        if (general%salt_mole_fraction%itype == AT_SOLUBILITY_BC) then
-          condition%iphase = LGP_STATE
+        if (associated(general%salt_mole_fraction)) then
+          if (general%salt_mole_fraction%itype == AT_SOLUBILITY_BC) then
+            condition%iphase = LGP_STATE
+          endif
         else
            condition%iphase = TWO_PHASE_STATE
         endif

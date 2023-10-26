@@ -89,7 +89,7 @@ subroutine CondControlAssignFlowInitCond(realization)
   discretization => realization%discretization
   field => realization%field
   patch => realization%patch
-  material_property_array => patch%material_property_array   !DF: check
+  material_property_array => realization%patch%material_property_array   !DF: check
 
   ! to catch uninitialized grid cells.  see VecMin check at bottom.
   call VecSet(field%work_loc,UNINITIALIZED_DOUBLE,ierr);CHKERRQ(ierr)
@@ -100,7 +100,7 @@ subroutine CondControlAssignFlowInitCond(realization)
     if (.not.associated(cur_patch)) exit
 
     grid => cur_patch%grid
-    material_auxvars => cur_patch%aux%Material%auxvars
+!    material_auxvars => cur_patch%aux%Material%auxvars
 
     select case(option%iflowmode)
 
