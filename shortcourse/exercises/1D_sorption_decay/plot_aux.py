@@ -67,3 +67,10 @@ def plot_results(plt,filenames,columns,
 def gridlines(plt,x,y):
     plt.plot(x,y,c='grey',ls='dotted')
 
+def create_figure(title):
+    f = plt.figure(figsize=(12,6))
+    f.suptitle(title,fontsize=16)
+    f.subplots_adjust(hspace=0.2,wspace=0.25,
+                      bottom=.12,top=.85,
+                      left=.1,right=.98)
+    return f

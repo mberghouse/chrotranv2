@@ -14,13 +14,12 @@ import matplotlib
 import matplotlib.pyplot as plt
 from plot_aux import *
 
-f = plt.figure(figsize=(16,6))
-f.suptitle("Solute Transport and Sorption",fontsize=16)
+f = create_figure("Solute Transport and Sorption")
 
 plt.subplot(1,2,1)
 plt.title('Concentration Breakthrough @ 49.5 Meters')
-plt.xlabel('Concentration [M]')
-plt.ylabel('Time [y]')
+plt.xlabel('Time [y]')
+plt.ylabel('Concentration [M]')
 filenames = ['transport_sorption-obs-0.pft']
 columns = np.arange(2,4)
 minval,maxval = plot_results(plt,filenames,columns)
@@ -28,17 +27,13 @@ minval,maxval = plot_results(plt,filenames,columns)
 
 plt.subplot(1,2,2)
 plt.title('Concentration Profile @ 12.5 Years')
-plt.xlabel('Concentration [M]')
-plt.ylabel('X [m]')
+plt.xlabel('X [m]')
+plt.ylabel('Concentration [M]')
 filenames = ['transport_sorption-002.tec']
 columns = np.arange(4,6)
 minval,maxval = plot_results(plt,filenames,columns)
 gridlines(plt,[50.,50.],[minval,maxval])
 gridlines(plt,[25.,25.],[minval,maxval])
 gridlines(plt,[0.,100.],[0.5*maxval,0.5*maxval])
-
-f.subplots_adjust(hspace=0.2,wspace=0.40,
-                  bottom=.12,top=.85,
-                  left=.08,right=.92)
 
 plt.show()

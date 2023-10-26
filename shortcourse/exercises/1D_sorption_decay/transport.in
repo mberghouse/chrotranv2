@@ -53,7 +53,7 @@ END
 
 #=========================== fluid properties =================================
 FLUID_PROPERTY
-  DIFFUSION_COEFFICIENT 1.d-9
+  DIFFUSION_COEFFICIENT 1.d-8
 END
 
 #=========================== material properties ==============================

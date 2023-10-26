@@ -14,15 +14,14 @@ import matplotlib
 import matplotlib.pyplot as plt
 from plot_aux import *
 
-f = plt.figure(figsize=(16,6))
-f.suptitle("Solute Transport and Decay",fontsize=16)
+f = create_figure("Solute Transport and Decay")
 
 plt.subplot(1,2,1)
 plt.title('Concentration Breakthrough @ 49.5 Meters')
-plt.xlabel('Concentration [M]')
-plt.ylabel('Time [y]')
-filenames = ['transport_sorption_decay-obs-0.pft']
-columns = [0,2,3]
+plt.xlabel('Time [y]')
+plt.ylabel('Concentration [M]')
+filenames = ['transport_decay-obs-0.pft']
+columns = [2,3,4]
 mylabels = default_labels[:]
 mylabels[1:2] = default_labels[2:4]
 mycolors = default_colors[:]
@@ -33,15 +32,11 @@ minval,maxval = plot_results(plt,filenames,columns,
 
 plt.subplot(1,2,2)
 plt.title('Concentration Profile @ 12.5 Years')
-plt.xlabel('Concentration [M]')
-plt.ylabel('X [m]')
-filenames = ['transport_sorption_decay-002.tec']
-columns = [4,6,7]
+plt.xlabel('X [m]')
+plt.ylabel('Concentration [M]')
+filenames = ['transport_decay-002.tec']
+columns = [4,5,6]
 minval,maxval = plot_results(plt,filenames,columns,
                              colors=mycolors,labels=mylabels)
-
-f.subplots_adjust(hspace=0.2,wspace=0.40,
-                  bottom=.12,top=.85,
-                  left=.08,right=.92)
 
 plt.show()
