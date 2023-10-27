@@ -108,23 +108,18 @@ TIME
   MAXIMUM_TIMESTEP_SIZE 1.d0 h
 END
 
-#=========================== constraints ======================================
-CONSTRAINT initial
-  CONCENTRATIONS # [mol/L]
-    O2(aq)    1.5d-3   F
-    CH2O(aq)  2.d-3    F
-    CO2(aq)   1.d-10   F
-  /
-  IMMOBILE    # [mol/m^3 bulk]
-    Biomass   1.d-4
-  /
-END
-
 #=========================== transport conditions =============================
 TRANSPORT_CONDITION initial
   TYPE ZERO_GRADIENT
-  CONSTRAINT_LIST
-    0.d0 initial
+  CONSTRAINT initial
+    CONCENTRATIONS # [mol/L]
+      O2(aq)    1.5d-3   F
+      CH2O(aq)  2.d-3    F
+      CO2(aq)   1.d-10   F
+    /
+    IMMOBILE    # [mol/m^3 bulk]
+      Biomass   1.d-4
+    /
   /
 END
 
