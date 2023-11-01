@@ -697,6 +697,10 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
     endif
   endif
 
+  if (cell_pressure /= cell_pressure) then
+    print *, 'cell pressure nan'
+  endif
+
   select case(global_auxvar%istate)
     case(LIQUID_STATE)
       gen_auxvar%pres(lid) = x(GENERAL_LIQUID_PRESSURE_DOF)
@@ -816,10 +820,13 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
       gen_auxvar%sat(lid) = 0.d0
       gen_auxvar%sat(gid) = 1.d0
       gen_auxvar%xmol(wid,gid) = 1.d0 - gen_auxvar%xmol(acid,gid)
+
+      cell_pressure = gen_auxvar%pres(gid)
       ! need to set mole fractions in liquid phase in equilibrium with
       ! water saturated with air in order to accommodate air diffusion between
       ! GAS_STATE cell and TWO_PHASE/LIQUID_STATE cells as air should still
       ! diffuse through the liquid phase.
+
       if (.not.option%flow%sat_pres_depends_on_salinity) then
         if (associated(gen_auxvar%d)) then
           !Not supported: interfacial tension, Kelvin equation
@@ -969,7 +976,8 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
         gen_auxvar%sat(gid) = max(0.d0,gen_auxvar%sat(gid))
         gen_auxvar%sat(gid) = min(1.d0,gen_auxvar%sat(gid))
       endif
-
+      cell_pressure = max(gen_auxvar%pres(lid),gen_auxvar%pres(gid), &
+                          gen_auxvar%pres(spid))
       if (general_2ph_energy_dof == GENERAL_TEMPERATURE_INDEX) then
         gen_auxvar%temp = x(GENERAL_ENERGY_DOF)
         if (.not.option%flow%sat_pres_depends_on_salinity) then
@@ -1156,7 +1164,6 @@ subroutine GeneralAuxVarCompute(x,gen_auxvar,global_auxvar,material_auxvar, &
   if (eos_henry_ierr /= 0) then
      call GeneralEOSGasError(natural_id,eos_henry_ierr,gen_auxvar,option)
   endif
-
 
   cell_pressure = max(gen_auxvar%pres(lid),gen_auxvar%pres(gid), &
                       gen_auxvar%pres(spid))
