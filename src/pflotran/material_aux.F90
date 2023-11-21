@@ -42,8 +42,7 @@ module Material_Aux_module
   ! "ADD_SOIL_PROPERTY_INDEX_HERE" to see whereall you must update the code.
   PetscInt, public :: soil_compressibility_index
   PetscInt, public :: soil_reference_pressure_index
-  PetscInt, public :: epsilon_index
-  PetscInt, public :: half_matrix_width_index
+  PetscInt, public :: electrical_conductivity_index
   PetscInt, public :: archie_cementation_exp_index
   PetscInt, public :: archie_saturation_exp_index
   PetscInt, public :: archie_tortuosity_index
@@ -65,9 +64,9 @@ module Material_Aux_module
     PetscReal :: soil_particle_density
     PetscReal, pointer :: permeability(:)
     PetscReal, pointer :: sat_func_prop(:)
-    PetscReal, pointer :: soil_properties(:) ! den, therm. cond., heat cap., epsilon, matrix length
-    PetscReal, pointer :: electrical_conductivity(:) ! Geophysics -> electrical conductivity for ERT/SIP/EM
+    PetscReal, pointer :: soil_properties(:) ! den, therm. cond., heat cap.
     type(fracture_auxvar_type), pointer :: fracture
+    type(secondary_auxvar_type), pointer :: secondary_prop
     PetscReal, pointer :: geomechanics_subsurface_prop(:)
     PetscInt :: creep_closure_id
 
@@ -83,6 +82,12 @@ module Material_Aux_module
     PetscReal :: properties(4)
     PetscReal :: vector(3) ! < 0. 0. 0. >
   end type fracture_auxvar_type
+
+  type, public :: secondary_auxvar_type
+    PetscReal :: epsilon
+    PetscReal :: half_matrix_width
+    PetscInt :: ncells
+  end type secondary_auxvar_type
 
   type, public :: material_parameter_type
     PetscReal, pointer :: soil_heat_capacity(:) ! MJ/kg rock-K
@@ -156,12 +161,13 @@ function MaterialAuxCreate(option)
   use Option_module
   use Variables_module, only : SOIL_COMPRESSIBILITY, &
                                SOIL_REFERENCE_PRESSURE, &
-                               EPSILON, HALF_MATRIX_WIDTH, &
+                               ELECTRICAL_CONDUCTIVITY, &
                                ARCHIE_CEMENTATION_EXPONENT, &
                                ARCHIE_SATURATION_EXPONENT, &
                                ARCHIE_TORTUOSITY_CONSTANT, &
                                SURFACE_ELECTRICAL_CONDUCTIVITY, &
-                               WAXMAN_SMITS_CLAY_CONDUCTIVITY
+                               WAXMAN_SMITS_CLAY_CONDUCTIVITY, &
+                               NUMBER_SECONDARY_CELLS
 
   implicit none
 
@@ -189,12 +195,9 @@ function MaterialAuxCreate(option)
     call MaterialAuxInitSoilPropertyMap(aux,soil_reference_pressure_index, &
                                         SOIL_REFERENCE_PRESSURE, &
                                         'Soil Reference Pressure')
-    call MaterialAuxInitSoilPropertyMap(aux,epsilon_index, &
-                                        EPSILON, &
-                                        'Multicontinuum Epsilon')
-    call MaterialAuxInitSoilPropertyMap(aux,half_matrix_width_index, &
-                                        HALF_MATRIX_WIDTH, &
-                                        'Multicontinuum Half Matrix Width')
+    call MaterialAuxInitSoilPropertyMap(aux,electrical_conductivity_index, &
+                                        ELECTRICAL_CONDUCTIVITY, &
+                                        'Electrical Conductivity')
     call MaterialAuxInitSoilPropertyMap(aux,archie_cementation_exp_index, &
                                         ARCHIE_CEMENTATION_EXPONENT, &
                                         'Archie Cementation Exponent')
@@ -268,6 +271,14 @@ subroutine MaterialAuxVarInit(auxvar,option)
   endif
   nullify(auxvar%sat_func_prop)
   nullify(auxvar%fracture)
+  if (option%use_sc) then
+    allocate(auxvar%secondary_prop)
+    auxvar%secondary_prop%epsilon = UNINITIALIZED_DOUBLE
+    auxvar%secondary_prop%half_matrix_width = UNINITIALIZED_DOUBLE
+    auxvar%secondary_prop%ncells = UNINITIALIZED_INTEGER
+  else
+    nullify(auxvar%secondary_prop)
+  endif
   auxvar%creep_closure_id = 1
 
   if (max_material_index > 0) then
@@ -279,16 +290,6 @@ subroutine MaterialAuxVarInit(auxvar,option)
   endif
 
   nullify(auxvar%geomechanics_subsurface_prop)
-
-  ! PJ: for geophysics
-  if (option%igeopmode /= NULL_MODE) then
-    ! TODO: Tensor conductivity for anisotropy
-    ! using scalar for now
-    allocate(auxvar%electrical_conductivity(1))
-    auxvar%electrical_conductivity = UNINITIALIZED_DOUBLE
-  else
-    nullify(auxvar%electrical_conductivity)
-  endif
 
 end subroutine MaterialAuxVarInit
 
@@ -346,9 +347,6 @@ subroutine MaterialAuxVarCopy(auxvar,auxvar2,option)
     auxvar2%soil_properties = auxvar%soil_properties
   endif
   auxvar2%creep_closure_id = auxvar%creep_closure_id
-  if (associated(auxvar%electrical_conductivity)) then
-    auxvar2%electrical_conductivity = auxvar%electrical_conductivity
-  endif
 
 end subroutine MaterialAuxVarCopy
 
@@ -753,12 +751,13 @@ function MaterialAuxVarGetValue(material_auxvar,ivar)
       MaterialAuxVarGetValue = &
         material_auxvar%soil_properties(soil_reference_pressure_index)
     case(EPSILON)
-      MaterialAuxVarGetValue = material_auxvar%soil_properties(epsilon_index)
+      MaterialAuxVarGetValue = material_auxvar%secondary_prop%epsilon
     case(HALF_MATRIX_WIDTH)
       MaterialAuxVarGetValue = &
-        material_auxvar%soil_properties(half_matrix_width_index)
+        material_auxvar%secondary_prop%half_matrix_width
     case(ELECTRICAL_CONDUCTIVITY)
-      MaterialAuxVarGetValue = material_auxvar%electrical_conductivity(1)
+      MaterialAuxVarGetValue = &
+        material_auxvar%soil_properties(electrical_conductivity_index)
     case(ARCHIE_CEMENTATION_EXPONENT)
       MaterialAuxVarGetValue = &
         material_auxvar%soil_properties(archie_cementation_exp_index)
@@ -811,10 +810,6 @@ subroutine MaterialAuxVarSetValue(material_auxvar,ivar,value)
       material_auxvar%porosity = value
     case(TORTUOSITY)
       material_auxvar%tortuosity = value
-    case(EPSILON)
-      material_auxvar%soil_properties(epsilon_index) = value
-    case(HALF_MATRIX_WIDTH)
-      material_auxvar%soil_properties(half_matrix_width_index) = value
     case(PERMEABILITY_X)
       material_auxvar%permeability(perm_xx_index) = value
     case(PERMEABILITY_Y)
@@ -831,6 +826,14 @@ subroutine MaterialAuxVarSetValue(material_auxvar,ivar,value)
       material_auxvar%soil_properties(soil_compressibility_index) = value
     case(SOIL_REFERENCE_PRESSURE)
       material_auxvar%soil_properties(soil_reference_pressure_index) = value
+    case(EPSILON)
+      material_auxvar%secondary_prop%epsilon = value
+    case(HALF_MATRIX_WIDTH)
+      material_auxvar%secondary_prop%half_matrix_width = value
+    case(NUMBER_SECONDARY_CELLS)
+      material_auxvar%secondary_prop%ncells = int(value)
+    case(ELECTRICAL_CONDUCTIVITY)
+      material_auxvar%soil_properties(electrical_conductivity_index) = value
     case(ARCHIE_CEMENTATION_EXPONENT)
       material_auxvar%soil_properties(archie_cementation_exp_index) = value
     case(ARCHIE_SATURATION_EXPONENT)
@@ -1077,10 +1080,13 @@ subroutine MaterialAuxVarStrip(auxvar)
   call DeallocateArray(auxvar%sat_func_prop)
   call DeallocateArray(auxvar%soil_properties)
   call MaterialAuxVarFractureStrip(auxvar%fracture)
+  if (associated(auxvar%secondary_prop)) then
+    deallocate(auxvar%secondary_prop)
+    nullify(auxvar%secondary_prop)
+  endif
   if (associated(auxvar%geomechanics_subsurface_prop)) then
     call DeallocateArray(auxvar%geomechanics_subsurface_prop)
   endif
-  call DeallocateArray(auxvar%electrical_conductivity)
 
 end subroutine MaterialAuxVarStrip
 

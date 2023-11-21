@@ -1797,7 +1797,27 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
             endif
             ! ---> see code that just prints error
             coupler%flow_bc_type(1) = HYDROSTATIC_BC
-            coupler%flow_bc_type(2:option%nflowdof) = DIRICHLET_BC
+            coupler%flow_bc_type(2:3) = DIRICHLET_BC
+            if (general_salt .and. .not. general_soluble_matrix) then
+              ! mole fraction; 4th dof ----------------------- !
+              select case(general%salt_mole_fraction%itype)
+                case(DIRICHLET_BC)
+                  call PatchGetCouplerValueFromDataset(coupler,option, &
+                         patch%grid,general%salt_mole_fraction%dataset,iconn,xmol2)
+                    if (general_immiscible) then
+                      xmol2 = GENERAL_IMMISCIBLE_VALUE
+                    endif
+                    coupler%flow_aux_real_var(FOUR_INTEGER,iconn) = xmol2
+                    dof4 = PETSC_TRUE
+                    coupler%flow_bc_type(GENERAL_SALT_EQUATION_INDEX) = DIRICHLET_BC
+               case default
+                   string = GetSubConditionType(general%salt_mole_fraction%itype)
+                   option%io_buffer = &
+                       FlowConditionUnknownItype(coupler%flow_condition, &
+                       'GENERAL_MODE liquid state salt mole fraction ',string)
+                 call PrintErrMsg(option)
+               end select
+            endif
           else
           ! liquid pressure; 1st dof --------------------- !
             select case(general%liquid_pressure%itype)
@@ -1861,11 +1881,11 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                     coupler%flow_aux_real_var(FOUR_INTEGER,iconn) = xmol2
                     dof4 = PETSC_TRUE
                     coupler%flow_bc_type(GENERAL_SALT_EQUATION_INDEX) = DIRICHLET_BC
-                 case default
+               case default
                    string = GetSubConditionType(general%salt_mole_fraction%itype)
                    option%io_buffer = &
                        FlowConditionUnknownItype(coupler%flow_condition, &
-                       'GENERAL_MODE liquid state mole fraction ',string)
+                       'GENERAL_MODE liquid state salt mole fraction ',string)
                  call PrintErrMsg(option)
                end select
             endif
@@ -2458,6 +2478,7 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                                  'PatchUpdateCouplerAuxVarsG')
     end select
   endif
+
   if (associated(general%energy_flux)) then
     coupler%flow_bc_type(GENERAL_ENERGY_EQUATION_INDEX) = NEUMANN_BC
     select type(selector => general%energy_flux%dataset)
@@ -2495,24 +2516,25 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
     end select
     if (general_salt) dof4 = PETSC_TRUE
   endif
+
   if (associated(general%salt_mole_fraction)) then
     coupler%flow_bc_type(GENERAL_SALT_EQUATION_INDEX) = DIRICHLET_BC
     select type(selector => general%salt_mole_fraction%dataset)
       class is(dataset_ascii_type)
         coupler%flow_aux_real_var(FOUR_INTEGER,1:num_connections) = &
-                                             general%salt_mole_fraction%dataset%rarray(1)
+                                              general%salt_mole_fraction%dataset%rarray(1)
         dof4 = PETSC_TRUE
-     class is(dataset_gridded_hdf5_type)
-        call PatchVerifyDatasetGriddedForFlux(selector,coupler,option)
+      class is(dataset_gridded_hdf5_type)
         call PatchUpdateCouplerGridDataset(coupler,option,patch%grid,selector, &
-             FOUR_INTEGER)
+                                           FOUR_INTEGER)
         dof4 = PETSC_TRUE
-     class default
+      class default
         call PrintMsg(option,'general%salt_mole_fraction%dataset')
         call DatasetUnknownClass(selector,option, &
-             'PatchUpdateCouplerAuxVarsG')
+                                 'PatchUpdateCouplerAuxVarsG')
     end select
   endif
+
   if (associated(general%precipitate_saturation)) then
     coupler%flow_bc_type(GENERAL_SALT_EQUATION_INDEX) = DIRICHLET_BC
     select type(selector => general%precipitate_saturation%dataset)
@@ -2521,7 +2543,6 @@ subroutine PatchUpdateCouplerAuxVarsG(patch,coupler,option)
                                              general%precipitate_saturation%dataset%rarray(1)
         dof4 = PETSC_TRUE
      class is(dataset_gridded_hdf5_type)
-        call PatchVerifyDatasetGriddedForFlux(selector,coupler,option)
         call PatchUpdateCouplerGridDataset(coupler,option,patch%grid,selector, &
              FOUR_INTEGER)
         dof4 = PETSC_TRUE
@@ -2846,15 +2867,21 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
                 '" requires a mole fraction BC of type DIRICHLET.'
               call PrintErrMsg(option)
             endif
-            if (hydrate%temperature%itype /= DIRICHLET_BC) then
-              option%io_buffer = 'Hydrostatic liquid state pressure BC for &
-                &flow condition "' // trim(flow_condition%name) // &
-                '" requires a temperature BC of type DIRICHLET.'
-              call PrintErrMsg(option)
+            if (associated(hydrate%temperature)) then
+              if(hydrate%temperature%itype /= DIRICHLET_BC) then
+                option%io_buffer = 'Hydrostatic liquid state pressure BC for &
+                  &flow condition "' // trim(flow_condition%name) // &
+                  '" requires a temperature BC of type DIRICHLET.'
+                call PrintErrMsg(option)
+              else
+                coupler%flow_bc_type(3) = DIRICHLET_BC
+              endif
+            elseif (associated(hydrate%energy_flux)) then
+              coupler%flow_bc_type(3) = NEUMANN_BC 
             endif
             ! ---> see code that just prints error
             coupler%flow_bc_type(1) = HYDROSTATIC_BC
-            coupler%flow_bc_type(2:3) = DIRICHLET_BC
+            coupler%flow_bc_type(2) = DIRICHLET_BC
           else
           ! liquid pressure; 1st dof --------------------- !
             select case(hydrate%liquid_pressure%itype)
@@ -3664,6 +3691,69 @@ subroutine PatchUpdateCouplerAuxVarsH(patch,coupler,option)
           end select
       ! ---------------------------------------------------------------------- !
         case(HYD_ANY_STATE)
+          if (associated(hydrate%liquid_pressure)) then
+            if (hydrate%liquid_pressure%itype == HYDROSTATIC_BC) then
+              if (hydrate%mole_fraction%itype /= DIRICHLET_BC) then
+                option%io_buffer = 'Hydrostatic liquid state pressure BC for &
+                  &flow condition "' // trim(flow_condition%name) // &
+                  '" requires a mole fraction BC of type DIRICHLET.'
+                call PrintErrMsg(option)
+              endif
+              if (associated(hydrate%temperature)) then
+                if (hydrate%temperature%itype /= DIRICHLET_BC) then
+                  option%io_buffer = 'Hydrostatic liquid state pressure BC for &
+                    &flow condition "' // trim(flow_condition%name) // &
+                    '" requires a temperature BC of type DIRICHLET.'
+                  call PrintErrMsg(option)
+                else
+                  coupler%flow_bc_type(3) = DIRICHLET_BC
+                endif
+              elseif (associated(hydrate%energy_flux)) then
+                if (hydrate%energy_flux%itype == NEUMANN_BC) then
+                  coupler%flow_bc_type(3) = NEUMANN_BC
+                endif
+              endif
+              ! ---> see code that just prints error
+              call HydrostaticUpdateCoupler(coupler,option,patch%grid)
+              dof1 = PETSC_TRUE
+              coupler%flow_bc_type(1) = HYDROSTATIC_BC
+              coupler%flow_bc_type(2) = DIRICHLET_BC
+            else
+            ! liquid pressure; 1st dof --------------------- !
+              select case(hydrate%liquid_pressure%itype)
+                case(DIRICHLET_BC,DIRICHLET_SEEPAGE_BC)
+                  call PatchGetCouplerValueFromDataset(coupler,option, &
+                    patch%grid,hydrate%liquid_pressure%dataset,iconn,liq_pressure)
+                  coupler%flow_aux_real_var(ONE_INTEGER,iconn) = liq_pressure
+                  dof1 = PETSC_TRUE
+                  coupler%flow_bc_type(HYDRATE_LIQUID_EQUATION_INDEX) = &
+                                                                      DIRICHLET_BC
+                case default
+                  string = GetSubConditionType(hydrate%liquid_pressure%itype)
+                  option%io_buffer = &
+                    FlowConditionUnknownItype(coupler%flow_condition, &
+                    'HYDRATE MODE liquid state liquid pressure ',string)
+                  call PrintErrMsg(option)
+              end select
+            endif
+          endif
+          if (associated(hydrate%mole_fraction)) then
+            ! mole fraction; 2nd dof ----------------------- !
+              select case(hydrate%mole_fraction%itype)
+                case(DIRICHLET_BC)
+                  call PatchGetCouplerValueFromDataset(coupler,option, &
+                              patch%grid,hydrate%mole_fraction%dataset,iconn,xmol)
+                  coupler%flow_aux_real_var(TWO_INTEGER,iconn) = xmol
+                  dof2 = PETSC_TRUE
+                  coupler%flow_bc_type(HYDRATE_GAS_EQUATION_INDEX) = DIRICHLET_BC
+                case default
+                  string = GetSubConditionType(hydrate%mole_fraction%itype)
+                  option%io_buffer = &
+                    FlowConditionUnknownItype(coupler%flow_condition, &
+                    'HYDRATE MODE liquid state mole fraction ',string)
+                  call PrintErrMsg(option)
+              end select
+          endif
           ! temperature; 2nd dof ------------------------- !
           if (associated(hydrate%temperature)) then
             select case(hydrate%temperature%itype)
@@ -6705,8 +6795,8 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
       enddo
     case(POROSITY,BASE_POROSITY,INITIAL_POROSITY, &
          VOLUME,TORTUOSITY,SOIL_COMPRESSIBILITY, &
-         EPSILON,HALF_MATRIX_WIDTH, &
-         SOIL_REFERENCE_PRESSURE,ELECTRICAL_CONDUCTIVITY, &
+         EPSILON,HALF_MATRIX_WIDTH, NUMBER_SECONDARY_CELLS,&
+         SOIL_REFERENCE_PRESSURE, &
          ARCHIE_CEMENTATION_EXPONENT,ARCHIE_SATURATION_EXPONENT, &
          ARCHIE_TORTUOSITY_CONSTANT,SURFACE_ELECTRICAL_CONDUCTIVITY, &
          WAXMAN_SMITS_CLAY_CONDUCTIVITY)
@@ -6828,6 +6918,11 @@ subroutine PatchGetVariable1(patch,field,reaction_base,option, &
             vec_ptr(local_id) = 1.d0
           endif
         endif
+      enddo
+    case(ELECTRICAL_CONDUCTIVITY)
+      do local_id=1,grid%nlmax
+        vec_ptr(local_id) = &
+          patch%aux%ERT%auxvars(grid%nL2G(local_id))%bulk_conductivity
       enddo
     case(ELECTRICAL_POTENTIAL)
       call ERTAuxCheckElectrodeBounds(size(patch%aux%ERT%auxvars(1)% &
@@ -7085,7 +7180,11 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
             value = patch%aux%TH%auxvars(ghosted_id)%u
           case(SECONDARY_TEMPERATURE)
             local_id = grid%nG2L(ghosted_id)
-            value = patch%aux%SC_heat%sec_heat_vars(local_id)%sec_temp(isubvar)
+            if (size(patch%aux%SC_heat%sec_heat_vars(local_id)%sec_temp) < isubvar) then
+              value = UNINITIALIZED_DOUBLE
+            else
+              value = patch%aux%SC_heat%sec_heat_vars(local_id)%sec_temp(isubvar)
+            endif
           case default
             call PatchUnsupportedVariable('TH',ivar,option)
         end select
@@ -7222,7 +7321,11 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
             value = patch%aux%Global%auxvars(ghosted_id)%fugacoeff(1)
           case(SECONDARY_TEMPERATURE)
             local_id = grid%nG2L(ghosted_id)
-            value = patch%aux%SC_heat%sec_heat_vars(local_id)%sec_temp(isubvar)
+            if (size(patch%aux%SC_heat%sec_heat_vars(local_id)%sec_temp) < isubvar) then
+              value = UNINITIALIZED_DOUBLE
+            else
+              value = patch%aux%SC_heat%sec_heat_vars(local_id)%sec_temp(isubvar)
+            endif
           case default
             call PatchUnsupportedVariable('MPHASE',ivar,option)
         end select
@@ -7658,7 +7761,7 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
         case(PRIMARY_MOLARITY)
           value = patch%aux%RT%auxvars(ghosted_id)%pri_molal(isubvar)*xmass * &
                   patch%aux%Global%auxvars(ghosted_id)%den_kg(iphase) / 1000.d0
-        case(SECONDARY_MOLALITY)
+        case(SECONDARY_MOLALITY)  
           value = patch%aux%RT%auxvars(ghosted_id)%sec_molal(isubvar)
         case(SECONDARY_MOLARITY)
           value = patch%aux%RT%auxvars(ghosted_id)%sec_molal(isubvar)*xmass * &
@@ -7752,7 +7855,7 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
             patch%aux%RT%auxvars(ghosted_id)%kinsrfcplx_free_site_conc(isubvar)
         case(PRIMARY_ACTIVITY_COEF)
           value = patch%aux%RT%auxvars(ghosted_id)%pri_act_coef(isubvar)
-        case(SECONDARY_ACTIVITY_COEF)
+        case(SECONDARY_ACTIVITY_COEF)  
           value = patch%aux%RT%auxvars(ghosted_id)%sec_act_coef(isubvar)
         case(PRIMARY_KD)
           call ReactionComputeKd(isubvar,value, &
@@ -7794,7 +7897,7 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
     case(POROSITY,BASE_POROSITY,INITIAL_POROSITY, &
          VOLUME,TORTUOSITY,SOIL_COMPRESSIBILITY,SOIL_REFERENCE_PRESSURE, &
          EPSILON,HALF_MATRIX_WIDTH, &
-         ELECTRICAL_CONDUCTIVITY,ARCHIE_CEMENTATION_EXPONENT, &
+         ARCHIE_CEMENTATION_EXPONENT, &
          ARCHIE_SATURATION_EXPONENT,ARCHIE_TORTUOSITY_CONSTANT, &
          SURFACE_ELECTRICAL_CONDUCTIVITY,WAXMAN_SMITS_CLAY_CONDUCTIVITY)
       value = MaterialAuxVarGetValue(material_auxvars(ghosted_id),ivar)
@@ -7869,6 +7972,8 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
           value = 1.d0
         endif
       endif
+    case(ELECTRICAL_CONDUCTIVITY)
+      value = patch%aux%ERT%auxvars(ghosted_id)%bulk_conductivity
     case(ELECTRICAL_POTENTIAL_DIPOLE)
       call ERTAuxCheckElectrodeBounds(size(patch%aux%ERT%auxvars(1)% &
                                       potential),isubvar,isubvar2,option)
@@ -7889,29 +7994,54 @@ function PatchGetVariableValueAtCell(patch,field,reaction_base,option, &
     ! Need to fix the below two cases (they assume only one component) -- SK 02/06/13
     case(SECONDARY_CONCENTRATION)
       ! Note that the units are in mol/kg
-      local_id = grid%nG2L(ghosted_id)
-      value = patch%aux%SC_RT%sec_transport_vars(local_id)% &
-                                   sec_rt_auxvar(isubvar)%total(isubvar2,1)
+       local_id = grid%nG2L(ghosted_id)
+       if (size(patch%aux%SC_RT%sec_transport_vars(local_id)% &
+                sec_rt_auxvar) < isubvar) then
+          value = UNINITIALIZED_DOUBLE
+       else
+         value = patch%aux%SC_RT%sec_transport_vars(local_id)% &
+                 sec_rt_auxvar(isubvar)%total(isubvar2,1)
+       endif
     case(SECONDARY_CONCENTRATION_GAS)
       local_id = grid%nG2L(ghosted_id)
-      value = patch%aux%SC_RT%sec_transport_vars(local_id)% &
-                                   sec_rt_auxvar(isubvar)%gas_pp(isubvar2)
+      if (size(patch%aux%SC_RT%sec_transport_vars(local_id)% &
+               sec_rt_auxvar) < isubvar) then
+        value = UNINITIALIZED_DOUBLE
+      else
+        value = patch%aux%SC_RT%sec_transport_vars(local_id)% &
+                sec_rt_auxvar(isubvar)%gas_pp(isubvar2)
+      endif
     case(SEC_MIN_VOLFRAC)
       local_id = grid%nG2L(ghosted_id)
-      value = patch%aux%SC_RT%sec_transport_vars(local_id)% &
-              sec_rt_auxvar(isubvar)%mnrl_volfrac(isubvar2)
+      if (size(patch%aux%SC_RT%sec_transport_vars(local_id)% &
+               sec_rt_auxvar) < isubvar) then
+        value = UNINITIALIZED_DOUBLE
+      else
+        value = patch%aux%SC_RT%sec_transport_vars(local_id)% &
+                sec_rt_auxvar(isubvar)%mnrl_volfrac(isubvar2)
+      endif
     case(SEC_MIN_RATE)
       local_id = grid%nG2L(ghosted_id)
-      value = patch%aux%SC_RT%sec_transport_vars(local_id)% &
-              sec_rt_auxvar(isubvar)%mnrl_rate(isubvar2)
+      if (size(patch%aux%SC_RT%sec_transport_vars(local_id)% &
+               sec_rt_auxvar) < isubvar) then
+        value = UNINITIALIZED_DOUBLE
+      else
+        value = patch%aux%SC_RT%sec_transport_vars(local_id)% &
+                sec_rt_auxvar(isubvar)%mnrl_rate(isubvar2)
+      endif
     case(SEC_MIN_SI)
       local_id = grid%nG2L(ghosted_id)
-      value = RMineralSaturationIndex(isubvar2,&
-                                      patch%aux%SC_RT% &
-                                      sec_transport_vars(local_id)% &
-                                      sec_rt_auxvar(isubvar), &
-                                      patch%aux%Global%auxvars(ghosted_id),&
-                                      reaction,option)
+      if (size(patch%aux%SC_RT%sec_transport_vars(local_id)% &
+               sec_rt_auxvar) < isubvar) then
+        value = UNINITIALIZED_DOUBLE
+      else
+        value = RMineralSaturationIndex(isubvar2,&
+                                        patch%aux%SC_RT% &
+                                        sec_transport_vars(local_id)% &
+                                        sec_rt_auxvar(isubvar), &
+                                        patch%aux%Global%auxvars(ghosted_id),&
+                                        reaction,option)
+      endif
     case(SALINITY)
       value = patch%aux%Global%auxvars(ghosted_id)%m_nacl(ONE_INTEGER)
     case(SMECTITE)
@@ -8693,7 +8823,7 @@ subroutine PatchSetVariable(patch,field,option,vec,vec_format,ivar,isubvar)
           call PrintErrMsg(option, &
                     'Setting of total molality at grid cell not supported.')
       end select
-    case(POROSITY,BASE_POROSITY,INITIAL_POROSITY,ELECTRICAL_CONDUCTIVITY, &
+    case(POROSITY,BASE_POROSITY,INITIAL_POROSITY, &
          EPSILON,HALF_MATRIX_WIDTH, &
          ARCHIE_CEMENTATION_EXPONENT,ARCHIE_SATURATION_EXPONENT, &
          ARCHIE_TORTUOSITY_CONSTANT,SURFACE_ELECTRICAL_CONDUCTIVITY, &
@@ -8737,6 +8867,11 @@ subroutine PatchSetVariable(patch,field,option,vec,vec_format,ivar,isubvar)
       else if (vec_format == LOCAL) then
         patch%imat(1:grid%ngmax) = int(vec_ptr(1:grid%ngmax))
       endif
+    case(ELECTRICAL_CONDUCTIVITY)
+      do local_id=1,grid%nlmax
+        patch%aux%ERT%auxvars(grid%nL2G(local_id))%bulk_conductivity = &
+          vec_ptr(local_id)
+      enddo
     case(ELECTRICAL_POTENTIAL)
       do local_id=1,grid%nlmax
         patch%aux%ERT%auxvars(grid%nL2G(local_id))%potential(isubvar) = &

@@ -343,10 +343,6 @@ subroutine RealizationCreateDiscretization(realization)
       endif
 
     else ! operator splitting
-      ! ndof degrees of freedom, global
-      ! create the 1 dof vector for solving the individual linear systems
-      call DiscretizationCreateVector(discretization,ONEDOF,field%tran_rhs_coef, &
-                                      GLOBAL,option)
       ! create the ntran dof vector for storage of the solution
       call DiscretizationCreateVector(discretization,NTRANDOF,field%tran_xx, &
                                       GLOBAL,option)
@@ -354,8 +350,6 @@ subroutine RealizationCreateDiscretization(realization)
                                          field%tran_yy)
       call DiscretizationDuplicateVector(discretization,field%tran_xx, &
                                          field%tran_dxx)
-      call DiscretizationDuplicateVector(discretization,field%tran_xx, &
-                                         field%tran_rhs)
 
       ! ndof degrees of freedom, local
       ! again, just for storage of the current colution
@@ -364,13 +358,6 @@ subroutine RealizationCreateDiscretization(realization)
 
     endif
 
-  endif
-
-  ! geophysics
-  if (option%ngeopdof > 0) then
-    ! 1 dof
-    call DiscretizationDuplicateVector(discretization,field%work, &
-                                       field%electrical_conductivity)
   endif
 
   grid => discretization%grid
@@ -917,6 +904,24 @@ subroutine RealProcessMatPropAndSatFunc(realization)
             cur_material_property%multicontinuum%half_matrix_width_dataset => dataset
           class default
             option%io_buffer = 'Incorrect dataset type for length.'
+            call PrintErrMsg(option)
+        end select
+      endif
+      if (associated(cur_material_property%multicontinuum%ncells_dataset)) then
+        string = 'MATERIAL_PROPERTY(' // trim(cur_material_property%name) // &
+                 '),NUM_CELLS'
+        dataset => &
+          DatasetBaseGetPointer(realization%datasets, &
+                                cur_material_property% &
+                                  multicontinuum%ncells_dataset%name, &
+                                string,option)
+        call DatasetDestroy(cur_material_property% &
+                              multicontinuum%ncells_dataset)
+        select type(dataset)
+          class is (dataset_common_hdf5_type)
+            cur_material_property%multicontinuum%ncells_dataset => dataset
+          class default
+            option%io_buffer = 'Incorrect dataset type for number of secondary cells.'
             call PrintErrMsg(option)
         end select
       endif
