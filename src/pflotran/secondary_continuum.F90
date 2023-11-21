@@ -727,7 +727,7 @@ end subroutine SecondaryHeatAuxVarInit
 ! ************************************************************************** !
 
 subroutine SecondaryGenAuxVarInit(multicontinuum, &
-                                  epsilon,half_matrix_width, &
+                                  epsilon,half_matrix_width, ncells, &
                                   sec_gen_vars, initial_condition,option)
 
   ! Initializes all the general mode secondary continuum
@@ -750,6 +750,7 @@ subroutine SecondaryGenAuxVarInit(multicontinuum, &
   
   PetscReal :: epsilon
   PetscReal :: half_matrix_width
+  PetscInt  :: ncells
   PetscReal :: area_per_vol
   
   call SecondaryContinuumSetProperties( &
@@ -762,7 +763,7 @@ subroutine SecondaryGenAuxVarInit(multicontinuum, &
        multicontinuum%porosity, &
        option)
 
-  sec_gen_vars%ncells = multicontinuum%ncells
+  sec_gen_vars%ncells = ncells
   sec_gen_vars%half_aperture = multicontinuum%half_aperture
   sec_gen_vars%epsilon = epsilon
   sec_gen_vars%log_spacing = multicontinuum%log_spacing

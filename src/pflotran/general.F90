@@ -175,8 +175,9 @@ subroutine GeneralSetup(realization)
       if (patch%imat(ghosted_id) <= 0) cycle
       call SecondaryGenAuxVarInit( &
            patch%material_property_array(patch%imat(ghosted_id))%ptr%multicontinuum, &
-           patch%aux%Material%auxvars(ghosted_id)%soil_properties(epsilon_index), &
-           patch%aux%Material%auxvars(ghosted_id)%soil_properties(half_matrix_width_index), &
+           patch%aux%Material%auxvars(ghosted_id)%secondary_prop%epsilon, &
+           patch%aux%Material%auxvars(ghosted_id)%secondary_prop%half_matrix_width, &
+           patch%aux%Material%auxvars(ghosted_id)%secondary_prop%ncells, &
            general_sec_gen_vars(local_id), initial_condition, option)
            
     enddo      
@@ -370,7 +371,7 @@ subroutine GeneralUpdateSolution(realization)
         if (patch%imat(ghosted_id) <= 0) cycle
       endif
       if (Equal((patch%aux%Material%auxvars(ghosted_id)% &
-          soil_properties(epsilon_index)),1.d0)) cycle
+          secondary_prop%epsilon),1.d0)) cycle
       iend = local_id*option%nflowdof
       istart = iend-option%nflowdof+1
 
@@ -1251,7 +1252,7 @@ subroutine GeneralUpdateFixedAccum(realization)
     option%iflag = GENERAL_UPDATE_FOR_FIXED_ACCUM
 
     if (option%use_sc) then
-      vol_frac_prim = material_auxvars(ghosted_id)%soil_properties(epsilon_index)
+      vol_frac_prim = material_auxvars(ghosted_id)%secondary_prop%epsilon
     else
       vol_frac_prim = 1.d0
     endif
@@ -1469,7 +1470,7 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
     local_end = local_id * option%nflowdof
     local_start = local_end - option%nflowdof + 1
     if (option%use_sc) then
-      vol_frac_prim = material_auxvars(ghosted_id)%soil_properties(epsilon_index)
+      vol_frac_prim = material_auxvars(ghosted_id)%secondary_prop%epsilon
     else
       vol_frac_prim = 1.d0
     endif
@@ -1495,10 +1496,10 @@ subroutine GeneralResidual(snes,xx,r,realization,ierr)
         if (patch%imat(ghosted_id) <= 0) cycle
       endif
       if (Equal((material_auxvars(ghosted_id)% &
-          soil_properties(epsilon_index)),1.d0)) cycle
+          secondary_prop%epsilon),1.d0)) cycle
       iend = local_id*option%nflowdof
       istart = iend-option%nflowdof+1
-      vol_frac_prim = material_auxvars(ghosted_id)%soil_properties(epsilon_index)
+      vol_frac_prim = material_auxvars(ghosted_id)%secondary_prop%epsilon
       sec_diffusion_coefficient = patch%material_property_array(patch%imat(ghosted_id))% &
                                   ptr%multicontinuum%diff_coeff
       sec_porosity = patch%material_property_array(patch%imat(ghosted_id))% &
@@ -1933,7 +1934,7 @@ subroutine GeneralJacobian(snes,xx,A,B,realization,ierr)
                               Jup,vol_frac_prim)
     if (option%use_sc) then
       if (.not.Equal((material_auxvars(ghosted_id)% &
-          soil_properties(epsilon_index)),1.d0)) then
+          secondary_prop%epsilon),1.d0)) then
         sec_diffusion_coefficient = patch%material_property_array(patch%imat(ghosted_id))% &
                                     ptr%multicontinuum%diff_coeff
         sec_porosity = patch%material_property_array(patch%imat(ghosted_id))% &
