@@ -421,7 +421,7 @@ subroutine ChromiumReact(this,Residual,Jacobian,compute_derivative, &
   PetscReal :: mu_B, mu_CD
   PetscReal :: sum_food
   PetscInt :: idof_food_mobile, idof_food_immobile, idof_biomass, idof_Cr
-  PetscInt :: idof_alcohol, idof_biocide
+  PetscInt :: idof_alcohol, idof_biocide, idof_CO2, idof_O2
   PetscReal :: immobile_to_water_vol
   PetscReal :: immobile_mole_fraction, mobile_mole_fraction
   PetscReal :: biomass_residual_delta
