@@ -476,6 +476,7 @@ subroutine ChromiumReact(this,Residual,Jacobian,compute_derivative, &
   !
   ! option - Provides handle for controlling simulation, catching and
   !          reporting errors.
+  call InputPushBlock(input,option)
   option%flow%store_darcy_vel = PETSC_TRUE
   ! Unit of the residual must be in moles/second
   ! global_auxvar%sat(iphase) = saturation of cell
@@ -676,6 +677,7 @@ subroutine ChromiumKineticState(this,rt_auxvar,global_auxvar, &
   idof_biocide = this%X_id
   idof_biomass = reaction%offset_immobile + this%B_id
   idof_food_immobile = reaction%offset_immobile + this%D_immobile_id
+  call InputPushBlock(input,option)
   option%flow%store_darcy_vel = PETSC_TRUE
   immobile_to_water_vol = &
             material_auxvar%porosity*global_auxvar%sat(iphase)*1000.d0            ! L water/ m3 bulk
