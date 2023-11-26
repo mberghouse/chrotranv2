@@ -888,7 +888,7 @@ subroutine BioTH_React(this,Residual,Jacobian,compute_derivative, &
   PetscReal :: rho_f
   PetscReal :: g
   PetscReal :: viscosity
-  PetscReal :: delta_volfrac
+
 
   PetscReal :: Vaq  ! mol/L
   PetscReal :: Vim  ! mol/m^3
@@ -1277,7 +1277,7 @@ subroutine BioTH_KineticState(this,rt_auxvar,global_auxvar, &
   PetscReal :: rho_f
   PetscReal :: g
   PetscReal :: viscosity
-
+  PetscReal :: delta_volfrac
   PetscReal :: Vaq  ! mol/L
   PetscReal :: Vim  ! mol/m^3
   PetscReal :: Rate
