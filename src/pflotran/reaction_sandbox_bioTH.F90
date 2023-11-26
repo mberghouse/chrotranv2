@@ -1248,7 +1248,7 @@ subroutine BioTH_KineticState(this,rt_auxvar,global_auxvar, &
   !
   ! Updates the kinetic state for the sandbox
   !
-  !use Option_module
+  use Option_module
   use String_module
   use Reaction_Aux_module, only : reaction_rt_type
   use Reaction_Immobile_Aux_module
