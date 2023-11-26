@@ -1224,11 +1224,11 @@ subroutine BioTH_React(this,Residual,Jacobian,compute_derivative, &
   ! The actual calculation:
 
   Residual(this%species_Vaq_id) = &
-    Residual(this%species_Vaq_id) - RateAtt - RateDecayAq + RateDet  mu_B_mob_residual
+    Residual(this%species_Vaq_id) - RateAtt - RateDecayAq + RateDet + mu_B_mob_residual
 
   Residual(this%species_Vim_id + reaction%offset_immobile) = &
     Residual(this%species_Vim_id + reaction%offset_immobile) &
-    - RateDet - RateDecayIm  mu_B_im_residual
+    - RateDet - RateDecayIm + mu_B_im_residual
 
   ! NOTES
   ! 1. Always subtract contribution from residual
