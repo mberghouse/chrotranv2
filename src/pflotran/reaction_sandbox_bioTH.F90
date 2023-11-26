@@ -803,6 +803,7 @@ subroutine BioTH_Setup(this,reaction,option)
 
   use Reaction_Aux_module, only : reaction_rt_type, GetPrimarySpeciesIDFromName
   use Reaction_Immobile_Aux_module, only : GetImmobileSpeciesIDFromName
+  use Reaction_Mineral_Aux_module, only : GetMineralIDFromName
   use Option_module
 
   implicit none
@@ -912,10 +913,10 @@ subroutine BioTH_React(this,Residual,Jacobian,compute_derivative, &
 
   ! Detachment rate
   PetscReal :: kdet
-  PetscReal :: mu_B_im
-  PetscReal :: mu_B_mob
+  PetscReal :: mu_B_im, mu_B_im_residual
+  PetscReal :: mu_B_mob, mu_B_mob_residual
   PetscReal :: sum_food
-  PetscReal :: immobile_to_water_vol
+  PetscReal :: immobile_mole_fraction, mobile_mole_fraction
 
   ! Global stuff (Check global_aux.F90)
   volume = material_auxvar%volume
@@ -1145,7 +1146,6 @@ subroutine BioTH_React(this,Residual,Jacobian,compute_derivative, &
 			!(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
             (this%inhibition_B/ (Vaq + this%inhibition_B))**this%exponent_B  !mol/Ls
   mu_B_mob_residual =     - mu_B_mob*L_water + &                      ! mol/Ls * L 
-                           ! Velocity decay, mol/s
                           (this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel)* & 
                            this%rate_B_2* &                         ! 1/s natural decay
                            (Vaq - this%background_concentration_B)* &  ! mol/m3 bulk
@@ -1290,20 +1290,20 @@ subroutine BioTH_KineticState(this,rt_auxvar,global_auxvar, &
             rt_auxvar%immobile(this%D_immobile_id)/ &
             immobile_to_water_vol                                                 ! in mol/L water; Note that food_immobile is divided by porosity*saturation
 
-  mu_B_im = this%rate_B_1*rt_auxvar%immobile(this%Vim)* &      ! mol/m3 bulk/s
+  mu_B_im = this%rate_B_1*Vim* &      ! mol/m3 bulk/s
 			(sum_food/(sum_food + this%monod_D))* &
 			!(rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
 			!(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
             ! F monod term, unitless
             ! B monod inhibition term, unitless
-            (this%inhibition_B/ (rt_auxvar%immobile(this%Vim) + this%inhibition_B))**this%exponent_B 
-  mu_B_mob = this%rate_B_1*.25*rt_auxvar%total(this%Vaq,iphase)* &      ! mol/m3 bulk/s
+            (this%inhibition_B/ (Vim + this%inhibition_B))**this%exponent_B 
+  mu_B_mob = this%rate_B_1*.25*Vaq* &      ! mol/m3 bulk/s
 			(sum_food/(sum_food + this%monod_D))* &
 			!(rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
 			!(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
             ! F monod term, unitless
             ! B monod inhibition term, unitless
-            (this%inhibition_B/ (rt_auxvar%immobile(this%Vaq) + this%inhibition_B))**this%exponent_B
+            (this%inhibition_B/ (Vaq + this%inhibition_B))**this%exponent_B
 
   biomass_residual_delta = &                                       ! Growth usage, mol/s
             - mu_B_im*material_auxvar%volume &                      ! mol/m3 bulk/s * m3 bulk
