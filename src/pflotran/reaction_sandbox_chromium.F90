@@ -2,8 +2,9 @@ module Reaction_Sandbox_Chromium_class
 
 ! Sandbox reaction for Cr(VI) reduction using bio-reduction with reduced permeability
 #include "petsc/finclude/petscsys.h"
+  use petscsys  
   use Reaction_Sandbox_Base_class
-  use petscsys
+
   use Global_Aux_module
   use Reactive_Transport_Aux_module
 
@@ -140,11 +141,12 @@ subroutine ChromiumRead(this,input,option)
   ! Date: 08/19/2015
   !
 
-#include "petsc/finclude/petscsys.h"
-  use petscsys
+
   use Option_module
   use String_module
   use Input_Aux_module
+  use Utility_module
+  use Units_module, only : UnitsConvertToInternal
 
   implicit none
 
@@ -152,14 +154,15 @@ subroutine ChromiumRead(this,input,option)
   type(input_type), pointer  :: input
   type(option_type) :: option
 
-  character(len=MAXWORDLENGTH) :: word
+  character(len=MAXWORDLENGTH) :: word, internal_units
 
+  call InputPushBlock(input,option)
   do
     call InputReadPflotranString(input,option)
     if (InputError(input)) exit
     if (InputCheckExit(input,option)) exit
 
-    call InputReadWord(input,option,word,PETSC_TRUE)
+    call InputReadCard(input,option,word)
     call InputErrorMsg(input,option,'keyword', &
                        'CHEMISTRY,REACTION_SANDBOX,CHROMIUM_REDUCTION')
     call StringToUpper(word)
@@ -328,8 +331,9 @@ subroutine ChromiumRead(this,input,option)
         call InputKeywordUnrecognized(input,word, &
                      'CHEMISTRY,REACTION_SANDBOX,CHROMIUM_REDUCTION',option)
     end select
-  enddo
+  end do
 
+  call InputPopBlock(input,option)
 end subroutine ChromiumRead
 
 ! ************************************************************************** !
@@ -402,9 +406,10 @@ subroutine ChromiumReact(this,Residual,Jacobian,compute_derivative, &
   use Option_module
   use Utility_module
   use String_module
-  use Input_Aux_module
-  use Reaction_Aux_module
-  use Material_Aux_module
+  use Input_Aux_module  
+  use Reaction_Aux_module, only : reaction_rt_type
+  use Reaction_Immobile_Aux_module
+  use Material_Aux_module, only : material_auxvar_type
 
   implicit none
   type(input_type), pointer :: input
