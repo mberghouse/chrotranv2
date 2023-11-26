@@ -1145,10 +1145,9 @@ subroutine BioTH_React(this,Residual,Jacobian,compute_derivative, &
 			!(rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
 			!(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
             (this%inhibition_B/ (Vaq + this%inhibition_B))**this%exponent_B  !mol/Ls
-  mu_B_mob_residual =     - mu_B_mob*L_water + &                      ! mol/Ls * L 
-                          (this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel)* & 
-                           this%rate_B_2* &                         ! 1/s natural decay
-                           (Vaq - this%background_concentration_B)* &  ! mol/m3 bulk
+			
+  mu_B_mob_residual = - mu_B_mob*L_water + (this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel)* & 
+                           this%rate_B_2*(Vaq - this%background_concentration_B)* &  ! mol/m3 bulk
                            L_water                              ! m3 bulk
                                 ! m3 bulk
 
@@ -1281,6 +1280,9 @@ subroutine BioTH_KineticState(this,rt_auxvar,global_auxvar, &
   PetscReal :: mu_B_mob
   PetscReal :: sum_food
   PetscReal :: immobile_to_water_vol
+  
+  Vaq = rt_auxvar%total(this%species_Vaq_id,iphase)
+  Vim = rt_auxvar%immobile(this%species_Vim_id)
 
 
   immobile_to_water_vol = &
