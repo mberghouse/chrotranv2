@@ -400,11 +400,12 @@ subroutine ChromiumReact(this,Residual,Jacobian,compute_derivative, &
   !
 
   use Option_module
+  use Input_Aux_module
   use Reaction_Aux_module
   use Material_Aux_module
 
   implicit none
-
+  type(input_type), pointer :: input
   class(reaction_sandbox_chromium_type) :: this
   type(option_type) :: option
   class(reaction_rt_type) :: reaction
@@ -648,6 +649,7 @@ subroutine ChromiumKineticState(this,rt_auxvar,global_auxvar, &
   !
 
   use Option_module
+  use Input_Aux_module
   use Reaction_Aux_module
   use Material_Aux_module, only: material_auxvar_type
 
@@ -655,6 +657,7 @@ subroutine ChromiumKineticState(this,rt_auxvar,global_auxvar, &
 
   class(reaction_sandbox_chromium_type) :: this
   type(option_type) :: option
+  type(input_type), pointer :: input
   class(reaction_rt_type) :: reaction
   ! the following arrays must be declared after reaction
   type(reactive_transport_auxvar_type) :: rt_auxvar
