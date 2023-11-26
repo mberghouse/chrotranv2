@@ -848,7 +848,7 @@ subroutine BioTH_Setup(this,reaction,option)
 end subroutine BioTH_Setup
 
 ! ************************************************************************** !
-subroutine BioTH_KineticState(this,Residual,Jacobian,compute_derivative, &
+subroutine BioTH_React(this,Residual,Jacobian,compute_derivative, &
                         rt_auxvar,global_auxvar,material_auxvar, &
                         reaction, option)
   !
