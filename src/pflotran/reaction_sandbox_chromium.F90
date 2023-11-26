@@ -69,7 +69,7 @@ module Reaction_Sandbox_Chromium_class
     procedure, public :: ReadInput => ChromiumRead
     procedure, public :: Setup => ChromiumSetup
     procedure, public :: Evaluate => ChromiumReact
-    procedure, public :: UpdateKineticState => ChromiumKineticState
+    !procedure, public :: UpdateKineticState => ChromiumKineticState
     procedure, public :: Destroy => ChromiumDestroy
   end type reaction_sandbox_chromium_type
 
