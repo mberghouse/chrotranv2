@@ -1179,7 +1179,7 @@ subroutine BioTH_React(this,Residual,Jacobian,compute_derivative, &
                            volume                                 ! m3 bulk
 
 
-  ! Residual(this%D_immobile_id) = Residual(this%D_immobile_id) + &
+  Residual(this%D_immobile_id) = Residual(this%D_immobile_id) + &
                            ! ! Growth usage, mol/s
                            this%stoichiometric_D_1* &                          ! unitless
                            immobile_mole_fraction* &                              ! dimensionless
