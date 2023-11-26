@@ -1146,9 +1146,11 @@ subroutine BioTH_React(this,Residual,Jacobian,compute_derivative, &
 			!(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
             (this%inhibition_B/ (Vaq + this%inhibition_B))**this%exponent_B
 
-  mu_B_mob_residual =  -1* mu_B_mob
+  mu_B_mob_residual =     -1* mu_B_mob*L_water + &  
+                          (this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel)* & 
+                           this%rate_B_2*(Vaq - this%background_concentration_B)* L_water  
 
-  mu_B_im_residual =     - mu_B_im*volume + &                      ! mol/Ls * L 
+  mu_B_im_residual =     - 1*mu_B_im*volume + &                      ! mol/Ls * L 
                            ! Natural decay, mol/s
                           (this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel)* & 
                            this%rate_B_2* &                         ! 1/s
