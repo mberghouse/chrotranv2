@@ -507,12 +507,12 @@ subroutine ChromiumReact(this,Residual,Jacobian,compute_derivative, &
   mu_B = this%rate_B_1*rt_auxvar%immobile(this%B_id)* &      ! mol/m3 bulk/s
         ! F monod term, unitless
         (sum_food/(sum_food + this%monod_D))* & !    
-		((rt_auxvar%total(idof_O2,iphase))**.0002)* &   
+		!((rt_auxvar%total(idof_O2,iphase))**.0002)* &   
 		!(1.1/(1+exp(.3*(17.4-global_auxvar%temp))))*& !   
 		   ! y=1.1/(1+e^(.3*(17.4-x)))
 		!(-2*abs(global_auxvar%sat(iphase)-.5)+1)*&    ! saturation O2 lmitation
-		((rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
-		(this%K_O + rt_auxvar%total(idof_O2,iphase)))**2.5)*&             ! limitation
+		!((rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
+		!(this%K_O + rt_auxvar%total(idof_O2,iphase)))**2.5)*&             ! limitation
         ! B monod inhibition term, unitless
         (this%inhibition_B/ &
         (rt_auxvar%immobile(this%B_id) + &
@@ -524,19 +524,19 @@ subroutine ChromiumReact(this,Residual,Jacobian,compute_derivative, &
 
   mu_CD = this%mass_action_CD*sum_food*rt_auxvar%total(idof_Cr,iphase)    ! mol/L/s
   
-  respiration_rate = - rt_auxvar%immobile(this%B_id)* &                 ! mol/m3 bulk
-                     material_auxvar%volume * this%k * &         ! fitting parameter k
+  !respiration_rate = - rt_auxvar%immobile(this%B_id)* &                 ! mol/m3 bulk
+  !                   material_auxvar%volume * this%k * &         ! fitting parameter k
 					 !(rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
 					 !(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
-					 (-2*abs(global_auxvar%sat(iphase)-.5)+1)*&
+	!				 (-2*abs(global_auxvar%sat(iphase)-.5)+1)*&
 					 !((rt_auxvar%total(idof_O2,iphase))**.0002)* &   
-					 (1.1/(1+exp(.3*(17.4-global_auxvar%temp))))
+	!				 (1.1/(1+exp(.3*(17.4-global_auxvar%temp))))
 					 
 			
-  oxygen_rate = - respiration_rate
+  !oxygen_rate = - respiration_rate
   
-  Residual(idof_O2) = Residual(idof_O2) + oxygen_rate 
-  Residual(idof_CO2) = Residual(idof_CO2) + respiration_rate 
+  !Residual(idof_O2) = Residual(idof_O2) + oxygen_rate 
+  !Residual(idof_CO2) = Residual(idof_CO2) + respiration_rate 
 
   Residual(idof_Cr) =      Residual(idof_Cr) + &
                            ! Biological reaction, mol/s
