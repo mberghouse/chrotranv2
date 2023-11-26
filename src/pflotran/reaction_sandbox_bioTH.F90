@@ -52,6 +52,54 @@ module Reaction_Sandbox_BioTH_class
 
     !Debug?
     PetscBool :: debug_option
+	
+	character(len=MAXWORDLENGTH) :: name_D_mobile   ! This the mobile food in the reaction
+    character(len=MAXWORDLENGTH) :: name_D_immobile ! This the immobile food in the reaction
+    character(len=MAXWORDLENGTH) :: name_C     ! This is for Cr(VI) in the reaction
+    character(len=MAXWORDLENGTH) :: name_B ! This is for the biomass in the reaction
+    character(len=MAXWORDLENGTH) :: name_I ! This is for the alcohol in the reaction
+    character(len=MAXWORDLENGTH) :: name_X ! This is for the biocide in the reaction
+    character(len=MAXWORDLENGTH) :: name_biomineral ! This is for the dummny bio mineral
+	character(len=MAXWORDLENGTH) :: name_O2 ! This is for the dummny bio mineral
+	character(len=MAXWORDLENGTH) :: name_CO2 ! This is for the dummny bio mineral
+
+    PetscInt :: B_id
+    PetscInt :: C_id
+    PetscInt :: D_immobile_id  ! Immobile food
+    PetscInt :: D_mobile_id    ! Mobile food
+    PetscInt :: I_id
+    PetscInt :: X_id
+    PetscInt :: biomineral_id
+    PetscInt :: O2_id
+	PetscInt :: CO2_id
+
+    ! Decay and inhibition parameters in our sophisticated model
+    PetscReal :: background_concentration_B    ! Minimum background concentration of the biomass
+    PetscReal :: rate_B_1
+    PetscReal :: rate_B_2
+    PetscReal :: rate_C
+    PetscReal :: rate_D
+    PetscReal :: rate_D_i
+    PetscReal :: rate_D_m
+    PetscReal :: inhibition_B
+    PetscReal :: inhibition_C
+    PetscReal :: monod_D
+    PetscReal :: inhibition_I
+    PetscReal :: mass_action_B
+    PetscReal :: mass_action_CD
+    PetscReal :: mass_action_X
+    PetscReal :: stoichiometric_C
+    PetscReal :: stoichiometric_D_1
+    PetscReal :: stoichiometric_D_2
+    PetscReal :: exponent_B
+    PetscReal :: density_B
+    PetscReal :: beta
+    PetscReal :: alpha
+    PetscReal :: beta_vel
+    PetscReal :: alpha_vel
+
+    PetscReal :: k    ! Maximum respiration rate
+    PetscReal :: K_O  ! Half-saturation constant for oxygen
 
   contains
     procedure, public :: ReadInput => BioTH_Read
@@ -181,7 +229,6 @@ subroutine BioTH_Read(this,input,option)
   type(option_type) :: option
 
   character(len=MAXWORDLENGTH) :: word, internal_units
-
   call InputPushBlock(input,option)
   do
     call InputReadPflotranString(input,option)
@@ -194,6 +241,164 @@ subroutine BioTH_Read(this,input,option)
     call StringToUpper(word)
 
     select case(trim(word))
+	  case('NAME_B')
+        call InputReadWord(input,option,this%name_B,PETSC_TRUE)
+        call InputErrorMsg(input,option,'name_B', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+      case('NAME_C')
+        call InputReadWord(input,option,this%name_C,PETSC_TRUE)
+        call InputErrorMsg(input,option,'name_C', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+      case('NAME_D_MOBILE')
+        call InputReadWord(input,option,this%name_D_mobile,PETSC_TRUE)
+        call InputErrorMsg(input,option,'name_D_mobile', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+      case('NAME_D_IMMOBILE')
+        call InputReadWord(input,option,this%name_D_immobile,PETSC_TRUE)
+        call InputErrorMsg(input,option,'name_D_immobile', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+      case('NAME_I')
+        call InputReadWord(input,option,this%name_I,PETSC_TRUE)
+        call InputErrorMsg(input,option,'name_I', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+      case('NAME_X')
+        call InputReadWord(input,option,this%name_X,PETSC_TRUE)
+        call InputErrorMsg(input,option,'name_X', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+      case('NAME_BIOMINERAL')
+        call InputReadWord(input,option,this%name_biomineral,PETSC_TRUE)
+        call InputErrorMsg(input,option,'name_biomineral', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+      case('BETA') 
+        call InputReadDouble(input,option,this%beta) 
+        call InputErrorMsg(input,option,'beta', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')     
+      case('ALPHA_VEL') 
+        call InputReadDouble(input,option,this%alpha_vel) 
+        call InputErrorMsg(input,option,'alpha_vel', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')    
+
+      case('BETA_VEL') 
+        call InputReadDouble(input,option,this%beta_vel) 
+        call InputErrorMsg(input,option,'beta_vel', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')						   
+      
+      case('K')
+        call InputReadDouble(input, option, this%k)
+        call InputErrorMsg(input, option, 'k', 'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+
+      case('K_O')
+        call InputReadDouble(input, option, this%K_O)
+        call InputErrorMsg(input, option, 'K_O', 'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+
+      case('NAME_O2')
+        call InputReadWord(input,option,this%name_O2,PETSC_TRUE)
+        call InputErrorMsg(input,option,'name_O2', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')  
+	  case('NAME_CO2')
+        call InputReadWord(input,option,this%name_CO2,PETSC_TRUE)
+        call InputErrorMsg(input,option,'name_CO2', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')  
+	  
+      case('EXPONENT_B')
+        ! Read the double precision background concentration in kg/m^3
+        call InputReadDouble(input,option,this%exponent_B)
+        call InputErrorMsg(input,option,'exponent_B', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+
+      case('BACKGROUND_CONC_B')
+        ! Read the double precision background concentration in kg/m^3
+        call InputReadDouble(input,option,this%background_concentration_B )
+        call InputErrorMsg(input,option,'background_concentration_B', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+
+      case('MASS_ACTION_B')
+        call InputReadDouble(input,option,this%mass_action_B)
+        call InputErrorMsg(input,option,'mass_action_B', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+      case('MASS_ACTION_CD')
+        ! Read the double precision background concentration in kg/m^3
+        call InputReadDouble(input,option,this%mass_action_CD)
+        call InputErrorMsg(input,option,'mass_action_CD', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+      case('MASS_ACTION_X')
+        call InputReadDouble(input,option,this%mass_action_X)
+        call InputErrorMsg(input,option,'mass_action_X', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+
+      case('INHIBITION_B')
+        ! Read the double precision rate constant
+        call InputReadDouble(input,option,this%inhibition_B)
+        call InputErrorMsg(input,option,'inhibition_B', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+      case('INHIBITION_C')
+        ! Read the double precision rate constant
+        call InputReadDouble(input,option,this%inhibition_C)
+        call InputErrorMsg(input,option,'inhibition_C', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+      case('MONOD_D')
+        ! Read the double precision rate constant
+        call InputReadDouble(input,option,this%monod_D)
+        call InputErrorMsg(input,option,'monod_D', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+      case('INHIBITION_I')
+        ! Read the double precision background concentration in kg/m^3
+        call InputReadDouble(input,option,this%inhibition_I)
+        call InputErrorMsg(input,option,'inhibition_I', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+
+      case('RATE_B_1')
+        ! Read the double precision rate constant
+        call InputReadDouble(input,option,this%rate_B_1)
+        call InputErrorMsg(input,option,'rate_B_1', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+      case('RATE_B_2')
+        ! Read the double precision rate constant
+        call InputReadDouble(input,option,this%rate_B_2)
+        call InputErrorMsg(input,option,'rate_B_2', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+      case('RATE_C')
+        ! Read the double precision rate constant
+        call InputReadDouble(input,option,this%rate_C)
+        call InputErrorMsg(input,option,'rate_C', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+      case('RATE_D')
+        ! Read the double precision rate constant
+        call InputReadDouble(input,option,this%rate_D)
+        call InputErrorMsg(input,option,'rate_D', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+      case('RATE_D_IMMOB')
+        ! Read the double precision background concentration in kg/m^3
+        call InputReadDouble(input,option,this%rate_D_i)
+        call InputErrorMsg(input,option,'rate_D_i', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+      case('RATE_D_MOBIL')
+        ! Read the double precision background concentration in kg/m^3
+        call InputReadDouble(input,option,this%rate_D_m)
+        call InputErrorMsg(input,option,'rate_D_m', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+
+      case('DENSITY_B')
+        call InputReadDouble(input,option,this%density_B)
+        call InputErrorMsg(input,option,'density_B', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+
+      case('STOICHIOMETRIC_C')
+        ! Read the double precision background concentration in kg/m^3
+        call InputReadDouble(input,option,this%stoichiometric_C )
+        call InputErrorMsg(input,option,'stoichiometric_C', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+      case('STOICHIOMETRIC_D_1')
+        ! Read the double precision rate constant
+        call InputReadDouble(input,option,this%stoichiometric_D_1)
+        call InputErrorMsg(input,option,'stoichiometric_D_1', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+      case('STOICHIOMETRIC_D_2')
+        ! Read the double precision background concentration in kg/m^3
+        call InputReadDouble(input,option,this%stoichiometric_D_2)
+        call InputErrorMsg(input,option,'stoichiometric_D_2', &
+                           'CHEMISTRY,REACTION_SANDBOX,BIOPARTICLE')
+
       case('PARTICLE_NAME_AQ')
         ! Bioparticle name while in suspension
         call InputReadWord(input,option,this%name_aqueous,PETSC_TRUE)
@@ -611,6 +816,33 @@ subroutine BioTH_Setup(this,reaction,option)
 
   this%species_Vim_id = &
     GetImmobileSpeciesIDFromName(this%name_immobile,reaction%immobile,option)
+  this%D_mobile_id = &
+    GetPrimarySpeciesIDFromName(this%name_D_mobile, &
+                                reaction,option)
+
+  this%C_id = &
+    GetPrimarySpeciesIDFromName(this%name_C, &
+                                reaction,option)
+
+  this%I_id = &
+    GetPrimarySpeciesIDFromName(this%name_I, &
+                                reaction,option)
+
+  this%X_id = &
+    GetPrimarySpeciesIDFromName(this%name_X, &
+                                reaction,option)
+  this%O2_id = &
+    GetPrimarySpeciesIDFromName(this%name_O2, &
+                                reaction,option)
+  this%CO2_id = &
+    GetPrimarySpeciesIDFromName(this%name_CO2, &
+                                reaction,option)                               
+  this%D_immobile_id = &
+    GetImmobileSpeciesIDFromName(this%name_D_immobile, &
+                                 reaction%immobile,option)
+  this%biomineral_id = &
+    GetMineralIDFromName(this%name_biomineral, &
+                         reaction%mineral,option)
 
 end subroutine BioTH_Setup
 
