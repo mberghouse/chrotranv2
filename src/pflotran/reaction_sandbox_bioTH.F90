@@ -1132,68 +1132,68 @@ subroutine BioTH_React(this,Residual,Jacobian,compute_derivative, &
   Rate = decayIm * Vim * volume
   RateDecayIm = - Rate
   !immobile_to_water_vol = material_auxvar%porosity*global_auxvar%sat(iphase)*1000.d0
-  sum_food = rt_auxvar%total(this%D_mobile_id,iphase)*L_water + &
-            rt_auxvar%immobile(this%D_immobile_id)*volume                                                ! in mol
+  ! sum_food = rt_auxvar%total(this%D_mobile_id,iphase)*L_water + &
+            ! rt_auxvar%immobile(this%D_immobile_id)*volume                                                ! in mol
 
-  mu_B_im = this%rate_B_1*Vim* &      ! mol/Ls
-			(sum_food/(sum_food + this%monod_D))* &
-			!(rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
-			!(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
-            (this%inhibition_B/ (Vim + this%inhibition_B))**this%exponent_B 
-  mu_B_mob = this%rate_B_1*.25*Vaq* &      ! mol/Ls
-			(sum_food/(sum_food + this%monod_D))* &
-			!(rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
-			!(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
-            (this%inhibition_B/ (Vaq + this%inhibition_B))**this%exponent_B
+  ! mu_B_im = this%rate_B_1*Vim* &      ! mol/Ls
+			! (sum_food/(sum_food + this%monod_D))* &
+			! !(rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
+			! !(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
+            ! (this%inhibition_B/ (Vim + this%inhibition_B))**this%exponent_B 
+  ! mu_B_mob = this%rate_B_1*.25*Vaq* &      ! mol/Ls
+			! (sum_food/(sum_food + this%monod_D))* &
+			! !(rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
+			! !(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
+            ! (this%inhibition_B/ (Vaq + this%inhibition_B))**this%exponent_B
 
-  mu_B_mob_residual = -1* mu_B_mob*L_water + & 
-  ((this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel)* & 
-  this%rate_B_2*(Vaq - this%background_concentration_B)* L_water  
+  ! mu_B_mob_residual = -1* mu_B_mob*L_water + & 
+  ! ((this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel)* & 
+  ! this%rate_B_2*(Vaq - this%background_concentration_B)* L_water  
 
-   mu_B_im_residual = -1* mu_B_im*volume + & 
-  ((this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel)* & 
-  this%rate_B_2*(Vim - this%background_concentration_B)* volume  
-
-
-  mobile_mole_fraction = rt_auxvar%total(this%D_mobile_id,iphase)*L_water/sum_food
-  immobile_mole_fraction = 1 - mobile_mole_fraction
+   ! mu_B_im_residual = -1* mu_B_im*volume + & 
+  ! ((this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel)* & 
+  ! this%rate_B_2*(Vim - this%background_concentration_B)* volume  
 
 
-  Residual(this%D_mobile_id) = Residual(this%D_mobile_id) + &
-                           ! Growth usage, mol/s
-                           this%stoichiometric_D_1* &
-                           mobile_mole_fraction* &                                ! dimensionless
-                           mu_B_mob*L_water + &                        ! mol/m3 bulk/s * m3 bulk
-                           ! Direct usage, mol/s
-                           this%rate_D* &                          ! 1/s
-                           mobile_mole_fraction* &                                ! dimensionless
-                           Vaq*L_water + &                        ! mol/L/s * m3 bulk
-                           ! immobilization, mol/s
-                           this%rate_D_i* &                   ! 1/s
-                           rt_auxvar%total(this%D_mobile_id,iphase)* &            ! mol/L
-                           L_water - &   ! L water/m3 bulk
-                           ! remobilization, mol/s
-                           this%rate_D_m* &                   ! 1/s
-                           rt_auxvar%immobile(this%D_immobile_id)* &           ! mol/m3 bulk
-                           volume                                 ! m3 bulk
+  ! mobile_mole_fraction = rt_auxvar%total(this%D_mobile_id,iphase)*L_water/sum_food
+  ! immobile_mole_fraction = 1 - mobile_mole_fraction
 
 
-  Residual(this%D_immobile_id) = Residual(this%D_immobile_id) + &
-                           ! Growth usage, mol/s
-                           this%stoichiometric_D_1* &                          ! unitless
-                           immobile_mole_fraction* &                              ! dimensionless
-                           mu_B_im*volume + &                        ! mol/m3 bulk/s * m3 bulk
-                           ! Direct usage, mol/s
-                           this%rate_D* &                          ! 1/s
-                           immobile_mole_fraction* &                              ! dimensionless
-                           Vim* volume - &                              ! L water/m3 bulk
-                           ! immobilization, mol/s
-                           this%rate_D_i* &                   ! 1/s
-                           rt_auxvar%total(this%D_mobile_id,iphase)* &            ! mol/L
-                           L_water + & ! remobilization, mol/s
-                           this%rate_D_m* &                   ! 1/s
-                           rt_auxvar%immobile(this%D_immobile_id)* &           ! mol/m3 bulk
-                           volume
+  ! Residual(this%D_mobile_id) = Residual(this%D_mobile_id) + &
+                           ! ! Growth usage, mol/s
+                           ! this%stoichiometric_D_1* &
+                           ! mobile_mole_fraction* &                                ! dimensionless
+                           ! mu_B_mob*L_water + &                        ! mol/m3 bulk/s * m3 bulk
+                           ! ! Direct usage, mol/s
+                           ! this%rate_D* &                          ! 1/s
+                           ! mobile_mole_fraction* &                                ! dimensionless
+                           ! Vaq*L_water + &                        ! mol/L/s * m3 bulk
+                           ! ! immobilization, mol/s
+                           ! this%rate_D_i* &                   ! 1/s
+                           ! rt_auxvar%total(this%D_mobile_id,iphase)* &            ! mol/L
+                           ! L_water - &   ! L water/m3 bulk
+                           ! ! remobilization, mol/s
+                           ! this%rate_D_m* &                   ! 1/s
+                           ! rt_auxvar%immobile(this%D_immobile_id)* &           ! mol/m3 bulk
+                           ! volume                                 ! m3 bulk
+
+
+  ! Residual(this%D_immobile_id) = Residual(this%D_immobile_id) + &
+                           ! ! Growth usage, mol/s
+                           ! this%stoichiometric_D_1* &                          ! unitless
+                           ! immobile_mole_fraction* &                              ! dimensionless
+                           ! mu_B_im*volume + &                        ! mol/m3 bulk/s * m3 bulk
+                           ! ! Direct usage, mol/s
+                           ! this%rate_D* &                          ! 1/s
+                           ! immobile_mole_fraction* &                              ! dimensionless
+                           ! Vim* volume - &                              ! L water/m3 bulk
+                           ! ! immobilization, mol/s
+                           ! this%rate_D_i* &                   ! 1/s
+                           ! rt_auxvar%total(this%D_mobile_id,iphase)* &            ! mol/L
+                           ! L_water + & ! remobilization, mol/s
+                           ! this%rate_D_m* &                   ! 1/s
+                           ! rt_auxvar%immobile(this%D_immobile_id)* &           ! mol/m3 bulk
+                           ! volume
 ! This awful block just tries to
 ! avoid concentrations below 1E-50
 ! (Is this avoided with TRUNCATE_CONCENTRATION ?) > sure it does
@@ -1223,11 +1223,11 @@ subroutine BioTH_React(this,Residual,Jacobian,compute_derivative, &
   ! The actual calculation:
 
   Residual(this%species_Vaq_id) = &
-    Residual(this%species_Vaq_id) - RateAtt - RateDecayAq + RateDet + mu_B_mob_residual
+    Residual(this%species_Vaq_id) - RateAtt - RateDecayAq + RateDet !+ mu_B_mob_residual
 
   Residual(this%species_Vim_id + reaction%offset_immobile) = &
     Residual(this%species_Vim_id + reaction%offset_immobile) &
-    - RateDet - RateDecayIm + mu_B_im_residual
+    - RateDet - RateDecayIm !+ mu_B_im_residual
 
   ! NOTES
   ! 1. Always subtract contribution from residual
@@ -1247,74 +1247,384 @@ subroutine BioTH_KineticState(this,rt_auxvar,global_auxvar, &
   !
   ! Updates the kinetic state for the sandbox
   !
-  ! Author: Satish Karra, Scott Hansen, Sachin Pandey, LANL
-  ! Date: 09/15/2016
-  !
-
-  use Option_module
-  use Utility_module
+  !use Option_module
   use String_module
-  use Input_Aux_module
-  use Reaction_Aux_module
-  use Material_Aux_module, only: material_auxvar_type
+  use Reaction_Aux_module, only : reaction_rt_type
+  use Reaction_Immobile_Aux_module
+  use Material_Aux_module, only : material_auxvar_type
 
   implicit none
 
   class(reaction_sandbox_bioth_type) :: this
   type(option_type) :: option
-  type(input_type), pointer :: input
   class(reaction_rt_type) :: reaction
+  PetscBool :: compute_derivative
+
   ! the following arrays must be declared after reaction
+  PetscReal :: Residual(reaction%ncomp)
+  PetscReal :: Jacobian(reaction%ncomp,reaction%ncomp)
   type(reactive_transport_auxvar_type) :: rt_auxvar
   type(global_auxvar_type) :: global_auxvar
   type(material_auxvar_type) :: material_auxvar
 
   PetscInt, parameter :: iphase = 1
-  PetscReal :: biomass_residual_delta, delta_volfrac
+  PetscReal :: volume                 ! m^3 bulk
+  PetscReal :: porosity               ! m^3 pore space / m^3 bulk
+  PetscReal :: liquid_saturation      ! m^3 water / m^3 pore space
+  PetscReal :: L_water                ! L water
+  PetscReal :: temperature
+  PetscReal :: rho_f
+  PetscReal :: g
+  PetscReal :: viscosity
 
-  PetscReal :: mu_B_im
-  PetscReal :: mu_B_mob
-  PetscReal :: sum_food
-  PetscReal :: immobile_to_water_vol
   PetscReal :: Vaq  ! mol/L
   PetscReal :: Vim  ! mol/m^3
-  
+  PetscReal :: Rate
+  PetscReal :: RateAtt, RateDet  ! mol/sec
+  PetscReal :: RateDecayAq, RateDecayIm !Check units
+  PetscReal :: stoichVaq
+  PetscReal :: stoichVim
+
+  ! Decay model parameters
+  PetscReal :: decayAq, decayIm
+  PetscReal :: logDrefAq, logDrefAd
+  PetscReal :: TrefAq, TrefAd
+  PetscReal :: zTAq, zTAd
+  PetscReal :: nAq, nAd
+
+  ! Filtration model parameters for attachment
+  PetscReal :: katt
+  PetscReal :: dc,dp,Hamaker,rho_p, alpha, qMag, diffusionCoeff, kB
+  PetscReal :: Gm, Gm5, Happel
+  PetscReal :: NR, NPe, NvdW, Ngr
+  PetscReal :: Eta_D, Eta_I, Eta_G, Eta_0
+
+  ! Detachment rate
+  PetscReal :: kdet
+  PetscReal :: mu_B_im, mu_B_im_residual
+  PetscReal :: mu_B_mob, mu_B_mob_residual
+  PetscReal :: sum_food
+  PetscReal :: immobile_mole_fraction, mobile_mole_fraction
+
+  ! Global stuff (Check global_aux.F90)
+  volume = material_auxvar%volume
+  porosity = material_auxvar%porosity
+  liquid_saturation = global_auxvar%sat(iphase)
+  L_water = porosity*liquid_saturation*volume*1.d3
+  ! 1.d3 converts m^3 water -> L water
+
+  viscosity = 0.0008891
+  ! Ns/m2 (This should be a field but not found in global_auxvar)
+
+  temperature = global_auxvar%temp
+  rho_f = global_auxvar%den_kg(iphase)
+  g = EARTH_GRAVITY
+
+
+! Assign concentrations of Vaq and Vim
   Vaq = rt_auxvar%total(this%species_Vaq_id,iphase)
   Vim = rt_auxvar%immobile(this%species_Vim_id)
 
+  ! initialize all rates to zero
+  Rate = 0.d0
+  RateAtt = 0.d0
+  RateDet = 0.d0
+  RateDecayAq = 0.d0
+  RateDecayIm = 0.d0
 
-  immobile_to_water_vol = &
-            material_auxvar%porosity*global_auxvar%sat(iphase)*1000.d0            ! L water/ m3 bulk
+  ! stoichiometries
+  ! reactants have negative stoichiometry
+  ! products have positive stoichiometry
+  stoichVaq = -1.d0
+  stoichVim = 1.d0
 
-  sum_food = rt_auxvar%total(this%D_mobile_id,iphase) + &
-            rt_auxvar%immobile(this%D_immobile_id)/ &
-            immobile_to_water_vol                                                 ! in mol/L water; Note that food_immobile is divided by porosity*saturation
+  ! kinetic rate constants
+  katt = 0.d0
+  kdet = 0.d0
+  kdet = this%rate_detachment
 
-  mu_B_im = this%rate_B_1*Vim* &      ! mol/m3 bulk/s
-			(sum_food/(sum_food + this%monod_D))* &
-			!(rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
-			!(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
-            ! F monod term, unitless
-            ! B monod inhibition term, unitless
-            (this%inhibition_B/ (Vim + this%inhibition_B))**this%exponent_B 
-  mu_B_mob = this%rate_B_1*.25*Vaq* &      ! mol/m3 bulk/s
-			(sum_food/(sum_food + this%monod_D))* &
-			!(rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
-			!(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
-            ! F monod term, unitless
-            ! B monod inhibition term, unitless
-            (this%inhibition_B/ (Vaq + this%inhibition_B))**this%exponent_B
+  !!!!!!!!!!!!!!!!!!!
+  ! Decay rate - Aqueous phase
+  !
+  !  Check Guillier et al. for model equation (2020)
+  !  decay = ln(10)/D
+  !  logD = logDref - [(T-Tref)/zT]^n
+  !
+  !!!!!!!!!!!!!!!!!!!
+  logDrefAq = 0.0
+  TrefAq = 0.0
+  zTAq = 0.0
+  nAq = 0.0
 
-  biomass_residual_delta = &                                       ! Growth usage, mol/s
-            - mu_B_im*material_auxvar%volume &                      ! mol/m3 bulk/s * m3 bulk
-            - mu_B_mob*material_auxvar%volume  ! Natural decay, mol/s
-            !(this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel* &  ! Growth usage, mol/s
+  IF (this%decay_aqueous < 0.d0) THEN
+    logDrefAq = this%logDref_aqueous
+    TrefAq = this%Tref_aqueous
+    zTAq = this%zT_aqueous
+    nAq = this%nAq_aqueous
+
+    decayAq = (2.302585/(10.0 ** (logDrefAq - (((temperature - TrefAq)/zTAq)**nAq))))/3600  ! 1/s
+  ELSE
+    decayAq = this%decay_aqueous
+  END IF
+
+
+!!!!!!!!!!!!!!!!!!!
+! Decay rate - Immobile phase
+!!!!!!!!!!!!!!!!!!!
+
+  logDrefAd = 0.0
+  TrefAd = 0.0
+  zTAd = 0.0
+  nAd = 0.0
+
+  IF (this%decay_adsorbed < 0.d0) THEN
+    logDrefAd = this%logDref_adsorbed
+    TrefAd = this%Tref_adsorbed
+    zTAd = this%zT_adsorbed
+    nAd = this%nAq_adsorbed
+    decayIm = (2.302585/(10.0 ** (logDrefAd - (((temperature - TrefAd)/zTAd)**nAd))))/3600  ! 1/s
+
+  ELSE
+    decayIm = this%decay_adsorbed
+  END IF
+
+!!!!!!!!!!!!!!!!!!!
+! Attachment rate
+!!!!!!!!!!!!!!!!!!!
+  dc = 0.0
+  dp = 0.0
+  Hamaker = 0.0
+  rho_p = 0.0
+  alpha = 0.0
+
+  IF (this%rate_attachment < 0.d0) THEN
+    kB = this%BOLTZMANN_CONSTANT
+    dc = this%diam_collector
+    dp = this%diam_particle
+    rho_p = this%density_particle
+    alpha = this%alpha_efficiency
+    Hamaker = this%hamaker_constant
+
+    qMag = MAX(global_auxvar%darcy_vel(iphase),1.0d-20)
+
+    diffusionCoeff = this%BOLTZMANN_CONSTANT*(temperature+273.15) / &
+                   (3.0 * PI * viscosity * dp)
+
+    ! Non-dimensional parameters
+    !! Happel parameter As
+    Gm = (1.0 - porosity)**(1./3.)
+    Gm5 = Gm*Gm*Gm*Gm*Gm
+    Happel = (2.0 * (1.0 - Gm5)) / (2.0 - (3.0*Gm) + (3.0*Gm5) - (2.0*Gm*Gm5))
+
+    !! Aspect ratio
+    NR = dp/dc
+
+    !! Péclet number
+    NPe = (qMag * dc) / (diffusionCoeff)
+
+    !! van der Waals number
+    NvdW = Hamaker/(kB*(temperature + 273.15))
+
+    !! Gravitational number
+    NGr = PI/12.0 * (dp*dp*dp*dp) * (rho_p - rho_f) * g /&
+          (kB*(temperature + 273.15))
+
+    ! Collector efficiencies
+    ! ( see Tufenkji & Elimelech 2014
+    !   DOI : 10.1021/es034049r )
+    !! Transport by diffusion
+    Eta_D = 2.4 &
+            * Happel**(1./3.) &
+            * NR**(-0.081) &
+            * NPe**(-0.715) &
+            * NvdW**(0.052)
+
+    !! Transport by interception
+    Eta_I = 0.55 &
+            * Happel &
+            * NR**(1.55) &
+            * NPe**(-0.125) &
+            * NvdW**(0.125)
+
+    !! Transport due to gravity
+    Eta_G = 0.475 &
+            * NR**(-1.35) &
+            * NPe**(-1.11) &
+            * NvdW**(0.053) &
+            * NGr**(1.11)
+
+    !! Single collector efficiency
+    Eta_0 = Eta_D + Eta_I + Eta_G
+
+    ! Rate of attachment according to CFT
+    katt = 1.5 * (1 - porosity) * qMag * alpha * Eta_0 &
+           / (dc * porosity)
+
+    ! Edwin debugging
+    if(this%debug_option) then
+      print '(3x,"porosity = ", ES12.4)', porosity
+      print '(3x,"temp C   = ", ES12.4)', Temperature
+      print '(3x,"viscosit = ", ES12.4)', viscosity
+      print '(3x,"densityF = ", ES12.4)', rho_f
+      print '(3x,"densityP = ", ES12.4)', rho_p
+
+      print '(3x,"DarcyqMa = ", ES12.4)', qMag
+      print '(3x,"diffCoef = ", ES12.4)', diffusionCoeff
+      print '(3x,"Gm       = ", ES12.4)', Gm
+      print '(3x,"Gm5      = ", ES12.4)', Gm5
+      print '(3x,"Happel   = ", ES12.4)', Happel
+      print '(3x,"NR       = ", ES12.4)', NR
+      print '(3x,"NPe      = ", ES12.4)', NPe
+      print '(3x,"NvW      = ", ES12.4)', NvdW
+      print '(3x,"NGr      = ", ES12.4)', NGr
+      print '(3x,"EtaD     = ", ES12.4)', Eta_D
+      print '(3x,"EtaI     = ", ES12.4)', Eta_I
+      print '(3x,"EtaG     = ", ES12.4)', Eta_G
+      print '(3x,"Eta0     = ", ES12.4)', Eta_0
+      print '(3x,"katt     = ", ES12.4)', katt
+      print *, "--------------------"
+    endif
+
+  else
+    ! A constant rate of attachment
+    katt = this%rate_attachment
+  end if
+
+!!!!!!!!!!!!!!!!!!!
+! Detachment rate
+!!!!!!!!!!!!!!!!!!!
+  if (this%rate_detachment < 0.d0) then
+    kdet = 0.0
+  else
+    ! A constant rate of attachment
+    kdet = this%rate_detachment
+  end if
+
+  RateAtt = 0.0
+  RateDet = 0.0
+  RateDecayAq = 0.0
+  RateDecayIm = 0.0
+
+
+  ! Build here for attachment/detachment
+  ! first-order forward - reverse (A <-> C)
+  Rate = katt * Vaq * L_water - kdet * Vim * volume
+  RateAtt = stoichVaq * Rate
+  RateDet = stoichVim * Rate
+
+  ! Build here for inactivation reactions
+  ! first-order (A -> X)
+  Rate = decayAq * Vaq * L_water
+  RateDecayAq = - Rate
+
+  Rate = decayIm * Vim * volume
+  RateDecayIm = - Rate
+  !immobile_to_water_vol = material_auxvar%porosity*global_auxvar%sat(iphase)*1000.d0
+  ! sum_food = rt_auxvar%total(this%D_mobile_id,iphase)*L_water + &
+            ! rt_auxvar%immobile(this%D_immobile_id)*volume                                                ! in mol
+
+  ! mu_B_im = this%rate_B_1*Vim* &      ! mol/Ls
+			! (sum_food/(sum_food + this%monod_D))* &
+			! !(rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
+			! !(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
+            ! (this%inhibition_B/ (Vim + this%inhibition_B))**this%exponent_B 
+  ! mu_B_mob = this%rate_B_1*.25*Vaq* &      ! mol/Ls
+			! (sum_food/(sum_food + this%monod_D))* &
+			! !(rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
+			! !(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
+            ! (this%inhibition_B/ (Vaq + this%inhibition_B))**this%exponent_B
+
+  ! mu_B_mob_residual = -1* mu_B_mob*L_water + & 
+  ! ((this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel)* & 
+  ! this%rate_B_2*(Vaq - this%background_concentration_B)* L_water  
+
+   ! mu_B_im_residual = -1* mu_B_im*volume + & 
+  ! ((this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel)* & 
+  ! this%rate_B_2*(Vim - this%background_concentration_B)* volume  
+
+
+  ! mobile_mole_fraction = rt_auxvar%total(this%D_mobile_id,iphase)*L_water/sum_food
+  ! immobile_mole_fraction = 1 - mobile_mole_fraction
+
+
+  ! Residual(this%D_mobile_id) = Residual(this%D_mobile_id) + &
+                           ! ! Growth usage, mol/s
+                           ! this%stoichiometric_D_1* &
+                           ! mobile_mole_fraction* &                                ! dimensionless
+                           ! mu_B_mob*L_water + &                        ! mol/m3 bulk/s * m3 bulk
+                           ! ! Direct usage, mol/s
+                           ! this%rate_D* &                          ! 1/s
+                           ! mobile_mole_fraction* &                                ! dimensionless
+                           ! Vaq*L_water + &                        ! mol/L/s * m3 bulk
+                           ! ! immobilization, mol/s
+                           ! this%rate_D_i* &                   ! 1/s
+                           ! rt_auxvar%total(this%D_mobile_id,iphase)* &            ! mol/L
+                           ! L_water - &   ! L water/m3 bulk
+                           ! ! remobilization, mol/s
+                           ! this%rate_D_m* &                   ! 1/s
+                           ! rt_auxvar%immobile(this%D_immobile_id)* &           ! mol/m3 bulk
+                           ! volume                                 ! m3 bulk
+
+
+  ! Residual(this%D_immobile_id) = Residual(this%D_immobile_id) + &
+                           ! ! Growth usage, mol/s
+                           ! this%stoichiometric_D_1* &                          ! unitless
+                           ! immobile_mole_fraction* &                              ! dimensionless
+                           ! mu_B_im*volume + &                        ! mol/m3 bulk/s * m3 bulk
+                           ! ! Direct usage, mol/s
+                           ! this%rate_D* &                          ! 1/s
+                           ! immobile_mole_fraction* &                              ! dimensionless
+                           ! Vim* volume - &                              ! L water/m3 bulk
+                           ! ! immobilization, mol/s
+                           ! this%rate_D_i* &                   ! 1/s
+                           ! rt_auxvar%total(this%D_mobile_id,iphase)* &            ! mol/L
+                           ! L_water + & ! remobilization, mol/s
+                           ! this%rate_D_m* &                   ! 1/s
+                           ! rt_auxvar%immobile(this%D_immobile_id)* &           ! mol/m3 bulk
+                           ! volume
+! This awful block just tries to
+! avoid concentrations below 1E-50
+! (Is this avoided with TRUNCATE_CONCENTRATION ?) > sure it does
+  ! if ( Vaq > 0.0 ) then
+  !   if ( Vim > 0.0 ) then
+  !     !Do nothing
+  !   else if ( Vim <= 0.0 ) then
+  !     Vim = 1.0d-50
+  !     RateDet = 0.0
+  !     RateDecayIm = 0.0
+  !   end if
+  ! else if ( Vaq <= 0.0 ) then
+  !   if ( Vim > 0.0 ) then
+  !     Vaq = 1.0d-50
+  !     RateAtt = 0.0
+  !     RateDecayAq = 0.0
+  !   else if ( Vim <= 0.0 ) then
+  !     Vim = 1.0d-50
+  !     Vaq = 1.0d-50
+  !     RateAtt = 0.0
+  !     RateDet = 0.0
+  !     RateDecayAq = 0.0
+  !     RateDecayIm = 0.0
+  !   end if
+  ! end if
+
+  ! The actual calculation:
+
+  Residual(this%species_Vaq_id) = &
+    Residual(this%species_Vaq_id) - RateAtt - RateDecayAq + RateDet !+ mu_B_mob_residual
+
+  Residual(this%species_Vim_id + reaction%offset_immobile) = &
+    Residual(this%species_Vim_id + reaction%offset_immobile) &
+    - RateDet - RateDecayIm !+ mu_B_im_residual
+
+
 
 
   delta_volfrac = &
-            - biomass_residual_delta / &                           ! mol/s
+            -1*(Residual(this%species_Vaq_id)+ & 
+			Residual(this%species_Vim_id + reaction%offset_immobile)) / &
             (this%density_B*1000.d0) / &                           ! mol/L * L/m3
-            material_auxvar%volume * &                             ! m3 bulk
+            volume * &                             ! m3 bulk
             option%tran_dt                                         ! s
 
   rt_auxvar%mnrl_volfrac(this%biomineral_id) = rt_auxvar%mnrl_volfrac(this%biomineral_id) + &
