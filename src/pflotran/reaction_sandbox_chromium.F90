@@ -69,7 +69,7 @@ module Reaction_Sandbox_Chromium_class
     procedure, public :: ReadInput => ChromiumRead
     procedure, public :: Setup => ChromiumSetup
     procedure, public :: Evaluate => ChromiumReact
-    !procedure, public :: UpdateKineticState => ChromiumKineticState
+    procedure, public :: UpdateKineticState => ChromiumKineticState
     procedure, public :: Destroy => ChromiumDestroy
   end type reaction_sandbox_chromium_type
 
@@ -484,8 +484,7 @@ subroutine ChromiumReact(this,Residual,Jacobian,compute_derivative, &
   !
   ! option - Provides handle for controlling simulation, catching and
   !          reporting errors.
-  call InputPushBlock(input,option)
-  option%flow%store_darcy_vel = PETSC_TRUE
+  !option%flow%store_darcy_vel = PETSC_TRUE
   ! Unit of the residual must be in moles/second
   ! global_auxvar%sat(iphase) = saturation of cell
   ! 1.d3 converts m^3 water -> L water
