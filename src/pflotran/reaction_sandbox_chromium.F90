@@ -400,6 +400,8 @@ subroutine ChromiumReact(this,Residual,Jacobian,compute_derivative, &
   !
 
   use Option_module
+  use Utility_module
+  use String_module
   use Input_Aux_module
   use Reaction_Aux_module
   use Material_Aux_module
@@ -649,6 +651,8 @@ subroutine ChromiumKineticState(this,rt_auxvar,global_auxvar, &
   !
 
   use Option_module
+  use Utility_module
+  use String_module
   use Input_Aux_module
   use Reaction_Aux_module
   use Material_Aux_module, only: material_auxvar_type
