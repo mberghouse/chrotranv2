@@ -1150,12 +1150,9 @@ subroutine BioTH_React(this,Residual,Jacobian,compute_derivative, &
   ((this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel)* & 
   this%rate_B_2*(Vaq - this%background_concentration_B)* L_water  
 
-  mu_B_im_residual =     - 1*mu_B_im*volume + &                      ! mol/Ls * L 
-                           ! Natural decay, mol/s
-                          (this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel)* & 
-                           this%rate_B_2* &                         ! 1/s
-                           (Vim - this%background_concentration_B)* &  ! mol/m3 bulk
-                           volume                             ! m3 bulk
+   mu_B_im_residual = -1* mu_B_im*volume + & 
+  ((this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel)* & 
+  this%rate_B_2*(Vim - this%background_concentration_B)* volume  
 
 
   mobile_mole_fraction = rt_auxvar%total(this%D_mobile_id,iphase)*L_water/sum_food
