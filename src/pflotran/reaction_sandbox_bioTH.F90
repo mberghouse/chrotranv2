@@ -1529,68 +1529,40 @@ subroutine BioTH_KineticState(this,rt_auxvar,global_auxvar, &
   ! sum_food = rt_auxvar%total(this%D_mobile_id,iphase)*L_water + &
             ! rt_auxvar%immobile(this%D_immobile_id)*volume                                                ! in mol
 
-  mu_B_im = this%rate_B_1*Vim* !&      ! mol/Ls
-			! (sum_food/(sum_food + this%monod_D))* &
+  sum_food = rt_auxvar%total(this%D_mobile_id,iphase)*L_water + &
+             rt_auxvar%immobile(this%D_immobile_id)*volume               ! in mol
+
+  mu_B_im = this%rate_B_1*Vim* &      ! mol/Ls
+			(sum_food/(sum_food + this%monod_D))* &
 			! !(rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
 			! !(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
-            ! (this%inhibition_B/ (Vim + this%inhibition_B))**this%exponent_B 
-  mu_B_mob = this%rate_B_1*.5*Vaq* !&      ! mol/Ls
-			! (sum_food/(sum_food + this%monod_D))* &
+            (this%inhibition_B/ (Vim + this%inhibition_B))**this%exponent_B 
+  mu_B_mob = this%rate_B_1*Vaq* &      ! mol/Ls
+			(sum_food/(sum_food + this%monod_D))* &
 			! !(rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
 			! !(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
-            ! (this%inhibition_B/ (Vaq + this%inhibition_B))**this%exponent_B
+            (this%inhibition_B/ (Vaq + this%inhibition_B))**this%exponent_B
+			
+  !option%flow%store_darcy_vel = PETSC_TRUE
+  qMag = MAX(global_auxvar%darcy_vel(iphase),1.0d-10)
+  
+  mu_B_mob_residual = -1* mu_B_mob*L_water + &
+  this%rate_B_2*(Vaq - this%background_concentration_B)* L_water + & 
+  ((this%alpha_vel*qMag)**this%beta_vel)* & 
+  (Vaq - this%background_concentration_B)* L_water  
 
-  mu_B_mob_residual = -1* mu_B_mob*L_water !+ & 
-  ! ((this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel)* & 
-  ! this%rate_B_2*(Vaq - this%background_concentration_B)* L_water  
-
-  mu_B_im_residual = -1* mu_B_im*volume !+ & 
-  ! ((this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel)* & 
-  ! this%rate_B_2*(Vim - this%background_concentration_B)* volume  
-
-
-  ! mobile_mole_fraction = rt_auxvar%total(this%D_mobile_id,iphase)*L_water/sum_food
-  ! immobile_mole_fraction = 1 - mobile_mole_fraction
-
-
-  ! Residual(this%D_mobile_id) = Residual(this%D_mobile_id) + &
-                           ! ! Growth usage, mol/s
-                           ! this%stoichiometric_D_1* &
-                           ! mobile_mole_fraction* &                                ! dimensionless
-                           ! mu_B_mob*L_water + &                        ! mol/m3 bulk/s * m3 bulk
-                           ! ! Direct usage, mol/s
-                           ! this%rate_D* &                          ! 1/s
-                           ! mobile_mole_fraction* &                                ! dimensionless
-                           ! Vaq*L_water + &                        ! mol/L/s * m3 bulk
-                           ! ! immobilization, mol/s
-                           ! this%rate_D_i* &                   ! 1/s
-                           ! rt_auxvar%total(this%D_mobile_id,iphase)* &            ! mol/L
-                           ! L_water - &   ! L water/m3 bulk
-                           ! ! remobilization, mol/s
-                           ! this%rate_D_m* &                   ! 1/s
-                           ! rt_auxvar%immobile(this%D_immobile_id)* &           ! mol/m3 bulk
-                           ! volume                                 ! m3 bulk
+  mu_B_im_residual = -1* mu_B_im*volume + & 
+  this%rate_B_2*(Vim - this%background_concentration_B)* volume + & 
+  ((this%alpha_vel*qMag)**this%beta_vel)* & 
+  (Vim - this%background_concentration_B)* volume  
 
 
-  ! Residual(this%D_immobile_id) = Residual(this%D_immobile_id) + &
-                           ! ! Growth usage, mol/s
-                           ! this%stoichiometric_D_1* &                          ! unitless
-                           ! immobile_mole_fraction* &                              ! dimensionless
-                           ! mu_B_im*volume + &                        ! mol/m3 bulk/s * m3 bulk
-                           ! ! Direct usage, mol/s
-                           ! this%rate_D* &                          ! 1/s
-                           ! immobile_mole_fraction* &                              ! dimensionless
-                           ! Vim* volume - &                              ! L water/m3 bulk
-                           ! ! immobilization, mol/s
-                           ! this%rate_D_i* &                   ! 1/s
-                           ! rt_auxvar%total(this%D_mobile_id,iphase)* &            ! mol/L
-                           ! L_water + & ! remobilization, mol/s
-                           ! this%rate_D_m* &                   ! 1/s
-                           ! rt_auxvar%immobile(this%D_immobile_id)* &           ! mol/m3 bulk
-                           ! volume
+  mobile_mole_fraction = rt_auxvar%total(this%D_mobile_id,iphase)*L_water/sum_food
+  immobile_mole_fraction = 1 - mobile_mole_fraction
 
 
-  biomass_residual_delta = mu_B_mob_residual+mu_B_im_residual
+
+  biomass_residual_delta = mu_B_im_residual
   
   delta_volfrac = &
             - biomass_residual_delta / &                           ! mol/s
