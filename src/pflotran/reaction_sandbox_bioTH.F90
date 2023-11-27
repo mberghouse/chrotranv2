@@ -1141,7 +1141,7 @@ subroutine BioTH_React(this,Residual,Jacobian,compute_derivative, &
 			! !(rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
 			! !(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
             (this%inhibition_B/ (Vim + this%inhibition_B))**this%exponent_B 
-  mu_B_mob = this%rate_B_1*.5*Vaq* &      ! mol/Ls
+  mu_B_mob = this%rate_B_1*Vaq* &      ! mol/Ls
 			(sum_food/(sum_food + this%monod_D))* &
 			! !(rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
 			! !(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
@@ -1529,22 +1529,22 @@ subroutine BioTH_KineticState(this,rt_auxvar,global_auxvar, &
   ! sum_food = rt_auxvar%total(this%D_mobile_id,iphase)*L_water + &
             ! rt_auxvar%immobile(this%D_immobile_id)*volume                                                ! in mol
 
-  ! mu_B_im = this%rate_B_1*Vim* &      ! mol/Ls
+  mu_B_im = this%rate_B_1*Vim* !&      ! mol/Ls
 			! (sum_food/(sum_food + this%monod_D))* &
 			! !(rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
 			! !(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
             ! (this%inhibition_B/ (Vim + this%inhibition_B))**this%exponent_B 
-  ! mu_B_mob = this%rate_B_1*.25*Vaq* &      ! mol/Ls
+  mu_B_mob = this%rate_B_1*.5*Vaq* !&      ! mol/Ls
 			! (sum_food/(sum_food + this%monod_D))* &
 			! !(rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
 			! !(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
             ! (this%inhibition_B/ (Vaq + this%inhibition_B))**this%exponent_B
 
-  ! mu_B_mob_residual = -1* mu_B_mob*L_water + & 
+  mu_B_mob_residual = -1* mu_B_mob*L_water !+ & 
   ! ((this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel)* & 
   ! this%rate_B_2*(Vaq - this%background_concentration_B)* L_water  
 
-   ! mu_B_im_residual = -1* mu_B_im*volume + & 
+  mu_B_im_residual = -1* mu_B_im*volume !+ & 
   ! ((this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel)* & 
   ! this%rate_B_2*(Vim - this%background_concentration_B)* volume  
 
@@ -1588,48 +1588,14 @@ subroutine BioTH_KineticState(this,rt_auxvar,global_auxvar, &
                            ! this%rate_D_m* &                   ! 1/s
                            ! rt_auxvar%immobile(this%D_immobile_id)* &           ! mol/m3 bulk
                            ! volume
-! This awful block just tries to
-! avoid concentrations below 1E-50
-! (Is this avoided with TRUNCATE_CONCENTRATION ?) > sure it does
-  ! if ( Vaq > 0.0 ) then
-  !   if ( Vim > 0.0 ) then
-  !     !Do nothing
-  !   else if ( Vim <= 0.0 ) then
-  !     Vim = 1.0d-50
-  !     RateDet = 0.0
-  !     RateDecayIm = 0.0
-  !   end if
-  ! else if ( Vaq <= 0.0 ) then
-  !   if ( Vim > 0.0 ) then
-  !     Vaq = 1.0d-50
-  !     RateAtt = 0.0
-  !     RateDecayAq = 0.0
-  !   else if ( Vim <= 0.0 ) then
-  !     Vim = 1.0d-50
-  !     Vaq = 1.0d-50
-  !     RateAtt = 0.0
-  !     RateDet = 0.0
-  !     RateDecayAq = 0.0
-  !     RateDecayIm = 0.0
-  !   end if
-  ! end if
 
-  ! The actual calculation:
 
-  Residual(this%species_Vaq_id) = &
-    Residual(this%species_Vaq_id) - RateAtt - RateDecayAq + RateDet !+ mu_B_mob_residual
-
-  Residual(this%species_Vim_id + reaction%offset_immobile) = &
-    Residual(this%species_Vim_id + reaction%offset_immobile) &
-    - RateDet - RateDecayIm !+ mu_B_im_residual
-
-  biomass_residual_delta = Residual(this%species_Vim_id + reaction%offset_immobile)+ & 
-  Residual(this%species_Vaq_id)
+  biomass_residual_delta = mu_B_mob_residual+mu_B_im_residual
   
   delta_volfrac = &
             - biomass_residual_delta / &                           ! mol/s
             (this%density_B*1000.d0) / &                           ! mol/L * L/m3
-            material_auxvar%volume * &                             ! m3 bulk
+            volume * &                             ! m3 bulk
             option%tran_dt
 
   rt_auxvar%mnrl_volfrac(this%biomineral_id) = rt_auxvar%mnrl_volfrac(this%biomineral_id) + &
