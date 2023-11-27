@@ -1147,15 +1147,17 @@ subroutine BioTH_React(this,Residual,Jacobian,compute_derivative, &
 			! !(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
             (this%inhibition_B/ (Vaq + this%inhibition_B))**this%exponent_B
 			
-  qMag = MAX(global_auxvar%darcy_vel(iphase),1.0d-20)
+  qMag = MAX(global_auxvar%darcy_vel(iphase),1.0d-8)
   
-  mu_B_mob_residual = -1* mu_B_mob*L_water + & 
+  mu_B_mob_residual = -1* mu_B_mob*L_water + &
+  this%rate_B_2*(Vaq - this%background_concentration_B)* L_water + & 
   ((this%alpha_vel*qMag)**this%beta_vel)* & 
-  this%rate_B_2*(Vaq - this%background_concentration_B)* L_water  
+  (Vaq - this%background_concentration_B)* L_water  
 
   mu_B_im_residual = -1* mu_B_im*volume + & 
+  this%rate_B_2*(Vim - this%background_concentration_B)* volume + & 
   ((this%alpha_vel*qMag)**this%beta_vel)* & 
-  this%rate_B_2*(Vim - this%background_concentration_B)* volume  
+  (Vim - this%background_concentration_B)* volume  
 
 
   mobile_mole_fraction = rt_auxvar%total(this%D_mobile_id,iphase)*L_water/sum_food
