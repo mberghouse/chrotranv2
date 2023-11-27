@@ -1141,18 +1141,18 @@ subroutine BioTH_React(this,Residual,Jacobian,compute_derivative, &
 			! !(rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
 			! !(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
             (this%inhibition_B/ (Vim + this%inhibition_B))**this%exponent_B 
-  mu_B_mob = this%rate_B_1*.25*Vaq* &      ! mol/Ls
+  mu_B_mob = this%rate_B_1*.5*Vaq* &      ! mol/Ls
 			(sum_food/(sum_food + this%monod_D))* &
 			! !(rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
 			! !(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
             (this%inhibition_B/ (Vaq + this%inhibition_B))**this%exponent_B
 
   mu_B_mob_residual = -1* mu_B_mob*L_water + & 
-  ! ((this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel)* & 
+  ((this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel)* & 
   this%rate_B_2*(Vaq - this%background_concentration_B)* L_water  
 
   mu_B_im_residual = -1* mu_B_im*volume + & 
-  ! ((this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel)* & 
+  ((this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel)* & 
   this%rate_B_2*(Vim - this%background_concentration_B)* volume  
 
 
