@@ -1147,17 +1147,18 @@ subroutine BioTH_React(this,Residual,Jacobian,compute_derivative, &
 			! !(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
             (this%inhibition_B/ (Vaq + this%inhibition_B))**this%exponent_B
 			
-  qMag = MAX(global_auxvar%darcy_vel(iphase),1.0d-8)
+  !option%flow%store_darcy_vel = PETSC_TRUE
+  qMag = MAX(global_auxvar%darcy_vel(iphase),1.0d-10)
   
   mu_B_mob_residual = -1* mu_B_mob*L_water + &
-  this%rate_B_2*(Vaq - this%background_concentration_B)* L_water  
-  !((this%alpha_vel*qMag)**this%beta_vel)* & 
-  !(Vaq - this%background_concentration_B)* L_water  
+  this%rate_B_2*(Vaq - this%background_concentration_B)* L_water + & 
+  ((this%alpha_vel*qMag)**this%beta_vel)* & 
+  (Vaq - this%background_concentration_B)* L_water  
 
   mu_B_im_residual = -1* mu_B_im*volume + & 
-  this%rate_B_2*(Vim - this%background_concentration_B)* volume  
-  !((this%alpha_vel*qMag)**this%beta_vel)* & 
-  !(Vim - this%background_concentration_B)* volume  
+  this%rate_B_2*(Vim - this%background_concentration_B)* volume + & 
+  ((this%alpha_vel*qMag)**this%beta_vel)* & 
+  (Vim - this%background_concentration_B)* volume  
 
 
   mobile_mole_fraction = rt_auxvar%total(this%D_mobile_id,iphase)*L_water/sum_food
@@ -1281,7 +1282,7 @@ subroutine BioTH_KineticState(this,rt_auxvar,global_auxvar, &
   PetscReal :: rho_f
   PetscReal :: g
   PetscReal :: viscosity
-  PetscReal :: delta_volfrac
+  PetscReal :: delta_volfrac, biomass_residual_delta
   PetscReal :: Vaq  ! mol/L
   PetscReal :: Vim  ! mol/m^3
   PetscReal :: Rate
@@ -1622,15 +1623,14 @@ subroutine BioTH_KineticState(this,rt_auxvar,global_auxvar, &
     Residual(this%species_Vim_id + reaction%offset_immobile) &
     - RateDet - RateDecayIm !+ mu_B_im_residual
 
-
-
-
+  biomass_residual_delta = Residual(this%species_Vim_id + reaction%offset_immobile)+ & 
+  Residual(this%species_Vaq_id)
+  
   delta_volfrac = &
-            (Residual(this%species_Vaq_id)+ & 
-			Residual(this%species_Vim_id + reaction%offset_immobile)) / &
+            - biomass_residual_delta / &                           ! mol/s
             (this%density_B*1000.d0) / &                           ! mol/L * L/m3
-            volume * &                             ! m3 bulk
-            option%tran_dt                                         ! s
+            material_auxvar%volume * &                             ! m3 bulk
+            option%tran_dt
 
   rt_auxvar%mnrl_volfrac(this%biomineral_id) = rt_auxvar%mnrl_volfrac(this%biomineral_id) + &
                                       delta_volfrac
