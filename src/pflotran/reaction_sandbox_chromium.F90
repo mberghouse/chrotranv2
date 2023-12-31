@@ -518,34 +518,17 @@ subroutine ChromiumReact(this,Residual,Jacobian,compute_derivative, &
              rt_auxvar%immobile(this%D_immobile_id)/ &
              immobile_to_water_vol                                                ! in mol/L water; Note that food_immobile is divided by porosity*saturation
 
-  mu_B = this%rate_B_1*rt_auxvar%immobile(this%B_id)* &      ! mol/m3 bulk/s
-        ! F monod term, unitless
-		temp_factor* & 
-        (sum_food/(sum_food + this%monod_D))* & !    
-        ! B monod inhibition term, unitless
+  mu_B = this%rate_B_1*rt_auxvar%immobile(this%B_id)*temp_factor* & 
+        (sum_food/(sum_food + this%monod_D))* & 
         (this%inhibition_B/ &
         (rt_auxvar%immobile(this%B_id) + &
-         this%inhibition_B))**this%exponent_B* &
+         this%inhibition_B))**this%exponent_B
         ! I Monod inhibition term, unitless
         ! (this%inhibition_I/ &
         ! (this%inhibition_I + &
          ! rt_auxvar%total(idof_alcohol,iphase)))
 
   mu_CD = this%mass_action_CD*sum_food*rt_auxvar%total(idof_Cr,iphase)    ! mol/L/s
-  
-  !respiration_rate = - rt_auxvar%immobile(this%B_id)* &                 ! mol/m3 bulk
-  !                   material_auxvar%volume * this%k * &         ! fitting parameter k
-					 !(rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
-					 !(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
-	!				 (-2*abs(global_auxvar%sat(iphase)-.5)+1)*&
-					 !((rt_auxvar%total(idof_O2,iphase))**.0002)* &   
-	!				 (1.1/(1+exp(.3*(17.4-global_auxvar%temp))))
-					 
-			
-  !oxygen_rate = - respiration_rate
-  
-  !Residual(idof_O2) = Residual(idof_O2) + oxygen_rate 
-  !Residual(idof_CO2) = Residual(idof_CO2) + respiration_rate 
 
   Residual(idof_Cr) =      Residual(idof_Cr) + &
                            ! Biological reaction, mol/s
@@ -714,9 +697,7 @@ subroutine ChromiumKineticState(this,rt_auxvar,global_auxvar, &
             immobile_to_water_vol                                                 ! in mol/L water; Note that food_immobile is divided by porosity*saturation
 
   mu_B = this%rate_B_1*rt_auxvar%immobile(this%B_id)* &      ! mol/m3 bulk/s
-			(sum_food/(sum_food + this%monod_D))* &
-			temp_factor*&
-            ! B monod inhibition term, unitless
+			(sum_food/(sum_food + this%monod_D))*temp_factor*&
             (this%inhibition_B/ (rt_auxvar%immobile(this%B_id) + this%inhibition_B))**this%exponent_B !* &
             ! I inhibition term, unitless
             !(this%inhibition_I/ (rt_auxvar%total(idof_alcohol,iphase)+this%inhibition_I))
