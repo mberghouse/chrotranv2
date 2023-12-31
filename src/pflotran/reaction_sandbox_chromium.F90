@@ -25,8 +25,8 @@ module Reaction_Sandbox_Chromium_class
     character(len=MAXWORDLENGTH) :: name_I ! This is for the alcohol in the reaction
     character(len=MAXWORDLENGTH) :: name_X ! This is for the biocide in the reaction
     character(len=MAXWORDLENGTH) :: name_biomineral ! This is for the dummny bio mineral
-	character(len=MAXWORDLENGTH) :: name_O2 ! This is for the dummny bio mineral
-	character(len=MAXWORDLENGTH) :: name_CO2 ! This is for the dummny bio mineral
+	! character(len=MAXWORDLENGTH) :: name_O2 ! This is for the dummny bio mineral
+	! character(len=MAXWORDLENGTH) :: name_CO2 ! This is for the dummny bio mineral
 
     PetscInt :: B_id
     PetscInt :: C_id
@@ -35,8 +35,8 @@ module Reaction_Sandbox_Chromium_class
     PetscInt :: I_id
     PetscInt :: X_id
     PetscInt :: biomineral_id
-    PetscInt :: O2_id
-	PetscInt :: CO2_id
+    ! PetscInt :: O2_id
+	! PetscInt :: CO2_id
 
     ! Decay and inhibition parameters in our sophisticated model
     PetscReal :: background_concentration_B    ! Minimum background concentration of the biomass
@@ -219,14 +219,14 @@ subroutine ChromiumRead(this,input,option)
         call InputReadDouble(input, option, this%K_O)
         call InputErrorMsg(input, option, 'K_O', 'CHEMISTRY,REACTION_SANDBOX,CHROMIUM_REDUCTION')
 
-      case('NAME_O2')
-        call InputReadWord(input,option,this%name_O2,PETSC_TRUE)
-        call InputErrorMsg(input,option,'name_O2', &
-                           'CHEMISTRY,REACTION_SANDBOX,CHROMIUM_REDUCTION')  
-	  case('NAME_CO2')
-        call InputReadWord(input,option,this%name_CO2,PETSC_TRUE)
-        call InputErrorMsg(input,option,'name_CO2', &
-                           'CHEMISTRY,REACTION_SANDBOX,CHROMIUM_REDUCTION')  
+      ! case('NAME_O2')
+        ! call InputReadWord(input,option,this%name_O2,PETSC_TRUE)
+        ! call InputErrorMsg(input,option,'name_O2', &
+                           ! 'CHEMISTRY,REACTION_SANDBOX,CHROMIUM_REDUCTION')  
+	  ! case('NAME_CO2')
+        ! call InputReadWord(input,option,this%name_CO2,PETSC_TRUE)
+        ! call InputErrorMsg(input,option,'name_CO2', &
+                           ! 'CHEMISTRY,REACTION_SANDBOX,CHROMIUM_REDUCTION')  
 	  
       case('EXPONENT_B')
         ! Read the double precision background concentration in kg/m^3
@@ -376,12 +376,12 @@ subroutine ChromiumSetup(this,reaction,option)
   this%B_id = &
     GetImmobileSpeciesIDFromName(this%name_B, &
                                  reaction%immobile,option)
-  this%O2_id = &
-    GetPrimarySpeciesIDFromName(this%name_O2, &
-                                reaction,option)
-  this%CO2_id = &
-    GetPrimarySpeciesIDFromName(this%name_CO2, &
-                                reaction,option)                               
+  ! this%O2_id = &
+    ! GetPrimarySpeciesIDFromName(this%name_O2, &
+                                ! reaction,option)
+  ! this%CO2_id = &
+    ! GetPrimarySpeciesIDFromName(this%name_CO2, &
+                                ! reaction,option)                               
   this%D_immobile_id = &
     GetImmobileSpeciesIDFromName(this%name_D_immobile, &
                                  reaction%immobile,option)
@@ -426,7 +426,7 @@ subroutine ChromiumReact(this,Residual,Jacobian,compute_derivative, &
 
   PetscInt, parameter :: iphase = 1
   PetscReal :: L_water
-  PetscReal :: mu_B, mu_CD
+  PetscReal :: mu_B, mu_CD, temp_factor, p1, p2, p3, p4, p5, p6, p7, temp
   PetscReal :: sum_food
   PetscInt :: idof_food_mobile, idof_food_immobile, idof_biomass, idof_Cr
   PetscInt :: idof_alcohol, idof_biocide, idof_CO2, idof_O2
@@ -491,15 +491,25 @@ subroutine ChromiumReact(this,Residual,Jacobian,compute_derivative, &
   L_water = material_auxvar%porosity*global_auxvar%sat(iphase)* &
             material_auxvar%volume*1.d3
   ! always subtract contribution from residual
-
+  
   idof_food_mobile = this%D_mobile_id
   idof_Cr = this%C_id
-  idof_O2 = this%O2_id
-  idof_CO2 = this%CO2_id
+  ! idof_O2 = this%O2_id
+  ! idof_CO2 = this%CO2_id
   idof_alcohol = this%I_id
   idof_biocide = this%X_id
   idof_biomass = reaction%offset_immobile + this%B_id
   idof_food_immobile = reaction%offset_immobile + this%D_immobile_id
+  
+  temp = global_auxvar%temp
+  p1 =  -2.917e-09 
+  p2 =   2.352e-07  
+  p3 =  -6.554e-06  
+  p4 =   6.033e-05  
+  p5 =    0.000135  
+  p6 =     0.02389 
+  p7 =      0.1962  
+  temp_factor = p1*temp**6+p2*temp**5+p3*temp**4+p4*temp**3+p5*temp**2+p6*temp+p7
 
   immobile_to_water_vol = &
      material_auxvar%porosity*global_auxvar%sat(iphase)*1000.d0                   ! L water/ m3 bulk
@@ -510,21 +520,16 @@ subroutine ChromiumReact(this,Residual,Jacobian,compute_derivative, &
 
   mu_B = this%rate_B_1*rt_auxvar%immobile(this%B_id)* &      ! mol/m3 bulk/s
         ! F monod term, unitless
+		temp_factor* & 
         (sum_food/(sum_food + this%monod_D))* & !    
-		!((rt_auxvar%total(idof_O2,iphase))**.0002)* &   
-		!(1.1/(1+exp(.3*(17.4-global_auxvar%temp))))*& !   
-		   ! y=1.1/(1+e^(.3*(17.4-x)))
-		!(-2*abs(global_auxvar%sat(iphase)-.5)+1)*&    ! saturation O2 lmitation
-		!((rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
-		!(this%K_O + rt_auxvar%total(idof_O2,iphase)))**2.5)*&             ! limitation
         ! B monod inhibition term, unitless
         (this%inhibition_B/ &
         (rt_auxvar%immobile(this%B_id) + &
          this%inhibition_B))**this%exponent_B* &
         ! I Monod inhibition term, unitless
-        (this%inhibition_I/ &
-        (this%inhibition_I + &
-         rt_auxvar%total(idof_alcohol,iphase)))
+        ! (this%inhibition_I/ &
+        ! (this%inhibition_I + &
+         ! rt_auxvar%total(idof_alcohol,iphase)))
 
   mu_CD = this%mass_action_CD*sum_food*rt_auxvar%total(idof_Cr,iphase)    ! mol/L/s
   
@@ -558,7 +563,7 @@ subroutine ChromiumReact(this,Residual,Jacobian,compute_derivative, &
   biomass_residual_delta = &                                                      ! Growth usage, mol/s
                            - mu_B*material_auxvar%volume + &                      ! mol/m3 bulk/s * m3 bulk
                            ! Natural decay, mol/s
-                          !(this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel!* &     ! Growth usage, mol/s
+                          (this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel!* &     ! Growth usage, mol/s
 
                            this%rate_B_2* &                         ! 1/s
                            (rt_auxvar%immobile(this%B_id) - &
@@ -676,6 +681,7 @@ subroutine ChromiumKineticState(this,rt_auxvar,global_auxvar, &
   PetscReal :: biomass_residual_delta, delta_volfrac
 
   PetscReal :: mu_B
+  PetscReal :: temp_factor, p1, p2, p3, p4, p5, p6, p7, temp
   PetscReal :: sum_food
   PetscInt :: idof_food_mobile, idof_food_immobile, idof_biomass, idof_Cr
   PetscInt :: idof_alcohol, idof_biocide
@@ -692,26 +698,33 @@ subroutine ChromiumKineticState(this,rt_auxvar,global_auxvar, &
   option%flow%store_darcy_vel = PETSC_TRUE
   immobile_to_water_vol = &
             material_auxvar%porosity*global_auxvar%sat(iphase)*1000.d0            ! L water/ m3 bulk
-
+  
+  temp = global_auxvar%temp
+  p1 =  -2.917e-09 
+  p2 =   2.352e-07  
+  p3 =  -6.554e-06  
+  p4 =   6.033e-05  
+  p5 =    0.000135  
+  p6 =     0.02389 
+  p7 =      0.1962  
+  temp_factor = p1*temp**6+p2*temp**5+p3*temp**4+p4*temp**3+p5*temp**2+p6*temp+p7
+  
   sum_food = rt_auxvar%total(idof_food_mobile,iphase) + &
             rt_auxvar%immobile(this%D_immobile_id)/ &
             immobile_to_water_vol                                                 ! in mol/L water; Note that food_immobile is divided by porosity*saturation
 
   mu_B = this%rate_B_1*rt_auxvar%immobile(this%B_id)* &      ! mol/m3 bulk/s
 			(sum_food/(sum_food + this%monod_D))* &
-			!(rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
-			!(this%K_O + rt_auxvar%total(idof_O2,iphase)))*&             ! limitation
-            ! F monod term, unitless
-            (sum_food/(sum_food + this%monod_D))* &
+			temp_factor*&
             ! B monod inhibition term, unitless
-            (this%inhibition_B/ (rt_auxvar%immobile(this%B_id) + this%inhibition_B))**this%exponent_B * &
+            (this%inhibition_B/ (rt_auxvar%immobile(this%B_id) + this%inhibition_B))**this%exponent_B !* &
             ! I inhibition term, unitless
-            (this%inhibition_I/ (rt_auxvar%total(idof_alcohol,iphase)+this%inhibition_I))
+            !(this%inhibition_I/ (rt_auxvar%total(idof_alcohol,iphase)+this%inhibition_I))
 
   biomass_residual_delta = &                                       ! Growth usage, mol/s
             - mu_B*material_auxvar%volume + &                      ! mol/m3 bulk/s * m3 bulk
             ! Natural decay, mol/s
-            !(this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel* &  ! Growth usage, mol/s
+            (this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel* &  ! Growth usage, mol/s
 
             this%rate_B_2* &                         ! 1/s
             (rt_auxvar%immobile(this%B_id) - &
