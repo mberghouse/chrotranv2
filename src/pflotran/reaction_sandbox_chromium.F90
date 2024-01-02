@@ -543,10 +543,15 @@ subroutine ChromiumReact(this,Residual,Jacobian,compute_derivative, &
                            material_auxvar%volume* &                              ! m3 bulk
                            immobile_to_water_vol                                  ! L water/m3 bulk
 
+  IF global_auxvar%darcy_vel(iphase) > this%alpha_vel THEN
+		diff = global_auxvar%darcy_vel(iphase)-this%alpha_vel
+  ELSE
+		diff = 1e-10
   biomass_residual_delta = &                                                      ! Growth usage, mol/s
                            - mu_B*material_auxvar%volume + &                      ! mol/m3 bulk/s * m3 bulk
                            ! Natural decay, mol/s
-                          (global_auxvar%darcy_vel(iphase)-this%alpha_vel)**this%beta_vel* &     ! Growth usage, mol/s
+						   
+                          (diff)**this%beta_vel* &     ! Growth usage, mol/s
                            this%rate_B_2* &                         ! 1/s
                            (rt_auxvar%immobile(this%B_id) - &
                             this%background_concentration_B)* &                                  ! mol/m3 bulk
@@ -701,10 +706,14 @@ subroutine ChromiumKineticState(this,rt_auxvar,global_auxvar, &
             ! I inhibition term, unitless
             !(this%inhibition_I/ (rt_auxvar%total(idof_alcohol,iphase)+this%inhibition_I))
 
+  IF global_auxvar%darcy_vel(iphase) > this%alpha_vel THEN
+		diff = global_auxvar%darcy_vel(iphase)-this%alpha_vel
+  ELSE
+		diff = 1e-10
   biomass_residual_delta = &                                       ! Growth usage, mol/s
             - mu_B*material_auxvar%volume + &                      ! mol/m3 bulk/s * m3 bulk
             ! Natural decay, mol/s
-            (global_auxvar%darcy_vel(iphase)-this%alpha_vel)**this%beta_vel* &  ! Growth usage, mol/s
+            (diff)**this%beta_vel* &  ! Growth usage, mol/s
             this%rate_B_2* &                         ! 1/s
             (rt_auxvar%immobile(this%B_id) - &
             this%background_concentration_B)* &                                   ! mol/m3 bulk
