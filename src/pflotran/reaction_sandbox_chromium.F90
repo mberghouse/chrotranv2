@@ -546,7 +546,7 @@ subroutine ChromiumReact(this,Residual,Jacobian,compute_derivative, &
   biomass_residual_delta = &                                                      ! Growth usage, mol/s
                            - mu_B*material_auxvar%volume + &                      ! mol/m3 bulk/s * m3 bulk
                            ! Natural decay, mol/s
-                          (this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel* &     ! Growth usage, mol/s
+                          (global_auxvar%darcy_vel(iphase)-this%alpha_vel)**this%beta_vel* &     ! Growth usage, mol/s
                            this%rate_B_2* &                         ! 1/s
                            (rt_auxvar%immobile(this%B_id) - &
                             this%background_concentration_B)* &                                  ! mol/m3 bulk
@@ -704,7 +704,7 @@ subroutine ChromiumKineticState(this,rt_auxvar,global_auxvar, &
   biomass_residual_delta = &                                       ! Growth usage, mol/s
             - mu_B*material_auxvar%volume + &                      ! mol/m3 bulk/s * m3 bulk
             ! Natural decay, mol/s
-            (this%alpha_vel*global_auxvar%darcy_vel(iphase))**this%beta_vel* &  ! Growth usage, mol/s
+            (global_auxvar%darcy_vel(iphase)-this%alpha_vel)**this%beta_vel* &  ! Growth usage, mol/s
             this%rate_B_2* &                         ! 1/s
             (rt_auxvar%immobile(this%B_id) - &
             this%background_concentration_B)* &                                   ! mol/m3 bulk
