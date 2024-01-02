@@ -548,10 +548,8 @@ subroutine ChromiumReact(this,Residual,Jacobian,compute_derivative, &
   else
     diff = 1e-10
   endif
-  biomass_residual_delta =                                                      ! Growth usage, mol/s
-                           - mu_B*material_auxvar%volume + &                      ! mol/m3 bulk/s * m3 bulk
+  biomass_residual_delta = - mu_B*material_auxvar%volume + &           ! mol/m3 bulk/s * m3 bulk
                            ! Natural decay, mol/s
-						   
                           ((diff)**this%beta_vel)* &     ! Growth usage, mol/s
                            this%rate_B_2* &                         ! 1/s
                            (rt_auxvar%immobile(this%B_id) - &
@@ -711,8 +709,7 @@ subroutine ChromiumKineticState(this,rt_auxvar,global_auxvar, &
   else
     diff = 1e-10
   endif
-  biomass_residual_delta = &                                       ! Growth usage, mol/s
-            - mu_B*material_auxvar%volume + &                      ! mol/m3 bulk/s * m3 bulk
+  biomass_residual_delta = - mu_B*material_auxvar%volume + &         
             ! Natural decay, mol/s
             ((diff)**this%beta_vel)* &  ! Growth usage, mol/s
             this%rate_B_2* &                         ! 1/s
