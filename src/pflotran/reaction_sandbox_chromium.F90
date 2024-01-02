@@ -551,12 +551,14 @@ subroutine ChromiumReact(this,Residual,Jacobian,compute_derivative, &
   biomass_residual_delta = &                                                      ! Growth usage, mol/s
                            - mu_B*material_auxvar%volume + &                      ! mol/m3 bulk/s * m3 bulk
                            ! Natural decay, mol/s
-						   
-                          (diff)**this%beta_vel* &     ! Growth usage, mol/s
-                           this%rate_B_2* &                         ! 1/s
-                           (rt_auxvar%immobile(this%B_id) - &
-                            this%background_concentration_B)* &                                  ! mol/m3 bulk
-                           material_auxvar%volume + &                             ! m3 bulk
+						   (diff)**this%beta_vel* &  ! Growth usage, mol/s
+						   (rt_auxvar%immobile(this%B_id) - &
+						   this%background_concentration_B)* &                                   ! mol/m3 bulk
+						   material_auxvar%volume + &
+						   this%rate_B_2* &                         ! 1/s
+						   (rt_auxvar%immobile(this%B_id) - &
+						   this%background_concentration_B)* &                                   ! mol/m3 bulk
+						   material_auxvar%volume + &                             ! m3 bulk                            ! m3 bulk
                            ! Biocide reaction, mol/s
                            this%mass_action_B* &                 ! L/mol/s
                            (rt_auxvar%immobile(this%B_id) - &
@@ -715,6 +717,9 @@ subroutine ChromiumKineticState(this,rt_auxvar,global_auxvar, &
             - mu_B*material_auxvar%volume + &                      ! mol/m3 bulk/s * m3 bulk
             ! Natural decay, mol/s
             (diff)**this%beta_vel* &  ! Growth usage, mol/s
+			(rt_auxvar%immobile(this%B_id) - &
+            this%background_concentration_B)* &                                   ! mol/m3 bulk
+            material_auxvar%volume + &
             this%rate_B_2* &                         ! 1/s
             (rt_auxvar%immobile(this%B_id) - &
             this%background_concentration_B)* &                                   ! mol/m3 bulk
