@@ -426,7 +426,7 @@ subroutine ChromiumReact(this,Residual,Jacobian,compute_derivative, &
 
   PetscInt, parameter :: iphase = 1
   PetscReal :: L_water
-  PetscReal :: mu_B, mu_CD, temp_factor, p1, p2, p3, p4, p5, p6, p7, temp
+  PetscReal :: mu_B, mu_CD, temp_factor, p1, p2, p3, p4, p5, p6, p7, temp, diff
   PetscReal :: sum_food
   PetscInt :: idof_food_mobile, idof_food_immobile, idof_biomass, idof_Cr
   PetscInt :: idof_alcohol, idof_biocide, idof_CO2, idof_O2
@@ -543,10 +543,10 @@ subroutine ChromiumReact(this,Residual,Jacobian,compute_derivative, &
                            material_auxvar%volume* &                              ! m3 bulk
                            immobile_to_water_vol                                  ! L water/m3 bulk
 
-  IF global_auxvar%darcy_vel(iphase) > this%alpha_vel THEN
-		diff = global_auxvar%darcy_vel(iphase)-this%alpha_vel
-  ELSE
-		diff = 1e-10
+  if (global_auxvar%darcy_vel(iphase) > this%alpha_vel) then
+    diff = global_auxvar%darcy_vel(iphase)-this%alpha_vel
+  else
+    diff = 1e-10
   biomass_residual_delta = &                                                      ! Growth usage, mol/s
                            - mu_B*material_auxvar%volume + &                      ! mol/m3 bulk/s * m3 bulk
                            ! Natural decay, mol/s
@@ -668,7 +668,7 @@ subroutine ChromiumKineticState(this,rt_auxvar,global_auxvar, &
   PetscReal :: biomass_residual_delta, delta_volfrac
 
   PetscReal :: mu_B
-  PetscReal :: temp_factor, p1, p2, p3, p4, p5, p6, p7, temp
+  PetscReal :: temp_factor, p1, p2, p3, p4, p5, p6, p7, temp, diff
   PetscReal :: sum_food
   PetscInt :: idof_food_mobile, idof_food_immobile, idof_biomass, idof_Cr
   PetscInt :: idof_alcohol, idof_biocide
@@ -705,11 +705,10 @@ subroutine ChromiumKineticState(this,rt_auxvar,global_auxvar, &
             (this%inhibition_B/ (rt_auxvar%immobile(this%B_id) + this%inhibition_B))**this%exponent_B !* &
             ! I inhibition term, unitless
             !(this%inhibition_I/ (rt_auxvar%total(idof_alcohol,iphase)+this%inhibition_I))
-
-  IF global_auxvar%darcy_vel(iphase) > this%alpha_vel THEN
-		diff = global_auxvar%darcy_vel(iphase)-this%alpha_vel
-  ELSE
-		diff = 1e-10
+  if (global_auxvar%darcy_vel(iphase) > this%alpha_vel) then
+    diff = global_auxvar%darcy_vel(iphase)-this%alpha_vel
+  else
+    diff = 1e-10
   biomass_residual_delta = &                                       ! Growth usage, mol/s
             - mu_B*material_auxvar%volume + &                      ! mol/m3 bulk/s * m3 bulk
             ! Natural decay, mol/s
