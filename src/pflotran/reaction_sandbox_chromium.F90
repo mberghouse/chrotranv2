@@ -718,7 +718,7 @@ subroutine ChromiumKineticState(this,rt_auxvar,global_auxvar, &
             this%rate_B_2* &                         ! 1/s
             (rt_auxvar%immobile(this%B_id) - &
             this%background_concentration_B)* &                                   ! mol/m3 bulk
-            material_auxvar%volume + &                             ! m3 bulk
+            material_auxvar%volume                              ! m3 bulk
 
 
   delta_volfrac = &
