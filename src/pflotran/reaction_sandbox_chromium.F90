@@ -99,7 +99,7 @@ function ChromiumCreate()
   ChromiumCreate%name_I = ''
   ChromiumCreate%name_X = ''
   ChromiumCreate%name_biomineral = ''
-  ChrotranCreate%name_CO2 = ''
+  ChromiumCreate%name_CO2 = ''
 
   ChromiumCreate%D_mobile_id = 0
   ChromiumCreate%D_immobile_id = 0
@@ -108,7 +108,7 @@ function ChromiumCreate()
   ChromiumCreate%I_id = 0
   ChromiumCreate%X_id = 0
   ChromiumCreate%biomineral_id = 0
-  ChrotranCreate%CO2_id = 0
+  ChromiumCreate%CO2_id = 0
 
   ChromiumCreate%stoichiometric_D_1 = 0.d0
   ChromiumCreate%rate_D = 0.d0
