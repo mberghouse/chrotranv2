@@ -2,6 +2,7 @@
 'H2O' 3.0 0.0 18.0153
 'Cr(VI)' 0. 0. 0.
 'molasses' 0. 0. 0.
+'bio_CO2' 3.0 0.0 44.0098
 'ethanol' 0. 0. 0.
 'biocide' 0. 0. 0.
 'null' 0 0 0
