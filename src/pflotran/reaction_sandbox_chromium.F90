@@ -383,7 +383,7 @@ subroutine ChromiumSetup(this,reaction,option)
     GetPrimarySpeciesIDFromName(this%name_O2, &
                                 reaction,option)
   this%CO2_id = &
-    GetSecondarySpeciesIDFromName(this%name_CO2, &
+    GetPrimarySpeciesIDFromName(this%name_CO2, &
                                 reaction,option)                               
   this%D_immobile_id = &
     GetImmobileSpeciesIDFromName(this%name_D_immobile, &
@@ -523,7 +523,7 @@ subroutine ChromiumReact(this,Residual,Jacobian,compute_derivative, &
 
   mu_B = this%rate_B_1*rt_auxvar%immobile(this%B_id)*&
         ((rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
-		(this%K_O + rt_auxvar%total(idof_O2,iphase)))**2)*&
+		(this%K_O + rt_auxvar%total(idof_O2,iphase))))*&
 		temp_factor* & 
         (sum_food/(sum_food + this%monod_D))* & 
         (this%inhibition_B/ &
@@ -688,7 +688,7 @@ subroutine ChromiumKineticState(this,rt_auxvar,global_auxvar, &
 
   idof_food_mobile = this%D_mobile_id
   idof_Cr = this%C_id
-  !idof_O2 = this%O2_id
+  idof_O2 = this%O2_id
   idof_alcohol = this%I_id
   idof_biocide = this%X_id
   idof_biomass = reaction%offset_immobile + this%B_id
@@ -713,7 +713,10 @@ subroutine ChromiumKineticState(this,rt_auxvar,global_auxvar, &
             immobile_to_water_vol                                                 ! in mol/L water; Note that food_immobile is divided by porosity*saturation
 
   mu_B = this%rate_B_1*rt_auxvar%immobile(this%B_id)* &      ! mol/m3 bulk/s
-			(sum_food/(sum_food + this%monod_D))*temp_factor*&
+			(sum_food/(sum_food + this%monod_D))*&
+			((rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
+		(this%K_O + rt_auxvar%total(idof_O2,iphase))))*&
+		temp_factor*&
             (this%inhibition_B/ (rt_auxvar%immobile(this%B_id) + this%inhibition_B))**this%exponent_B !* &
             ! I inhibition term, unitless
             !(this%inhibition_I/ (rt_auxvar%total(idof_alcohol,iphase)+this%inhibition_I))
