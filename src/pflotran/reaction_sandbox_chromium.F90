@@ -25,7 +25,7 @@ module Reaction_Sandbox_Chromium_class
     character(len=MAXWORDLENGTH) :: name_I ! This is for the alcohol in the reaction
     character(len=MAXWORDLENGTH) :: name_X ! This is for the biocide in the reaction
     character(len=MAXWORDLENGTH) :: name_biomineral ! This is for the dummny bio mineral
-	! character(len=MAXWORDLENGTH) :: name_O2 ! This is for the dummny bio mineral
+	character(len=MAXWORDLENGTH) :: name_O2 ! This is for the dummny bio mineral
 	character(len=MAXWORDLENGTH) :: name_CO2 ! This is for the dummny bio mineral
 
     PetscInt :: B_id
@@ -35,7 +35,7 @@ module Reaction_Sandbox_Chromium_class
     PetscInt :: I_id
     PetscInt :: X_id
     PetscInt :: biomineral_id
-    ! PetscInt :: O2_id
+    PetscInt :: O2_id
 	PetscInt :: CO2_id
 
     ! Decay and inhibition parameters in our sophisticated model
@@ -109,6 +109,7 @@ function ChromiumCreate()
   ChromiumCreate%X_id = 0
   ChromiumCreate%biomineral_id = 0
   ChromiumCreate%CO2_id = 0
+  ChromiumCreate%O2_id = 0
 
   ChromiumCreate%stoichiometric_D_1 = 0.d0
   ChromiumCreate%rate_D = 0.d0
@@ -221,10 +222,10 @@ subroutine ChromiumRead(this,input,option)
         call InputReadDouble(input, option, this%K_O)
         call InputErrorMsg(input, option, 'K_O', 'CHEMISTRY,REACTION_SANDBOX,CHROMIUM_REDUCTION')
 
-      ! case('NAME_O2')
-        ! call InputReadWord(input,option,this%name_O2,PETSC_TRUE)
-        ! call InputErrorMsg(input,option,'name_O2', &
-                           ! 'CHEMISTRY,REACTION_SANDBOX,CHROMIUM_REDUCTION')  
+      case('NAME_O2')
+        call InputReadWord(input,option,this%name_O2,PETSC_TRUE)
+        call InputErrorMsg(input,option,'name_O2', &
+                           'CHEMISTRY,REACTION_SANDBOX,CHROMIUM_REDUCTION')  
 	  case('NAME_CO2')
         call InputReadWord(input,option,this%name_CO2,PETSC_TRUE)
         call InputErrorMsg(input,option,'name_CO2', &
@@ -378,9 +379,9 @@ subroutine ChromiumSetup(this,reaction,option)
   this%B_id = &
     GetImmobileSpeciesIDFromName(this%name_B, &
                                  reaction%immobile,option)
-  ! this%O2_id = &
-    ! GetPrimarySpeciesIDFromName(this%name_O2, &
-                                ! reaction,option)
+  this%O2_id = &
+    GetPrimarySpeciesIDFromName(this%name_O2, &
+                                reaction,option)
   this%CO2_id = &
     GetSecondarySpeciesIDFromName(this%name_CO2, &
                                 reaction,option)                               
@@ -496,7 +497,7 @@ subroutine ChromiumReact(this,Residual,Jacobian,compute_derivative, &
   
   idof_food_mobile = this%D_mobile_id
   idof_Cr = this%C_id
-  ! idof_O2 = this%O2_id
+  idof_O2 = this%O2_id
   idof_CO2 = this%CO2_id
   idof_alcohol = this%I_id
   idof_biocide = this%X_id
@@ -520,7 +521,10 @@ subroutine ChromiumReact(this,Residual,Jacobian,compute_derivative, &
              rt_auxvar%immobile(this%D_immobile_id)/ &
              immobile_to_water_vol                                                ! in mol/L water; Note that food_immobile is divided by porosity*saturation
 
-  mu_B = this%rate_B_1*rt_auxvar%immobile(this%B_id)*temp_factor* & 
+  mu_B = this%rate_B_1*rt_auxvar%immobile(this%B_id)*&
+        ((rt_auxvar%total(idof_O2,iphase) / &        !oxygen 
+		(this%K_O + rt_auxvar%total(idof_O2,iphase)))**2)*&
+		temp_factor* & 
         (sum_food/(sum_food + this%monod_D))* & 
         (this%inhibition_B/ &
         (rt_auxvar%immobile(this%B_id) + &
@@ -567,6 +571,9 @@ subroutine ChromiumReact(this,Residual,Jacobian,compute_derivative, &
   respiration_rate = - rt_auxvar%immobile(this%B_id)* &                 ! mol/m3 bulk
                      material_auxvar%volume * this%k
   
+  oxygen_rate = - respiration_rate
+  
+  Residual(idof_O2) = Residual(idof_O2) + oxygen_rate
   Residual(idof_CO2) = Residual(idof_CO2) + respiration_rate 
   Residual(idof_biomass) = Residual(idof_biomass) + biomass_residual_delta        ! mol/s
 
