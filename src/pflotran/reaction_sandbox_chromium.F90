@@ -682,7 +682,7 @@ subroutine ChromiumKineticState(this,rt_auxvar,global_auxvar, &
   PetscReal :: mu_B
   PetscReal :: temp_factor, p1, p2, p3, p4, p5, p6, p7, temp, diff
   PetscReal :: sum_food
-  PetscInt :: idof_food_mobile, idof_food_immobile, idof_biomass, idof_Cr
+  PetscInt :: idof_food_mobile, idof_food_immobile, idof_biomass, idof_Cr, idof_O2
   PetscInt :: idof_alcohol, idof_biocide
   PetscReal :: immobile_to_water_vol
 
